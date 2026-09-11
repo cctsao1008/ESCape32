@@ -7,35 +7,165 @@
     "output": "docs/architecture/generated/E61_ESCape32_v1.6_Startup_Lifecycle.html",
     "animation": "trace",
     "visual_preset": "signal-flow",
-    "quality_profile": "showcase",
-    "viewBox": [1320, 760]
+    "quality_profile": "standard",
+    "viewBox": [
+      1320,
+      760
+    ]
   },
   "lanes": [
-    {"id": "command", "label": "Command"},
-    {"id": "control", "label": "Control"},
-    {"id": "feedback", "label": "Feedback"}
+    {
+      "id": "main",
+      "label": "Motor startup / run"
+    },
+    {
+      "id": "feedback",
+      "label": "BEMF feedback"
+    },
+    {
+      "id": "terminal",
+      "label": "Stop / terminal"
+    }
   ],
   "states": [
-    {"id": "neutral", "type": "start", "label": "Neutral / Stopped", "sublabel": "step=0 · bridge stopped/coast/brake", "lane": "command", "col": 0},
-    {"id": "throttle", "type": "decision", "label": "Valid throttle", "sublabel": "DShot decode updates throt", "lane": "command", "col": 1},
-    {"id": "start6", "type": "active", "label": "Start Six-Step", "sublabel": "SINE_RANGE=0 → no sine startup region", "lane": "control", "col": 1},
-    {"id": "ramp", "type": "active", "label": "Controlled Duty Ramp", "sublabel": "DUTY_MIN=14 · SPUP=20 · RATE=15 · RAMP=70", "lane": "control", "col": 2},
-    {"id": "acquire", "type": "waiting", "label": "Acquire BEMF Sync", "sublabel": "COMP → TIM2 zero crossing · sync counter", "lane": "feedback", "col": 2},
-    {"id": "closed", "type": "success", "label": "Closed Sensorless Run", "sublabel": "sync >= 6 · filtered commutation interval", "lane": "control", "col": 3},
-    {"id": "timeout", "type": "failure", "label": "BEMF Timeout / Desync", "sublabel": "sync reset · ertm invalidated", "lane": "feedback", "col": 3},
-    {"id": "stop", "type": "neutral", "label": "Throttle Zero / Protection", "sublabel": "coast, brake, or stop according to state", "lane": "command", "col": 4}
+    {
+      "id": "neutral",
+      "type": "start",
+      "label": "Neutral / Stopped",
+      "sublabel": "stopped",
+      "lane": "main",
+      "col": 0
+    },
+    {
+      "id": "throttle",
+      "type": "decision",
+      "label": "Valid throttle",
+      "sublabel": "valid DShot throttle",
+      "lane": "main",
+      "col": 1
+    },
+    {
+      "id": "start6",
+      "type": "active",
+      "label": "Start Six-Step",
+      "sublabel": "SINE_RANGE=0",
+      "lane": "main",
+      "col": 2
+    },
+    {
+      "id": "ramp",
+      "type": "active",
+      "label": "Controlled Duty Ramp",
+      "sublabel": "duty ramp limits",
+      "lane": "main",
+      "col": 3
+    },
+    {
+      "id": "acquire",
+      "type": "waiting",
+      "label": "Acquire BEMF Sync",
+      "sublabel": "BEMF zero crossing",
+      "lane": "feedback",
+      "col": 2
+    },
+    {
+      "id": "closed",
+      "type": "success",
+      "label": "Closed Loop",
+      "sublabel": "BEMF synchronized",
+      "lane": "main",
+      "col": 4
+    },
+    {
+      "id": "timeout",
+      "type": "failure",
+      "label": "BEMF Timeout / Desync",
+      "sublabel": "sync reset",
+      "lane": "feedback",
+      "col": 0
+    },
+    {
+      "id": "stop",
+      "type": "neutral",
+      "label": "Stop / Protect",
+      "sublabel": "coast / brake / stop",
+      "lane": "terminal",
+      "col": 2
+    }
   ],
   "transitions": [
-    {"id": "t1", "from": "neutral", "to": "throttle", "label": "DShot command", "variant": "emphasis", "route": "auto"},
-    {"id": "t2", "from": "throttle", "to": "start6", "label": "input != 0", "variant": "emphasis", "route": "drop"},
-    {"id": "t3", "from": "start6", "to": "ramp", "label": "nextstep()", "variant": "emphasis", "route": "auto"},
-    {"id": "t4", "from": "ramp", "to": "acquire", "label": "floating phase selected", "variant": "dashed", "route": "drop"},
-    {"id": "t5", "from": "acquire", "to": "closed", "label": "valid ZC events build sync", "variant": "emphasis", "route": "auto"},
-    {"id": "t6", "from": "acquire", "to": "timeout", "label": "expected ZC not observed", "variant": "security", "route": "auto"},
-    {"id": "t7", "from": "timeout", "to": "ramp", "label": "control continues with sync reset", "variant": "dashed", "route": "bottom-channel"},
-    {"id": "t8", "from": "closed", "to": "stop", "label": "throttle zero / protection", "route": "auto"},
-    {"id": "t9", "from": "ramp", "to": "stop", "label": "throttle zero / protection", "route": "bottom-channel"},
-    {"id": "t10", "from": "stop", "to": "neutral", "label": "stopped", "route": "bottom-channel"}
+    {
+      "id": "t1",
+      "from": "neutral",
+      "to": "throttle",
+      "variant": "emphasis",
+      "route": "auto"
+    },
+    {
+      "id": "t2",
+      "from": "throttle",
+      "to": "start6",
+      "variant": "emphasis",
+      "route": "drop"
+    },
+    {
+      "id": "t3",
+      "from": "start6",
+      "to": "ramp",
+      "variant": "emphasis",
+      "route": "auto"
+    },
+    {
+      "id": "t4",
+      "from": "ramp",
+      "to": "acquire",
+      "variant": "dashed",
+      "route": "drop"
+    },
+    {
+      "id": "t5",
+      "from": "acquire",
+      "to": "closed",
+      "variant": "emphasis",
+      "route": "straight",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "t6",
+      "from": "acquire",
+      "to": "timeout",
+      "variant": "security",
+      "route": "auto"
+    },
+    {
+      "id": "t7",
+      "from": "timeout",
+      "to": "ramp",
+      "variant": "dashed",
+      "route": "bottom-channel"
+    },
+    {
+      "id": "t8",
+      "from": "closed",
+      "to": "stop",
+      "route": "right-channel",
+      "fromSide": "right",
+      "toSide": "right",
+      "channelX": 820
+    },
+    {
+      "id": "t9",
+      "from": "ramp",
+      "to": "stop",
+      "route": "bottom-channel"
+    },
+    {
+      "id": "t10",
+      "from": "stop",
+      "to": "neutral",
+      "route": "bottom-channel"
+    }
   ],
   "cards": [
     {
