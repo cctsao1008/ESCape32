@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "E61 ESCape32 v1.6 DShot-to-Commutation Sequence",
+    "subtitle": "Command capture, throttle update, six-step drive, BEMF zero-cross feedback",
+    "output": "docs/architecture/generated/E61_ESCape32_v1.6_DShot_Sequence.html",
+    "animation": "trace",
+    "visual_preset": "signal-flow",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [1500, 900]
+  },
+  "participants": [
+    {"id": "fc", "type": "external", "label": "Flight Controller", "sublabel": "DShot source"},
+    {"id": "tim3", "type": "frontend", "label": "PA6 / TIM3 + DMA", "sublabel": "capture"},
+    {"id": "decode", "type": "backend", "label": "DShot Decode", "sublabel": "CRC / throttle"},
+    {"id": "control", "type": "backend", "label": "Motor Control", "sublabel": "1 kHz loop"},
+    {"id": "comm", "type": "backend", "label": "Commutation", "sublabel": "nextstep()"},
+    {"id": "pwm", "type": "frontend", "label": "TIM1 PWM", "sublabel": "3-phase drive"},
+    {"id": "motor", "type": "external", "label": "Motor / Power Stage", "sublabel": "U/V/W"},
+    {"id": "bemf", "type": "messagebus", "label": "COMP2/4 + TIM2", "sublabel": "BEMF timing"}
+  ],
+  "segments": [
+    {"from": 155, "to": 360, "label": "DShot frame acquisition"},
+    {"from": 360, "to": 620, "label": "Drive update"},
+    {"from": 620, "to": 855, "label": "Sensorless feedback"}
+  ],
+  "messages": [
+    {"id": "m1", "from": "fc", "to": "tim3", "y": 190, "label": "DShot frame", "variant": "emphasis"},
+    {"id": "m2", "from": "tim3", "to": "decode", "y": 250, "label": "DMA-captured edge timings"},
+    {"id": "m3", "from": "decode", "to": "decode", "y": 310, "label": "timing validation + 4-bit CRC"},
+    {"id": "m4", "from": "decode", "to": "control", "y": 380, "label": "update throt", "variant": "emphasis"},
+    {"id": "m5", "from": "control", "to": "control", "y": 440, "label": "apply duty_min / spup / ramp / rate"},
+    {"id": "m6", "from": "control", "to": "comm", "y": 500, "label": "run state + target duty", "variant": "emphasis"},
+    {"id": "m7", "from": "comm", "to": "pwm", "y": 560, "label": "select driven + floating phases", "variant": "emphasis"},
+    {"id": "m8", "from": "pwm", "to": "motor", "y": 620, "label": "complementary PWM → gate driver → MOSFETs", "variant": "emphasis"},
+    {"id": "m9", "from": "motor", "to": "bemf", "y": 690, "label": "floating-phase BEMF zero crossing", "variant": "dashed"},
+    {"id": "m10", "from": "bemf", "to": "comm", "y": 750, "label": "captured interval + delayed commutation", "variant": "dashed"},
+    {"id": "m11", "from": "comm", "to": "pwm", "y": 815, "label": "next six-step state", "variant": "return"}
+  ],
+  "activations": [
+    {"participant": "decode", "from": 235, "to": 390, "type": "backend"},
+    {"participant": "control", "from": 370, "to": 520, "type": "backend"},
+    {"participant": "comm", "from": 490, "to": 835, "type": "backend"},
+    {"participant": "bemf", "from": 675, "to": 770, "type": "messagebus"}
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Input path",
+      "items": [
+        "entryirq() classifies input timing before installing dshotirq().",
+        "iotim_dma_isr() rejects invalid timing or CRC and writes the decoded throttle value."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Control path",
+      "items": [
+        "The main loop converts throttle to target duty and applies startup/thermal limits.",
+        "nextstep() drives the six-step sequence and chooses the next floating-phase comparator."
+      ]
+    }
+  ]
+}

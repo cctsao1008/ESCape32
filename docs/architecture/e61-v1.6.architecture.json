@@ -1,0 +1,243 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "E61 ESCape32 v1.6 Runtime Architecture",
+    "subtitle": "STM32G431 / STSPIN32G4 · DShot input · sensorless six-step BEMF commutation",
+    "output": "docs/architecture/generated/E61_ESCape32_v1.6_System_Map.html",
+    "animation": "trace",
+    "visual_preset": "signal-flow",
+    "quality_profile": "showcase",
+    "viewBox": [1440, 900],
+    "views": [
+      {
+        "id": "command-path",
+        "label": "Command to motor",
+        "focus": ["fc", "pa6_input", "dshot_decode", "control_loop", "commutation", "tim1_pwm", "stspin", "power_stage", "motor"],
+        "note": "Primary command path from FC DShot input to the three-phase power stage."
+      },
+      {
+        "id": "bemf-loop",
+        "label": "BEMF feedback loop",
+        "focus": ["motor", "bemf_frontend", "comparators", "tim2_bemf", "commutation", "tim1_pwm"],
+        "note": "Sensorless rotor-position feedback based on floating-phase BEMF zero crossing."
+      },
+      {
+        "id": "startup-control",
+        "label": "Startup control",
+        "focus": ["dshot_decode", "control_loop", "commutation", "tim1_pwm"],
+        "note": "E61 v1.6 uses six-step startup with duty limiting and slew/ramp constraints; sine_range is disabled."
+      }
+    ]
+  },
+  "layout": {
+    "mode": "grid",
+    "origin": [80, 90],
+    "cols": 5,
+    "gapX": 55,
+    "gapY": 65,
+    "cellW": 220,
+    "cellH": 115
+  },
+  "components": [
+    {
+      "id": "fc",
+      "type": "external",
+      "label": "Flight Controller",
+      "sublabel": "DShot150 / 300 / 600 source",
+      "row": 0,
+      "col": 0
+    },
+    {
+      "id": "pa6_input",
+      "type": "frontend",
+      "label": "PA6 / TIM3 Input",
+      "sublabel": "Edge capture + DMA protocol detection",
+      "row": 0,
+      "col": 1,
+      "sources": [
+        {"path": "src/io.c", "line": 95, "end_line": 135, "label": "input detection"},
+        {"path": "mcu/STM32G431/config.c", "line": 433, "end_line": 438, "label": "TIM3 DMA route"}
+      ]
+    },
+    {
+      "id": "dshot_decode",
+      "type": "backend",
+      "label": "DShot Decoder",
+      "sublabel": "DMA capture · timing check · CRC · throttle",
+      "row": 0,
+      "col": 2,
+      "sources": [
+        {"path": "src/io.c", "line": 253, "end_line": 260, "label": "DShot mode select"},
+        {"path": "src/io.c", "line": 309, "end_line": 430, "label": "DShot ISR / decode"}
+      ]
+    },
+    {
+      "id": "control_loop",
+      "type": "backend",
+      "label": "1 kHz Motor Control Loop",
+      "sublabel": "throttle · startup limits · duty slew · protection",
+      "row": 0,
+      "col": 3,
+      "sources": [
+        {"path": "src/main.c", "line": 664, "end_line": 790, "label": "main control loop"},
+        {"path": "CMakeLists.txt", "line": 100, "end_line": 102, "label": "E61 v1.6 defaults"}
+      ]
+    },
+    {
+      "id": "commutation",
+      "type": "backend",
+      "label": "Six-Step Commutation",
+      "sublabel": "phase selection · floating phase · commutation timing",
+      "row": 1,
+      "col": 3,
+      "sources": [
+        {"path": "src/main.c", "line": 104, "end_line": 180, "label": "nextstep()"},
+        {"path": "src/main.c", "line": 385, "end_line": 415, "label": "BEMF ISR"}
+      ]
+    },
+    {
+      "id": "tim1_pwm",
+      "type": "frontend",
+      "label": "TIM1 Complementary PWM",
+      "sublabel": "CH1/2/3 + CH1N/2N/3N · dead time",
+      "row": 1,
+      "col": 4,
+      "sources": [
+        {"path": "src/main.c", "line": 752, "end_line": 790, "label": "duty to PWM"}
+      ]
+    },
+    {
+      "id": "stspin",
+      "type": "security",
+      "label": "STSPIN32G4 Gate Driver",
+      "sublabel": "INH/INL control · internal protections",
+      "row": 2,
+      "col": 4,
+      "sources": [
+        {"path": "CMakeLists.txt", "line": 102, "end_line": 102, "label": "STSPIN32G4_DRIVER"}
+      ]
+    },
+    {
+      "id": "power_stage",
+      "type": "cloud",
+      "label": "Three-Phase MOSFET Bridge",
+      "sublabel": "U / V / W power stage",
+      "row": 3,
+      "col": 4
+    },
+    {
+      "id": "motor",
+      "type": "external",
+      "label": "BLDC Motor",
+      "sublabel": "HQM-35 / application load",
+      "row": 3,
+      "col": 3
+    },
+    {
+      "id": "bemf_frontend",
+      "type": "frontend",
+      "label": "BEMF Analog Front End",
+      "sublabel": "OUT1 / OUT2 / OUT3 vs PAB_COM",
+      "row": 3,
+      "col": 2,
+      "sources": [
+        {"path": "mcu/STM32G431/config.c", "line": 551, "end_line": 575, "label": "E61 comparator mapping"}
+      ]
+    },
+    {
+      "id": "comparators",
+      "type": "frontend",
+      "label": "COMP2 / COMP4",
+      "sublabel": "Selected floating-phase zero crossing",
+      "row": 2,
+      "col": 2,
+      "sources": [
+        {"path": "mcu/STM32G431/config.c", "line": 561, "end_line": 623, "label": "compctl()"}
+      ]
+    },
+    {
+      "id": "tim2_bemf",
+      "type": "messagebus",
+      "label": "TIM2 BEMF Timing Chain",
+      "sublabel": "COMPx_OUT → IC1 → OC3/TRGO → TIM1",
+      "row": 1,
+      "col": 2,
+      "sources": [
+        {"path": "mcu/STM32G431/config.c", "line": 446, "end_line": 455, "label": "TIM2 routing"}
+      ]
+    },
+    {
+      "id": "adc_protection",
+      "type": "database",
+      "label": "ADC / Protection Inputs",
+      "sublabel": "VBAT · NTC · sensor data",
+      "row": 1,
+      "col": 0,
+      "sources": [
+        {"path": "mcu/STM32G431/config.c", "line": 457, "end_line": 511, "label": "ADC + DMA"},
+        {"path": "src/main.c", "line": 420, "end_line": 450, "label": "sensor processing"}
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "STM32G431 Firmware",
+      "wraps": ["pa6_input", "dshot_decode", "control_loop", "commutation", "tim1_pwm", "comparators", "tim2_bemf", "adc_protection"],
+      "pad": 24
+    },
+    {
+      "kind": "region",
+      "label": "Power Hardware",
+      "wraps": ["stspin", "power_stage", "motor", "bemf_frontend"],
+      "pad": 24
+    }
+  ],
+  "connections": [
+    {"id": "c1", "from": "fc", "to": "pa6_input", "label": "DShot", "variant": "emphasis", "route": "orthogonal-h"},
+    {"id": "c2", "from": "pa6_input", "to": "dshot_decode", "label": "captured edges", "route": "orthogonal-h"},
+    {"id": "c3", "from": "dshot_decode", "to": "control_loop", "label": "throt", "variant": "emphasis", "route": "orthogonal-h"},
+    {"id": "c4", "from": "control_loop", "to": "commutation", "label": "run / duty / timing", "variant": "emphasis", "route": "orthogonal-v"},
+    {"id": "c5", "from": "commutation", "to": "tim1_pwm", "label": "phase state", "variant": "emphasis", "route": "orthogonal-h"},
+    {"id": "c6", "from": "tim1_pwm", "to": "stspin", "label": "INH1..3 / INL1..3", "variant": "emphasis", "route": "orthogonal-v"},
+    {"id": "c7", "from": "stspin", "to": "power_stage", "label": "GHS / GLS", "variant": "emphasis", "route": "orthogonal-v"},
+    {"id": "c8", "from": "power_stage", "to": "motor", "label": "U / V / W", "variant": "emphasis", "route": "orthogonal-h"},
+    {"id": "c9", "from": "motor", "to": "bemf_frontend", "label": "phase BEMF", "variant": "dashed", "route": "orthogonal-h"},
+    {"id": "c10", "from": "bemf_frontend", "to": "comparators", "label": "scaled phase / virtual neutral", "variant": "dashed", "route": "orthogonal-v"},
+    {"id": "c11", "from": "comparators", "to": "tim2_bemf", "label": "COMPx_OUT", "variant": "dashed", "route": "orthogonal-v"},
+    {"id": "c12", "from": "tim2_bemf", "to": "commutation", "label": "zero-cross timing", "variant": "dashed", "route": "orthogonal-h"},
+    {"id": "c13", "from": "adc_protection", "to": "control_loop", "label": "voltage / temperature / protection", "variant": "security", "route": "orthogonal-h"}
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "E61 v1.6 tuning defaults",
+      "items": [
+        "SINE_RANGE=0",
+        "DUTY_MIN=14",
+        "DUTY_SPUP=20",
+        "DUTY_RATE=15",
+        "DUTY_RAMP=70",
+        "THROT_ZTC=1"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Sensorless commutation principle",
+      "items": [
+        "One phase is left floating in each six-step state.",
+        "COMP2 / COMP4 select the E61 phase BEMF signal against PAB_COM.",
+        "TIM2 timestamps zero crossing and schedules the delayed commutation event."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Artifact scope",
+      "items": [
+        "Derived from the supplied E61 v1.6 source archive, not from the current upstream master revision.",
+        "Code remains authoritative for implemented behavior; this diagram is a reviewed presentation layer."
+      ]
+    }
+  ]
+}
