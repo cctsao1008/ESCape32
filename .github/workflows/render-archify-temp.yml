@@ -46,22 +46,40 @@ jobs:
               {"id":"feedback","label":"BEMF feedback"},
               {"id":"terminal","label":"Stop / terminal"}
             ] |
-            (.states[] | select(.id=="neutral").lane) = "main" |
-            (.states[] | select(.id=="neutral").col) = 0 |
-            (.states[] | select(.id=="throttle").lane) = "main" |
-            (.states[] | select(.id=="throttle").col) = 1 |
-            (.states[] | select(.id=="start6").lane) = "main" |
-            (.states[] | select(.id=="start6").col) = 2 |
-            (.states[] | select(.id=="ramp").lane) = "main" |
-            (.states[] | select(.id=="ramp").col) = 3 |
-            (.states[] | select(.id=="closed").lane) = "main" |
-            (.states[] | select(.id=="closed").col) = 4 |
-            (.states[] | select(.id=="acquire").lane) = "feedback" |
-            (.states[] | select(.id=="acquire").col) = 0 |
-            (.states[] | select(.id=="timeout").lane) = "feedback" |
-            (.states[] | select(.id=="timeout").col) = 2 |
-            (.states[] | select(.id=="stop").lane) = "terminal" |
-            (.states[] | select(.id=="stop").col) = 2
+            (.states[] | select(.id=="neutral") | .lane) = "main" |
+            (.states[] | select(.id=="neutral") | .col) = 0 |
+            (.states[] | select(.id=="neutral") | .sublabel) = "stopped" |
+            (.states[] | select(.id=="throttle") | .lane) = "main" |
+            (.states[] | select(.id=="throttle") | .col) = 1 |
+            (.states[] | select(.id=="throttle") | .sublabel) = "valid DShot throttle" |
+            (.states[] | select(.id=="start6") | .lane) = "main" |
+            (.states[] | select(.id=="start6") | .col) = 2 |
+            (.states[] | select(.id=="start6") | .sublabel) = "SINE_RANGE=0" |
+            (.states[] | select(.id=="ramp") | .lane) = "main" |
+            (.states[] | select(.id=="ramp") | .col) = 3 |
+            (.states[] | select(.id=="ramp") | .sublabel) = "duty ramp limits" |
+            (.states[] | select(.id=="closed") | .lane) = "main" |
+            (.states[] | select(.id=="closed") | .col) = 4 |
+            (.states[] | select(.id=="closed") | .label) = "Closed Loop" |
+            (.states[] | select(.id=="closed") | .sublabel) = "BEMF synchronized" |
+            (.states[] | select(.id=="acquire") | .lane) = "feedback" |
+            (.states[] | select(.id=="acquire") | .col) = 2 |
+            (.states[] | select(.id=="acquire") | .sublabel) = "BEMF zero crossing" |
+            (.states[] | select(.id=="timeout") | .lane) = "feedback" |
+            (.states[] | select(.id=="timeout") | .col) = 0 |
+            (.states[] | select(.id=="timeout") | .sublabel) = "sync reset" |
+            (.states[] | select(.id=="stop") | .lane) = "terminal" |
+            (.states[] | select(.id=="stop") | .col) = 2 |
+            (.states[] | select(.id=="stop") | .label) = "Stop / Protect" |
+            (.states[] | select(.id=="stop") | .sublabel) = "coast / brake / stop" |
+            (.transitions[] |= del(.label)) |
+            (.transitions[] | select(.id=="t5") | .route) = "straight" |
+            (.transitions[] | select(.id=="t5") | .fromSide) = "top" |
+            (.transitions[] | select(.id=="t5") | .toSide) = "bottom" |
+            (.transitions[] | select(.id=="t8") | .route) = "right-channel" |
+            (.transitions[] | select(.id=="t8") | .fromSide) = "right" |
+            (.transitions[] | select(.id=="t8") | .toSide) = "right" |
+            (.transitions[] | select(.id=="t8") | .channelX) = 820
           ' docs/architecture/e61-v1.6.startup-lifecycle.json > /tmp/lifecycle.json
           mv /tmp/lifecycle.json docs/architecture/e61-v1.6.startup-lifecycle.json
 
