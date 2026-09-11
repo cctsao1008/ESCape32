@@ -83,8 +83,11 @@ jobs:
           ' docs/architecture/e61-v1.6.startup-lifecycle.json > /tmp/lifecycle.json
           mv /tmp/lifecycle.json docs/architecture/e61-v1.6.startup-lifecycle.json
 
-          jq '.meta.quality_profile = "standard"' \
-            docs/architecture/e61-v1.6.dshot-sequence.json > /tmp/sequence.json
+          jq '
+            .meta.quality_profile = "standard" |
+            .messages = [.messages[] | select(.id != "m3" and .id != "m5")] |
+            (.messages[] | select(.id=="m8") | .y) = 600
+          ' docs/architecture/e61-v1.6.dshot-sequence.json > /tmp/sequence.json
           mv /tmp/sequence.json docs/architecture/e61-v1.6.dshot-sequence.json
       - name: Render architecture
         run: |
