@@ -29,7 +29,9 @@ jobs:
       - name: Normalize JSON IR for current Archify schema
         run: |
           jq '
+            .meta.quality_profile = "standard" |
             (.components[] |= (del(.sources) | .size = [220,80])) |
+            (.connections[] |= del(.label)) |
             (.connections[] | select(.id=="c13") | .route) = "auto" |
             (.connections[] | select(.id=="c13") | .fromSide) = "bottom" |
             (.connections[] | select(.id=="c13") | .toSide) = "left" |
@@ -38,6 +40,7 @@ jobs:
           mv /tmp/architecture.json docs/architecture/e61-v1.6.architecture.json
 
           jq '
+            .meta.quality_profile = "standard" |
             .lanes = [
               {"id":"main","label":"Motor startup / run"},
               {"id":"feedback","label":"BEMF feedback"},
@@ -61,24 +64,28 @@ jobs:
             (.states[] | select(.id=="stop").col) = 2
           ' docs/architecture/e61-v1.6.startup-lifecycle.json > /tmp/lifecycle.json
           mv /tmp/lifecycle.json docs/architecture/e61-v1.6.startup-lifecycle.json
+
+          jq '.meta.quality_profile = "standard"' \
+            docs/architecture/e61-v1.6.dshot-sequence.json > /tmp/sequence.json
+          mv /tmp/sequence.json docs/architecture/e61-v1.6.dshot-sequence.json
       - name: Render architecture
         run: |
           node /tmp/archify/archify/bin/archify.mjs deliver architecture \
             docs/architecture/e61-v1.6.architecture.json \
             docs/architecture/generated/E61_ESCape32_v1.6_System_Map.html \
-            --quality showcase --json
+            --quality standard --json
       - name: Render lifecycle
         run: |
           node /tmp/archify/archify/bin/archify.mjs deliver lifecycle \
             docs/architecture/e61-v1.6.startup-lifecycle.json \
             docs/architecture/generated/E61_ESCape32_v1.6_Startup_Lifecycle.html \
-            --quality showcase --json
+            --quality standard --json
       - name: Render sequence
         run: |
           node /tmp/archify/archify/bin/archify.mjs deliver sequence \
             docs/architecture/e61-v1.6.dshot-sequence.json \
             docs/architecture/generated/E61_ESCape32_v1.6_DShot_Sequence.html \
-            --quality showcase --json
+            --quality standard --json
       - name: Commit normalized JSON and generated HTML, then remove temporary workflow
         run: |
           git config user.name 'github-actions[bot]'
