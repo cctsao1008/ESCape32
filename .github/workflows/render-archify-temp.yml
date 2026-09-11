@@ -28,8 +28,13 @@ jobs:
           npm install
       - name: Normalize JSON IR for current Archify schema
         run: |
-          jq '(.components[] |= del(.sources))' \
-            docs/architecture/e61-v1.6.architecture.json > /tmp/architecture.json
+          jq '
+            (.components[] |= (del(.sources) | .size = [220,80])) |
+            (.connections[] | select(.id=="c13") | .route) = "auto" |
+            (.connections[] | select(.id=="c13") | .fromSide) = "bottom" |
+            (.connections[] | select(.id=="c13") | .toSide) = "left" |
+            (.connections[] | select(.id=="c13") | .via) = [[190,430],[875,430],[875,130]]
+          ' docs/architecture/e61-v1.6.architecture.json > /tmp/architecture.json
           mv /tmp/architecture.json docs/architecture/e61-v1.6.architecture.json
 
           jq '
