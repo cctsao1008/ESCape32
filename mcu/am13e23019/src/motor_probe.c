@@ -27,6 +27,15 @@ static void am13e_motor_backend_compile_probe(void)
     hw_motor_am13e_encode_six_step_shadow(0x0U, 0x0U, false);
 
     /*
+     * Stage E: compile-check the asynchronous commutation candidate.
+     * Outputs are never enabled in this probe. The helper masks all three
+     * pairs to FLOAT, writes ACTIVE AQ tables, then releases B before A.
+     */
+    hw_motor_am13e_apply_six_step_masked_active_probe(0x4U, 0x2U, true);
+    hw_motor_am13e_apply_six_step_masked_active_probe(0x4U, 0x2U, false);
+    hw_motor_am13e_apply_six_step_masked_active_probe(0x0U, 0x0U, false);
+
+    /*
      * Stage C: verify the exact AQ shadow API used by the TI global-load
      * example for all three phase pairs.  These values are compile probes
      * only; they are not yet the ESCape32 six-step gate-state mapping.

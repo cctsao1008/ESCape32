@@ -173,3 +173,63 @@ Trip Zone software force/clear, if exposed
 
 Once those APIs are captured, Path A and Path B can be compared with real code
 rather than register-name inference.
+
+
+## Result of pinned-SDK API capture
+
+The SDK exposes the complete Global Load control sequence:
+
+```text
+DL_MCPWM_enableGlobalLoad()
+DL_MCPWM_disableGlobalLoad()
+DL_MCPWM_setGlobalLoadTrigger()
+DL_MCPWM_enableGlobalLoadOneShotMode()
+DL_MCPWM_setGlobalLoadOneShotLatch()
+DL_MCPWM_getGlobalLoadOneShotLatchStatus()
+DL_MCPWM_forceGlobalLoadOneShotEvent()
+```
+
+This confirms Path A is technically implementable. It also confirms the
+coupling concern: Global Load is module-wide rather than AQ-only.
+
+The captured DriverLib/HW API does not expose a software Trip Zone assertion
+primitive for normal use. The visible `INTFRC` bits force interrupt flags;
+they are not a gate-output trip command.
+
+## Selected Stage-E bench candidate: AQ safe-mask + ACTIVE AQ update
+
+For the first faithful AM13 six-step implementation, prefer a controlled
+blanking sequence over software-forced Global Load:
+
+```text
+commutation event
+    |
+    +-- force every A AQ input LOW
+    +-- force every B AQ input HIGH
+    |      => all three final phase pairs FLOAT
+    |
+    +-- write all six ACTIVE AQ control tables
+    |
+    +-- release B software force
+    +-- release A software force
+    |
+    +-- new six-step state active
+```
+
+Why this is preferred for the first bench:
+
+- commutation remains asynchronous to PWM ZERO/PRD;
+- PWM duty/period/dead-band shadows remain in their normal PWM-boundary timing
+  domain;
+- no pending compare or period shadow is accidentally committed mid-cycle;
+- masking only removes drive before the active AQ state is rewritten;
+- release order keeps the high-side forced off until the B path has reached its
+  new state, after which RED delays a new high-side rising edge.
+
+This deliberately introduces a short all-phase FLOAT interval. That interval
+must be measured. If it is too large or too jittery, the sequence can later be
+optimized with direct pair-register writes, DMA, or a shadow-coherency Global
+Load scheme.
+
+The production `hw_motor_apply_six_step()` remains blocked until this sequence
+is measured on the actual MCPWM outputs with the power stage disabled.
