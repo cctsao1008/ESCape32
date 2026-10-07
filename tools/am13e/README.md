@@ -88,4 +88,16 @@ TI_ROOT=/opt/ti DOWNLOAD_DIR=/tmp/am13e-tools ./tools/am13e/install-toolchain.sh
 Individual components can be skipped with `--skip-sdk`, `--skip-gcc`, and
 `--skip-sysconfig`.
 
+## SysConfig installation note
+
+SysConfig's Linux installer treats `--prefix` as the final installation
+directory. Therefore the bootstrap installs it with:
+
+```text
+--prefix ~/ti/sysconfig_1.28.0
+```
+
+Do not use `--prefix ~/ti` for SysConfig. Doing so places SysConfig files
+directly in the shared TI root instead of creating a versioned subdirectory.
+
 The scripts do not modify the installed TI SDK.

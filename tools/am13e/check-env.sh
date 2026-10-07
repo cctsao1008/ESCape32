@@ -72,7 +72,9 @@ else
     fail "AM13E SDK not found or incomplete at $SDK_ROOT"
 fi
 
-if [ -d "$SYSCFG_ROOT" ]; then
+if [ -x "$TI_ROOT/sysconfig_cli.sh" ] && [ ! -d "$SYSCFG_ROOT" ]; then
+    fail "SysConfig is installed directly in TI_ROOT; expected isolated location $SYSCFG_ROOT"
+elif [ -d "$SYSCFG_ROOT" ]; then
     if [ -x "$SYSCFG_ROOT/sysconfig_cli.sh" ] ||
        [ -f "$SYSCFG_ROOT/dist/cli.js" ] ||
        [ -f "$SYSCFG_ROOT/nodejs/node" ]; then
