@@ -249,6 +249,7 @@ static void entryirq(void) {
 	TIM_CCER(IOTIM) = 0;
 	TIM_CCMR1(IOTIM) = TIM_CCMR1_CC1S_IN_TRC | TIM_CCMR1_IC1F_CK_INT_N_8;
 	TIM_SMCR(IOTIM) = TIM_SMCR_SMS_RM | TIM_SMCR_TS_TI1F_ED; // Reset on any edge on TI1
+	TIM_CCER(IOTIM) = TIM_CCER_CC1E; // IC1 on any edge on TI1
 	TIM_DIER(IOTIM) = TIM_DIER_UIE;
 	TIM_ARR(IOTIM) = dshotarr1; // Frame reset timeout
 	TIM_EGR(IOTIM) = TIM_EGR_UG;
@@ -302,18 +303,22 @@ static void servoirq(void) {
 }
 
 static void dshotirq(void) {
-	if (!(TIM_DIER(IOTIM) & TIM_DIER_UIE) || !(TIM_SR(IOTIM) & TIM_SR_UIF)) return; // Fall through exactly once
+	static char n;
+	if (!(TIM_DIER(IOTIM) & TIM_DIER_UIE) || !(TIM_SR(IOTIM) & TIM_SR_UIF)) return;
 	TIM_SR(IOTIM) = ~TIM_SR_UIF;
-	if (!TIM_CCER(IOTIM)) { // Detect DSHOT polarity
-		TIM_CCER(IOTIM) = TIM_CCER_CC1E; // IC1 on any edge on TI1
-		dshotinv = IOTIM_IDR; // Inactive level
+	if ((TIM_DIER(IOTIM) & TIM_DIER_CC1DE) && DMA1_CNDTR(IOTIM_DMA) == 32 && dshotinv == IOTIM_IDR) {
+		if (++n < 4) return;
+		TIM_ARR(IOTIM) = -1; // Don't trigger UEV for timebase consistency
+		TIM_CR1(IOTIM) = TIM_CR1_CEN | TIM_CR1_ARPE;
+		TIM_DIER(IOTIM) = TIM_DIER_CC1DE;
+		return;
 	}
+	DMA1_CCR(IOTIM_DMA) = 0;
 	DMA1_CNDTR(IOTIM_DMA) = 32;
 	DMA1_CCR(IOTIM_DMA) = DMA_CCR_EN | DMA_CCR_TCIE | DMA_CCR_CIRC | DMA_CCR_MINC | DMA_CCR_PSIZE_16BIT | DMA_CCR_MSIZE_16BIT;
-	TIM_ARR(IOTIM) = -1;
-	TIM_EGR(IOTIM) = TIM_EGR_UG;
-	TIM_CR1(IOTIM) = TIM_CR1_CEN | TIM_CR1_ARPE;
-	TIM_DIER(IOTIM) = TIM_DIER_CC1DE;
+	TIM_DIER(IOTIM) = TIM_DIER_UIE | TIM_DIER_CC1DE;
+	dshotinv = IOTIM_IDR;
+	n = 0;
 }
 
 static void dshotreset(void) {
@@ -341,7 +346,6 @@ static void dshotreset(void) {
 
 static void dshotresync(void) {
 	if (dshotinv) dshotreset();
-	DMA1_CCR(IOTIM_DMA) = 0;
 	TIM_CR1(IOTIM) = TIM_CR1_CEN | TIM_CR1_ARPE | TIM_CR1_URS;
 	TIM_ARR(IOTIM) = dshotarr1; // Frame reset timeout
 	TIM_EGR(IOTIM) = TIM_EGR_UG;
@@ -360,6 +364,7 @@ void iotim_dma_isr(void) { // DSHOT
 	static const char gcr[] = {0x19, 0x1b, 0x12, 0x13, 0x1d, 0x15, 0x16, 0x17, 0x1a, 0x09, 0x0a, 0x0b, 0x1e, 0x0d, 0x0e, 0x0f};
 	static char cmd, cnt, rep;
 	DMA1_IFCR = DMA_IFCR_CTCIF(IOTIM_DMA);
+	if (TIM_DIER(IOTIM) & TIM_DIER_UIE) return; // Bad sync
 	if (DMA1_CCR(IOTIM_DMA) & DMA_CCR_DIR) {
 		dshotreset();
 		if (!dshotval) {
