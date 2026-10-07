@@ -16,6 +16,7 @@
 */
 
 #include "common.h"
+#include "hw_motor.h"
 
 #define REVISION 17
 #define REVPATCH 3
@@ -128,29 +129,19 @@ static void nextstep(void) {
 		int b = a < 120 ? a + 240 : a - 120;
 		int c = a < 240 ? a + 120 : a - 240;
 		int p = min(cfg.sine_power << 3, 120 - cutback); // 50% cutback at 15C above prot_temp
-		TIM1_CR1 = TIM_CR1_CEN | TIM_CR1_ARPE | TIM_CR1_UDIS;
-		TIM1_ARR = CLK_KHZ / 24 - 1;
-		TIM1_CCR1 = DEAD_TIME + (sinedata[a] * p >> 7);
-		TIM1_CCR2 = DEAD_TIME + (sinedata[b] * p >> 7);
-		TIM1_CCR3 = DEAD_TIME + (sinedata[c] * p >> 7);
-		TIM1_CR1 = TIM_CR1_CEN | TIM_CR1_ARPE;
+		hw_motor_sine_update(
+			CLK_KHZ / 24 - 1,
+			DEAD_TIME + (sinedata[a] * p >> 7),
+			DEAD_TIME + (sinedata[b] * p >> 7),
+			DEAD_TIME + (sinedata[c] * p >> 7)
+		);
 #ifdef ERPM_PIN
 		if (step == 1) GPIO(ERPM_PORT, BSRR) = 1 << (ERPM_PIN + 16);
 		else if (step == 181) GPIO(ERPM_PORT, BSRR) = 1 << ERPM_PIN;
 #endif
 		if (prep) return;
-		TIM1_CCMR1 = TIM_CCMR1_OC1PE | TIM_CCMR1_OC1M_PWM1 | TIM_CCMR1_OC2PE | TIM_CCMR1_OC2M_PWM1;
-		TIM1_CCMR2 = TIM_CCMR2_OC3PE | TIM_CCMR2_OC3M_PWM1;
-#ifdef PWM_ENABLE
-		int er = TIM_CCER_CC1E | TIM_CCER_CC1NP | TIM_CCER_CC2E | TIM_CCER_CC2NP | TIM_CCER_CC3E | TIM_CCER_CC3NP;
-#else
-		int er = TIM_CCER_CC1E | TIM_CCER_CC1NE | TIM_CCER_CC2E | TIM_CCER_CC2NE | TIM_CCER_CC3E | TIM_CCER_CC3NE;
-#endif
-#ifdef INVERTED_HIGH
-		er |= TIM_CCER_CC1P | TIM_CCER_CC2P | TIM_CCER_CC3P;
-#endif
-		TIM1_CCER = er;
-		TIM1_EGR = TIM_EGR_UG | TIM_EGR_COMG;
+		hw_motor_sine_enable_outputs();
+		hw_motor_commit_update();
 		TIM_DIER(IFTIM) = 0;
 		compctl(0);
 		sync = 0;
@@ -177,90 +168,8 @@ static void nextstep(void) {
 	int p = x & m; // Positive phase
 	int n = ~x & m; // Negative phase
 	int cc = m >> 3 ^ reverse << 2; // Floating phase
-	int m1 = TIM_CCMR1_OC1PE | TIM_CCMR1_OC2PE;
-#ifdef TIM1_CCR5
-	int m2 = TIM_CCMR2_OC3PE;
-	int er = TIM_CCER_CC5E;
-#else
-	int m2 = TIM_CCMR2_OC3PE | TIM_CCMR2_OC4PE | TIM_CCMR2_OC4M_PWM1;
-	int er = TIM_CCER_CC4E;
-#endif
 	if (cfg.throt_ztc && !throt) p = n = 0; // Zero-throttle coasting
-	if (p & 1) {
-		m1 |= TIM_CCMR1_OC1M_PWM1;
-#ifdef PWM_ENABLE
-		er |= TIM_CCER_CC1E;
-#else
-		er |= cfg.damp ? TIM_CCER_CC1E | TIM_CCER_CC1NE : TIM_CCER_CC1E;
-#endif
-	} else if (n & 1) {
-#ifdef PWM_ENABLE
-		m1 |= TIM_CCMR1_OC1M_FORCE_LOW;
-#else
-		m1 |= TIM_CCMR1_OC1M_FORCE_HIGH;
-#endif
-		er |= TIM_CCER_CC1NE;
-	} else {
-#ifdef PWM_ENABLE
-		m1 |= TIM_CCMR1_OC1M_FORCE_HIGH;
-#else
-		m1 |= TIM_CCMR1_OC1M_FORCE_LOW;
-#endif
-		er |= TIM_CCER_CC1NE;
-	}
-	if (p & 2) {
-		m1 |= TIM_CCMR1_OC2M_PWM1;
-#ifdef PWM_ENABLE
-		er |= TIM_CCER_CC2E;
-#else
-		er |= cfg.damp ? TIM_CCER_CC2E | TIM_CCER_CC2NE : TIM_CCER_CC2E;
-#endif
-	} else if (n & 2) {
-#ifdef PWM_ENABLE
-		m1 |= TIM_CCMR1_OC2M_FORCE_LOW;
-#else
-		m1 |= TIM_CCMR1_OC2M_FORCE_HIGH;
-#endif
-		er |= TIM_CCER_CC2NE;
-	} else {
-#ifdef PWM_ENABLE
-		m1 |= TIM_CCMR1_OC2M_FORCE_HIGH;
-#else
-		m1 |= TIM_CCMR1_OC2M_FORCE_LOW;
-#endif
-		er |= TIM_CCER_CC2NE;
-	}
-	if (p & 4) {
-		m2 |= TIM_CCMR2_OC3M_PWM1;
-#ifdef PWM_ENABLE
-		er |= TIM_CCER_CC3E;
-#else
-		er |= cfg.damp ? TIM_CCER_CC3E | TIM_CCER_CC3NE : TIM_CCER_CC3E;
-#endif
-	} else if (n & 4) {
-#ifdef PWM_ENABLE
-		m2 |= TIM_CCMR2_OC3M_FORCE_LOW;
-#else
-		m2 |= TIM_CCMR2_OC3M_FORCE_HIGH;
-#endif
-		er |= TIM_CCER_CC3NE;
-	} else {
-#ifdef PWM_ENABLE
-		m2 |= TIM_CCMR2_OC3M_FORCE_HIGH;
-#else
-		m2 |= TIM_CCMR2_OC3M_FORCE_LOW;
-#endif
-		er |= TIM_CCER_CC3NE;
-	}
-#ifdef PWM_ENABLE
-	er |= TIM_CCER_CC1NP | TIM_CCER_CC2NP | TIM_CCER_CC3NP;
-#endif
-#ifdef INVERTED_HIGH
-	er |= TIM_CCER_CC1P | TIM_CCER_CC2P | TIM_CCER_CC3P;
-#endif
-	TIM1_CCMR1 = m1;
-	TIM1_CCMR2 = m2;
-	TIM1_CCER = er;
+	hw_motor_apply_six_step(p, n, cfg.damp);
 	compctl(pcc);
 	pcc = cc;
 	if (ival > 1000 << IFTIM_XRES) {
@@ -337,16 +246,8 @@ static void laststep(void) {
 	sine = 0;
 	prep = 0;
 	if (lock) nextstep();
-	else {
-#ifdef PWM_ENABLE
-		TIM1_CCMR1 = TIM_CCMR1_OC1PE | TIM_CCMR1_OC1M_PWM2 | TIM_CCMR1_OC2PE | TIM_CCMR1_OC2M_PWM2;
-		TIM1_CCMR2 = TIM_CCMR2_OC3PE | TIM_CCMR2_OC3M_PWM2;
-#else
-		TIM1_CCMR1 = TIM_CCMR1_OC1PE | TIM_CCMR1_OC1M_PWM1 | TIM_CCMR1_OC2PE | TIM_CCMR1_OC2M_PWM1;
-		TIM1_CCMR2 = TIM_CCMR2_OC3PE | TIM_CCMR2_OC3M_PWM1;
-#endif
-	}
-	TIM1_EGR = TIM_EGR_UG | TIM_EGR_COMG;
+	else hw_motor_set_idle_pwm_mode();
+	hw_motor_commit_update();
 	compctl(0);
 	oldstep = step;
 	step = 0;
