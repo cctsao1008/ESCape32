@@ -166,3 +166,24 @@ The script:
 
 The dependency directory and regression build directory are ignored by Git.
 
+
+## Capture TI MCPWM reference sources
+
+Before implementing the AM13E motor backend, capture the exact MCPWM DriverLib
+and example sources from the pinned local SDK:
+
+```bash
+./tools/am13e/collect-mcpwm-reference.sh
+```
+
+The output is written to:
+
+```text
+.am13e-build/mcpwm-reference.txt
+```
+
+It includes the MCPWM DriverLib files plus the LaunchPad No-RTOS sources for
+basic PWM generation, deadband, global load, trip zone, and CPU-latency
+examples. This is used to derive the AM13 backend from the installed SDK rather
+than guessing TI API names or register semantics.
+
