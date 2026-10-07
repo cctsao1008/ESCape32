@@ -216,11 +216,26 @@ if [ "$skip_sysconfig" -eq 0 ]; then
         }
 
         chmod +x "$sysconfig_installer"
-        echo "Installing SysConfig into $TI_ROOT..."
-        "$sysconfig_installer" --mode unattended --prefix "$TI_ROOT"
 
-        [ -d "$SYSCFG_ROOT" ] || {
-            echo "SysConfig installation completed but expected root was not found: $SYSCFG_ROOT" >&2
+        if [ -x "$TI_ROOT/sysconfig_cli.sh" ] && [ "$SYSCFG_ROOT" != "$TI_ROOT" ]; then
+            cat >&2 <<EOF
+SysConfig is already installed directly in TI_ROOT:
+  $TI_ROOT
+
+Expected isolated location:
+  $SYSCFG_ROOT
+
+Clean the old flat SysConfig installation before retrying.
+EOF
+            exit 1
+        fi
+
+        mkdir -p "$SYSCFG_ROOT"
+        echo "Installing SysConfig into $SYSCFG_ROOT..."
+        "$sysconfig_installer" --mode unattended --prefix "$SYSCFG_ROOT"
+
+        [ -x "$SYSCFG_ROOT/sysconfig_cli.sh" ] || {
+            echo "SysConfig installation completed but CLI was not found: $SYSCFG_ROOT/sysconfig_cli.sh" >&2
             exit 1
         }
     fi
