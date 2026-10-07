@@ -137,6 +137,7 @@ echo "Validated TI APIs:"
 echo "  DL_MCPWM_setTimeBasePeriodShadow"
 echo "  DL_MCPWM_setCounterCompareShadowValue (1A/2A/3A)"
 echo "  DL_MCPWM_setGlobalLoadOneShotLatch"
+echo "  DL_MCPWM_setActionQualifierActionShadow (1A/1B/2A/2B/3A/3B)"
 echo
 echo "Not validated yet:"
 echo "  six-step AQ output-state mapping"

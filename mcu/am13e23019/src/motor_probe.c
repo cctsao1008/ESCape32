@@ -14,6 +14,45 @@
 static void am13e_motor_backend_compile_probe(void)
 {
     hw_motor_sine_update(8000, 1000, 2000, 4000);
+
+    /*
+     * Stage C: verify the exact AQ shadow API used by the TI global-load
+     * example for all three phase pairs.  These values are compile probes
+     * only; they are not yet the ESCape32 six-step gate-state mapping.
+     */
+    DL_MCPWM_setActionQualifierActionShadow(
+        MCPWM_1_INST,
+        DL_MCPWM_AQ_OUTPUT_1A,
+        DL_MCPWM_AQ_OUTPUT_LOW,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPA);
+    DL_MCPWM_setActionQualifierActionShadow(
+        MCPWM_1_INST,
+        DL_MCPWM_AQ_OUTPUT_1B,
+        DL_MCPWM_AQ_OUTPUT_HIGH,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_PERIOD);
+
+    DL_MCPWM_setActionQualifierActionShadow(
+        MCPWM_1_INST,
+        DL_MCPWM_AQ_OUTPUT_2A,
+        DL_MCPWM_AQ_OUTPUT_LOW,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPA);
+    DL_MCPWM_setActionQualifierActionShadow(
+        MCPWM_1_INST,
+        DL_MCPWM_AQ_OUTPUT_2B,
+        DL_MCPWM_AQ_OUTPUT_HIGH,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_PERIOD);
+
+    DL_MCPWM_setActionQualifierActionShadow(
+        MCPWM_1_INST,
+        DL_MCPWM_AQ_OUTPUT_3A,
+        DL_MCPWM_AQ_OUTPUT_LOW,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPA);
+    DL_MCPWM_setActionQualifierActionShadow(
+        MCPWM_1_INST,
+        DL_MCPWM_AQ_OUTPUT_3B,
+        DL_MCPWM_AQ_OUTPUT_HIGH,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_PERIOD);
+
     hw_motor_commit_update();
 }
 
