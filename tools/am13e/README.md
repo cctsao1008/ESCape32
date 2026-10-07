@@ -88,6 +88,20 @@ TI_ROOT=/opt/ti DOWNLOAD_DIR=/tmp/am13e-tools ./tools/am13e/install-toolchain.sh
 Individual components can be skipped with `--skip-sdk`, `--skip-gcc`, and
 `--skip-sysconfig`.
 
+## AM13E23019 Stage-A bring-up build
+
+After the TI SDK smoke build passes, build the first repo-owned AM13E23019
+target with:
+
+```bash
+./tools/am13e/build-am13e-bringup.sh
+```
+
+This target is build-only. It reuses the pinned TI SDK empty LaunchPad SysConfig
+as a temporary seed and verifies that the resulting application ELF relocates
+the interrupt vectors to `0x00006000` while preserving TI's RAM vector table,
+RAMFUNC placement and hard-float ABI.
+
 ## SDK GCC smoke build
 
 The TI SDK's generated imports file defaults the Arm GNU toolchain location to a
