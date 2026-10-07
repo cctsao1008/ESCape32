@@ -16,52 +16,52 @@ platform_src="$repo_root/mcu/am13e23019"
 
 sdk_build_dir="$SDK_ROOT/build/am13e230x/m33_gcc_arm_debug"
 work_dir="$repo_root/.am13e-build/bringup"
-overlay_src="$work_dir/source"
-overlay_bin="$sdk_build_dir/escape32_am13e23019"
+output_dir="$sdk_build_dir/escape32_am13e23019"
 hook_file="$work_dir/am13e_project_hook.cmake"
-seed_syscfg="$SDK_ROOT/examples/empty/am13e230x_lp/m33_nortos/example.syscfg"
+generated_syscfg="$SDK_ROOT/examples/empty/am13e230x_lp/m33_nortos/cmake_syscfg_generated"
 
 target="am13e23019_bringup"
-elf="$overlay_bin/$target.elf"
-map="$overlay_bin/$target.map"
+elf="$output_dir/$target.elf"
+map="$output_dir/$target.map"
 
 "$script_dir/check-env.sh"
 
-[ -f "$seed_syscfg" ] || {
-    echo "TI SDK SysConfig seed not found: $seed_syscfg" >&2
-    exit 1
-}
-
 echo
-echo "Preparing AM13E23019 Stage-A build overlay"
-echo "=========================================="
+echo "Preparing AM13E23019 Stage-A build"
+echo "=================================="
 echo "Repository      : $repo_root"
 echo "SDK root        : $SDK_ROOT"
-echo "Overlay source  : $overlay_src"
+echo "Platform source : $platform_src"
 echo "SDK build dir   : $sdk_build_dir"
+echo "Output dir      : $output_dir"
 echo
 
 rm -rf "$work_dir"
-mkdir -p "$overlay_src/src"
+mkdir -p "$work_dir"
 
-cp "$platform_src/CMakeLists.txt" "$overlay_src/CMakeLists.txt"
-cp "$platform_src/src/main.c" "$overlay_src/src/main.c"
-cp "$seed_syscfg" "$overlay_src/example.syscfg"
-
-# First generate the pinned TI SDK GCC baseline. This gives us a known-good
-# cache with TI's exact SDK device/compiler/SysConfig configuration.
+# First build the pinned TI SDK empty example. Besides proving the SDK baseline,
+# this generates the known-good SysConfig C/H files that Stage A reuses.
 "$script_dir/build-sdk-smoke.sh"
 
-# Add the external AM13E target only for the reconfigure below. CMake's project
-# include runs immediately after project(); DEFER schedules add_subdirectory()
-# until the TI top-level directory has created ti_sdk_config/source targets.
+if ! compgen -G "$generated_syscfg/*.c" > /dev/null; then
+    echo "TI empty-example SysConfig output was not generated: $generated_syscfg" >&2
+    exit 1
+fi
+
+rm -rf "$output_dir"
+mkdir -p "$output_dir"
+
+# CMAKE_PROJECT_INCLUDE runs immediately after project(). At that point the TI
+# SDK config/source targets do not exist yet, so schedule an include() at the
+# end of the top-level directory. Unlike add_subdirectory(), include() is valid
+# during deferred execution and lets the repo-owned target bind to TI targets
+# after they have been created.
 cat > "$hook_file" <<EOF
+set(ESCAPE32_AM13E_OUTPUT_DIR "$output_dir")
 cmake_language(
     DEFER
-    DIRECTORY "$SDK_ROOT"
-    CALL add_subdirectory
-        "$overlay_src"
-        "$overlay_bin"
+    CALL include
+        "$platform_src/CMakeLists.txt"
 )
 EOF
 
