@@ -45,7 +45,7 @@ else
     warn "WSL not detected; native Linux is also supported"
 fi
 
-for tool in make ninja python3 tar xz; do
+for tool in make ninja python3 tar xz dot; do
     if command -v "$tool" >/dev/null 2>&1; then
         pass "$tool: $(command -v "$tool")"
     else
