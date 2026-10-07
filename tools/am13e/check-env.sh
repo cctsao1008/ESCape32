@@ -5,9 +5,10 @@ EXPECTED_SDK_DIR="am13e230x_sdk_26_01_00_03"
 EXPECTED_SYSCFG_DIR="sysconfig_1.28.0"
 EXPECTED_GCC_DIR="arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi"
 
-SDK_ROOT="${AM13E_SDK_ROOT:-$HOME/ti/$EXPECTED_SDK_DIR}"
-SYSCFG_ROOT="${SYSCFG_PATH:-$HOME/ti/$EXPECTED_SYSCFG_DIR}"
-GCC_ROOT="${GCC_ARM_TOOLCHAIN_PATH:-$HOME/$EXPECTED_GCC_DIR}"
+TI_ROOT="${TI_ROOT:-$HOME/ti}"
+SDK_ROOT="${AM13E_SDK_ROOT:-$TI_ROOT/$EXPECTED_SDK_DIR}"
+SYSCFG_ROOT="${SYSCFG_PATH:-$TI_ROOT/$EXPECTED_SYSCFG_DIR}"
+GCC_ROOT="${GCC_ARM_TOOLCHAIN_PATH:-$TI_ROOT/$EXPECTED_GCC_DIR}"
 
 failures=0
 warnings=0
@@ -17,12 +18,12 @@ warn() { printf '[WARN] %s\n' "$*"; warnings=$((warnings + 1)); }
 fail() { printf '[FAIL] %s\n' "$*"; failures=$((failures + 1)); }
 
 version_ge() {
-    # Return success when $1 >= $2 for dotted numeric versions.
     [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" = "$2" ]
 }
 
 printf 'AM13E environment check\n'
 printf '=======================\n'
+printf 'TI root        : %s\n' "$TI_ROOT"
 printf 'SDK root       : %s\n' "$SDK_ROOT"
 printf 'SysConfig root : %s\n' "$SYSCFG_ROOT"
 printf 'GCC root       : %s\n\n' "$GCC_ROOT"
@@ -91,7 +92,12 @@ if [ -x "$gcc_bin" ]; then
         *) warn "GCC exists at pinned path but reports version '$gcc_version'" ;;
     esac
 else
-    fail "Pinned Arm GNU toolchain not found at $GCC_ROOT"
+    legacy_gcc="$HOME/$EXPECTED_GCC_DIR"
+    if [ -x "$legacy_gcc/bin/arm-none-eabi-gcc" ]; then
+        fail "Pinned Arm GNU toolchain is in legacy location $legacy_gcc; move it to $GCC_ROOT"
+    else
+        fail "Pinned Arm GNU toolchain not found at $GCC_ROOT"
+    fi
 fi
 
 printf '\n'
