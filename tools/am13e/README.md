@@ -214,3 +214,20 @@ remain compile-time errors until those mappings are validated.
 The TI example pin assignment is only a compile-time reference; it is not the
 E62 product pinout.
 
+
+## Capture MCPWM force/dead-band APIs
+
+The six-step mapping depends on whether AM13 provides a per-pair override that
+can coexist with the module-wide dead-band configuration. Capture the exact
+pinned-SDK declarations before implementing output-state control:
+
+```bash
+./tools/am13e/collect-mcpwm-force-reference.sh
+```
+
+Output:
+
+```text
+.am13e-build/mcpwm-force-reference.txt
+```
+
