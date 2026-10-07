@@ -108,6 +108,141 @@ void hw_motor_am13e_configure_split_deadband(uint16_t dead_time_ticks)
         ESCAPE32_AM13E_MCPWM_INST, dead_time_ticks);
 }
 
+/*
+ * AQ shadow primitives used to encode six-step phase states.
+ *
+ * CompleteShadow(..., 0) first clears every event action so a phase never
+ * inherits stale compare/period behavior from its previous commutation state.
+ * The encoder only writes shadow AQ registers; it does not enable TBCLK,
+ * enable outputs, or arm a global-load event.
+ */
+static inline __attribute__((always_inline))
+void hw_motor_am13e_aq_clear_shadow(
+    DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE output)
+{
+    DL_MCPWM_setActionQualifierActionCompleteShadow(
+        ESCAPE32_AM13E_MCPWM_INST, output, 0U);
+}
+
+static inline __attribute__((always_inline))
+void hw_motor_am13e_aq_constant(
+    DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE output,
+    DL_MCPWM_ACTION_QUALIFIER_OUTPUT level)
+{
+    hw_motor_am13e_aq_clear_shadow(output);
+
+    /*
+     * Program both cycle-boundary events.  This makes the intended constant
+     * state explicit in the AQ table while leaving compare events inactive.
+     */
+    DL_MCPWM_setActionQualifierActionShadow(
+        ESCAPE32_AM13E_MCPWM_INST,
+        output,
+        level,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_ZERO);
+    DL_MCPWM_setActionQualifierActionShadow(
+        ESCAPE32_AM13E_MCPWM_INST,
+        output,
+        level,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_PERIOD);
+}
+
+static inline __attribute__((always_inline))
+void hw_motor_am13e_aq_pwm(
+    DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE output,
+    DL_MCPWM_ACTION_QUALIFIER_OUTPUT_EVENT compare_event)
+{
+    hw_motor_am13e_aq_clear_shadow(output);
+
+    /* Edge-aligned source waveform: HIGH at ZERO, LOW at compare. */
+    DL_MCPWM_setActionQualifierActionShadow(
+        ESCAPE32_AM13E_MCPWM_INST,
+        output,
+        DL_MCPWM_AQ_OUTPUT_HIGH,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_ZERO);
+    DL_MCPWM_setActionQualifierActionShadow(
+        ESCAPE32_AM13E_MCPWM_INST,
+        output,
+        DL_MCPWM_AQ_OUTPUT_LOW,
+        compare_event);
+}
+
+static inline __attribute__((always_inline))
+void hw_motor_am13e_encode_phase_pair_shadow(
+    DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE output_a,
+    DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE output_b,
+    DL_MCPWM_ACTION_QUALIFIER_OUTPUT_EVENT compare_a,
+    DL_MCPWM_ACTION_QUALIFIER_OUTPUT_EVENT compare_b,
+    bool positive,
+    bool negative,
+    bool damp)
+{
+    if (positive) {
+        hw_motor_am13e_aq_pwm(output_a, compare_a);
+
+        if (damp) {
+            /* Same source waveform; dead-band makes final B complementary. */
+            hw_motor_am13e_aq_pwm(output_b, compare_b);
+        } else {
+            /* B=HIGH before the inverted FED path => final low-side OFF. */
+            hw_motor_am13e_aq_constant(
+                output_b, DL_MCPWM_AQ_OUTPUT_HIGH);
+        }
+    } else if (negative) {
+        /*
+         * A=LOW and B=LOW before DB:
+         * final A=LOW, final B=HIGH => low-side continuously ON.
+         */
+        hw_motor_am13e_aq_constant(
+            output_a, DL_MCPWM_AQ_OUTPUT_LOW);
+        hw_motor_am13e_aq_constant(
+            output_b, DL_MCPWM_AQ_OUTPUT_LOW);
+    } else {
+        /*
+         * A=LOW and B=HIGH before DB:
+         * final A=LOW, final B=LOW => floating phase.
+         */
+        hw_motor_am13e_aq_constant(
+            output_a, DL_MCPWM_AQ_OUTPUT_LOW);
+        hw_motor_am13e_aq_constant(
+            output_b, DL_MCPWM_AQ_OUTPUT_HIGH);
+    }
+}
+
+static inline __attribute__((always_inline))
+void hw_motor_am13e_encode_six_step_shadow(
+    unsigned int positive_mask,
+    unsigned int negative_mask,
+    bool damp)
+{
+    hw_motor_am13e_encode_phase_pair_shadow(
+        DL_MCPWM_AQ_OUTPUT_1A,
+        DL_MCPWM_AQ_OUTPUT_1B,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPA,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPB,
+        (positive_mask & 0x1U) != 0U,
+        (negative_mask & 0x1U) != 0U,
+        damp);
+
+    hw_motor_am13e_encode_phase_pair_shadow(
+        DL_MCPWM_AQ_OUTPUT_2A,
+        DL_MCPWM_AQ_OUTPUT_2B,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPA,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPB,
+        (positive_mask & 0x2U) != 0U,
+        (negative_mask & 0x2U) != 0U,
+        damp);
+
+    hw_motor_am13e_encode_phase_pair_shadow(
+        DL_MCPWM_AQ_OUTPUT_3A,
+        DL_MCPWM_AQ_OUTPUT_3B,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPA,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPB,
+        (positive_mask & 0x4U) != 0U,
+        (negative_mask & 0x4U) != 0U,
+        damp);
+}
+
 static inline __attribute__((always_inline))
 void hw_motor_commit_update(void)
 {

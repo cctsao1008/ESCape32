@@ -17,6 +17,16 @@ static void am13e_motor_backend_compile_probe(void)
     hw_motor_sine_update(8000, 1000, 2000, 4000);
 
     /*
+     * Stage D: compile-check the real ESCape32 phase-state encoder.
+     *
+     * Step 1: +C / -B / A floating.  Exercise both damp modes, then exercise
+     * the zero-throttle coast case where all three phases float.
+     */
+    hw_motor_am13e_encode_six_step_shadow(0x4U, 0x2U, true);
+    hw_motor_am13e_encode_six_step_shadow(0x4U, 0x2U, false);
+    hw_motor_am13e_encode_six_step_shadow(0x0U, 0x0U, false);
+
+    /*
      * Stage C: verify the exact AQ shadow API used by the TI global-load
      * example for all three phase pairs.  These values are compile probes
      * only; they are not yet the ESCape32 six-step gate-state mapping.

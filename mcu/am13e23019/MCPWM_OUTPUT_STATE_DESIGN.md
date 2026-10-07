@@ -1,7 +1,8 @@
 # AM13E MCPWM Output-State Design Decision
 
-Status: **split-input dead-band architecture selected for compile and bench
-validation**. Production output enable remains blocked.
+Status: **split-input dead-band architecture selected; AQ shadow truth-table
+encoder implemented for compile validation**. Production output enable remains
+blocked.
 
 ## Evidence from SDK 26.01.00.03
 
@@ -114,11 +115,38 @@ the fixed dead-band path produces complementary final outputs.
 For non-damped PWM, B is represented by a constant-HIGH AQ table, which becomes
 a constant-LOW final B output after the configured inversion.
 
+## AQ shadow encoder
+
+The repo now implements three source primitives without using AQ software force:
+
+```text
+PWM          -> HIGH at CTR=ZERO, LOW at pair-local CMP
+CONSTANT_LOW -> LOW at CTR=ZERO and CTR=PERIOD
+CONSTANT_HIGH-> HIGH at CTR=ZERO and CTR=PERIOD
+```
+
+Before programming a primitive, the complete AQ shadow table is cleared with
+`DL_MCPWM_setActionQualifierActionCompleteShadow(..., 0)` so a phase cannot
+inherit stale actions from its previous commutation state.
+
+The provisional six-step shadow encoder maps the ESCape32 positive/negative
+bitmasks to all three A/B pairs:
+
+```text
+positive + damp : A=PWM,  B=PWM
+positive no damp: A=PWM,  B=HIGH
+negative        : A=LOW,  B=LOW
+floating        : A=LOW,  B=HIGH
+```
+
+This function only prepares shadow registers. It deliberately does not enable
+TBCLK, enable output pins, or decide the final commutation load boundary.
+
 ## Remaining validation before output enable
 
-1. Compile-check the fixed split-input dead-band DriverLib calls.
-2. Encode LOW, HIGH, and PWM states using AQ shadow tables only.
-3. Prove Global Load updates all three phase pairs at the intended boundary.
+1. Prove the Global Load event/timing is the correct replacement for
+   ESCape32's STM32 COM/preload semantics.
+2. Prove Global Load updates all three phase pairs at the intended boundary.
 4. On hardware with power stage disabled/disconnected, measure:
    - A/B polarity;
    - RED and FED dead time;
@@ -128,7 +156,8 @@ a constant-LOW final B output after the configured inversion.
    - all six commutation states.
 5. Confirm final E62 gate-driver input polarity and MCPWM pin assignment.
 6. Only then replace the compile-time stop in
-   `hw_motor_apply_six_step()`.
+   `hw_motor_apply_six_step()` with the validated shadow encoder plus the
+   validated commutation-boundary mechanism.
 
 Trip Zone remains the asynchronous protection path and is not used to encode
 normal commutation states.
