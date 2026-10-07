@@ -187,3 +187,30 @@ basic PWM generation, deadband, global load, trip zone, and CPU-latency
 examples. This is used to derive the AM13 backend from the installed SDK rather
 than guessing TI API names or register semantics.
 
+
+## AM13E MCPWM backend compile probe
+
+After collecting the MCPWM reference sources, validate the first native AM13E
+motor-backend operations against the pinned SDK:
+
+```bash
+./tools/am13e/build-am13e-motor-probe.sh
+```
+
+This build first compiles TI's official MCPWM global-load example, then reuses
+its generated SysConfig output for a repo-owned compile probe. The probe
+validates only:
+
+- MCPWM period shadow update;
+- PWM1A/PWM2A/PWM3A compare shadow updates;
+- one-shot global-load commit;
+- application link base at `0x00006000`;
+- GCC hard-float ABI.
+
+It deliberately does **not** claim that ESCape32 six-step AQ/dead-band/output
+state semantics are complete. Attempts to use the unfinished AM13 operations
+remain compile-time errors until those mappings are validated.
+
+The TI example pin assignment is only a compile-time reference; it is not the
+E62 product pinout.
+
