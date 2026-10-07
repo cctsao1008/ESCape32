@@ -10,7 +10,7 @@
 #include "core_cm33.h"
 #include "e62_flash_layout.h"
 
-static bool e62_boot_app_vector_sane(void)
+__attribute__((noinline))\nstatic bool e62_boot_app_vector_sane(void)
 {
     const volatile uint32_t *vector =
         (const volatile uint32_t *)(uintptr_t)E62_APP_BASE;
