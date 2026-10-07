@@ -27,13 +27,16 @@ static void am13e_motor_backend_compile_probe(void)
     hw_motor_am13e_encode_six_step_shadow(0x0U, 0x0U, false);
 
     /*
-     * Stage E: compile-check the asynchronous commutation candidate.
-     * Outputs are never enabled in this probe. The helper masks all three
-     * pairs to FLOAT, writes ACTIVE AQ tables, then releases B before A.
+     * Stage F: compile-check the selected commutation candidate.
+     *
+     * The AQ event tables are configured once as PWM carriers. Six-step
+     * commutation uses only asynchronous pair-local continuous software force.
+     * This keeps duty/period shadows in the PWM-boundary timing domain.
      */
-    hw_motor_am13e_apply_six_step_masked_active_probe(0x4U, 0x2U, true);
-    hw_motor_am13e_apply_six_step_masked_active_probe(0x4U, 0x2U, false);
-    hw_motor_am13e_apply_six_step_masked_active_probe(0x0U, 0x0U, false);
+    hw_motor_am13e_prepare_pwm_carriers_active();
+    hw_motor_am13e_apply_six_step_force_probe(0x4U, 0x2U, true);
+    hw_motor_am13e_apply_six_step_force_probe(0x4U, 0x2U, false);
+    hw_motor_am13e_apply_six_step_force_probe(0x0U, 0x0U, false);
 
     /*
      * Stage C: verify the exact AQ shadow API used by the TI global-load
@@ -74,10 +77,9 @@ static void am13e_motor_backend_compile_probe(void)
         DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_PERIOD);
 
     /*
-     * The SDK exposes pair-local continuous software force.  Compile-check it
-     * here, but do not use AQSFRC for normal commutation: AQSFRC has no shadow
-     * register, so multi-phase updates would not be atomic.  Six-step state
-     * changes will be encoded in AQCTLA/B shadow tables instead.
+     * The SDK exposes pair-local continuous software force. Stage F now uses
+     * this as the commutation selector, with an all-FLOAT mask between states.
+     * Keep these direct calls as an API-level compile check as well.
      */
     DL_MCPWM_setActionQualifierSWAction(
         MCPWM_1_INST, DL_MCPWM_AQ_OUTPUT_1A, DL_MCPWM_AQ_SW_CONTINUOUS_LOW);

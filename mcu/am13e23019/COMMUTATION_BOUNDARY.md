@@ -233,3 +233,68 @@ Load scheme.
 
 The production `hw_motor_apply_six_step()` remains blocked until this sequence
 is measured on the actual MCPWM outputs with the power stage disabled.
+
+
+## Stage-F refinement: static AQ carriers + AQSFRC state selection
+
+A closer review of the AM13 AQ rules improves the Stage-E candidate.
+
+The TRM explicitly defines software-forced AQ events as asynchronous and gives
+them the highest Action Qualifier event priority. Continuous LOW/HIGH force is
+available independently for every A/B output.
+
+Therefore normal commutation does not need to rewrite AQ active registers at
+all.
+
+Configure all six AQ event tables once as normal PWM carriers:
+
+```text
+A: HIGH at ZERO, LOW at CMPA
+B: HIGH at ZERO, LOW at CMPB
+```
+
+Then encode the ESCape32 phase state entirely through continuous AQ software
+force:
+
+```text
+positive + damp : A=unforced, B=unforced
+positive no-damp: A=unforced, B=force HIGH
+negative        : A=force LOW, B=force LOW
+floating        : A=force LOW, B=force HIGH
+```
+
+With the fixed split-input dead-band, these produce the same intended final
+states:
+
+```text
+PWM + damp   -> HS PWM, LS complementary
+PWM no damp -> HS PWM, LS OFF
+negative    -> HS OFF, LS ON
+float       -> HS OFF, LS OFF
+```
+
+Transition ordering remains conservative:
+
+```text
+1. force all A LOW
+2. force all B HIGH
+      -> all phases FLOAT
+3. apply the three target B force states
+4. apply the three target A force states
+```
+
+This is preferable to the previous ACTIVE-AQ rewrite candidate because:
+
+- the underlying AQ carrier state remains continuously valid;
+- no AQ table rewrite occurs in the commutation hot path;
+- duty/period/dead-band shadows remain completely independent;
+- software force is the hardware-defined asynchronous, highest-priority AQ
+  mechanism;
+- fewer peripheral register classes are touched during commutation.
+
+The remaining question is physical behavior when a continuous force is removed
+mid-PWM-cycle. The bench must verify whether the unforced output immediately
+reflects the already-running AQ carrier state or waits for the next AQ event,
+and measure the resulting blanking/phase error.
+
+Production `hw_motor_apply_six_step()` remains blocked until this is measured.

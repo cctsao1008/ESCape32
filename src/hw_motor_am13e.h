@@ -244,83 +244,29 @@ void hw_motor_am13e_encode_six_step_shadow(
 }
 
 /*
- * Stage-E candidate: preserve asynchronous commutation timing without using
- * module-wide Global Load.
+ * Stage-F candidate: keep the AQ event tables static as PWM carriers and use
+ * pair-local continuous AQ software force as the six-step state selector.
  *
- * AQ software force is used only as a temporary safe mask. With the selected
- * split-input dead-band topology:
+ * The AM13E TRM defines software-forced AQ events as asynchronous and gives
+ * them the highest AQ event priority. This lets commutation stay independent
+ * of the PWM time-base while compare/period shadows keep their normal
+ * PWM-boundary update domain.
  *
- *   force A = LOW, then force B = HIGH  -> final pair = OFF/OFF
+ * Runtime phase-state encoding:
  *
- * The next AQ state is then written directly to the ACTIVE AQ tables while the
- * pair is masked. Release is deliberately ordered B first, then A, so the
- * high-side remains forced off until the low-side path has reached its new
- * state. Physical timing still requires bench validation.
+ *   positive + damp : A force disabled, B force disabled
+ *   positive no-damp: A force disabled, B force HIGH
+ *   negative        : A force LOW,      B force LOW
+ *   floating        : A force LOW,      B force HIGH
+ *
+ * With the fixed split-input dead-band:
+ *
+ *   OutA = RED(PWMA)
+ *   OutB = NOT(FED(PWMB))
+ *
+ * those AQ-force states map to the intended gate states.  Physical release
+ * behavior and transition blanking still require scope validation.
  */
-static inline __attribute__((always_inline))
-void hw_motor_am13e_force_all_float(void)
-{
-    DL_MCPWM_setActionQualifierSWAction(
-        ESCAPE32_AM13E_MCPWM_INST,
-        DL_MCPWM_AQ_OUTPUT_1A,
-        DL_MCPWM_AQ_SW_CONTINUOUS_LOW);
-    DL_MCPWM_setActionQualifierSWAction(
-        ESCAPE32_AM13E_MCPWM_INST,
-        DL_MCPWM_AQ_OUTPUT_2A,
-        DL_MCPWM_AQ_SW_CONTINUOUS_LOW);
-    DL_MCPWM_setActionQualifierSWAction(
-        ESCAPE32_AM13E_MCPWM_INST,
-        DL_MCPWM_AQ_OUTPUT_3A,
-        DL_MCPWM_AQ_SW_CONTINUOUS_LOW);
-
-    DL_MCPWM_setActionQualifierSWAction(
-        ESCAPE32_AM13E_MCPWM_INST,
-        DL_MCPWM_AQ_OUTPUT_1B,
-        DL_MCPWM_AQ_SW_CONTINUOUS_HIGH);
-    DL_MCPWM_setActionQualifierSWAction(
-        ESCAPE32_AM13E_MCPWM_INST,
-        DL_MCPWM_AQ_OUTPUT_2B,
-        DL_MCPWM_AQ_SW_CONTINUOUS_HIGH);
-    DL_MCPWM_setActionQualifierSWAction(
-        ESCAPE32_AM13E_MCPWM_INST,
-        DL_MCPWM_AQ_OUTPUT_3B,
-        DL_MCPWM_AQ_SW_CONTINUOUS_HIGH);
-}
-
-static inline __attribute__((always_inline))
-void hw_motor_am13e_release_all_float(void)
-{
-    /*
-     * Release B first while every A path is still forced LOW. This prevents a
-     * newly-active high-side from preceding the low-side transition. Then
-     * release A; the RED path delays any rising high-side edge.
-     */
-    DL_MCPWM_setActionQualifierSWAction(
-        ESCAPE32_AM13E_MCPWM_INST,
-        DL_MCPWM_AQ_OUTPUT_1B,
-        DL_MCPWM_AQ_SW_FORCE_DISABLED);
-    DL_MCPWM_setActionQualifierSWAction(
-        ESCAPE32_AM13E_MCPWM_INST,
-        DL_MCPWM_AQ_OUTPUT_2B,
-        DL_MCPWM_AQ_SW_FORCE_DISABLED);
-    DL_MCPWM_setActionQualifierSWAction(
-        ESCAPE32_AM13E_MCPWM_INST,
-        DL_MCPWM_AQ_OUTPUT_3B,
-        DL_MCPWM_AQ_SW_FORCE_DISABLED);
-
-    DL_MCPWM_setActionQualifierSWAction(
-        ESCAPE32_AM13E_MCPWM_INST,
-        DL_MCPWM_AQ_OUTPUT_1A,
-        DL_MCPWM_AQ_SW_FORCE_DISABLED);
-    DL_MCPWM_setActionQualifierSWAction(
-        ESCAPE32_AM13E_MCPWM_INST,
-        DL_MCPWM_AQ_OUTPUT_2A,
-        DL_MCPWM_AQ_SW_FORCE_DISABLED);
-    DL_MCPWM_setActionQualifierSWAction(
-        ESCAPE32_AM13E_MCPWM_INST,
-        DL_MCPWM_AQ_OUTPUT_3A,
-        DL_MCPWM_AQ_SW_FORCE_DISABLED);
-}
 
 static inline __attribute__((always_inline))
 void hw_motor_am13e_aq_clear_active(
@@ -328,25 +274,6 @@ void hw_motor_am13e_aq_clear_active(
 {
     DL_MCPWM_setActionQualifierActionCompleteActive(
         ESCAPE32_AM13E_MCPWM_INST, output, 0U);
-}
-
-static inline __attribute__((always_inline))
-void hw_motor_am13e_aq_constant_active(
-    DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE output,
-    DL_MCPWM_ACTION_QUALIFIER_OUTPUT level)
-{
-    hw_motor_am13e_aq_clear_active(output);
-
-    DL_MCPWM_setActionQualifierActionActive(
-        ESCAPE32_AM13E_MCPWM_INST,
-        output,
-        level,
-        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_ZERO);
-    DL_MCPWM_setActionQualifierActionActive(
-        ESCAPE32_AM13E_MCPWM_INST,
-        output,
-        level,
-        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_PERIOD);
 }
 
 static inline __attribute__((always_inline))
@@ -369,81 +296,157 @@ void hw_motor_am13e_aq_pwm_active(
 }
 
 static inline __attribute__((always_inline))
-void hw_motor_am13e_encode_phase_pair_active(
-    DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE output_a,
+void hw_motor_am13e_prepare_pwm_carriers_active(void)
+{
+    hw_motor_am13e_aq_pwm_active(
+        DL_MCPWM_AQ_OUTPUT_1A,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPA);
+    hw_motor_am13e_aq_pwm_active(
+        DL_MCPWM_AQ_OUTPUT_1B,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPB);
+
+    hw_motor_am13e_aq_pwm_active(
+        DL_MCPWM_AQ_OUTPUT_2A,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPA);
+    hw_motor_am13e_aq_pwm_active(
+        DL_MCPWM_AQ_OUTPUT_2B,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPB);
+
+    hw_motor_am13e_aq_pwm_active(
+        DL_MCPWM_AQ_OUTPUT_3A,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPA);
+    hw_motor_am13e_aq_pwm_active(
+        DL_MCPWM_AQ_OUTPUT_3B,
+        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPB);
+}
+
+static inline __attribute__((always_inline))
+void hw_motor_am13e_force_all_float(void)
+{
+    /*
+     * Force A LOW first so all high-side commands are removed before any B
+     * path changes. Then force B HIGH; after the configured inversion this
+     * produces final B LOW. Result: all three phase pairs OFF/OFF.
+     */
+    DL_MCPWM_setActionQualifierSWAction(
+        ESCAPE32_AM13E_MCPWM_INST,
+        DL_MCPWM_AQ_OUTPUT_1A,
+        DL_MCPWM_AQ_SW_CONTINUOUS_LOW);
+    DL_MCPWM_setActionQualifierSWAction(
+        ESCAPE32_AM13E_MCPWM_INST,
+        DL_MCPWM_AQ_OUTPUT_2A,
+        DL_MCPWM_AQ_SW_CONTINUOUS_LOW);
+    DL_MCPWM_setActionQualifierSWAction(
+        ESCAPE32_AM13E_MCPWM_INST,
+        DL_MCPWM_AQ_OUTPUT_3A,
+        DL_MCPWM_AQ_SW_CONTINUOUS_LOW);
+
+    DL_MCPWM_setActionQualifierSWAction(
+        ESCAPE32_AM13E_MCPWM_INST,
+        DL_MCPWM_AQ_OUTPUT_1B,
+        DL_MCPWM_AQ_SW_CONTINUOUS_HIGH);
+    DL_MCPWM_setActionQualifierSWAction(
+        ESCAPE32_AM13E_MCPWM_INST,
+        DL_MCPWM_AQ_OUTPUT_2B,
+        DL_MCPWM_AQ_SW_CONTINUOUS_HIGH);
+    DL_MCPWM_setActionQualifierSWAction(
+        ESCAPE32_AM13E_MCPWM_INST,
+        DL_MCPWM_AQ_OUTPUT_3B,
+        DL_MCPWM_AQ_SW_CONTINUOUS_HIGH);
+}
+
+static inline __attribute__((always_inline))
+DL_MCPWM_ACTION_QUALIFIER_SW_FORCE_OUTPUT
+hw_motor_am13e_target_force_a(bool positive)
+{
+    return positive
+        ? DL_MCPWM_AQ_SW_FORCE_DISABLED
+        : DL_MCPWM_AQ_SW_CONTINUOUS_LOW;
+}
+
+static inline __attribute__((always_inline))
+DL_MCPWM_ACTION_QUALIFIER_SW_FORCE_OUTPUT
+hw_motor_am13e_target_force_b(bool positive, bool negative, bool damp)
+{
+    if (positive && damp) {
+        return DL_MCPWM_AQ_SW_FORCE_DISABLED;
+    }
+
+    if (negative) {
+        return DL_MCPWM_AQ_SW_CONTINUOUS_LOW;
+    }
+
+    return DL_MCPWM_AQ_SW_CONTINUOUS_HIGH;
+}
+
+static inline __attribute__((always_inline))
+void hw_motor_am13e_apply_target_force_b(
     DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE output_b,
-    DL_MCPWM_ACTION_QUALIFIER_OUTPUT_EVENT compare_a,
-    DL_MCPWM_ACTION_QUALIFIER_OUTPUT_EVENT compare_b,
     bool positive,
     bool negative,
     bool damp)
 {
-    if (positive) {
-        hw_motor_am13e_aq_pwm_active(output_a, compare_a);
-
-        if (damp) {
-            hw_motor_am13e_aq_pwm_active(output_b, compare_b);
-        } else {
-            hw_motor_am13e_aq_constant_active(
-                output_b, DL_MCPWM_AQ_OUTPUT_HIGH);
-        }
-    } else if (negative) {
-        hw_motor_am13e_aq_constant_active(
-            output_a, DL_MCPWM_AQ_OUTPUT_LOW);
-        hw_motor_am13e_aq_constant_active(
-            output_b, DL_MCPWM_AQ_OUTPUT_LOW);
-    } else {
-        hw_motor_am13e_aq_constant_active(
-            output_a, DL_MCPWM_AQ_OUTPUT_LOW);
-        hw_motor_am13e_aq_constant_active(
-            output_b, DL_MCPWM_AQ_OUTPUT_HIGH);
-    }
+    DL_MCPWM_setActionQualifierSWAction(
+        ESCAPE32_AM13E_MCPWM_INST,
+        output_b,
+        hw_motor_am13e_target_force_b(positive, negative, damp));
 }
 
 static inline __attribute__((always_inline))
-void hw_motor_am13e_encode_six_step_active(
+void hw_motor_am13e_apply_target_force_a(
+    DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE output_a,
+    bool positive)
+{
+    DL_MCPWM_setActionQualifierSWAction(
+        ESCAPE32_AM13E_MCPWM_INST,
+        output_a,
+        hw_motor_am13e_target_force_a(positive));
+}
+
+static inline __attribute__((always_inline))
+void hw_motor_am13e_apply_six_step_force_probe(
     unsigned int positive_mask,
     unsigned int negative_mask,
     bool damp)
 {
-    hw_motor_am13e_encode_phase_pair_active(
-        DL_MCPWM_AQ_OUTPUT_1A,
+    /*
+     * Step 1: asynchronous safe mask.
+     */
+    hw_motor_am13e_force_all_float();
+
+    /*
+     * Step 2: establish all B/low-side target states while every A/high-side
+     * path is still forced LOW.
+     */
+    hw_motor_am13e_apply_target_force_b(
         DL_MCPWM_AQ_OUTPUT_1B,
-        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPA,
-        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPB,
         (positive_mask & 0x1U) != 0U,
         (negative_mask & 0x1U) != 0U,
         damp);
-
-    hw_motor_am13e_encode_phase_pair_active(
-        DL_MCPWM_AQ_OUTPUT_2A,
+    hw_motor_am13e_apply_target_force_b(
         DL_MCPWM_AQ_OUTPUT_2B,
-        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPA,
-        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPB,
         (positive_mask & 0x2U) != 0U,
         (negative_mask & 0x2U) != 0U,
         damp);
-
-    hw_motor_am13e_encode_phase_pair_active(
-        DL_MCPWM_AQ_OUTPUT_3A,
+    hw_motor_am13e_apply_target_force_b(
         DL_MCPWM_AQ_OUTPUT_3B,
-        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPA,
-        DL_MCPWM_AQ_OUTPUT_ON_TIMEBASE_UP_CMPB,
         (positive_mask & 0x4U) != 0U,
         (negative_mask & 0x4U) != 0U,
         damp);
-}
 
-static inline __attribute__((always_inline))
-void hw_motor_am13e_apply_six_step_masked_active_probe(
-    unsigned int positive_mask,
-    unsigned int negative_mask,
-    bool damp)
-{
-    hw_motor_am13e_force_all_float();
-    hw_motor_am13e_encode_six_step_active(
-        positive_mask, negative_mask, damp);
-    hw_motor_am13e_release_all_float();
+    /*
+     * Step 3: release only the positive A path(s). Any rising edge still goes
+     * through RED dead time.
+     */
+    hw_motor_am13e_apply_target_force_a(
+        DL_MCPWM_AQ_OUTPUT_1A,
+        (positive_mask & 0x1U) != 0U);
+    hw_motor_am13e_apply_target_force_a(
+        DL_MCPWM_AQ_OUTPUT_2A,
+        (positive_mask & 0x2U) != 0U);
+    hw_motor_am13e_apply_target_force_a(
+        DL_MCPWM_AQ_OUTPUT_3A,
+        (positive_mask & 0x4U) != 0U);
 }
 
 static inline __attribute__((always_inline))
