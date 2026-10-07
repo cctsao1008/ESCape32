@@ -252,3 +252,23 @@ This capture is specifically for deciding how to preserve ESCape32's
 BEMF-derived asynchronous commutation boundary without unintentionally moving
 PWM duty/period updates to the same timing domain.
 
+
+
+## E62 Boot-A image contract
+
+Build the common bootloader link/launch contract independently of FW1:
+
+```bash
+./tools/am13e/build-am13e-boot.sh
+```
+
+This stage verifies the 16 KiB boot partition and direct launch contract for
+the single application at `0x00006000`. It does not yet implement service
+transport, Flash programming, or an image-header/CRC policy.
+
+The regular application bring-up now uses the dedicated E62 application linker
+and verifies the full `0x00006000..0x0007FFFF` application ownership:
+
+```bash
+./tools/am13e/build-am13e-bringup.sh
+```

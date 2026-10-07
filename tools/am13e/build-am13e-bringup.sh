@@ -81,6 +81,7 @@ cmake --build "$sdk_build_dir"     --target "$target"     --parallel "$(nproc)"
 objdump="$GCC_ROOT/bin/arm-none-eabi-objdump"
 readelf="$GCC_ROOT/bin/arm-none-eabi-readelf"
 size="$GCC_ROOT/bin/arm-none-eabi-size"
+nm="$GCC_ROOT/bin/arm-none-eabi-nm"
 
 section_vma() {
     local section="$1"
@@ -91,6 +92,14 @@ intvecs="$(section_vma .intvecs)"
 text_vma="$(section_vma .text)"
 vtable="$(section_vma .vtable)"
 ramfunc="$(section_vma .TI.ramfunc)"
+
+symbol_addr() {
+    local symbol="$1"
+    "$nm" -n "$elf" | awk -v s="$symbol" '$3 == s { print "0x" $1; exit }'
+}
+
+app_start="$(symbol_addr __e62_app_flash_start__)"
+app_end="$(symbol_addr __e62_app_flash_end__)"
 
 fail=0
 
@@ -114,6 +123,8 @@ echo "========================="
 echo
 
 check_equal ".intvecs" "$intvecs" "0x00006000"
+check_equal "app start" "$app_start" "0x00006000"
+check_equal "app end" "$app_end" "0x00080000"
 
 # .vtable is contributed by TI's interrupt relocation implementation. The
 # interrupt-free Stage-A image may legitimately omit that archive member under
@@ -152,4 +163,7 @@ if [ "$fail" -ne 0 ]; then
 fi
 
 echo
-echo "Stage-A relocatable application baseline PASS."
+echo "Stage-A E62 application-link contract PASS."
+echo "Dedicated linker enforces:"
+echo "  APP 0x00006000..0x0007FFFF (488 KiB)"
+echo "  Boot + FW1 CFG + FW2 CFG remain outside application ownership"

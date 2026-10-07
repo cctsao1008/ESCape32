@@ -36,7 +36,7 @@ if(NOT AM13E_SYSCFG_SOURCES)
     )
 endif()
 
-get_target_property(LINKER_SCRIPT ${TI_SDK_CONFIG} LINKER_SCRIPT_DEFAULT)
+set(LINKER_SCRIPT ${AM13E_PLATFORM_DIR}/linker_app.ld)
 
 add_executable(${TARGET})
 
@@ -61,11 +61,9 @@ set_target_properties(${TARGET} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${ESCAPE32_AM13E_OUTPUT_DIR}"
 )
 
-# The TI default linker script exposes _intvecs_base_address as an overridable
-# symbol. Stage A uses that mechanism so the application vector table starts at
-# 0x6000 while the rest of TI's default section/RAM behavior stays unchanged.
+# The E62 application owns only 0x00006000..0x0007FFFF. The dedicated
+# linker script enforces that partition and retains TI's RAM/.TI.ramfunc model.
 target_link_options(${TARGET} PRIVATE
-    "-Wl,--defsym,_intvecs_base_address=0x00006000"
     "${TOOLCHAIN_SET_MAP_PREFIX}${ESCAPE32_AM13E_OUTPUT_DIR}/${TARGET}.map"
     "${TOOLCHAIN_SET_LINKER_SCRIPT_PREFIX}${LINKER_SCRIPT}"
 )
