@@ -231,3 +231,24 @@ Output:
 .am13e-build/mcpwm-force-reference.txt
 ```
 
+
+## Capture commutation/global-load APIs
+
+The six-step AQ encoder is now compile-valid, but AM13 Global Load affects all
+shadowed MCPWM registers when enabled. Before mapping the STM32 COM event, capture
+the exact pinned-SDK Global Load and Trip Zone control APIs:
+
+```bash
+./tools/am13e/collect-mcpwm-commutation-reference.sh
+```
+
+Output:
+
+```text
+.am13e-build/mcpwm-commutation-reference.txt
+```
+
+This capture is specifically for deciding how to preserve ESCape32's
+BEMF-derived asynchronous commutation boundary without unintentionally moving
+PWM duty/period updates to the same timing domain.
+

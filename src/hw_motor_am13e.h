@@ -246,6 +246,14 @@ void hw_motor_am13e_encode_six_step_shadow(
 static inline __attribute__((always_inline))
 void hw_motor_commit_update(void)
 {
+    /*
+     * Compile-probe behavior only.
+     *
+     * This arms the configured one-shot Global Load. It is NOT yet the
+     * production equivalent of STM32 TIM_EGR.COMG because activation timing
+     * depends on GLDCTL.GLDMODE, and Global Load affects all MCPWM shadowed
+     * registers. See mcu/am13e23019/COMMUTATION_BOUNDARY.md.
+     */
     DL_MCPWM_setGlobalLoadOneShotLatch(ESCAPE32_AM13E_MCPWM_INST);
 }
 
