@@ -88,6 +88,36 @@ TI_ROOT=/opt/ti DOWNLOAD_DIR=/tmp/am13e-tools ./tools/am13e/install-toolchain.sh
 Individual components can be skipped with `--skip-sdk`, `--skip-gcc`, and
 `--skip-sysconfig`.
 
+## SDK GCC smoke build
+
+The TI SDK's generated imports file defaults the Arm GNU toolchain location to a
+directory directly below `$HOME`. This repository intentionally keeps the
+toolchain below `~/ti` with the SDK and SysConfig, so use the wrapper instead
+of invoking the SDK make target without path overrides:
+
+```bash
+./tools/am13e/build-sdk-smoke.sh
+```
+
+The wrapper:
+
+- validates the pinned environment;
+- removes any stale CMake cache from a previous compiler path;
+- passes the pinned SysConfig and GCC paths explicitly to the TI SDK make flow;
+- generates the `m33_gcc_arm_debug` build tree; and
+- builds only TI's `ex_empty_lp` target.
+
+Equivalent manual generation command:
+
+```bash
+make -C "$AM13E_SDK_ROOT" \
+  M33_TI_ARM_CLANG_BUILD_ENABLE=n \
+  M33_GCC_ARM_BUILD_ENABLE=y \
+  SYSCFG_PATH="$HOME/ti/sysconfig_1.28.0" \
+  GCC_ARM_TOOLCHAIN_PATH="$HOME/ti/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi" \
+  cmake-genfiles-m33_gcc_arm_debug
+```
+
 ## SysConfig installation note
 
 SysConfig's Linux installer treats `--prefix` as the final installation
