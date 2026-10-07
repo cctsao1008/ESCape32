@@ -9,7 +9,7 @@
  * clock and flash initialization remain comparable with the SDK smoke target.
  */
 
-#include "ti_msp_dl_config.h"
+#include "ti_sdk_dl_config.h"
 
 int main(void)
 {
