@@ -145,3 +145,24 @@ Do not use `--prefix ~/ti` for SysConfig. Doing so places SysConfig files
 directly in the shared TI root instead of creating a versioned subdirectory.
 
 The scripts do not modify the installed TI SDK.
+
+## Legacy libopencm3 regression build
+
+The AM13 port must preserve existing ESCape32 targets. A helper script mirrors
+the upstream ESCape32 dependency flow but pins libopencm3 for reproducibility:
+
+```bash
+./tools/am13e/build-legacy-regression.sh
+```
+
+The script:
+
+- uses the pinned Arm GNU toolchain already installed below `~/ti`;
+- clones libopencm3 into `.deps/libopencm3` when needed;
+- checks out libopencm3 commit
+  `ddcbb2889fa018626c604e27ea50e66db5755b78`;
+- builds the upstream-required STM32 F0/G0/G4/L4 libopencm3 libraries;
+- builds `ESCAPE1` (STM32G071) and `PHOTONDRIVE1` (STM32G431).
+
+The dependency directory and regression build directory are ignored by Git.
+
