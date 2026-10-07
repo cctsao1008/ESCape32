@@ -114,7 +114,17 @@ echo "========================="
 echo
 
 check_equal ".intvecs" "$intvecs" "0x00006000"
-check_equal ".vtable" "$vtable" "0x20000000"
+
+# .vtable is contributed by TI's interrupt relocation implementation. The
+# interrupt-free Stage-A image may legitimately omit that archive member under
+# --gc-sections. If it is linked, its placement must still match the TI
+# baseline.
+if [ -z "$vtable" ]; then
+    printf '[PASS] %-12s not linked (interrupt-free Stage A)\n' ".vtable"
+else
+    check_equal ".vtable" "$vtable" "0x20000000"
+fi
+
 check_equal ".TI.ramfunc" "$ramfunc" "0x00c18000"
 
 if [ -n "$text_vma" ] && (( text_vma >= 0x00006100 )); then

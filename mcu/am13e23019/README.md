@@ -53,7 +53,14 @@ Expected ELF invariants:
 ```text
 .intvecs     0x00006000
 .text        >= 0x00006100
-.vtable      0x20000000
+.vtable      absent for interrupt-free Stage A, or 0x20000000 if linked
 .TI.ramfunc  0x00C18000
 ABI          hard-float
 ```
+
+The TI RAM vector table is supplied by the interrupt relocation implementation.
+Because Stage A does not register or enable interrupts, GCC/linker section
+garbage collection can legitimately omit that archive member and therefore the
+`.vtable` section. Once an interrupt path is introduced, the build validation
+will require any linked `.vtable` to remain at TI's baseline address
+`0x20000000`.
