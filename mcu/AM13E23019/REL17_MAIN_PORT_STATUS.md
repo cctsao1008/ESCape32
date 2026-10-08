@@ -78,3 +78,10 @@ Host regression: `bash tools/am13e/run-am13e-safety-contract-host-test.sh` saves
 - **Validation:** these commits were made through GitHub file edits, not a local TI SDK cross-compile. Keep `build-am13e/logs/` logs and expect `src/main.c` to remain blocked by board-dependent `#error` and AQ/dead-band assertions.
 
 Do not flash or power a motor from this port until the clock, phase map, trip, gate-driver and BEMF path have been scoped and qualified.
+
+## Clock-domain corrections (2026-10-09 follow-up)
+
+- `src/main.c` now passes `am13e_active_contract->core_hz` to the SysTick 16-kHz scheduling setup. This is distinct from `mcpwm_hz`, `ecap_hz` and `timg12_hz`; the old STM32 `CLK` macro is no longer used in AM13E scheduler startup.
+- `am13e_core_start_scheduler_tick()` returns bool and validates nonzero input, exact tick division, and 24-bit SysTick reload before enabling SysTick. No assumption about AM13E PLL or clock-tree state is made.
+- `am13e_clock_convert_ticks()` now implements ceil(product / source_hz) with quotient and remainder to avoid overflow in the formerly used `product + source_hz - 1` formula. Added maximum-width regression cases.
+- **Open board blockers:** no authoritative E62 SysConfig clock-tree extraction is wired to `am13e_active_contract`; phase/comparator mapping, PWM AQ/dead-band, gate-driver disable polarity, asynchronous trip, TIMG12/eCAP epoch and fault recovery have not been physically qualified. The original compile-time gates remain intentional.
