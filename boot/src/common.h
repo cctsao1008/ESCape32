@@ -72,7 +72,7 @@ void senddata(const char *buf, int len);
 
 uint32_t crc32(const char *buf, int len);
 #if defined(AM13E)
-int write(char *dst, const char *src, int len);
+int boot_am13e_flash_write(char *dst, const char *src, int len);
 void update(char *dst, const char *src, int len);
 #else
 int write(char *dst, const char *src, int len) __attribute__((__long_call__));
