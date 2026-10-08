@@ -101,7 +101,7 @@ int main(void)
     /* The rel17 CLI does not evaluate CFG_MAP exp2; CRSF does.
        Record the difference before making any behavioral change. */
     rearm = 0;
-    cli("set throt_mode 1", "throt_mode: 1\\nOK\\n");
+    cli("set throt_mode 1", "throt_mode: 1\nOK\n");
     assert(rearm == 0);
     const char write_mode[] = {(char)0x2d, 0, 1, 17, 1};
     n = execcrsfcmd(write_mode, sizeof write_mode, (char *)response);
