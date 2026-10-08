@@ -51,7 +51,19 @@ function(add_am13e_target name)
     target_link_libraries(${name}.elf PRIVATE
         -Wl,--start-group ${libs} c_nano m gcc nosys -Wl,--end-group)
     set_target_properties(${name}.elf PROPERTIES OUTPUT_NAME "${name}.elf" SUFFIX "")
-    find_program(AM13E_OBJCOPY arm-none-eabi-objcopy REQUIRED)
+    set(am13e_toolchain_root "$ENV{GCC_ARM_TOOLCHAIN_PATH}")
+    if(NOT am13e_toolchain_root)
+        if(DEFINED ENV{TI_ROOT})
+            set(am13e_toolchain_root "$ENV{TI_ROOT}/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi")
+        else()
+            set(am13e_toolchain_root "$ENV{HOME}/ti/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi")
+        endif()
+    endif()
+    find_program(AM13E_OBJCOPY arm-none-eabi-objcopy
+        HINTS "${am13e_toolchain_root}/bin")
+    if(NOT AM13E_OBJCOPY)
+        message(FATAL_ERROR "arm-none-eabi-objcopy missing; set GCC_ARM_TOOLCHAIN_PATH")
+    endif()
     add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${name}.bin"
         "${CMAKE_CURRENT_BINARY_DIR}/${name}.hex"
         COMMAND "${AM13E_OBJCOPY}" -O binary "$<TARGET_FILE:${name}.elf>" "${CMAKE_CURRENT_BINARY_DIR}/${name}.bin"
