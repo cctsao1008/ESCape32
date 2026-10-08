@@ -63,7 +63,15 @@ function(add_target_ti_am13e name)
             target_link_options(${name}.elf PRIVATE
                 -Wl,-Map,${CMAKE_CURRENT_BINARY_DIR}/${name}.map
                 -T${AM13E_BOOT_LINKER_SCRIPT}
-                -Wl,--no-undefined)
+                -Wl,--no-undefined
+                -Wl,--require-defined=Reset_Handler
+                -Wl,--require-defined=main
+                -Wl,--require-defined=initio
+                -Wl,--require-defined=recvbuf
+                -Wl,--require-defined=sendbuf
+                -Wl,--require-defined=crc32
+                -Wl,--require-defined=write
+                -Wl,--require-defined=boot_am13e_launch_application)
             set(am13e_binary ${name}.elf)
         else()
             # Without a validated board linker contract this stage compiles
