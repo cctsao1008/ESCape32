@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include "ti_sdk_dl_config.h"
 #include "fw1_bemf_events.h"
+void fw1_timg12_init(void);
 
 #define ESCAPE32_AM13E_MCPWM_INST MCPWM0
 #include "hw_motor_am13e.h"
@@ -35,6 +36,7 @@ static void fw1_next_commutation(void)
 int main(void)
 {
     SYSCFG_DL_init();
+    fw1_timg12_init();
 
     /* Start actual MCPWM0 timebase and AQ carriers. Initial output is FLOAT.
      * Duty, dead-time and PWM clock must be reconciled with E62 product spec.
