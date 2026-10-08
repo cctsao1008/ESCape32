@@ -15,7 +15,9 @@
 ** along with this firmware. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifdef ESCAPE32_PROG_HOST_TEST
+#if defined(ESCAPE32_AM13E_PROG_LINK)
+#include "am13e_prog_port.h"
+#elif defined(ESCAPE32_PROG_HOST_TEST)
 #include "../tools/am13e/rel17_prog_host_shim.h"
 #else
 #include "common.h"
