@@ -37,7 +37,7 @@ cmake_language(
 EOF
 
 echo
-echo "Reconfiguring TI SDK with E62 Boot-A target"
+echo "Reconfiguring TI SDK with E62 Boot target"
 cmake \
     -S "$SDK_ROOT" \
     -B "$sdk_build_dir" \
@@ -87,7 +87,7 @@ check_equal() {
 }
 
 echo
-echo "E62 AM13E23019 Boot-A ELF validation"
+echo "E62 AM13E23019 Boot ELF validation"
 echo "====================================="
 "$size" "$elf"
 echo
@@ -123,12 +123,12 @@ echo "MAP: $map"
 
 if [ "$fail" -ne 0 ]; then
     echo
-    echo "Boot-A ELF validation failed." >&2
+    echo "Boot ELF validation failed." >&2
     exit 1
 fi
 
 echo
-echo "Boot-A image contract PASS."
+echo "Boot image contract PASS."
 echo "Validated:"
 echo "  boot vector @ 0x00000000"
 echo "  boot flash ownership 0x00000000..0x00003FFF"
