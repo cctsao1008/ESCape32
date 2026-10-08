@@ -2,7 +2,7 @@ ENTRY(boot_reset)
 
 MEMORY {
   EMU_FLASH (rx) : ORIGIN = 0x00000000, LENGTH = 0x00010000
-  EMU_RAM (rwx) : ORIGIN = 0x20000000, LENGTH = 0x00008000
+  EMU_RAM (rwx) : ORIGIN = 0x28000000, LENGTH = 0x00010000
 }
 SECTIONS {
   .boot_vectors 0x00000000 : { KEEP(*(.boot_vectors)) } > EMU_FLASH
