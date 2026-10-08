@@ -20,6 +20,7 @@
 #include "hw_six_step.h"
 #include "hw_bemf_rel17_math.h"
 #include "hw_bemf_rel17_state.h"
+#include "hw_bemf_rel17_bridge.h"
 #ifdef ESCAPE32_AM13E
 #include "am13e_core_port.h"
 #endif
@@ -285,19 +286,21 @@ void iftim_isr(void) { // BEMF zero-crossing
 	const int timeout = (er & TIM_DIER_UIE) && (sr & TIM_SR_UIF);
 	const int capture = !timeout && (er & IFTIM_ICIE) ? IFTIM_ICR : 0;
 	hw_bemf_rel17_state_t state = {ival, ertm, sync, fast};
-	const hw_bemf_rel17_event_t event = hw_bemf_rel17_process(
+	/* rel17 owns the timing state. The bridge only communicates
+	 * whether the platform timer must be armed or cancelled. */
+	const hw_bemf_rel17_bridge_action_t action = hw_bemf_rel17_bridge_event(
 		&state, timeout, !!(er & IFTIM_ICIE), capture, IFTIM_XRES, cfg.timing);
-	if (event.action == HW_BEMF_REL17_IGNORE) return;
+	if (!action.arm_delay && !action.cancel_delay) return;
 	ival = state.interval;
 	ertm = state.electrical_time;
 	sync = state.sync;
 	fast = state.fast;
-	if (event.action == HW_BEMF_REL17_TIMEOUT) {
+	if (action.cancel_delay) {
 		TIM_SR(IFTIM) = ~TIM_SR_UIF;
 		TIM_DIER(IFTIM) = 0;
 		return;
 	}
-	IFTIM_OCR = event.delay; // Commutation delay
+	IFTIM_OCR = action.delay_ticks; // Commutation delay
 	TIM_EGR(IFTIM) = TIM_EGR_UG;
 	TIM_DIER(IFTIM) = 0;
 }
