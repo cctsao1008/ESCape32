@@ -22,6 +22,7 @@
 #include "boot_request.h"
 #include "boot_service_pb14.h"
 #include "boot_service_port.h"
+#include "boot_update.h"
 #include "protocol.h"
 #include "soc.h"
 
@@ -45,6 +46,8 @@ int main(void)
      * timing/IOMUX implementation is ready.
      */
     if (platform_ready && boot_service_pb14_init()) {
+        boot_update_reset_session();
+
         const boot_protocol_ops_t *protocol =
             boot_service_port_bind(boot_service_pb14_transport());
 
