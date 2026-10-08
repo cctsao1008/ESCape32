@@ -61,8 +61,12 @@ function(add_target_ti_am13e name)
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
         -mfloat-abi=hard -fno-branch-count-reg)
     target_include_directories(${name} PRIVATE "${am13e_source_dir}")
+    if(name MATCHES "^BOOT")
+        target_include_directories(${name} PRIVATE "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E")
+    endif()
     target_include_directories(${name} SYSTEM PRIVATE
         "${AM13E_SYSCFG_DIR}"
+        "${AM13E_SDK_ROOT}/ti_sdk_config/am13e230x/default/device_support/include"
         "${AM13E_SDK_ROOT}/source/device/am13e230x/include"
         "${AM13E_SDK_ROOT}/source/driverlib/am13e230x"
         "${AM13E_SDK_ROOT}/source/arch/include"
