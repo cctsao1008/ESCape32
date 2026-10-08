@@ -4,6 +4,7 @@
 
 #include "boot_image.h"
 
+#include <stddef.h>
 #include <stdint.h>
 
 #include "boot_port.h"
