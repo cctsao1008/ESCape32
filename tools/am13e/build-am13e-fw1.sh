@@ -20,10 +20,10 @@ size="$toolchain/bin/arm-none-eabi-size"
 "$objdump" -h "$elf" | grep -Eq '^[[:space:]]*[0-9]+[[:space:]]+\.intvecs[[:space:]]+.*00006000' || {
     echo "[FAIL] FW1 vector base is not 0x6000" >&2; exit 1;
 }
-"$nm" "$elf" | grep -q ' fw1_debug_step$' || {
+"$nm" "$elf" | grep -q ' am13e_debug_step$' || {
     echo "[FAIL] FW1 runtime debug step control missing" >&2; exit 1;
 }
-"$nm" "$elf" | grep -q ' fw1_debug_enable$' || {
+"$nm" "$elf" | grep -q ' am13e_debug_enable$' || {
     echo "[FAIL] FW1 runtime debug enable control missing" >&2; exit 1;
 }
 # Package FW1 ELF itself (Stage-A bringup packaging is separate).
