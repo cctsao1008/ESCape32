@@ -773,7 +773,13 @@ void main(void) {
 		ccr = scale(curduty, 0, 2000, lock || (running && cfg.damp) ? DEAD_TIME : 0, brushed ? arr - (CLK_MHZ * 3 >> 1) : arr);
 #endif
 #if defined(ESCAPE32_AM13E)
-#error "E62 hardware port required: MCPWM duty update"
+		/* Actual MCPWM shadow writes; hardware output enable stays gated by
+		 * qualified MCPWM/AQ/dead-band/trip configuration.
+		 */
+		if (!am13e_active_contract ||
+		    !am13e_contract_qualified(am13e_active_contract) ||
+		    !hw_motor_am13e_update_duty((uint32_t)arr, (uint32_t)ccr))
+			hard_fault_handler();
 #else
 		TIM1_CR1 = TIM_CR1_CEN | TIM_CR1_ARPE | TIM_CR1_UDIS;
 		TIM1_ARR = arr;
