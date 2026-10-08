@@ -1,7 +1,7 @@
 /* E62 AM13E TIMG12 delay timer. IRQ vector hookup belongs to SysConfig. */
 #include <stdint.h>
 #include "dl_timerg.h"
-#include "am13e_bemf_events.h"
+#include "am13e_rel17_bemf_io.h"
 #include "am13e_timg12.h"
 
 void am13e_timg12_init(void)
@@ -28,5 +28,5 @@ void am13e_timg12_init(void)
 }
 void am13e_timg12_irq_callback(void)
 {
-    am13e_bemf_event_timg12_irq();
+    am13e_rel17_bemf_timg12_irq();
 }
