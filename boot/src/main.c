@@ -32,10 +32,16 @@
 void main(void) {
 	init();
 	initio();
+#if defined(AM13E)
+	if (boot_am13e_take_reboot_ack()) {
+		sendval(RES_OK);
+	}
+#else
 	if (RCC_CSR & (RCC_CSR_SFTRSTF | RCC_CSR_OBLRSTF)) { // Reboot
 		RCC_CSR = RCC_CSR_RMVF; // Clear reset flags
 		sendval(RES_OK); // ACK after reboot
 	}
+#endif
 #ifdef FAST_EXIT
 	else goto done;
 #endif
@@ -45,7 +51,11 @@ void main(void) {
 				sendval(RES_OK);
 				break;
 			case CMD_INFO: { // Get info
+#if defined(AM13E)
+				uint32_t mcu = boot_am13e_device_id();
+#else
 				int mcu = DBGMCU_IDCODE;
+#endif
 				char buf[32] = {REVISION, IO_PIN, mcu, mcu >> 8, mcu >> 16, mcu >> 24};
 				senddata(buf, sizeof buf);
 				break;
@@ -97,6 +107,14 @@ void main(void) {
 				break;
 			default: // Pass control to application
 			done:
+#if defined(AM13E)
+				/* Validate the AM13E application image and vector before launch.
+				 * The hardware backend owns the actual memory and reset contract.
+				 */
+				if (!boot_am13e_application_valid()) break;
+				boot_am13e_launch_application();
+				__builtin_unreachable();
+#else
 				if (*(uint16_t *)_rom_end != 0x32ea) break;
 				const uint32_t *vec = (const uint32_t *)(_rom_end + PAGE_SIZE); // Entry point
 				__asm__ volatile (
@@ -104,6 +122,7 @@ void main(void) {
 					"bx %1\n\t" // Jump to application
 					:: "r" (vec[0]), "r" (vec[1]) : "memory");
 				__builtin_unreachable();
+#endif
 		}
 	}
 }
