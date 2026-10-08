@@ -43,3 +43,9 @@ add_test(NAME am13e_image_validator COMMAND am13e_image_integrity_test)
 # Never mark the test WILL_FAIL: real rejection is required.
 add_test(NAME am13e_image_integrity_gate
     COMMAND am13e_flash_transaction_test --image-integrity)
+
+# Stage C: packer CLI uses Python's stdlib and a separate temporary image.
+# Keep it under CTest alongside the ARM-independent firmware integrity tests.
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+add_test(NAME am13e_image_packer
+    COMMAND "${Python3_EXECUTABLE}" "${REPO_ROOT}/boot/tests/am13e_image_packer_test.py")
