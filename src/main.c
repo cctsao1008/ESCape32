@@ -473,7 +473,13 @@ void pend_sv_handler(void) {
 void hard_fault_handler(void) {
 	ledctl(1); // Indicate error
 #if defined(ESCAPE32_AM13E)
-#error "E62 hardware port required: fault shutdown watchdog"
+	/* Software containment before the latched fault. The externally wired
+	 * trip/GD-disable hardware must independently shut down on MCU failure.
+	 * The stop operation is NOT proof of physical fail-safe output levels.
+	 */
+	am13e_bemf_cancel_delay();
+	hw_motor_am13e_runtime_stop();
+#error "E62 hardware port required: validate asynchronous MCPWM trip and watchdog reset"
 #else
 	TIM1_EGR = TIM_EGR_BG;
 	TIM6_PSC = CLK_KHZ / 10 - 1; // 0.1ms resolution
