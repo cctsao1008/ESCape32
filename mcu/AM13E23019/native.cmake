@@ -8,10 +8,11 @@ function(add_target_am13e name)
     if(NOT generated)
         message(FATAL_ERROR "AM13E SysConfig sources missing: ${AM13E_SYSCFG_DIR}; generate them using TI SysConfig first")
     endif()
+    # CMSIS Core is INTERFACE-only in the TI SDK (headers, no .a).
     # External TI SDK static archives, never configure the SDK as top-level.
     file(GLOB_RECURSE sdk_archives
         "${AM13E_SDK_BUILD}/*.a" "${AM13E_SDK_ROOT}/lib/*.a")
-    set(required_libs arch_ti_sdk_cfg_default cmsis_core driverlib_ti_sdk_cfg_default
+    set(required_libs arch_ti_sdk_cfg_default driverlib_ti_sdk_cfg_default
         utils_nortos_ti_sdk_cfg_default am13e230x)
     set(libs "")
     foreach(lib IN LISTS required_libs)
@@ -43,6 +44,9 @@ function(add_target_am13e name)
         "${AM13E_SDK_ROOT}/source/arch/include"
         "${AM13E_SDK_ROOT}/source/arch/m33/include"
         "${AM13E_SDK_ROOT}/source/cmsis/Core/Include"
+        "${AM13E_SDK_ROOT}/source/device/am13e230x/include/hw"
+        "${AM13E_SDK_ROOT}/source/utils/log/include"
+        "${AM13E_SDK_ROOT}/source/utils/utils_delay/include"
         "${AM13E_SDK_ROOT}/source/utils"
         "${AM13E_SDK_ROOT}/ti_sdk_config/am13e230x/default/arch_cfg"
         "${AM13E_SDK_ROOT}/ti_sdk_config/am13e230x/default/device_support/include")
