@@ -18,7 +18,7 @@
 #pragma once
 
 /* Hardware-only timer/comparator mapping is irrelevant to host command tests. */
-#ifndef ESCAPE32_PROG_HOST_TEST
+#if !defined(ESCAPE32_PROG_HOST_TEST) && !defined(ESCAPE32_AM13E_PROG_LINK)
 #if DEAD_TIME < 128
 #define TIM_DTG DEAD_TIME
 #elif DEAD_TIME < 256
