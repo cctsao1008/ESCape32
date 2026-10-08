@@ -79,6 +79,7 @@ cmake --build "$sdk_build_dir"     --target "$target"     --parallel "$(nproc)"
 }
 
 objdump="$GCC_ROOT/bin/arm-none-eabi-objdump"
+objcopy="$GCC_ROOT/bin/arm-none-eabi-objcopy"
 readelf="$GCC_ROOT/bin/arm-none-eabi-readelf"
 size="$GCC_ROOT/bin/arm-none-eabi-size"
 nm="$GCC_ROOT/bin/arm-none-eabi-nm"
@@ -89,6 +90,7 @@ section_vma() {
 }
 
 intvecs="$(section_vma .intvecs)"
+image_header="$(section_vma .image_header)"
 text_vma="$(section_vma .text)"
 vtable="$(section_vma .vtable)"
 ramfunc="$(section_vma .TI.ramfunc)"
@@ -123,6 +125,7 @@ echo "========================="
 echo
 
 check_equal ".intvecs" "$intvecs" "0x00006000"
+check_equal ".image_header" "$image_header" "0x00006100"
 check_equal "app start" "$app_start" "0x00006000"
 check_equal "app end" "$app_end" "0x00080000"
 
@@ -138,10 +141,10 @@ fi
 
 check_equal ".TI.ramfunc" "$ramfunc" "0x00c18000"
 
-if [ -n "$text_vma" ] && (( text_vma >= 0x00006100 )); then
+if [ -n "$text_vma" ] && (( text_vma >= 0x00006120 )); then
     printf '[PASS] %-12s %s\n' ".text" "$text_vma"
 else
-    printf '[FAIL] %-12s expected >= 0x00006100, got %s\n' ".text" "${text_vma:-<missing>}"
+    printf '[FAIL] %-12s expected >= 0x00006120, got %s\n' ".text" "${text_vma:-<missing>}"
     fail=1
 fi
 
@@ -152,9 +155,19 @@ else
     fail=1
 fi
 
+raw_bin="$output_dir/$target.raw.bin"
+packed_bin="$output_dir/$target.e62.bin"
+manifest="$output_dir/$target.e62.json"
+
+"$objcopy" -O binary "$elf" "$raw_bin"
+python3 "$script_dir/pack-am13e-image.py" \
+    "$raw_bin" "$packed_bin" --manifest "$manifest"
+
 echo
-echo "ELF: $elf"
-echo "MAP: $map"
+echo "ELF:      $elf"
+echo "MAP:      $map"
+echo "Packed:   $packed_bin"
+echo "Manifest: $manifest"
 
 if [ "$fail" -ne 0 ]; then
     echo
@@ -165,5 +178,8 @@ fi
 echo
 echo "Stage-A application-link contract PASS."
 echo "Dedicated linker enforces:"
-echo "  APP 0x00006000..0x0007FFFF (488 KiB)"
+echo "  APP vector @ 0x00006000"
+echo "  E62 image header @ 0x00006100 (32 bytes)"
+echo "  APP ownership 0x00006000..0x0007FFFF (488 KiB)"
 echo "  Boot + FW1 CFG + FW2 CFG remain outside application ownership"
+echo "Packager emits an aligned E62 image with header + payload CRC."
