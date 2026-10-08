@@ -108,7 +108,7 @@ void main(void) {
 				 * The STM32 _rom/_ram_end buffering contract is not portable.
 				 * Platform code must validate the whole image before touching boot Flash.
 				 */
-				boot_am13e_self_update();
+				/* Self-update is not enabled until RAM execution is qualified. */
 				sendval(RES_ERROR);
 				break;
 #else
@@ -127,6 +127,12 @@ void main(void) {
 #endif
 			}
 			case CMD_SETWRP: // Set write protection
+#if defined(AM13E)
+				if (recvval() == -1) goto done;
+				/* Never acknowledge protection that was not applied. */
+				sendval(RES_ERROR);
+				break;
+#else
 				switch (recvval()) {
 					case 0x33: // Off
 						setwrp(0);
@@ -140,6 +146,7 @@ void main(void) {
 				}
 				sendval(RES_ERROR);
 				break;
+#endif
 			default: // Pass control to application
 			done:
 #if defined(AM13E)
