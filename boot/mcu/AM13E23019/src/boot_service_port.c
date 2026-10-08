@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 
+#include "boot_image.h"
 #include "boot_port.h"
 #include "service_io.h"
 
@@ -85,7 +86,7 @@ const boot_protocol_ops_t *boot_service_port_bind(
         .write_block = boot_port_write_block,
         .handle_update = NULL,
         .handle_setwrp = NULL,
-        .app_valid = boot_port_app_valid,
+        .app_valid = boot_image_launchable,
         .jump_app = boot_port_jump_to_app,
     };
 
@@ -101,11 +102,4 @@ const boot_protocol_ops_t *boot_service_port_bind(
     protocol_ops.io_id = transport->io_id;
 
     return &protocol_ops;
-}
-
-
-__attribute__((weak))
-const boot_service_transport_ops_t *boot_service_transport_get(void)
-{
-    return NULL;
 }
