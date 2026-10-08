@@ -98,8 +98,8 @@ symbol_addr() {
     "$nm" -n "$elf" | awk -v s="$symbol" '$3 == s { print "0x" $1; exit }'
 }
 
-app_start="$(symbol_addr __e62_app_flash_start__)"
-app_end="$(symbol_addr __e62_app_flash_end__)"
+app_start="$(symbol_addr __app_flash_start__)"
+app_end="$(symbol_addr __app_flash_end__)"
 
 fail=0
 
@@ -163,7 +163,7 @@ if [ "$fail" -ne 0 ]; then
 fi
 
 echo
-echo "Stage-A E62 application-link contract PASS."
+echo "Stage-A application-link contract PASS."
 echo "Dedicated linker enforces:"
 echo "  APP 0x00006000..0x0007FFFF (488 KiB)"
 echo "  Boot + FW1 CFG + FW2 CFG remain outside application ownership"
