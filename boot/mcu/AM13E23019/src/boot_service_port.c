@@ -8,6 +8,7 @@
 
 #include "boot_image.h"
 #include "boot_port.h"
+#include "crc32.h"
 #include "service_io.h"
 
 static const boot_service_transport_ops_t *active_transport;
@@ -24,22 +25,11 @@ static void service_send_buffer(const char *buffer, int length)
 
 uint32_t boot_service_port_crc32(const char *buffer, int length)
 {
-    uint32_t crc = 0xffffffffU;
-
     if ((buffer == NULL) || (length < 0)) {
         return 0U;
     }
 
-    for (int i = 0; i < length; ++i) {
-        crc ^= (uint8_t)buffer[i];
-
-        for (unsigned int bit = 0U; bit < 8U; ++bit) {
-            uint32_t mask = 0U - (crc & 1U);
-            crc = (crc >> 1) ^ (0xedb88320U & mask);
-        }
-    }
-
-    return ~crc;
+    return boot_crc32(buffer, (uint32_t)length);
 }
 
 static const boot_service_io_ops_t service_io_ops = {
