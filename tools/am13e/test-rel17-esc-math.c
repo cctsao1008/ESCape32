@@ -6,6 +6,12 @@ int main(void)
 {
     const char sample[] = "123456789";
     assert(crc8(sample, 9) == 0xf4);
+    /* High-bit bytes must never create negative lookup-table indices. */
+    const char bytes[] = {(char)0x80, (char)0xff, (char)0x00, (char)0xa5};
+    (void)crc8(bytes, 4);
+    (void)crc8dvbs2(bytes, 4);
+    (void)crc16ccitt(bytes, 4);
+    (void)crc16xmodem(bytes, 4);
     assert(crc8dvbs2(sample, 9) == 0xbc);
     assert(crc16ccitt(sample, 9) == 0x2189);
     assert(crc16xmodem(sample, 9) == 0x31c3);
