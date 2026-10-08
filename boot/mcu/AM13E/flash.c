@@ -75,7 +75,11 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
                 return 0;
         return 1;
     }
-    if (((unsigned)len & 15U) != 0U)
+    /* WiFi-Link sends four-byte-aligned final blocks. AM13E Flash
+     * programming operates on complete 16-byte units; pad only the
+     * unwritten tail with erased (0xff) bytes. Never read beyond src.
+     */
+    if (((unsigned)len & 3U) != 0U)
         return 0;
 
     /* The host restores metadata block 0 before metadata block 1.
@@ -109,11 +113,24 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
      * The host protocol MUST transmit ordered blocks; an interruption
      * between blocks can leave an incomplete application image.
      */
+    const uint32_t aligned_len = (uint32_t)len & ~UINT32_C(15);
+    const uint32_t tail_len = (uint32_t)len - aligned_len;
     if (boot_am13e_flash_execute((uint32_t)addr,
-                                 (uint8_t *)(uintptr_t)src, (uint32_t)len,
+                                 (uint8_t *)(uintptr_t)src, aligned_len,
                                  (addr % DL_FLASH_SECTOR_SIZE) == 0U,
-                                 true) != DL_FLASH_SUCCESS)
+                                 aligned_len != 0U) != DL_FLASH_SUCCESS)
         return 0;
+    if (tail_len != 0U) {
+        uint8_t tail[16];
+        for (unsigned i = 0U; i < sizeof tail; ++i)
+            tail[i] = UINT8_C(0xff);
+        for (unsigned i = 0U; i < tail_len; ++i)
+            tail[i] = (uint8_t)src[aligned_len + i];
+        if (boot_am13e_flash_execute((uint32_t)(addr + aligned_len),
+                                     tail, sizeof tail, false, true) !=
+            DL_FLASH_SUCCESS)
+            return 0;
+    }
 
     const volatile uint8_t *verify = (const volatile uint8_t *)addr;
     for (int i = 0; i < len; ++i) {
