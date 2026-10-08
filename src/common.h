@@ -19,21 +19,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <libopencmsis/core_cm3.h>
-#include <libopencm3/stm32/syscfg.h>
-#include <libopencm3/stm32/rcc.h>
-#include <libopencm3/stm32/gpio.h>
-#include <libopencm3/stm32/timer.h>
-#ifdef AT32F4
-#include <libopencm3/cm3/common.h>
-#include <libopencm3/stm32/f1/usart.h>
-#else
-#include <libopencm3/stm32/usart.h>
-#endif
-#include <libopencm3/stm32/dma.h>
-#include <libopencm3/stm32/flash.h>
-#include <libopencm3/stm32/iwdg.h>
-#include <libopencm3/stm32/wwdg.h>
+#include "hw_platform.h"
 #include "config.h"
 #include "defs.h"
 
