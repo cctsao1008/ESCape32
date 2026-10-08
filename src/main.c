@@ -20,6 +20,9 @@
 #include "hw_six_step.h"
 #include "hw_bemf_rel17_math.h"
 #include "hw_bemf_rel17_state.h"
+#ifdef ESCAPE32_AM13E
+#include "am13e_core_port.h"
+#endif
 
 #define REVISION 17
 #define REVPATCH 3
@@ -363,8 +366,13 @@ void adcdata(int t, int u, int v, int c, int a) {
 }
 
 void sys_tick_handler(void) {
+	#ifdef ESCAPE32_AM13E
+	am13e_core_pend_pendsv();
+	am13e_core_resume_thread();
+#else
 	SCB_ICSR = SCB_ICSR_PENDSVSET; // Continue with low priority
 	SCB_SCR = 0; // Resume main loop
+#endif
 	if (++tick == tickv) tickf = 0;
 }
 
@@ -505,10 +513,14 @@ void main(void) {
 		hall = 0x10000;
 	}
 #endif
+	#ifdef ESCAPE32_AM13E
+	am13e_core_start_scheduler_tick((uint32_t)CLK, 16000U);
+#else
 	nvic_set_priority(NVIC_PENDSV_IRQ, 0x80);
 	STK_RVR = CLK_KHZ / 16 - 1; // 16kHz
 	STK_CVR = 0;
 	STK_CSR = STK_CSR_ENABLE | STK_CSR_TICKINT | STK_CSR_CLKSOURCE_AHB;
+#endif
 #ifndef ANALOG
 #if SENS_CNT >= 1
 	int cells = cfg.prot_cells;
@@ -736,7 +748,11 @@ void main(void) {
 			__enable_irq();
 		}
 	tick:
+		#ifdef ESCAPE32_AM13E
+		am13e_core_suspend_thread();
+#else
 		SCB_SCR = SCB_SCR_SLEEPONEXIT; // Suspend main loop
+#endif
 		__WFI();
 		if (tick & 0xf) continue; // 16kHz -> 1kHz
 #ifndef ANALOG
