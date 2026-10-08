@@ -93,3 +93,32 @@ bool fw1_bemf_event_ecap0_event1(void)
     DL_ECAP_clearInterrupt(ECAP0, DL_ECAP_ISR_SOURCE_CEVT1);
     return fw1_bemf_event_capture_interval(captured);
 }
+
+/*
+ * Start a new commutation interval epoch. CAP1 thereafter measures ticks
+ * since this boundary only when eCAP was configured in absolute capture mode,
+ * CAP1 reset-on-event is disabled, and its clock is calibrated to TIMG12.
+ * Never treat an arbitrary free-running timestamp as elapsed time.
+ */
+void fw1_bemf_ecap_start_epoch(void)
+{
+    DL_ECAP_disableTimeStampCapture(ECAP0);
+    DL_ECAP_clearInterrupt(ECAP0, DL_ECAP_ISR_SOURCE_CEVT1);
+    DL_ECAP_resetCounters(ECAP0);
+    DL_ECAP_enableTimeStampCapture(ECAP0);
+}
+
+void fw1_bemf_ecap_configure_capture(DL_ECAP_INPUT source,
+                                     DL_ECAP_EVENT_POLARITY edge)
+{
+    DL_ECAP_disableTimeStampCapture(ECAP0);
+    DL_ECAP_selectECAPInput(ECAP0, source);
+    DL_ECAP_enableCaptureMode(ECAP0);
+    DL_ECAP_setCaptureMode(ECAP0, DL_ECAP_CONTINUOUS_CAPTURE_MODE,
+                           DL_ECAP_EVENT_1);
+    DL_ECAP_disableCounterResetOnEvent(ECAP0, DL_ECAP_EVENT_1);
+    DL_ECAP_setEventPolarity(ECAP0, DL_ECAP_EVENT_1, edge);
+    DL_ECAP_clearInterrupt(ECAP0, DL_ECAP_ISR_SOURCE_CEVT1);
+    DL_ECAP_enableInterrupt(ECAP0, DL_ECAP_ISR_SOURCE_CEVT1);
+    fw1_bemf_ecap_start_epoch();
+}
