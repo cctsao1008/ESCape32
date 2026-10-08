@@ -26,5 +26,12 @@ typedef struct {
 const boot_protocol_ops_t *boot_service_port_bind(
     const boot_service_transport_ops_t *transport);
 
+/*
+ * Return the selected physical transport, or NULL when no service transport
+ * has been bound for the current product build. The default implementation is
+ * weak so a reviewed physical backend can provide the concrete binding.
+ */
+const boot_service_transport_ops_t *boot_service_transport_get(void);
+
 /* Software CRC-32 used by the AM13 boot service framing. */
 uint32_t boot_service_port_crc32(const char *buffer, int length);
