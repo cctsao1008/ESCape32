@@ -23,8 +23,8 @@ int boot_service_recv_value(const boot_service_io_ops_t *ops)
     }
 
     return ops->recv_buffer(buffer, 2) &&
-        ((buffer[0] ^ buffer[1]) == (char)0xff)
-        ? (unsigned char)buffer[0]
+        ((((uint8_t)buffer[0]) ^ ((uint8_t)buffer[1])) == 0xffU)
+        ? (uint8_t)buffer[0]
         : -1;
 }
 
