@@ -27,12 +27,31 @@ REGION_ALIAS("REGION_ARM_EXTAB", FLASH_IMAGE);
 
 __app_flash_start__ = ORIGIN(FLASH_IMAGE);
 __app_flash_end__ = ORIGIN(FLASH_IMAGE) + LENGTH(FLASH_IMAGE);
+__app_image_header_start__ = ORIGIN(FLASH_IMAGE) + 0x100;
+__app_image_header_end__ = __app_image_header_start__ + 0x20;
 
 SECTIONS
 {
     .intvecs ORIGIN(FLASH_IMAGE) : AT (ORIGIN(FLASH_IMAGE)) {
         KEEP (*(.intvecs))
     } > REGION_TEXT
+
+    /*
+     * Fixed E62 image header window. The packager patches these eight erased
+     * words after link. Keeping the record immediately after the vector window
+     * lets normal block programming carry metadata without padding the image to
+     * the end of MAIN Flash.
+     */
+    .image_header __app_image_header_start__ : {
+        LONG(0xffffffff)
+        LONG(0xffffffff)
+        LONG(0xffffffff)
+        LONG(0xffffffff)
+        LONG(0xffffffff)
+        LONG(0xffffffff)
+        LONG(0xffffffff)
+        LONG(0xffffffff)
+    } > REGION_TEXT AT> REGION_TEXT
 
     PROVIDE (_vtable_base_address =
         DEFINED(_vtable_base_address) ? _vtable_base_address : 0x20000000);
@@ -155,3 +174,7 @@ SECTIONS
 ASSERT(ADDR(.intvecs) == 0x00006000, "APP vector table must start at 0x00006000");
 ASSERT(__app_flash_start__ == 0x00006000, "APP start mismatch");
 ASSERT(__app_flash_end__ == 0x00080000, "APP end mismatch");
+
+ASSERT(SIZEOF(.intvecs) <= 0x100, "APP vector table overlaps image header");
+ASSERT(ADDR(.image_header) == 0x00006100, "APP image header address mismatch");
+ASSERT(SIZEOF(.image_header) == 0x20, "APP image header size mismatch");
