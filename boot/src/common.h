@@ -43,7 +43,12 @@
 #ifndef IO_PB14
 #error "AM13E boot target requires an explicit service I/O pin"
 #endif
-#define IO_PIN 4
+/* The service protocol pin identifier must be defined by the AM13E
+ * backend after protocol compatibility has been reviewed.
+ */
+#ifndef IO_PIN
+#error "AM13E boot service protocol IO_PIN identifier is not defined"
+#endif
 #else
 #define CLK_CNT(rate) ((CLK + ((rate) >> 1)) / (rate))
 
@@ -72,8 +77,13 @@ int recvdata(char *buf);
 void senddata(const char *buf, int len);
 
 uint32_t crc32(const char *buf, int len);
+#if defined(AM13E)
 int write(char *dst, const char *src, int len);
+void update(char *dst, const char *src, int len);
+#else
+int write(char *dst, const char *src, int len) __attribute__((__long_call__));
 void update(char *dst, const char *src, int len) __attribute__((__long_call__));
+#endif
 void setwrp(int type);
 
 #if defined(AM13E)
