@@ -12,6 +12,16 @@ int main(void)
     assert(am13e_clock_convert_ticks(1, 3000000, 1000000, &ticks));
     assert(ticks == 1);
     assert(!am13e_clock_convert_ticks(UINT32_MAX, 1, UINT32_MAX, &ticks));
+    /* Exact upper-range multiplication: ceil must not wrap uint64. */
+    assert(am13e_clock_convert_ticks(UINT32_MAX, UINT32_MAX,
+                                     UINT32_MAX, &ticks));
+    assert(ticks == UINT32_MAX);
+    assert(!am13e_clock_convert_ticks(UINT32_MAX, UINT32_MAX - 1U,
+                                      UINT32_MAX, &ticks));
+    assert(am13e_clock_convert_ticks(UINT32_MAX, UINT32_MAX,
+                                     UINT32_MAX - 1U, &ticks));
+    assert(ticks == UINT32_MAX - 1U);
+
 
     uint16_t period = 0;
     assert(!am13e_mcpwm_period_ticks(0, 24000, &period));
