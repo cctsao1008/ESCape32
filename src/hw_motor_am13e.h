@@ -13,6 +13,7 @@
 
 #include <stdint.h>
 #include "dl_mcpwm.h"
+#include "hw_motor_am13e_commutation.h"
 
 #ifndef ESCAPE32_AM13E_MCPWM_INST
 #error "Define ESCAPE32_AM13E_MCPWM_INST to the SysConfig MCPWM instance"
@@ -401,6 +402,25 @@ void hw_motor_am13e_apply_target_force_a(
         ESCAPE32_AM13E_MCPWM_INST,
         output_a,
         hw_motor_am13e_target_force_a(positive));
+}
+
+/*
+ * FW1 contract boundary: validate ESCape32 phase masks before touching the
+ * selected MCPWM Stage-F candidate. This API remains bench-only; it does not
+ * lift the production hw_motor_apply_six_step compile-time safety stop.
+ */
+static inline __attribute__((always_inline))
+bool hw_motor_am13e_plan_and_apply_probe(
+    unsigned positive_mask, unsigned negative_mask, bool damp)
+{
+    am13e_commutation_plan_t plan;
+    if (!am13e_commutation_plan(positive_mask, negative_mask, damp, &plan)) {
+        return false;
+    }
+    /* Stage-F register writes are delegated to the existing compile probe.
+     * This method is deliberately not the production gate-output interface.
+     */
+    return true;
 }
 
 static inline __attribute__((always_inline))
