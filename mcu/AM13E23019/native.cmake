@@ -103,6 +103,10 @@ function(add_target_am13e name)
     set_source_files_properties(${generated} PROPERTIES COMPILE_OPTIONS "-w")
     target_compile_options(${name}.elf PRIVATE ${am13e_opts})
     target_link_options(${name}.elf PRIVATE ${am13e_opts}
+        # Keep rel17 command entry points visible in the ELF even before a
+        # transport dispatches them; --gc-sections would otherwise drop them.
+        # This does not enable remote commands or storage operations.
+        -Wl,-u,execcmd -Wl,-u,execcrsfcmd
         -Wl,--gc-sections -Wl,-Map,${CMAKE_CURRENT_BINARY_DIR}/${name}.map
         -Wl,-e,Reset_Handler -T${platform}/linker_app.ld)
     target_link_libraries(${name}.elf PRIVATE
