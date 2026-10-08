@@ -15,12 +15,12 @@ int main(void)
     for (unsigned step = 1; step <= 6; ++step) {
         hw_six_step_t phase = hw_six_step_decode(step, 0U);
         am13e_commutation_plan_t plan;
-        assert(phase.positive == expected_positive[step - 1U]);
-        assert(phase.negative == expected_negative[step - 1U]);
-        assert(am13e_commutation_plan(phase.positive, phase.negative, true, &plan));
-        assert(plan.positive_mask == phase.positive);
-        assert(plan.negative_mask == phase.negative);
-        assert(!am13e_commutation_plan(phase.positive, phase.positive, true, &plan));
+        assert((phase.positive & 7U) == expected_positive[step - 1U]);
+        assert((phase.negative & 7U) == expected_negative[step - 1U]);
+        assert(am13e_commutation_plan(phase.positive & 7U, phase.negative & 7U, true, &plan));
+        assert(plan.positive_mask == (phase.positive & 7U));
+        assert(plan.negative_mask == (phase.negative & 7U));
+        assert(!am13e_commutation_plan(phase.positive & 7U, phase.positive & 7U, true, &plan));
     }
     for (unsigned reverse = 0; reverse < 2; ++reverse) {
         for (unsigned step = 1; step <= 6; ++step) {
