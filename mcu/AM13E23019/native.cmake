@@ -54,6 +54,14 @@ function(add_target_am13e name)
             ESCAPE32_AM13E ESCAPE32_AM13E_MCPWM_INST=MCPWM0
             __DEVICE_SHORT__="am13e230x" __DEVICE_LONG__="AM13E230x"
             __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
+        # Probe-only inputs: no values are inferred from unrelated boards.
+        foreach(required IN ITEMS CLK DEAD_TIME COMP_MAP)
+            if(DEFINED ESCAPE32_AM13E_PROBE_${required})
+                target_compile_definitions(${name}_rel17_probe PRIVATE
+                    "${required}=${ESCAPE32_AM13E_PROBE_${required}}")
+            endif()
+        endforeach()
+        target_compile_definitions(${name}_rel17_probe PRIVATE TARGET_NAME="E62")
         target_compile_options(${name}_rel17_probe PRIVATE ${am13e_opts})
     endif()
     # Own headers retain all ESCape32 warning diagnostics.
