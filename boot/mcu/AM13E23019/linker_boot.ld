@@ -53,6 +53,7 @@ SECTIONS
         KEEP (*(.text.boot_flash_*))
         KEEP (*(.text.boot_port_*))
         KEEP (*(.text.boot_protocol_*))
+        KEEP (*(.text.boot_service_*))
         . = ALIGN(0x8);
         *(.text.*)
         . = ALIGN(0x8);
