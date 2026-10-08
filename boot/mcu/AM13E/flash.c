@@ -9,8 +9,17 @@
 #include <soc.h>
 #include <stdint.h>
 
+#ifdef AM13E_FLASH_TEST
+extern uintptr_t boot_am13e_test_first;
+extern uintptr_t boot_am13e_test_end;
+#define BOOT_APP_FIRST boot_am13e_test_first
+#define BOOT_APP_END boot_am13e_test_end
+#else
 extern char __app_flash_start__[];
 extern char __boot_storage_end__[];
+#define BOOT_APP_FIRST ((uintptr_t)__app_flash_start__)
+#define BOOT_APP_END ((uintptr_t)__boot_storage_end__)
+#endif
 
 /* RAM-only staging of the application signature program unit.
  * Never publish the valid signature before both final metadata blocks
@@ -72,8 +81,8 @@ static uint32_t boot_am13e_flash_execute(uint32_t address,
 
 int boot_am13e_flash_write(char *dst, const char *src, int len) {
     uintptr_t addr = (uintptr_t)dst;
-    uintptr_t end = (uintptr_t)__boot_storage_end__;
-    uintptr_t first = (uintptr_t)__app_flash_start__;
+    uintptr_t end = BOOT_APP_END;
+    uintptr_t first = BOOT_APP_FIRST;
     if (!src || len <= 0 || (addr & 15U) != 0U || addr < first ||
         addr >= end || (unsigned)len > end - addr ||
         (unsigned)len > 1024U)
