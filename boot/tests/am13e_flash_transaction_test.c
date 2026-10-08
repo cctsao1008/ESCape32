@@ -64,6 +64,8 @@ uint32_t DL_Flash_program(uint32_t addr, uint8_t *src, uint32_t len) {
     return DL_FLASH_SUCCESS;
 }
 
+#define IMAGE_BYTES 5120U
+static uint8_t firmware[IMAGE_BYTES];
 static uint8_t payload[1024];
 static uint8_t sig[1024];
 static const uint8_t invalid[8] = {
@@ -77,13 +79,47 @@ static int write_block(unsigned block, const uint8_t *data, int size) {
         (const char *)data, size);
 }
 
-static void fill_blocks(void) {
-    for (unsigned i = 0; i < sizeof payload; ++i) {
-        payload[i] = (uint8_t)(i * 13U + 7U);
-        sig[i] = (uint8_t)(i * 3U + 21U);
+static void set16(uint8_t *p, uint16_t value) {
+    p[0] = (uint8_t)value;
+    p[1] = (uint8_t)(value >> 8);
+}
+static void set32(uint8_t *p, uint32_t value) {
+    for (unsigned i = 0; i < 4U; ++i)
+        p[i] = (uint8_t)(value >> (8U * i));
+}
+static uint32_t calculate_crc32(const uint8_t *p, uint32_t length,
+                                bool omit_header) {
+    uint32_t crc = UINT32_C(0xffffffff);
+    for (uint32_t i = 0; i < length; ++i) {
+        if (omit_header && i >= 256U && i < 288U) continue;
+        crc ^= p[i];
+        for (unsigned bit = 0; bit < 8U; ++bit)
+            crc = (crc >> 1) ^
+                  (UINT32_C(0xedb88320) & (0U - (crc & 1U)));
     }
-    sig[0] = 0xea;
-    sig[1] = 0x32;
+    return ~crc;
+}
+static void fill_blocks(void) {
+    /* Realistic metadata, CRC, vector and data for a v2 test image. */
+    for (unsigned i = 0; i < IMAGE_BYTES; ++i)
+        firmware[i] = (uint8_t)(i * 13U + 7U);
+    firmware[0] = 0xea;
+    firmware[1] = 0x32;
+    set32(firmware + 2048U, UINT32_C(0x20001000));
+    set32(firmware + 2052U,
+          (uint32_t)(boot_am13e_test_first + 2048U + 128U) | 1U);
+    uint8_t *header = firmware + 256U;
+    set32(header, UINT32_C(0x49323645));
+    set16(header + 4U, 1U);
+    set16(header + 6U, 32U);
+    set32(header + 8U, UINT32_C(0x33314d41));
+    set32(header + 12U, IMAGE_BYTES);
+    set32(header + 16U, calculate_crc32(firmware, IMAGE_BYTES, true));
+    set32(header + 20U, 0U);
+    set32(header + 24U, 0U);
+    set32(header + 28U, calculate_crc32(header, 28U, false));
+    memcpy(sig, firmware, sizeof sig);
+    memcpy(payload, firmware + 1024U, sizeof payload);
 }
 
 static void check_signature_absent(void) {
@@ -129,6 +165,12 @@ static void test_short_tail(void) {
 }
 
 static void test_restore_and_retry(void) {
+    /* Restart from the short-tail fixture and write a complete valid image. */
+    CHECK(write_block(0, invalid, 8) == 1);
+    CHECK(write_block(1, invalid, 8) == 1);
+    CHECK(write_block(2, firmware + 2048U, 1024) == 1);
+    CHECK(write_block(3, firmware + 3072U, 1024) == 1);
+    CHECK(write_block(4, firmware + 4096U, 1024) == 1);
     CHECK(write_block(0, sig, 1024) == 1);
     check_signature_absent();
     CHECK(write_block(0, sig, 1024) == 1);
@@ -137,6 +179,8 @@ static void test_restore_and_retry(void) {
     CHECK(head[0] == 0xea && head[1] == 0x32);
     CHECK(write_block(0, sig, 1024) == 1);
     CHECK(write_block(1, payload, 1024) == 1);
+    CHECK(memcmp((const void *)boot_am13e_test_first,
+                 firmware, IMAGE_BYTES) == 0);
     puts("PASS signature deferred and metadata retry");
     ++tests;
 }
@@ -222,19 +266,15 @@ static void test_powerloss_during_metadata_restore(void) {
     ++tests;
 }
 
-/* Opt-in negative regression gate: must reject premature FINALIZE.
- * Currently expected RED until image length/integrity is enforced.
- * Keep it separate from the 10/10 transaction regression suite.
+/* Regression for the previously RED case: reject early FINALIZE.
+ * The host sends only data block 2 for a 5-block firmware image.
  */
 static int image_integrity_negative_gate(void) {
     CHECK(write_block(0, invalid, 8) == 1);
     CHECK(write_block(1, invalid, 8) == 1);
-    CHECK(write_block(2, payload, 1024) == 1);
-    /* A one-block application is insufficient for the E62 image contract,
-     * yet the legacy metadata restore command can still be attempted.
-     */
-    (void)write_block(0, sig, 1024);
-    (void)write_block(1, payload, 1024);
+    CHECK(write_block(2, firmware + 2048U, 1024) == 1);
+    CHECK(write_block(0, sig, 1024) == 1);
+    CHECK(write_block(1, payload, 1024) == 0);
     const uint8_t *head = (const uint8_t *)boot_am13e_test_first;
     if (head[0] == 0xea && head[1] == 0x32) {
         fprintf(stderr,
