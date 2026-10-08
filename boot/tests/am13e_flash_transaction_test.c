@@ -322,6 +322,92 @@ static int image_integrity_negative_gate(void) {
     return 0;
 }
 
+
+/*
+ * Stage C3: feed the ACTUAL ARM-linked, Python-packed .e62v2.bin into
+ * production flash.c's original 1 KiB / signature-last write transaction.
+ * No test-side metadata rewriting: the image bytes must match exactly.
+ * The Linux mmap address differs from the physical M33 Reset_Handler;
+ * image_integrity.c validates that handler against AM13E_IMAGE_APP_BASE.
+ */
+static int test_packed_image_transaction(const char *filename) {
+    FILE *file = fopen(filename, "rb");
+    if (!file) { perror(filename); return 2; }
+    if (fseek(file, 0, SEEK_END) != 0) { fclose(file); return 2; }
+    long file_size = ftell(file);
+    if (file_size < 0 ||
+        file_size < (long)(AM13E_IMAGE_VECTOR_OFFSET + 16U) ||
+        file_size > (long)AM13E_IMAGE_MAX_TRANSPORT_BYTES ||
+        (file_size & 15L) != 0L) {
+        fprintf(stderr, "FAIL packed image length/alignment: %ld bytes\n",
+                file_size);
+        fclose(file);
+        return 2;
+    }
+    if (fseek(file, 0, SEEK_SET) != 0) { fclose(file); return 2; }
+    uint8_t *packed = malloc((size_t)file_size);
+    if (!packed) { fclose(file); return 2; }
+    const size_t got = fread(packed, 1U, (size_t)file_size, file);
+    fclose(file);
+    if (got != (size_t)file_size) {
+        fprintf(stderr, "FAIL cannot read complete packed image\n");
+        free(packed);
+        return 2;
+    }
+    CHECK(packed[0] == 0xea && packed[1] == 0x32);
+    CHECK(boot_am13e_test_first != AM13E_IMAGE_APP_BASE);
+    CHECK((uint32_t)packed[AM13E_IMAGE_HEADER_OFFSET + 12U] |
+          ((uint32_t)packed[AM13E_IMAGE_HEADER_OFFSET + 13U] << 8) |
+          ((uint32_t)packed[AM13E_IMAGE_HEADER_OFFSET + 14U] << 16) |
+          ((uint32_t)packed[AM13E_IMAGE_HEADER_OFFSET + 15U] << 24)
+          == (uint32_t)file_size);
+
+    memset((void *)boot_am13e_test_first, 0xff,
+           (size_t)(boot_am13e_test_end - boot_am13e_test_first));
+    boot_am13e_test_reset_update_state();
+
+    CHECK(write_block(0, invalid, 8) == 1);
+    CHECK(write_block(1, invalid, 8) == 1);
+    check_signature_absent();
+
+    for (size_t offset = 2048U; offset < (size_t)file_size;
+         offset += 1024U) {
+        const int n = (int)(((size_t)file_size - offset > 1024U)
+                            ? 1024U : (size_t)file_size - offset);
+        CHECK(write_block((unsigned)(offset / 1024U),
+                          packed + offset, n) == 1);
+        check_signature_absent();
+    }
+    puts("PASS ARM-linked packed data blocks accepted by production Flash state machine");
+
+    CHECK(write_block(0, packed, 1024) == 1);
+    CHECK(write_block(0, packed, 1024) == 1);
+    check_signature_absent();
+    CHECK(write_block(1, packed + 1024U, 1024) == 1);
+    puts("PASS production metadata restore / signature-last commit");
+
+    CHECK(memcmp((const void *)boot_am13e_test_first,
+                 packed, (size_t)file_size) == 0);
+    puts("PASS programmed Flash matches ARM-linked packed BIN byte-for-byte");
+
+    uint32_t verified_length = 0U;
+    CHECK(boot_am13e_image_check(
+              boot_am13e_test_first, boot_am13e_test_end,
+              NULL, 0U, &verified_length) == AM13E_IMAGE_VALID);
+    CHECK(verified_length == (uint32_t)file_size);
+    puts("PASS committed real-image M33 vector, metadata length and CRC verified");
+
+    boot_am13e_test_reset_update_state();
+    CHECK(boot_am13e_image_check(
+              boot_am13e_test_first, boot_am13e_test_end,
+              NULL, 0U, &verified_length) == AM13E_IMAGE_VALID);
+    puts("PASS packed firmware survives simulated cold-boot state loss");
+
+    free(packed);
+    puts("PASS Stage C3 actual ARM-linked packed image transaction");
+    return 0;
+}
+
 int main(int argc, char **argv) {
     void *region = mmap((void *)MAP_ADDRESS, MAP_LENGTH,
                         PROT_READ | PROT_WRITE,
@@ -339,8 +425,10 @@ int main(int argc, char **argv) {
 
     if (argc == 2 && strcmp(argv[1], "--image-integrity") == 0)
         return image_integrity_negative_gate();
+    if (argc == 3 && strcmp(argv[1], "--flash-image") == 0)
+        return test_packed_image_transaction(argv[2]);
     if (argc != 1) {
-        fprintf(stderr, "Usage: %s [--image-integrity]\n", argv[0]);
+        fprintf(stderr, "Usage: %s [--image-integrity | --flash-image path]\n", argv[0]);
         return 2;
     }
 
