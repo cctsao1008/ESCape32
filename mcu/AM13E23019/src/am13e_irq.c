@@ -5,16 +5,16 @@
 #include <stdbool.h>
 #include "arch_interrupt.h"
 #include "hw/hw_ints.h"
-#include "am13e_bemf_events.h"
+#include "am13e_rel17_bemf_io.h"
 #include "am13e_irq.h"
 
 static void am13e_ecap0_irq(void)
 {
-    (void)am13e_bemf_event_ecap0_event1();
+    (void)am13e_rel17_bemf_ecap0_irq();
 }
 static void am13e_timg12_irq(void)
 {
-    am13e_bemf_event_timg12_irq();
+    am13e_rel17_bemf_timg12_irq();
 }
 
 bool am13e_register_bemf_irqs(void)
