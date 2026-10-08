@@ -109,6 +109,8 @@ void main(void) {
 				 * Platform code must validate the whole image before touching boot Flash.
 				 */
 				boot_am13e_self_update();
+				sendval(RES_ERROR);
+				break;
 #else
 				char *buf = _ram_end; // Use upper SRAM as buffer
 				int pos = 0;
