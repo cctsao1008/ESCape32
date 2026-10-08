@@ -1,16 +1,42 @@
 /*
 ** AM13E application Flash programming using TI DriverLib.
-** WARNING: Bank 0 cannot be erased while code executes from Bank 0.
-** This backend rejects Bank 0 operations until a qualified RAM-resident
-** flash service is available. The complete rel17 update protocol must
-** account for 2 KiB sectors and 1 KiB transport blocks.
+** Flash command execution and interrupt masking are RAM-resident.
+** The 1 KiB transport / 2 KiB sector update contract still needs
+** hardware qualification and recovery testing.
 */
 #include "common.h"
 #include <dl_flash.h>
+#include <soc.h>
 #include <stdint.h>
 
 extern char __app_flash_start__[];
 extern char __boot_storage_end__[];
+
+/* Called from Flash; runs wholly in SRAM while its target bank is busy.
+ * No application Flash reads or protocol I/O occur in this critical region.
+ */
+__attribute__((noinline, section(".TI.ramfunc")))
+static uint32_t boot_am13e_flash_execute(uint32_t address,
+                                         uint8_t *buffer,
+                                         uint32_t bytes,
+                                         bool erase,
+                                         bool program) {
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    __DSB();
+    __ISB();
+
+    uint32_t result = DL_FLASH_SUCCESS;
+    if (erase)
+        result = DL_Flash_eraseSector(address);
+    if (result == DL_FLASH_SUCCESS && program)
+        result = DL_Flash_program(address, buffer, bytes);
+
+    __DSB();
+    __ISB();
+    __set_PRIMASK(primask);
+    return result;
+}
 
 int boot_am13e_flash_write(char *dst, const char *src, int len) {
     uintptr_t addr = (uintptr_t)dst;
@@ -19,14 +45,6 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
     if (!src || len <= 0 || (addr & 15U) != 0U || addr < first ||
         addr >= end || (unsigned)len > end - addr ||
         (unsigned)len > 1024U)
-        return 0;
-
-    /* Flash operations targeting the executing bank are unsupported.
-     * Do not bypass this until the full erase/program call chain is
-     * linked in RAM and validated on hardware.
-     */
-    if ((addr / DL_FLASH_BANK_SIZE) ==
-        ((uintptr_t)&boot_am13e_flash_write / DL_FLASH_BANK_SIZE))
         return 0;
 
     /* WiFi-Link signature invalidation: two 8-byte all-FF writes to
@@ -41,7 +59,7 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
             if ((uint8_t)src[i] != UINT8_C(0xff))
                 return 0;
         if (addr == first &&
-            DL_Flash_eraseSector((uint32_t)first) != DL_FLASH_SUCCESS)
+            boot_am13e_flash_execute((uint32_t)first, 0, 0, true, false) != DL_FLASH_SUCCESS)
             return 0;
         const volatile uint8_t *check = (const volatile uint8_t *)first;
         for (unsigned i = 0; i < DL_FLASH_SECTOR_SIZE; ++i)
@@ -56,13 +74,10 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
      * The host protocol MUST transmit ordered blocks; an interruption
      * between blocks can leave an incomplete application image.
      */
-    if ((addr % DL_FLASH_SECTOR_SIZE) == 0U) {
-        if (DL_Flash_eraseSector((uint32_t)addr) != DL_FLASH_SUCCESS)
-            return 0;
-    }
-
-    if (DL_Flash_program((uint32_t)addr, (uint8_t *)(uintptr_t)src,
-                         (uint32_t)len) != DL_FLASH_SUCCESS)
+    if (boot_am13e_flash_execute((uint32_t)addr,
+                                 (uint8_t *)(uintptr_t)src, (uint32_t)len,
+                                 (addr % DL_FLASH_SECTOR_SIZE) == 0U,
+                                 true) != DL_FLASH_SUCCESS)
         return 0;
 
     const volatile uint8_t *verify = (const volatile uint8_t *)addr;
