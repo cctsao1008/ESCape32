@@ -1,5 +1,7 @@
-# ESCape32-owned AM13E executable; TI SDK only supplies external artifacts.
-function(add_am13e_target name)
+# ESCape32 add_target() AM13E backend; TI SDK supplies external libraries.
+# Current sources implement a peripheral vertical slice, NOT rel17 src/main.c.
+# Full rel17 target must migrate the common.h hardware dependencies first.
+function(add_target_am13e name)
     include("${CMAKE_CURRENT_SOURCE_DIR}/mcu/AM13E23019/config.cmake")
     set(platform "${CMAKE_CURRENT_SOURCE_DIR}/mcu/AM13E23019")
     file(GLOB generated CONFIGURE_DEPENDS "${AM13E_SYSCFG_DIR}/*.c")
