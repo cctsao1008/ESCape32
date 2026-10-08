@@ -18,6 +18,7 @@ add_executable(${TARGET})
 target_sources(${TARGET} PRIVATE
     ${BOOT_DIR}/src/main.c
     ${BOOT_DIR}/src/boot_image.c
+    ${BOOT_DIR}/src/boot_platform.c
     ${BOOT_DIR}/src/boot_request.c
     ${BOOT_DIR}/src/boot_port.c
     ${BOOT_DIR}/src/boot_service_port.c
