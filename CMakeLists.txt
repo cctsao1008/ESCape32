@@ -20,7 +20,52 @@ add_compile_options(-ffreestanding -ffunction-sections -fdata-sections -fsingle-
 	-Wno-variadic-macros -Wno-unused-result -Wno-unused-parameter)
 add_link_options(-nostartfiles -Wl,--gc-sections)
 
+# TI AM13E is an independent platform. This stage establishes the native
+# E62 compile target; the executable/linker integration follows the C/H port.
+# Keep the original legacy add_target() implementation untouched.
+function(add_target_ti_am13e name)
+    set(AM13E_SDK_ROOT "$ENV{AM13E_SDK_ROOT}" CACHE PATH "TI AM13E SDK root")
+    if(NOT AM13E_SDK_ROOT)
+        set(AM13E_SDK_ROOT "$ENV{HOME}/ti/am13e230x_sdk_26_01_00_03"
+            CACHE PATH "TI AM13E SDK root" FORCE)
+    endif()
+    if(NOT EXISTS "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_mcpwm.h")
+        message(FATAL_ERROR "TI AM13E SDK not found; set AM13E_SDK_ROOT")
+    endif()
+    set(AM13E_SYSCFG_DIR
+        "${AM13E_SDK_ROOT}/examples/empty/am13e230x_lp/m33_nortos/cmake_syscfg_generated"
+        CACHE PATH "AM13E SysConfig generated headers (temporary)")
+    # This target compiles the original rel17 sources. No board clock,
+    # dead time, comparator routing or output-enable values are fabricated.
+    add_library(${name} OBJECT
+        src/main.c
+        src/io.c
+        src/telem.c
+        src/util.c
+        src/prog.c)
+    target_compile_definitions(${name} PRIVATE
+        TI_AM13E TARGET_NAME="${name}"
+        __DEVICE_SHORT__="am13e230x" __DEVICE_LONG__="AM13E230x"
+        __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
+    target_compile_options(${name} PRIVATE
+        -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
+        -mfloat-abi=hard -fno-branch-count-reg)
+    target_include_directories(${name} PRIVATE src)
+    target_include_directories(${name} SYSTEM PRIVATE
+        "${AM13E_SYSCFG_DIR}"
+        "${AM13E_SDK_ROOT}/source/device/am13e230x/include"
+        "${AM13E_SDK_ROOT}/source/driverlib/am13e230x"
+        "${AM13E_SDK_ROOT}/source/arch/include"
+        "${AM13E_SDK_ROOT}/source/arch/m33/include"
+        "${AM13E_SDK_ROOT}/source/cmsis/Core/Include"
+        "${AM13E_SDK_ROOT}/source/compiler/m33_gcc_arm")
+endfunction()
+
 function(add_target name mcu)
+    if(mcu STREQUAL "TI_AM13E")
+        add_target_ti_am13e(${name})
+        return()
+    endif()
 	include(mcu/${mcu}/config.cmake)
 	file(READ src/main.c main_c)
 	string(REGEX MATCH "REVISION [0-9]+" rev1 ${main_c})
@@ -101,3 +146,6 @@ add_target(TMOTOR2 STM32F051 DEAD_TIME=26 COMP_MAP=321 SMALL_DEVICE)
 add_target(TMOTOR3 STM32G071 DEAD_TIME=35 COMP_MAP=231 IO_PA6)
 add_target(TMOTOR4 STM32G071 DEAD_TIME=35 COMP_MAP=123)
 add_target(VWING1 STM32G071 DEAD_TIME=35 COMP_MAP=123 SENS_MAP=0xA5A4 VOLT_MUL=110 CURR_MUL=40 BEC_MAP=0xB35 BEC_MIN=1 LED_WS2812 LED_STAT IO_PA2 IO_AUX)
+
+# E62: TI AM13E23019 port, compiled separately from legacy MCU targets.
+add_target(E62 TI_AM13E)
