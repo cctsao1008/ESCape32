@@ -18,6 +18,7 @@
 #include "common.h"
 #include "hw_motor.h"
 #include "hw_six_step.h"
+#include "hw_bemf_rel17_math.h"
 
 #define REVISION 17
 #define REVPATCH 3
@@ -289,10 +290,11 @@ void iftim_isr(void) { // BEMF zero-crossing
 	if (!(er & IFTIM_ICIE)) return;
 	int t = IFTIM_ICR; // Time since last zero-crossing
 	if (t < ival >> 1) return;
-	int u = ival * 3;
-	fast = (t < u >> 2 || t > u >> 1) && ertm < 2000; // Fast acceleration/deceleration
-	ival = (t + u) >> 2; // Commutation interval
-	IFTIM_OCR = max((ival - (ival * cfg.timing >> 5)) >> 1, 1); // Commutation delay
+	const hw_bemf_rel17_result_t bemf =
+		hw_bemf_rel17_calculate(t, ival, ertm, cfg.timing);
+	fast = bemf.fast; // Fast acceleration/deceleration
+	ival = bemf.interval; // Commutation interval
+	IFTIM_OCR = bemf.delay; // Commutation delay
 	TIM_EGR(IFTIM) = TIM_EGR_UG;
 	TIM_DIER(IFTIM) = 0;
 	if (sync < 6) ++sync;
