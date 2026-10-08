@@ -10,6 +10,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+/* Architectural addresses are fixed for E62 v2. Host memory may be
+ * mapped elsewhere, but the M33 Reset Handler remains a physical address.
+ */
+#define AM13E_IMAGE_APP_BASE            UINT32_C(0x00006000)
 #define AM13E_IMAGE_HEADER_OFFSET       0x100U
 #define AM13E_IMAGE_HEADER_SIZE         32U
 #define AM13E_IMAGE_VECTOR_OFFSET       0x800U
