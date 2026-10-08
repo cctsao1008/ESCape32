@@ -19,6 +19,31 @@ extern char __boot_storage_end__[];
 static uint8_t pending_header[16];
 static bool pending_header_valid;
 
+/* One session follows the unchanged WiFi-Link ordering:
+ * invalidate 0, invalidate 1, sequential blocks 2..N, restore 0, restore 1.
+ * A lost ACK may repeat the most recently accepted block with identical data.
+ * State is intentionally volatile: a reset requires a fresh invalidation.
+ */
+enum update_phase {
+    UPDATE_IDLE,
+    UPDATE_INVALIDATED_0,
+    UPDATE_PROGRAM,
+    UPDATE_RESTORE_1,
+    UPDATE_COMPLETE
+};
+static enum update_phase update_phase;
+static unsigned next_block = 2U;
+static unsigned last_block = 256U;
+static unsigned last_length;
+
+static bool same_flash_block(uintptr_t addr, const char *src, unsigned len) {
+    const volatile uint8_t *flash = (const volatile uint8_t *)addr;
+    for (unsigned i = 0; i < len; ++i)
+        if (flash[i] != (uint8_t)src[i])
+            return false;
+    return true;
+}
+
 /* Called from Flash; runs wholly in SRAM while its target bank is busy.
  * No application Flash reads or protocol I/O occur in this critical region.
  */
@@ -54,12 +79,50 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
         (unsigned)len > 1024U)
         return 0;
 
+    const unsigned block = (unsigned)((addr - first) / 1024U);
+    if (len != 8) {
+        if (update_phase == UPDATE_PROGRAM && block >= 2U) {
+            if (block == last_block && (unsigned)len == last_length)
+                return same_flash_block(addr, src, (unsigned)len) ? 1 : 0;
+            if (block != next_block)
+                return 0;
+        } else if (block == 0U) {
+            if (update_phase == UPDATE_RESTORE_1 && len == 1024 &&
+                pending_header_valid) {
+                for (unsigned i = 0; i < sizeof pending_header; ++i)
+                    if (pending_header[i] != (uint8_t)src[i])
+                        return 0;
+                return same_flash_block(addr + sizeof pending_header,
+                                        src + sizeof pending_header,
+                                        1024U - sizeof pending_header) ? 1 : 0;
+            }
+            if (update_phase != UPDATE_PROGRAM || next_block <= 2U ||
+                len != 1024)
+                return 0;
+        } else if (block == 1U) {
+            if (update_phase == UPDATE_COMPLETE && len == 1024)
+                return same_flash_block(addr, src, 1024U) ? 1 : 0;
+            if (update_phase != UPDATE_RESTORE_1 || len != 1024)
+                return 0;
+        } else {
+            return 0;
+        }
+    }
+
     /* WiFi-Link signature invalidation: two 8-byte all-FF writes to
      * application blocks 0 and 1. The first erases the full 2 KiB
      * metadata sector; the second only confirms that it is blank.
      * No generic 8-byte program is attempted (ECC requires 16 bytes).
      */
     if (len == 8) {
+        if (block == 0U && update_phase != UPDATE_IDLE &&
+            update_phase != UPDATE_INVALIDATED_0)
+            return 0;
+        if (block == 1U && update_phase != UPDATE_INVALIDATED_0 &&
+            update_phase != UPDATE_PROGRAM)
+            return 0;
+        if (block == 1U && update_phase == UPDATE_PROGRAM)
+            return 0;
         pending_header_valid = false;
         if (addr != first && addr != first + 1024U)
             return 0;
@@ -73,6 +136,14 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
         for (unsigned i = 0; i < DL_FLASH_SECTOR_SIZE; ++i)
             if (check[i] != UINT8_C(0xff))
                 return 0;
+        if (block == 0U) {
+            update_phase = UPDATE_INVALIDATED_0;
+            next_block = 2U;
+            last_block = 256U;
+            last_length = 0U;
+        } else {
+            update_phase = UPDATE_PROGRAM;
+        }
         return 1;
     }
     /* WiFi-Link sends four-byte-aligned final blocks. AM13E Flash
@@ -104,6 +175,7 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
             if (verify[i] != (uint8_t)src[i])
                 return 0;
         pending_header_valid = true;
+        update_phase = UPDATE_RESTORE_1;
         return 1;
     }
     if (addr == first + 1024U && (len != 1024 || !pending_header_valid))
@@ -149,6 +221,11 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
         for (unsigned i = 0; i < sizeof pending_header; ++i)
             if (header[i] != pending_header[i])
                 return 0;
+        update_phase = UPDATE_COMPLETE;
+    } else {
+        last_block = block;
+        last_length = (unsigned)len;
+        ++next_block;
     }
     return 1;
 }
