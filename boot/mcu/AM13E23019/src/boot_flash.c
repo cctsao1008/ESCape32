@@ -79,6 +79,30 @@ static boot_flash_status_t boot_flash_classify_write(
 }
 
 /*
+ * Clear Status is also a Flash command (CMDTYPE=5). AM13E TRM 13.3.1
+ * requires the CMDEXEC/write-and-wait sequence to execute from SRAM or a
+ * different bank. Do not use the Flash-resident DriverLib inline helper here:
+ * the compiler may out-of-line it into Bank0 Flash.
+ *
+ * Keep the TI DriverLib register sequence unchanged; isolate the entire
+ * command, including its CMDINPROGRESS poll, in RAM_C.
+ */
+RAMFUNC static void boot_flash_bank0_clear_status(void)
+{
+    NVMNW->GEN.CMDTYPE = DL_FLASHCTL_COMMAND_TYPE_CLEAR_STATUS;
+    __DSB();
+    __ISB();
+
+    NVMNW->GEN.CMDEXEC = NVMNW_CMDEXEC_VAL_EXECUTE;
+    __DSB();
+    __ISB();
+
+    while ((NVMNW->GEN.STATCMD & NVMNW_STATCMD_CMDINPROGRESS_MASK) ==
+           NVMNW_STATCMD_CMDINPROGRESS_STATINPROGRESS) {
+    }
+}
+
+/*
  * Bank0 helpers intentionally live in .TI.ramfunc.
  *
  * The DriverLib configuration helpers called below execute before a Flash
@@ -101,7 +125,7 @@ RAMFUNC static boot_flash_status_t boot_flash_bank0_erase_sector(
         goto out;
     }
 
-    DL_FlashCTL_executeClearStatus(NVMNW);
+    boot_flash_bank0_clear_status();
     DL_FlashCTL_unprotectSector(
         NVMNW, address, DL_FLASHCTL_REGION_SELECT_MAIN);
 
@@ -149,7 +173,7 @@ RAMFUNC static boot_flash_status_t boot_flash_bank0_program(
     }
 
     while (remaining >= 16U) {
-        DL_FlashCTL_executeClearStatus(NVMNW);
+        boot_flash_bank0_clear_status();
         DL_FlashCTL_unprotectSector(
             NVMNW, address, DL_FLASHCTL_REGION_SELECT_MAIN);
 
@@ -176,7 +200,7 @@ RAMFUNC static boot_flash_status_t boot_flash_bank0_program(
     }
 
     if (remaining >= 8U) {
-        DL_FlashCTL_executeClearStatus(NVMNW);
+        boot_flash_bank0_clear_status();
         DL_FlashCTL_unprotectSector(
             NVMNW, address, DL_FLASHCTL_REGION_SELECT_MAIN);
 
@@ -212,7 +236,7 @@ RAMFUNC static boot_flash_status_t boot_flash_bank0_program(
             padded_bytes[i] = data[offset + i];
         }
 
-        DL_FlashCTL_executeClearStatus(NVMNW);
+        boot_flash_bank0_clear_status();
         DL_FlashCTL_unprotectSector(
             NVMNW, address, DL_FLASHCTL_REGION_SELECT_MAIN);
 
