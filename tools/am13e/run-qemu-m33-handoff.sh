@@ -23,6 +23,7 @@ set pagination off
 set architecture arm
 file $tmp/handoff.elf
 target remote localhost:$port
+printf "[INFO] reset PC=0x%x MSP=0x%x\\n", $pc, $msp
 hbreak app_landed
 continue
 set \$vtor = *(unsigned int*)0xE000ED08
@@ -43,7 +44,7 @@ printf "[PASS] QEMU Cortex-M33 reached APP at 0x6000; VTOR / MSP / APP marker co
 quit 0
 EOF
 "$qemu" -M mps2-an505 -cpu cortex-m33 -nographic \
-  -S -gdb "tcp::$port" -kernel "$tmp/handoff.bin" \
+  -S -gdb "tcp::$port" -kernel "$tmp/handoff.elf" \
   >"$tmp/qemu.log" 2>&1 &
 qemu_pid=$!
 if ! timeout 20s "$gdb" -q -batch -x "$tmp/test.gdb"; then
