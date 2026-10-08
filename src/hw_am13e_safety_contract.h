@@ -46,6 +46,20 @@ static inline bool am13e_clock_convert_ticks(uint32_t ticks,
     return true;
 }
 
+/* MCPWM period counter ticks for edge-aligned PWM, verified clock input.
+ * Reject zero, truncation and timer-width overflow. No board clock assumed.
+ */
+static inline bool am13e_mcpwm_period_ticks(uint32_t mcpwm_hz,
+    uint32_t pwm_hz, uint16_t *period)
+{
+    if (!period || !mcpwm_hz || !pwm_hz ||
+        (mcpwm_hz % pwm_hz) != 0U) return false;
+    uint32_t ticks = mcpwm_hz / pwm_hz;
+    if (ticks < 2U || ticks > UINT16_MAX) return false;
+    *period = (uint16_t)ticks;
+    return true;
+}
+
 static inline bool am13e_contract_qualified(const am13e_motor_contract_t *c)
 {
     return c && c->core_hz && c->mcpwm_hz && c->ecap_hz &&
