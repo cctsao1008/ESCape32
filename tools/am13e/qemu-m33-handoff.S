@@ -7,7 +7,7 @@
  */
 .section .boot_vectors, "a", %progbits
 .align 2
-.word 0x20008000
+.word 0x28008000
 .word boot_reset
 
 .section .boot_code, "ax", %progbits
@@ -27,7 +27,7 @@ boot_reset:
 
 .section .app_vectors, "a", %progbits
 .align 2
-.word 0x20008000
+.word 0x28008000
 .word app_reset
 
 .section .app_code, "ax", %progbits
@@ -35,7 +35,7 @@ boot_reset:
 .global app_reset
 .thumb_func
 app_reset:
-    ldr r0, =0x20000100
+    ldr r0, =0x28000100
     movs r1, #0x5a
     str r1, [r0]
 .global app_landed
