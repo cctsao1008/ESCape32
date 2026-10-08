@@ -73,7 +73,6 @@ void senddata(const char *buf, int len);
 uint32_t crc32(const char *buf, int len);
 #if defined(AM13E)
 int boot_am13e_flash_write(char *dst, const char *src, int len);
-void update(char *dst, const char *src, int len);
 #else
 int write(char *dst, const char *src, int len) __attribute__((__long_call__));
 void update(char *dst, const char *src, int len) __attribute__((__long_call__));
@@ -88,7 +87,6 @@ uint8_t boot_am13e_io_id(void);
 /* Resolve only validated Flash ranges, including overflow/alignment checks. */
 bool boot_am13e_read_range(unsigned block, unsigned length, const void **address);
 bool boot_am13e_write_range(unsigned block, unsigned length, char **address);
-void boot_am13e_self_update(void);
 bool boot_am13e_application_valid(void);
 __attribute__((noreturn)) void boot_am13e_launch_application(void);
 #endif
