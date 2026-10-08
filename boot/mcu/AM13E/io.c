@@ -8,7 +8,8 @@
 #include <dl_systick.h>
 #include <hw_pinmap.h>
 
-#define BOOT_IO_PORT GPIOB
+/* PB14 is GPIO46: GPIO1, bit 14 (46 - 32). */
+#define BOOT_IO_PORT GPIO1
 #define BOOT_IO_MASK (UINT32_C(1) << 14)
 #define BOOT_TICK_HZ UINT32_C(32000000)
 #define BOOT_BIT_TICKS ((BOOT_TICK_HZ + 19200U) / 38400U)
