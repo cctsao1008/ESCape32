@@ -61,7 +61,7 @@ set_target_properties(${TARGET} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${ESCAPE32_AM13E_OUTPUT_DIR}"
 )
 
-# The E62 application owns only 0x00006000..0x0007FFFF. The dedicated
+# The application owns only 0x00006000..0x0007FFFF. The dedicated
 # linker script enforces that partition and retains TI's RAM/.TI.ramfunc model.
 target_link_options(${TARGET} PRIVATE
     "${TOOLCHAIN_SET_MAP_PREFIX}${ESCAPE32_AM13E_OUTPUT_DIR}/${TARGET}.map"
