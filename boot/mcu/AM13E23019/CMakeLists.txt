@@ -20,6 +20,7 @@ target_sources(${TARGET} PRIVATE
     ${BOOT_DIR}/src/boot_port.c
     ${BOOT_DIR}/src/boot_flash.c
     ${BOOT_COMMON_DIR}/protocol.c
+    ${BOOT_COMMON_DIR}/service_io.c
 )
 
 target_include_directories(${TARGET} PRIVATE
