@@ -607,8 +607,12 @@ void main(void) {
 	while (!ready) __WFI(); // Wait for sensors
 	if (!cells) cells = (volt + 439) / 440; // Assume maximum 4.4V per battery cell
 #endif
+#if defined(ESCAPE32_AM13E)
+#error "E62 hardware port required: reset cause"
+#else
 	int csr = RCC_CSR;
 	RCC_CSR = RCC_CSR_RMVF; // Clear reset flags
+#endif /* ESCAPE32_AM13E */
 	if (!(csr & (RCC_CSR_IWDGRSTF | RCC_CSR_WWDGRSTF))) { // Power-on
 		const char *str = cfg.music;
 		if (str[0] == '~') playsound(_eod, clamp(atoi(str + 1), 0, 100));
@@ -623,6 +627,9 @@ void main(void) {
 	}
 	if (cfg.arm || (csr & RCC_CSR_WWDGRSTF)) { // Arming required
 	rearm:
+#if defined(ESCAPE32_AM13E)
+#error "E62 hardware port required: 250ms arming interval"
+#else
 		TIM6_PSC = CLK_KHZ / 10 - 1; // 0.1ms resolution
 		TIM6_ARR = 2499; // 250ms
 		TIM6_CR1 = TIM_CR1_URS;
@@ -640,6 +647,7 @@ void main(void) {
 		rearm = 0;
 		TIM6_CR1 = 0;
 		playmusic(hall ? "G_GC" : "GC", cfg.volume);
+#endif /* ESCAPE32_AM13E */
 	}
 #endif
 	laststep();
@@ -749,15 +757,22 @@ void main(void) {
 #else
 		ccr = scale(curduty, 0, 2000, lock || (running && cfg.damp) ? DEAD_TIME : 0, brushed ? arr - (CLK_MHZ * 3 >> 1) : arr);
 #endif
+#if defined(ESCAPE32_AM13E)
+#error "E62 hardware port required: MCPWM duty update"
+#else
 		TIM1_CR1 = TIM_CR1_CEN | TIM_CR1_ARPE | TIM_CR1_UDIS;
 		TIM1_ARR = arr;
 		TIM1_CCR1 = ccr;
 		TIM1_CCR2 = ccr;
 		TIM1_CCR3 = ccr;
 		TIM1_CR1 = TIM_CR1_CEN | TIM_CR1_ARPE;
+#endif /* ESCAPE32_AM13E */
 	skipduty:
 		if (running && !step) { // Start motor
 			if (brushed) {
+#if defined(ESCAPE32_AM13E)
+#error "E62 hardware port required: brushed output mode"
+#else
 				int m1 = TIM_CCMR1_OC1PE | TIM_CCMR1_OC2PE;
 				int m2 = TIM_CCMR2_OC3PE;
 #ifdef PWM_ENABLE
@@ -790,6 +805,7 @@ void main(void) {
 				TIM1_CCMR2 = m2;
 				TIM1_CCER = er;
 				TIM1_EGR = TIM_EGR_UG | TIM_EGR_COMG;
+#endif /* ESCAPE32_AM13E */
 				step = reverse + 1;
 				ertm = 600; // 100K ERPM (freq_min/duty_spup/duty_ramp have no effect)
 				goto tick;
@@ -799,6 +815,9 @@ void main(void) {
 			ival = 10000 << IFTIM_XRES;
 			ertm = 100000000;
 			nextstep();
+#if defined(ESCAPE32_AM13E)
+#error "E62 hardware port required: commutation start"
+#else
 			TIM1_EGR = TIM_EGR_UG | TIM_EGR_COMG;
 #ifdef SW_BLANKING
 			TIM1_DIER |= TIM_DIER_COMIE | TIM_DIER_UIE | TIM_DIER_CC4IE;
@@ -807,10 +826,14 @@ void main(void) {
 #endif
 			TIM_ARR(IFTIM) = IFTIM_OCR = (1 << (IFTIM_XRES + 16)) - 1;
 			TIM_EGR(IFTIM) = TIM_EGR_UG;
+#endif /* ESCAPE32_AM13E */
 			__enable_irq();
 			initpid(&bpid, 10000 << IFTIM_XRES);
 			boost = 0;
 		} else if (!running && step) { // Stop motor
+#if defined(ESCAPE32_AM13E)
+#error "E62 hardware port required: commutation stop"
+#else
 			__disable_irq();
 #ifdef SW_BLANKING
 			TIM1_DIER &= ~(TIM_DIER_COMIE | TIM_DIER_UIE | TIM_DIER_CC4IE);
@@ -820,6 +843,7 @@ void main(void) {
 			TIM_DIER(IFTIM) = 0;
 			TIM_ARR(IFTIM) = 0;
 			TIM_EGR(IFTIM) = TIM_EGR_UG;
+#endif /* ESCAPE32_AM13E */
 			laststep();
 			sync = 0;
 			fast = 0;
