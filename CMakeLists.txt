@@ -56,6 +56,12 @@ function(add_target_ti_am13e name)
         set(AM13E_BOOT_LINKER_SCRIPT "" CACHE FILEPATH
             "AM13E boot linker script selected for the target board")
         if(AM13E_BOOT_LINKER_SCRIPT)
+            set(am13e_startup
+                "${AM13E_SDK_ROOT}/source/device/am13e230x/src/startup_gcc_arm.c")
+            if(NOT EXISTS "${am13e_startup}")
+                message(FATAL_ERROR "TI AM13E GCC startup source not found")
+            endif()
+            list(APPEND am13e_sources "${am13e_startup}")
             if(NOT EXISTS "${AM13E_BOOT_LINKER_SCRIPT}")
                 message(FATAL_ERROR "AM13E_BOOT_LINKER_SCRIPT does not exist")
             endif()
