@@ -108,7 +108,7 @@ static void fill_blocks(void) {
     firmware[1] = 0x32;
     set32(firmware + 2048U, UINT32_C(0x20001000));
     set32(firmware + 2052U,
-          (uint32_t)(boot_am13e_test_first + 2048U + 128U) | 1U);
+          AM13E_IMAGE_APP_BASE + 2048U + 128U + 1U);
     uint8_t *header = firmware + 256U;
     set32(header, UINT32_C(0x49323645));
     set16(header + 4U, 1U);
