@@ -40,6 +40,7 @@
 #define __GPIO(port, name) GPIO##port##_##name
 
 #include "esc_types.h"
+#include "esc_config.h"
 
 extern char _boot[], _cfg[], _cfg_start[], _cfg_end[], _rom[], _ram[], _eod[], _vec[]; // Linker exports
 extern const uint16_t sinedata[];
