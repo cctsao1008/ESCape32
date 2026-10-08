@@ -38,11 +38,7 @@ if(AM13E_HOST_SANITIZERS AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
         -fsanitize=address,undefined)
 endif()
 add_test(NAME am13e_image_validator COMMAND am13e_image_integrity_test)
-# This is intentionally RED with the current signature-only update contract.
-# Opt in explicitly; never mask the failure with WILL_FAIL or mark it PASS.
-option(AM13E_ENABLE_IMAGE_INTEGRITY_GATE
-    "Enable currently failing negative image integrity regression gate" OFF)
-if(AM13E_ENABLE_IMAGE_INTEGRITY_GATE)
-    add_test(NAME am13e_image_integrity_gate
-        COMMAND am13e_flash_transaction_test --image-integrity)
-endif()
+# The previously RED early-finalize gate is now a mandatory regression.
+# Never mark the test WILL_FAIL: real rejection is required.
+add_test(NAME am13e_image_integrity_gate
+    COMMAND am13e_flash_transaction_test --image-integrity)
