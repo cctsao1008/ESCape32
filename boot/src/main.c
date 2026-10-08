@@ -6,104 +6,137 @@
 ** the Free Software Foundation, either version 3 of the License, or
 ** (at your option) any later version.
 **
-** This firmware is distributed in the hope that it will be useful,
-** but WITHOUT ANY WARRANTY; without even the implied warranty of
-** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-** GNU General Public License for more details.
-**
-** You should have received a copy of the GNU General Public License
-** along with this firmware. If not, see <http://www.gnu.org/licenses/>.
+** Legacy STM32/AT32 adapter for the common ESCape32 boot command engine.
 */
 
 #include "common.h"
+#include "protocol.h"
 
-#define REVISION 4
+#include <stdbool.h>
+#include <stdint.h>
 
-#define CMD_PROBE  0
-#define CMD_INFO   1
-#define CMD_READ   2
-#define CMD_WRITE  3
-#define CMD_UPDATE 4
-#define CMD_SETWRP 5
+static uint32_t legacy_device_id(void)
+{
+    return DBGMCU_IDCODE;
+}
 
-#define RES_OK    0
-#define RES_ERROR 1
+static const char *legacy_map_read(uint32_t offset, uint32_t length)
+{
+    (void)length;
+    return _rom_end + offset;
+}
 
-void main(void) {
-	init();
-	initio();
-	if (RCC_CSR & (RCC_CSR_SFTRSTF | RCC_CSR_OBLRSTF)) { // Reboot
-		RCC_CSR = RCC_CSR_RMVF; // Clear reset flags
-		sendval(RES_OK); // ACK after reboot
-	}
+static bool legacy_write_block(
+    uint32_t offset, const char *data, uint32_t length)
+{
+    return write(
+        _rom_end + offset, data, (int)length) != 0;
+}
+
+static bool legacy_app_valid(void)
+{
+    return *(uint16_t *)_rom_end == 0x32ea;
+}
+
+__attribute__((noreturn))
+static void legacy_jump_app(void)
+{
+    const uint32_t *vector =
+        (const uint32_t *)(_rom_end + PAGE_SIZE);
+
+    __asm__ volatile (
+        "msr msp, %0\n\t"
+        "bx %1\n\t"
+        :: "r" (vector[0]), "r" (vector[1]) : "memory");
+
+    __builtin_unreachable();
+}
+
+static void legacy_handle_update(void)
+{
+    char *buffer = _ram_end;
+    int position = 0;
+
+    for (int i = 0, blocks = (_rom_end - _rom) >> 10;
+         i < blocks;
+         ++i) {
+        int length = recvdata(buffer + position);
+        if (length == -1) {
+            return;
+        }
+
+        sendval(BOOT_RES_OK);
+        position += length;
+
+        if (length < (int)BOOT_PROTOCOL_BLOCK_SIZE) {
+            break;
+        }
+    }
+
+    update(_rom, buffer, position);
+
+    /*
+     * The legacy update() path resets on success and does not return.
+     * Returning here therefore represents an update failure.
+     */
+    sendval(BOOT_RES_ERROR);
+}
+
+static void legacy_handle_setwrp(void)
+{
+    switch (recvval()) {
+    case 0x33:
+        setwrp(0);
+        break;
+    case 0x44:
+        setwrp(1);
+        break;
+    case 0x55:
+        setwrp(2);
+        break;
+    default:
+        break;
+    }
+
+    /*
+     * The legacy setwrp() implementation resets when the option update
+     * succeeds. A returned call therefore preserves the upstream error reply.
+     */
+    sendval(BOOT_RES_ERROR);
+}
+
+static const boot_protocol_ops_t legacy_boot_ops = {
+    .io_id = IO_PIN,
+    .recv_value = recvval,
+    .send_value = sendval,
+    .recv_data = recvdata,
+    .send_data = senddata,
+    .device_id = legacy_device_id,
+    .map_read = legacy_map_read,
+    .write_block = legacy_write_block,
+    .handle_update = legacy_handle_update,
+    .handle_setwrp = legacy_handle_setwrp,
+    .app_valid = legacy_app_valid,
+    .jump_app = legacy_jump_app,
+};
+
+void main(void)
+{
+    init();
+    initio();
+
+    if (RCC_CSR & (RCC_CSR_SFTRSTF | RCC_CSR_OBLRSTF)) {
+        RCC_CSR = RCC_CSR_RMVF;
+        sendval(BOOT_RES_OK);
+    }
 #ifdef FAST_EXIT
-	else goto done;
+    else if (legacy_app_valid()) {
+        legacy_jump_app();
+    }
 #endif
-	for (;;) {
-		switch (recvval()) {
-			case CMD_PROBE: // Probe bootloader
-				sendval(RES_OK);
-				break;
-			case CMD_INFO: { // Get info
-				int mcu = DBGMCU_IDCODE;
-				char buf[32] = {REVISION, IO_PIN, mcu, mcu >> 8, mcu >> 16, mcu >> 24};
-				senddata(buf, sizeof buf);
-				break;
-			}
-			case CMD_READ: { // Read block
-				int num = recvval();
-				if (num == -1) goto done;
-				int cnt = recvval();
-				if (cnt == -1) goto done;
-				senddata(_rom_end + (num << 10), (cnt + 1) << 2);
-				break;
-			}
-			case CMD_WRITE: { // Write block
-				int num = recvval();
-				if (num == -1) goto done;
-				char buf[1024];
-				int len = recvdata(buf);
-				if (len == -1) goto done;
-				sendval(write(_rom_end + (num << 10), buf, len) ? RES_OK : RES_ERROR);
-				break;
-			}
-			case CMD_UPDATE: { // Update bootloader
-				char *buf = _ram_end; // Use upper SRAM as buffer
-				int pos = 0;
-				for (int i = 0, n = (_rom_end - _rom) >> 10; i < n; ++i) {
-					int len = recvdata(buf + pos);
-					if (len == -1) goto done;
-					sendval(RES_OK);
-					pos += len;
-					if (len < 1024) break; // Last block
-				}
-				update(_rom, buf, pos);
-				sendval(RES_ERROR);
-				break;
-			}
-			case CMD_SETWRP: // Set write protection
-				switch (recvval()) {
-					case 0x33: // Off
-						setwrp(0);
-						break;
-					case 0x44: // Bootloader
-						setwrp(1);
-						break;
-					case 0x55: // Full
-						setwrp(2);
-						break;
-				}
-				sendval(RES_ERROR);
-				break;
-			default: // Pass control to application
-			done:
-				if (*(uint16_t *)_rom_end != 0x32ea) break;
-				const uint32_t *vec = (const uint32_t *)(_rom_end + PAGE_SIZE); // Entry point
-				__asm__ volatile (
-					"msr msp, %0\n\t" // Initialize stack pointer
-					"bx %1\n\t" // Jump to application
-					:: "r" (vec[0]), "r" (vec[1]) : "memory");
-				__builtin_unreachable();
-		}
-	}
+
+    boot_protocol_run(&legacy_boot_ops);
+
+    for (;;) {
+    }
 }
