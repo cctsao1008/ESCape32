@@ -15,7 +15,11 @@
 ** along with this firmware. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#ifdef ESCAPE32_PROG_HOST_TEST
+#include "../tools/am13e/rel17_prog_host_shim.h"
+#else
 #include "common.h"
+#endif
 #include "esc_cmd_parse.h"
 
 #include "esc_param_map.h"
