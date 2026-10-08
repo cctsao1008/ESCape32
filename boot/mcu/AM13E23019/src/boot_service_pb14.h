@@ -1,8 +1,9 @@
 /*
- * AM13E23019 PB14 service transport.
+ * AM13E23019 PB14/GPIO46 Boot service transport.
  *
- * PB14/GPIO46 is the fixed physical service interface for the AM13E boot
- * architecture. The byte timing implementation is detailed design.
+ * Software implementation: polling 38400-baud 8N1 service link with a
+ * 500-ms receive timeout, using the deterministic Boot SYSOSC clock basis.
+ * Electrical/timing validation remains a Phase-4 hardware activity.
  */
 #pragma once
 
