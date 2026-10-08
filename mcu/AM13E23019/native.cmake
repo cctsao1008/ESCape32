@@ -12,8 +12,8 @@ function(add_target_am13e name)
     # External TI SDK static archives, never configure the SDK as top-level.
     file(GLOB_RECURSE sdk_archives
         "${AM13E_SDK_BUILD}/*.a" "${AM13E_SDK_ROOT}/lib/*.a")
-    set(required_libs arch_ti_sdk_cfg_default driverlib_ti_sdk_cfg_default
-        utils_nortos_ti_sdk_cfg_default am13e230x)
+    set(required_libs ti_sdk_cfg_default arch_ti_sdk_cfg_default
+        driverlib_ti_sdk_cfg_default utils_nortos_ti_sdk_cfg_default am13e230x)
     set(libs "")
     foreach(lib IN LISTS required_libs)
         set(found "")
@@ -49,7 +49,15 @@ function(add_target_am13e name)
         "${AM13E_SDK_ROOT}/source/utils/utils_delay/include"
         "${AM13E_SDK_ROOT}/source/utils"
         "${AM13E_SDK_ROOT}/ti_sdk_config/am13e230x/default/arch_cfg"
+        "${AM13E_SDK_ROOT}/ti_sdk_config/am13e230x/default/arch_cfg/m33"
+        "${AM13E_SDK_ROOT}/ti_sdk_config/am13e230x/default/driverlib_cfg"
+        "${AM13E_SDK_ROOT}/ti_sdk_config/am13e230x/default/Hal_Cfg"
+        "${AM13E_SDK_ROOT}/ti_sdk_config/am13e230x/default/utils_cfg"
+        "${AM13E_SDK_ROOT}/source/compiler/m33_gcc_arm"
         "${AM13E_SDK_ROOT}/ti_sdk_config/am13e230x/default/device_support/include")
+    target_compile_definitions(${name}.elf PRIVATE
+        __DEVICE_SHORT__="am13e230x" __DEVICE_LONG__="AM13E230x"
+        __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
     target_compile_options(${name}.elf PRIVATE ${am13e_opts})
     target_link_options(${name}.elf PRIVATE ${am13e_opts}
         -Wl,--gc-sections -Wl,-Map,${CMAKE_CURRENT_BINARY_DIR}/${name}.map
