@@ -1,5 +1,5 @@
 /*
- * E62 AM13E23019 common bootloader.
+ * AM13E23019 common bootloader.
  *
  * The current implementation establishes the fixed boot/application image
  * contract and direct application handoff. Service transport and Flash
@@ -9,19 +9,19 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "soc.h"
-#include "e62_flash_layout.h"
+#include "flash_layout.h"
 
 __attribute__((noinline))
-static bool e62_boot_app_vector_sane(void)
+static bool boot_app_vector_sane(void)
 {
     const volatile uint32_t *vector =
-        (const volatile uint32_t *)(uintptr_t)E62_APP_BASE;
+        (const volatile uint32_t *)(uintptr_t)ESCAPE32_APP_BASE;
     uint32_t initial_sp = vector[0];
     uint32_t reset_pc   = vector[1];
     uint32_t reset_addr = reset_pc & ~1UL;
 
-    if ((initial_sp < E62_RAM_S_BASE) ||
-        (initial_sp > E62_RAM_S_END) ||
+    if ((initial_sp < ESCAPE32_RAM_S_BASE) ||
+        (initial_sp > ESCAPE32_RAM_S_END) ||
         ((initial_sp & 0x7UL) != 0UL)) {
         return false;
     }
@@ -29,7 +29,8 @@ static bool e62_boot_app_vector_sane(void)
     if ((reset_pc & 0x1UL) == 0UL) {
         return false;
     }
-    if ((reset_addr < E62_APP_BASE) || (reset_addr >= E62_APP_END)) {
+    if ((reset_addr < ESCAPE32_APP_BASE) ||
+        (reset_addr >= ESCAPE32_APP_END)) {
         return false;
     }
 
@@ -37,10 +38,10 @@ static bool e62_boot_app_vector_sane(void)
 }
 
 __attribute__((noreturn))
-static void e62_boot_jump_to_app(void)
+static void boot_jump_to_app(void)
 {
     const volatile uint32_t *vector =
-        (const volatile uint32_t *)(uintptr_t)E62_APP_BASE;
+        (const volatile uint32_t *)(uintptr_t)ESCAPE32_APP_BASE;
     uint32_t initial_sp = vector[0];
     uint32_t reset_pc   = vector[1];
 
@@ -49,7 +50,7 @@ static void e62_boot_jump_to_app(void)
     SysTick->LOAD = 0U;
     SysTick->VAL  = 0U;
 
-    SCB->VTOR = E62_APP_BASE;
+    SCB->VTOR = ESCAPE32_APP_BASE;
     __DSB();
     __ISB();
 
@@ -68,8 +69,8 @@ static void e62_boot_jump_to_app(void)
 
 int main(void)
 {
-    if (e62_boot_app_vector_sane()) {
-        e62_boot_jump_to_app();
+    if (boot_app_vector_sane()) {
+        boot_jump_to_app();
     }
 
     /* Invalid/incomplete application: Boot Porting adds programming/recovery. */
