@@ -73,6 +73,9 @@ intvecs="$(section_vma .intvecs)"
 ramfunc="$(section_vma .TI.ramfunc)"
 boot_start="$(symbol_addr __boot_flash_start__)"
 boot_end="$(symbol_addr __boot_flash_end__)"
+bank0_erase="$(symbol_addr boot_flash_bank0_erase_sector)"
+bank0_program="$(symbol_addr boot_flash_bank0_program)"
+flash_exec="$(symbol_addr DL_FlashCTL_executeCommand)"
 fail=0
 
 check_equal() {
@@ -114,6 +117,22 @@ check_symbol "boot_flash_erase_sector"
 check_symbol "boot_flash_program"
 check_symbol "boot_flash_verify"
 
+check_ram_symbol() {
+    local label="$1"
+    local address="$2"
+    if [ -n "$address" ] &&
+       (( address >= 0x00c18000 && address < 0x00c20000 )); then
+        printf '[PASS] %-20s %s\n' "$label" "$address"
+    else
+        printf '[FAIL] %-20s expected RAM_C, got %s\n' "$label" "${address:-<missing>}"
+        fail=1
+    fi
+}
+
+check_ram_symbol "bank0 erase" "$bank0_erase"
+check_ram_symbol "bank0 program" "$bank0_program"
+check_ram_symbol "Flash cmd exec" "$flash_exec"
+
 if [ -n "$ramfunc" ] && (( ramfunc >= 0x00c18000 && ramfunc < 0x00c20000 )); then
     printf '[PASS] %-20s %s\n' ".TI.ramfunc" "$ramfunc"
 else
@@ -147,10 +166,10 @@ echo "  minimum APP vector sanity check"
 echo "  direct VTOR/MSP/reset-entry handoff scaffold"
 echo "  APP-range guarded Flash wrapper linked"
 echo "  Bank1 erase/program DriverLib path linked"
-echo "  TI Flash command RAMFUNC linked in RAM_C"
+echo "  Bank0 erase/program transaction linked in RAM_C"
+echo "  TI Flash command executor linked in RAM_C"
 echo
 echo "Not implemented yet:"
-echo "  Bank0 RAM-resident erase/program transaction"
 echo "  PB14 service/programming protocol"
 echo "  image header / CRC / valid-record policy"
 echo "  boot-entry request handshake"
