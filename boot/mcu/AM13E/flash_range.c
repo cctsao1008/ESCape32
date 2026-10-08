@@ -12,7 +12,7 @@ static bool flash_range(unsigned block, unsigned length, uintptr_t *start) {
     const uintptr_t first = (uintptr_t)__app_flash_start__;
     const uintptr_t limit = (uintptr_t)__boot_storage_end__;
     const uintptr_t offset = (uintptr_t)block * UINT32_C(1024);
-    if (!length || (length & 3U) || block > 255U || limit <= first ||
+    if (!length || length > 1024U || (length & 3U) || block > 255U || limit <= first ||
         block > UINT32_MAX / UINT32_C(1024) ||
         offset > limit - first ||
         (uintptr_t)length > limit - first - offset)
@@ -35,7 +35,7 @@ bool boot_am13e_write_range(unsigned block, unsigned length, char **address) {
     /* WiFi-Link invalidates the image with two eight-byte 0xff writes.
      * These are handled as a special erase transaction in flash.c.
      */
-    if (length != 8U && (length & 15U)) return false;
+    if ((length & 3U) != 0U) return false;
     if (length == 8U && block > 1U) return false;
     *address = (char *)start;
     return true;
