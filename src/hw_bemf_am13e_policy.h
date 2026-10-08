@@ -41,8 +41,13 @@ static inline am13e_bemf_result_t am13e_bemf_on_capture(
 {
     if (!s || !delay_ticks || timing > 32U ||
         captured_ticks > (uint32_t)INT_MAX ||
-        s->interval > (uint32_t)(INT_MAX / 4) ||
+        s->interval > (uint32_t)(INT_MAX / 3) ||
         s->electrical_time > (uint32_t)INT_MAX)
+        return AM13E_BEMF_IGNORED;
+    const uint32_t triple = s->interval * 3U;
+    if (captured_ticks > (uint32_t)INT_MAX - triple ||
+        ((captured_ticks + triple) >> 2) >
+            (uint32_t)(INT_MAX / (timing ? timing : 1U)))
         return AM13E_BEMF_IGNORED;
 
     hw_bemf_rel17_state_t rel17 = {
