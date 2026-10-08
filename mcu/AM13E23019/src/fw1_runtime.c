@@ -8,6 +8,7 @@
  */
 #include <stdint.h>
 #include "ti_sdk_dl_config.h"
+#include "fw1_bemf_events.h"
 
 #define ESCAPE32_AM13E_MCPWM_INST MCPWM0
 #include "hw_motor_am13e.h"
@@ -17,6 +18,18 @@ static const uint8_t fw1_negative[6] = {2U, 2U, 4U, 4U, 1U, 1U};
 
 volatile uint32_t fw1_debug_step;
 volatile uint32_t fw1_debug_enable;
+volatile uint32_t fw1_debug_bemf_interval;
+volatile uint32_t fw1_debug_bemf_ready; /* must remain 0 until TIMG initialized */
+
+static void fw1_next_commutation(void)
+{
+    uint32_t step = fw1_debug_step;
+    step = (step < 1U || step >= 6U) ? 1U : step + 1U;
+    fw1_debug_step = step;
+    (void)hw_motor_am13e_runtime_commutate(
+        fw1_positive[step - 1U], fw1_negative[step - 1U], true);
+}
+
 
 int main(void)
 {
@@ -36,9 +49,18 @@ int main(void)
      * enable=0 returns to all-phase FLOAT. Keeps the actual MCPWM register
      * control path exercisable without replacing the ESCape32 control loop.
      */
+    (void)fw1_bemf_event_setup(fw1_next_commutation, 1000U, 100000000U, 0U);
     uint32_t last_enable = 0U;
     uint32_t last_step = 0U;
     for (;;) {
+        /* Debug-only event injection; future eCAP ISR will supply interval. */
+        if (fw1_debug_bemf_ready == 1U && fw1_debug_bemf_interval != 0U) {
+            uint32_t interval = fw1_debug_bemf_interval;
+            fw1_debug_bemf_interval = 0U;
+            (void)fw1_bemf_event_capture_interval(interval);
+        }
+        if (fw1_debug_bemf_ready == 1U)
+            fw1_bemf_event_timg12_irq();
         uint32_t enable = fw1_debug_enable;
         uint32_t step = fw1_debug_step;
         if (enable != last_enable || step != last_step) {
