@@ -1,8 +1,9 @@
 /*
- * E62 AM13E23019 common bootloader Stage Boot-A.
+ * E62 AM13E23019 common bootloader.
  *
- * Link/launch-contract probe only. Service transport and Flash programming are
- * intentionally deferred to the next bootloader stage.
+ * The current implementation establishes the fixed boot/application image
+ * contract and direct application handoff. Service transport and Flash
+ * programming are added as part of Boot Porting.
  */
 
 #include <stdbool.h>
@@ -10,7 +11,8 @@
 #include "core_cm33.h"
 #include "e62_flash_layout.h"
 
-__attribute__((noinline))\nstatic bool e62_boot_app_vector_sane(void)
+__attribute__((noinline))
+static bool e62_boot_app_vector_sane(void)
 {
     const volatile uint32_t *vector =
         (const volatile uint32_t *)(uintptr_t)E62_APP_BASE;
@@ -70,7 +72,7 @@ int main(void)
         e62_boot_jump_to_app();
     }
 
-    /* Invalid/incomplete application: future stage enters programming mode. */
+    /* Invalid/incomplete application: Boot Porting adds programming/recovery. */
     for (;;) {
         __WFI();
     }

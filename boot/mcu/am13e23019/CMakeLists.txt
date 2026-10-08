@@ -1,4 +1,4 @@
-# E62 AM13E23019 common bootloader Stage Boot-A.
+# E62 AM13E23019 common bootloader.
 set(TARGET am13e23019_e62_boot)
 set(TI_SDK_CONFIG ti_sdk_cfg_default)
 set(E62_BOOT_DIR ${CMAKE_CURRENT_LIST_DIR})
