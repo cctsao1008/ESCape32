@@ -70,6 +70,7 @@ function(add_target_ti_am13e name)
                 -Wl,-Map,${CMAKE_CURRENT_BINARY_DIR}/${name}.map
                 -T${AM13E_BOOT_LINKER_SCRIPT}
                 -Wl,--no-undefined
+                -specs=nosys.specs
                 -Wl,--require-defined=Reset_Handler
                 -Wl,--require-defined=main
                 -Wl,--require-defined=initio
