@@ -14,6 +14,7 @@
 
 #include "boot_service_pb14.h"
 
+#include <stddef.h>
 #include <stdint.h>
 
 #include "boot_platform.h"
