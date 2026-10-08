@@ -38,8 +38,9 @@ AM13 application / Flash backend
 ~~~
 
 PB14/GPIO46 is the fixed physical service interface for this AM13 port.
-The remaining question is how to implement its byte timing and RX/TX
-turnaround on AM13 peripherals, not which pin the Boot service uses.
+Boot uses a polling 38400-baud 8N1 software-UART with SysTick timing from a
+deterministic 32-MHz SYSOSC basis. Runtime DShot/BiDShot remains a separate
+application-side timing implementation.
 
 ## Current software baseline
 
@@ -49,10 +50,11 @@ Implemented and build-validated:
 - common ESCape32 command engine;
 - common ESCape32 service framing;
 - AM13 service adapter;
-- fixed PB14 physical-transport module boundary;
+- deterministic 32-MHz Boot platform/clock basis;
+- fixed PB14 38400-baud polling service transport;
 - application vector/reset sanity check;
 - image-validity policy layer with future header/CRC pseudocode;
-- application-to-Boot request layer with retained-request pseudocode;
+- application-to-Boot one-shot request stored in SYSCTL SHUTDNSTORE bytes;
 - direct Cortex-M33 VTOR/MSP/reset-entry handoff;
 - application-only read/write range mapping;
 - contiguous MAIN-Flash erase/program handling;
@@ -68,11 +70,7 @@ platform/manufacturing extensions.
 
 ## Detailed design remaining
 
-- PB14 IOMUX and RX timing/capture implementation;
-- PB14 TX waveform generation and RX/TX turnaround;
-- exact service receive timeout;
-- stable AM13 device-ID value for INFO;
-- application-to-Boot retained request encoding and storage;
+- PB14 electrical/timing validation on E62 hardware;
 - image header / integrity / valid-record representation;
 - Flash protection policy;
 - optional bootloader self-update;
