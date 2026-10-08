@@ -21,6 +21,10 @@ add_compile_options(-ffreestanding -ffunction-sections -fdata-sections -fsingle-
 add_link_options(-nostartfiles -Wl,--gc-sections)
 
 function(add_target name mcu)
+	if(mcu STREQUAL "AM13E23019")
+		add_target_am13e(${name} ${ARGN})
+		return()
+	endif()
 	include(mcu/${mcu}/config.cmake)
 	file(READ src/main.c main_c)
 	string(REGEX MATCH "REVISION [0-9]+" rev1 ${main_c})
@@ -103,6 +107,7 @@ add_target(TMOTOR4 STM32G071 DEAD_TIME=35 COMP_MAP=123)
 add_target(VWING1 STM32G071 DEAD_TIME=35 COMP_MAP=123 SENS_MAP=0xA5A4 VOLT_MUL=110 CURR_MUL=40 BEC_MAP=0xB35 BEC_MIN=1 LED_WS2812 LED_STAT IO_PA2 IO_AUX)
 
 
-# TI AM13E23019 is an ESCape32 MCU target; the TI SDK is external.
+# TI AM13E23019 uses the normal ESCape32 add_target() dispatch.
+# TI SDK is an external MCU support dependency (like libopencm3).
 include(mcu/AM13E23019/native.cmake)
-add_am13e_target(E62_FW1)
+add_target(E62 AM13E23019)
