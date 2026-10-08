@@ -530,6 +530,30 @@ void hw_motor_am13e_runtime_stop(void)
                                     DL_MCPWM_COUNTER_MODE_STOP_FREEZE);
 }
 
+
+/* Synchronous three-phase duty shadow update. This prepares MCPWM only;
+ * it never authorizes output enable or changes the six-step AQ state.
+ * The caller must supply a board-qualified MCPWM clock-derived period.
+ */
+static inline bool hw_motor_am13e_update_duty(uint32_t period,
+                                               uint32_t duty)
+{
+    if (period < 2U || period > UINT16_MAX || duty >= period)
+        return false;
+    DL_MCPWM_setTimeBasePeriodShadow(ESCAPE32_AM13E_MCPWM_INST,
+                                    (uint16_t)period);
+    const DL_MCPWM_COUNTER_COMPARE_MODULE cmp[] = {
+        DL_MCPWM_COUNTER_COMPARE_1A, DL_MCPWM_COUNTER_COMPARE_1B,
+        DL_MCPWM_COUNTER_COMPARE_2A, DL_MCPWM_COUNTER_COMPARE_2B,
+        DL_MCPWM_COUNTER_COMPARE_3A, DL_MCPWM_COUNTER_COMPARE_3B
+    };
+    for (unsigned i = 0; i < 6U; ++i)
+        DL_MCPWM_setCounterCompareShadowValue(
+            ESCAPE32_AM13E_MCPWM_INST, cmp[i], (uint16_t)duty);
+    DL_MCPWM_setGlobalLoadOneShotLatch(ESCAPE32_AM13E_MCPWM_INST);
+    return true;
+}
+
 /*
  * Deliberate compile-time stops for semantics that are not validated yet.
  * These macros only fire when a caller tries to use the unfinished operation.
