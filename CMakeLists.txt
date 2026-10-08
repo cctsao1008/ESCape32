@@ -82,6 +82,12 @@ function(add_target_ti_am13e name)
     target_compile_options(${am13e_binary} PRIVATE
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
         -mfloat-abi=hard -fno-branch-count-reg)
+    if(TARGET ${name}.elf)
+        # Match linker multilib selection to the AM13E object ABI.
+        target_link_options(${name}.elf PRIVATE
+            -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
+            -mfloat-abi=hard -fno-branch-count-reg)
+    endif()
     target_include_directories(${am13e_binary} PRIVATE "${am13e_source_dir}")
     if(name MATCHES "^BOOT")
         target_include_directories(${am13e_binary} PRIVATE "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E")
