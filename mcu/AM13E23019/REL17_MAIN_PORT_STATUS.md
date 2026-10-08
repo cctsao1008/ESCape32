@@ -67,3 +67,14 @@ Host regression: `bash tools/am13e/run-am13e-safety-contract-host-test.sh` saves
 - `src/main.c` and `src/prog.c` remain mixed, with platform-specific sections gated. Portable `esc_*.c` remains intentionally common to all MCU builds.
 - Run `python3 tools/am13e/audit-source-isolation.py` in the full checkout. It enumerates **all actual src/*.c files**, flags unknown files instead of assuming the GitHub single-file connector delivered a complete tree.
 - This is source ownership isolation, not completion of the AM13E board I/O, watchdog, trip, PWM, pin mapping, or firmware linker integration.
+
+## Direct four-track implementation pass (2026-10-09)
+
+- **PWM duty:** original `src/main.c` now enters `hw_motor_am13e_update_duty()` in its AM13E duty branch. The backend checks 16-bit period / compare limits, writes 1A/1B, 2A/2B, 3A/3B MCPWM compare shadows and arms one-shot global load. This is *not* validated output activation timing.
+- **Clock:** original duty loop now derives PWM periods from `am13e_active_contract->mcpwm_hz`, not the STM32 `CLK_KHZ` formula. Exact divisibility and period-width checks are host-testable. This contract is intentionally *not yet populated* from E62 SysConfig, so runtime qualification fails closed.
+- **BEMF:** the existing AM13E eCAP-capture / TIMG12 delay path remains behind callback/clock/epoch qualification; no unqualified comparator routing or capture reset is enabled. Original motor stop and fault handler now request BEMF delay cancellation.
+- **Fault:** original fault and motor-stop branches request `hw_motor_am13e_runtime_stop()`. **Software stop is not hardware trip**: independent trip, external gate-disable state, reset/watchdog and recovery remain unqualified; deliberate compile-time errors are retained.
+- **Arming:** the existing zero-throttle/fault-latched host guard is tested; the real 250 ms E62 arming timer and reset-cause semantics remain compile-time blocked.
+- **Validation:** these commits were made through GitHub file edits, not a local TI SDK cross-compile. Keep `build-am13e/logs/` logs and expect `src/main.c` to remain blocked by board-dependent `#error` and AQ/dead-band assertions.
+
+Do not flash or power a motor from this port until the clock, phase map, trip, gate-driver and BEMF path have been scoped and qualified.
