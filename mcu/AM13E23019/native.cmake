@@ -30,10 +30,10 @@ function(add_target_am13e name)
         list(APPEND libs "${found}")
     endforeach()
     add_executable(${name}.elf
-        "${platform}/src/fw1_runtime.c"
-        "${platform}/src/fw1_bemf_events.c"
-        "${platform}/src/fw1_timg12.c"
-        "${platform}/src/fw1_irq.c"
+        "${platform}/src/am13e_runtime.c"
+        "${platform}/src/am13e_bemf_events.c"
+        "${platform}/src/am13e_timg12.c"
+        "${platform}/src/am13e_irq.c"
         ${generated})
     # Own headers retain all ESCape32 warning diagnostics.
     target_include_directories(${name}.elf PRIVATE
