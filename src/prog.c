@@ -83,7 +83,7 @@ static void appendbyte(char **pos, int val) {
     appendstr(&pos, #key); \
     appendstr(&pos, ": "); \
     appendval(&pos, readback); \
-    appendstr(&pos, "\\n"); \
+    appendstr(&pos, "\n"); \
 } while (0)
 #define getpairstr(idx, key) do { appendpair(str, key); } while (0)
 
