@@ -7,7 +7,7 @@
 #include <stdint.h>
 #include "esc_types.h"
 #include "esc_config.h"
-#include "esc_config_defaults.h"
+#include "defs.h"
 
 /* CFG_MAP CRSF serialization uses the canonical rel17 parameter defaults. */
 extern Cfg cfg;
