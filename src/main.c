@@ -676,7 +676,19 @@ void main(void) {
 	PID cpid = {.Kp = 80, .Ki = 0, .Kd = 600}; // Overcurrent protection
 #endif
 	for (int curduty = 0, running = 0, braking = 2, boost = 0, choke = 0, n = 0;;) {
+#if defined(ESCAPE32_AM13E)
+		int ccr, arr;
+		uint16_t qualified_period = 0;
+		if (!am13e_active_contract ||
+		    !am13e_contract_qualified(am13e_active_contract) ||
+		    !am13e_mcpwm_period_ticks(am13e_active_contract->mcpwm_hz,
+		                              (uint32_t)cfg.freq_min * 1000U,
+		                              &qualified_period))
+			hard_fault_handler();
+		arr = (int)qualified_period;
+#else
 		int ccr, arr = CLK_KHZ / cfg.freq_min;
+#endif
 		int input = rearm ? 0 : throt;
 		int range = cfg.sine_range * 20;
 		int delta = range ? 10 : 0;
@@ -762,7 +774,16 @@ void main(void) {
 		if (brushed && step != reverse + 1) step = 0; // Change brushed direction
 		if ((newduty += boost - choke) < 0) newduty = 0;
 		if (ertm) { // Variable PWM frequency
+#if defined(ESCAPE32_AM13E)
+			uint16_t max_freq_period;
+			if (!am13e_mcpwm_period_ticks(am13e_active_contract->mcpwm_hz,
+			                              (uint32_t)cfg.freq_max * 1000U,
+			                              &max_freq_period))
+				hard_fault_handler();
+			arr = scale(ertm, 1000, 2000, (int)max_freq_period, arr);
+#else
 			arr = scale(ertm, 1000, 2000, CLK_KHZ / cfg.freq_max, arr); // 30..60 kERPM
+#endif
 			erpm = 60000000 / ertm;
 		}
 		int maxduty = min(scale(erpm, 0, cfg.duty_ramp * 1000, cfg.duty_spup * 20, 2000), 2000 - cutback * 25); // 75% cutback at 15C above prot_temp
