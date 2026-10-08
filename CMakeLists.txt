@@ -41,7 +41,8 @@ function(add_target_ti_am13e name)
         set(am13e_sources
             "${PROJECT_SOURCE_DIR}/boot/src/main.c"
             "${PROJECT_SOURCE_DIR}/boot/src/io.c"
-            "${PROJECT_SOURCE_DIR}/boot/src/util.c")
+            "${PROJECT_SOURCE_DIR}/boot/src/util.c"
+            "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/flash_range.c")
         set(am13e_source_dir "${PROJECT_SOURCE_DIR}/boot/src")
     else()
         set(am13e_sources
