@@ -103,19 +103,6 @@ add_target(TMOTOR4 STM32G071 DEAD_TIME=35 COMP_MAP=123)
 add_target(VWING1 STM32G071 DEAD_TIME=35 COMP_MAP=123 SENS_MAP=0xA5A4 VOLT_MUL=110 CURR_MUL=40 BEC_MAP=0xB35 BEC_MIN=1 LED_WS2812 LED_STAT IO_PA2 IO_AUX)
 
 
-# E62 / TI AM13E23019 FW1
-#
-# TI AM13E uses TI SDK/DriverLib/SysConfig and its own Cortex-M33 toolchain.
-# Do not pass it through add_target(), whose libopencm3 sources, STM32 linker
-# layout and compilation flags are specific to the original MCU backends.
-#
-# This explicit, opt-in root target delegates to the pinned SDK's independent
-# CMake build. It is intentionally NOT in ALL: existing ESCape32 builds retain
-# their original behavior.
-add_custom_target(E62_FW1
-    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/tools/am13e/build-am13e-fw1.sh"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    COMMENT "Build and package E62 AM13E23019 FW1 with the pinned TI SDK"
-    USES_TERMINAL
-    VERBATIM
-)
+# TI AM13E23019 is an ESCape32 MCU target; the TI SDK is external.
+include(mcu/AM13E23019/native.cmake)
+add_am13e_target(E62_FW1)
