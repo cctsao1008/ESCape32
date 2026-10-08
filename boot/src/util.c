@@ -18,19 +18,25 @@
 #include "common.h"
 
 #if defined(AM13E)
-/* STM32 CRC peripheral configuration in the original bootloader uses
- * reflected input/output and a final inversion. Reproduce that wire CRC
- * in software without importing any legacy peripheral registers.
+#include "device.h"
+#include <dl_crcp.h>
+
+/* The ESCape32 boot protocol uses a reflected CRC-32 with all-one seed
+ * and final inversion. CRCP peripheral initialization is explicit here;
+ * low-level clock/power availability belongs to the AM13E boot init.
+ * CRCP result equivalence still requires native/on-target verification.
  */
 uint32_t crc32(const char *buf, int len) {
-    uint32_t crc = UINT32_C(0xffffffff);
     if (!buf || len < 0 || (len & 3)) return 0;
-    for (int i = 0; i < len; ++i) {
-        crc ^= (uint8_t)buf[i];
-        for (unsigned bit = 0; bit < 8; ++bit)
-            crc = (crc >> 1) ^ ((crc & 1U) ? UINT32_C(0xedb88320) : 0U);
-    }
-    return ~crc;
+    DL_CRCP_init(CRC, DL_CRCP_POLYNOMIAL_SIZE_32,
+                 DL_CRCP_BIT_REVERSED,
+                 DL_CRCP_INPUT_ENDIANESS_LITTLE_ENDIAN,
+                 DL_CRCP_OUTPUT_BYTESWAP_DISABLED);
+    DL_CRCP_setPolynomial(CRC, UINT32_C(0x04c11db7));
+    DL_CRCP_setSeed32(CRC, UINT32_C(0xffffffff));
+    for (int i = 0; i < len; ++i)
+        DL_CRCP_feedData8(CRC, (uint8_t)buf[i]);
+    return ~DL_CRCP_getResult32(CRC);
 }
 /* Flash programming, protection and reset remain backend-owned.
  * No fabricated Flash operations or write-protection defaults.
