@@ -404,31 +404,20 @@ void hw_motor_am13e_apply_target_force_a(
         hw_motor_am13e_target_force_a(positive));
 }
 
-/*
- * FW1 contract boundary: validate ESCape32 phase masks before touching the
- * selected MCPWM Stage-F candidate. This API remains bench-only; it does not
- * lift the production hw_motor_apply_six_step compile-time safety stop.
- */
-static inline __attribute__((always_inline))
-bool hw_motor_am13e_plan_and_apply_probe(
-    unsigned positive_mask, unsigned negative_mask, bool damp)
-{
-    am13e_commutation_plan_t plan;
-    if (!am13e_commutation_plan(positive_mask, negative_mask, damp, &plan)) {
-        return false;
-    }
-    /* Stage-F register writes are delegated to the existing compile probe.
-     * This method is deliberately not the production gate-output interface.
-     */
-    return true;
-}
-
 static inline __attribute__((always_inline))
 void hw_motor_am13e_apply_six_step_force_probe(
     unsigned int positive_mask,
     unsigned int negative_mask,
     bool damp)
 {
+    /* Reject invalid ESCape32 phase masks before any MCPWM register writes.
+     * This remains a bench-only probe, not production output enable.
+     */
+    am13e_commutation_plan_t plan;
+    if (!am13e_commutation_plan(
+            positive_mask, negative_mask, damp, &plan)) {
+        return;
+    }
     /*
      * Step 1: asynchronous safe mask.
      */
