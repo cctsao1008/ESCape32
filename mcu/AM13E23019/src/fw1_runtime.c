@@ -59,8 +59,13 @@ int main(void)
             fw1_debug_bemf_interval = 0U;
             (void)fw1_bemf_event_capture_interval(interval);
         }
-        if (fw1_debug_bemf_ready == 1U)
+        if (fw1_debug_bemf_ready == 1U) {
+            /* Poll eCAP0 until E62 IRQ registration is configured.
+             * CAP1 epoch must be tied to previous commutation boundary.
+             */
+            (void)fw1_bemf_event_ecap0_event1();
             fw1_bemf_event_timg12_irq();
+        }
         uint32_t command_seq = fw1_debug_command_seq;
         if (command_seq != last_command_seq) {
             uint32_t enable = fw1_debug_enable;
