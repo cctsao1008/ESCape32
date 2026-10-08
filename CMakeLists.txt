@@ -68,6 +68,7 @@ function(add_target_ti_am13e name)
         "${AM13E_SYSCFG_DIR}"
         "${AM13E_SDK_ROOT}/ti_sdk_config/am13e230x/default/device_support/include"
         "${AM13E_SDK_ROOT}/source/device/am13e230x/include"
+        "${AM13E_SDK_ROOT}/source/device/am13e230x/include/hw"
         "${AM13E_SDK_ROOT}/source/driverlib/am13e230x"
         "${AM13E_SDK_ROOT}/source/arch/include"
         "${AM13E_SDK_ROOT}/source/arch/m33/include"
