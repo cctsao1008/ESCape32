@@ -44,7 +44,10 @@ void boot_port_jump_to_app(void)
     uint32_t initial_sp = vector[0];
     uint32_t reset_pc   = vector[1];
 
-    __disable_irq();
+    /*
+     * Boot uses polling only and does not enable NVIC sources. Keep PRIMASK in
+     * its reset state so the application does not inherit interrupts disabled.
+     */
     SysTick->CTRL = 0U;
     SysTick->LOAD = 0U;
     SysTick->VAL  = 0U;
