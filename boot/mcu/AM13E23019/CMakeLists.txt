@@ -2,7 +2,7 @@
 set(TARGET am13e23019_e62_boot)
 set(TI_SDK_CONFIG ti_sdk_cfg_default)
 set(E62_BOOT_DIR ${CMAKE_CURRENT_LIST_DIR})
-set(E62_PLATFORM_DIR ${CMAKE_CURRENT_LIST_DIR}/../../../mcu/am13e23019)
+set(E62_PLATFORM_DIR ${CMAKE_CURRENT_LIST_DIR}/../../../mcu/AM13E23019)
 
 if(TARGET ${TARGET})
     return()
