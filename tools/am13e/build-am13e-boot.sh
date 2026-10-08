@@ -80,9 +80,19 @@ check_equal() {
     local actual="$2"
     local expected="$3"
     if [ "$actual" = "$expected" ]; then
-        printf '[PASS] %-14s %s\n' "$label" "$actual"
+        printf '[PASS] %-20s %s\n' "$label" "$actual"
     else
-        printf '[FAIL] %-14s expected %s, got %s\n' "$label" "$expected" "${actual:-<missing>}"
+        printf '[FAIL] %-20s expected %s, got %s\n' "$label" "$expected" "${actual:-<missing>}"
+        fail=1
+    fi
+}
+
+check_symbol() {
+    local symbol="$1"
+    if "$nm" "$elf" | grep -q " $symbol$"; then
+        printf '[PASS] %-20s linked\n' "$symbol"
+    else
+        printf '[FAIL] %-20s missing\n' "$symbol"
         fail=1
     fi
 }
@@ -97,17 +107,24 @@ check_equal ".intvecs" "$intvecs" "0x00000000"
 check_equal "boot start" "$boot_start" "0x00000000"
 check_equal "boot end" "$boot_end" "0x00004000"
 
-if "$nm" "$elf" | grep -q ' boot_app_vector_sane$'; then
-    echo "[PASS] app validate    linked"
+check_symbol "boot_app_vector_sane"
+check_symbol "boot_jump_to_app"
+check_symbol "boot_flash_app_range_valid"
+check_symbol "boot_flash_erase_sector"
+check_symbol "boot_flash_program"
+check_symbol "boot_flash_verify"
+
+if [ -n "$ramfunc" ] && (( ramfunc >= 0x00c18000 && ramfunc < 0x00c20000 )); then
+    printf '[PASS] %-20s %s\n' ".TI.ramfunc" "$ramfunc"
 else
-    echo "[FAIL] app validate    missing"
+    printf '[FAIL] %-20s expected RAM_C, got %s\n' ".TI.ramfunc" "${ramfunc:-<missing>}"
     fail=1
 fi
 
-if "$nm" "$elf" | grep -q ' boot_jump_to_app
-    echo "[PASS] ABI             hard-float ABI"
+if "$readelf" -h "$elf" | grep -q 'hard-float ABI'; then
+    printf '[PASS] %-20s hard-float ABI\n' "ABI"
 else
-    echo "[FAIL] ABI             hard-float ABI not reported"
+    printf '[FAIL] %-20s hard-float ABI not reported\n' "ABI"
     fail=1
 fi
 
@@ -133,60 +150,7 @@ echo "  Bank1 erase/program DriverLib path linked"
 echo "  TI Flash command RAMFUNC linked in RAM_C"
 echo
 echo "Not implemented yet:"
+echo "  Bank0 RAM-resident erase/program transaction"
 echo "  PB14 service/programming protocol"
 echo "  image header / CRC / valid-record policy"
-echo "  APP erase/program/verify"
-echo "  boot-entry request handshake"
-; then
-    echo "[PASS] app jump        linked"
-else
-    echo "[FAIL] app jump        missing"
-    fail=1
-fi
-
-for symbol in     boot_flash_app_range_valid     boot_flash_erase_sector     boot_flash_program     boot_flash_verify; do
-    if "$nm" "$elf" | grep -q " $symbol$"; then
-        printf '[PASS] %-17s linked\n' "$symbol"
-    else
-        printf '[FAIL] %-17s missing\n' "$symbol"
-        fail=1
-    fi
-done
-
-if [ -n "$ramfunc" ] && (( ramfunc >= 0x00c18000 && ramfunc < 0x00c20000 )); then
-    printf '[PASS] %-17s %s\n' ".TI.ramfunc" "$ramfunc"
-else
-    printf '[FAIL] %-17s expected RAM_C, got %s\n' ".TI.ramfunc" "${ramfunc:-<missing>}"
-    fail=1
-fi
-
-if "$readelf" -h "$elf" | grep -q 'hard-float ABI'; then
-    echo "[PASS] ABI             hard-float ABI"
-else
-    echo "[FAIL] ABI             hard-float ABI not reported"
-    fail=1
-fi
-
-echo
-echo "ELF: $elf"
-echo "MAP: $map"
-
-if [ "$fail" -ne 0 ]; then
-    echo
-    echo "Boot ELF validation failed." >&2
-    exit 1
-fi
-
-echo
-echo "Boot image contract PASS."
-echo "Validated:"
-echo "  boot vector @ 0x00000000"
-echo "  boot flash ownership 0x00000000..0x00003FFF"
-echo "  minimum APP vector sanity check"
-echo "  direct VTOR/MSP/reset-entry handoff scaffold"
-echo
-echo "Not implemented yet:"
-echo "  PB14 service/programming protocol"
-echo "  image header / CRC / valid-record policy"
-echo "  APP erase/program/verify"
 echo "  boot-entry request handshake"
