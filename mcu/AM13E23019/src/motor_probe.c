@@ -7,9 +7,39 @@
  */
 
 #include "ti_sdk_dl_config.h"
+#include "dl_ecap.h"
+#include "dl_cmpss_lite.h"
 
 #define ESCAPE32_AM13E_MCPWM_INST MCPWM_1_INST
 #include "hw_motor_am13e.h"
+
+
+/*
+ * FW1 hardware route compile probe: AM13E eCAP supports direct CMPSS
+ * CTRIPH/CTRIPL event input selection. No eCAP or comparator is enabled.
+ * The E62 board CMPSS pin routing and BEMF edge polarity are NOT inferred.
+ */
+static DL_ECAP_INPUT fw1_bemf_ecap_input(unsigned comparator, bool high)
+{
+    switch (comparator) {
+    case 0: return high ? DL_ECAP_INPUT_CMPSS0_CTRIPH : DL_ECAP_INPUT_CMPSS0_CTRIPL;
+    case 1: return high ? DL_ECAP_INPUT_CMPSS1_CTRIPH : DL_ECAP_INPUT_CMPSS1_CTRIPL;
+    case 3: return high ? DL_ECAP_INPUT_CMPSS3_CTRIPH : DL_ECAP_INPUT_CMPSS3_CTRIPL;
+    default: return DL_ECAP_INPUT_CMPSS0_CTRIPH; /* probe only; no runtime selection */
+    }
+}
+
+static void fw1_bemf_ecap_compile_probe(void)
+{
+    /* Compile-time SDK API verification only, held behind run_probe == 0. */
+    DL_ECAP_selectECAPInput(ECAP0, fw1_bemf_ecap_input(0, true));
+    DL_ECAP_selectECAPInput(ECAP0, fw1_bemf_ecap_input(1, false));
+    DL_ECAP_selectECAPInput(ECAP0, fw1_bemf_ecap_input(3, true));
+    DL_ECAP_setEventPolarity(ECAP0, DL_ECAP_EVENT_1, DL_ECAP_EVENT_RISING_EDGE);
+    DL_ECAP_enableTimeStampCapture(ECAP0);
+    (void)DL_ECAP_getEventTimeStamp(ECAP0, DL_ECAP_EVENT_1);
+    DL_ECAP_disableTimeStampCapture(ECAP0);
+}
 
 static void am13e_motor_backend_compile_probe(void)
 {
@@ -108,6 +138,7 @@ int main(void)
 
     if (run_probe) {
         am13e_motor_backend_compile_probe();
+        fw1_bemf_ecap_compile_probe();
     }
 
     for (;;) {
