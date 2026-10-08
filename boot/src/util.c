@@ -17,6 +17,11 @@
 
 #include "common.h"
 
+#if defined(TI_AM13E)
+/* CRC, Flash programming and protection are implemented by the AM13E
+ * boot MCU backend. Do not compile legacy FLASH/CRC register accesses.
+ */
+#else
 #ifndef FLASH_CR_STRT
 #define FLASH_CR_STRT FLASH_CR_START
 #endif
@@ -114,3 +119,5 @@ void setwrp(int type) { // 0 - off, 1 - bootloader, 2 - full
 #endif
 	for (;;); // Never return
 }
+
+#endif /* TI_AM13E */
