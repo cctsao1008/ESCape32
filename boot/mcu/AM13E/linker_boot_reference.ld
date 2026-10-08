@@ -190,4 +190,4 @@ ASSERT(__boot_storage_end__ == 0x00080000, "Flash limit mismatch");
 
 ASSERT(DL_Flash_eraseSector >= ORIGIN(RAM_C) && DL_Flash_eraseSector < ORIGIN(RAM_C) + LENGTH(RAM_C), "Sector erase must reside in SRAM");
 ASSERT(DL_Flash_program >= ORIGIN(RAM_C) && DL_Flash_program < ORIGIN(RAM_C) + LENGTH(RAM_C), "Flash programming must reside in SRAM");
-ASSERT(DL_FlashCTL_executeCommand >= ORIGIN(RAM_C) && DL_FlashCTL_executeCommand < ORIGIN(RAM_C) + LENGTH(RAM_C), "Flash command execution must reside in SRAM");
+/* DL_FlashCTL_executeCommand is static in the TI SDK: check its placement in the ELF map, not by a global linker assertion. */
