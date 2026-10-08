@@ -74,7 +74,7 @@ void am13e_bemf_event_timg12_irq(void)
     if (initialized) am13e_bemf_event_delay_elapsed(&engine);
 }
 
-void am13e_bemf_event_timeout(unsigned timer_xres)
+void am13e_bemf_adapter_timeout(unsigned timer_xres)
 {
     if (initialized) am13e_bemf_event_timeout(&engine, timer_xres);
 }
