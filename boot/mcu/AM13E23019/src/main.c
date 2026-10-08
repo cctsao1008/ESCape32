@@ -17,6 +17,7 @@
 #include <stddef.h>
 
 #include "boot_image.h"
+#include "boot_platform.h"
 #include "boot_port.h"
 #include "boot_request.h"
 #include "boot_service_pb14.h"
@@ -26,6 +27,7 @@
 
 int main(void)
 {
+    bool platform_ready = boot_platform_init();
     boot_request_reason_t request = boot_request_detect();
 
     if (request != BOOT_REQUEST_NONE) {
@@ -42,7 +44,7 @@ int main(void)
      * PB14 module is an architecture scaffold and returns false until its
      * timing/IOMUX implementation is ready.
      */
-    if (boot_service_pb14_init()) {
+    if (platform_ready && boot_service_pb14_init()) {
         const boot_protocol_ops_t *protocol =
             boot_service_port_bind(boot_service_pb14_transport());
 
