@@ -74,11 +74,6 @@ static void fill_blocks(void) {
     sig[1] = 0x32;
 }
 
-static void prepare(void) {
-    CHECK(write_block(0, invalid, 8) == 1);
-    CHECK(write_block(1, invalid, 8) == 1);
-}
-
 static void check_signature_absent(void) {
     const uint8_t *head = (const uint8_t *)boot_am13e_test_first;
     CHECK(head[0] == 0xff && head[1] == 0xff);
