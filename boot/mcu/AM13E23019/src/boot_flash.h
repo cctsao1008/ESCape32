@@ -2,8 +2,9 @@
  * AM13E23019 boot Flash backend contract.
  *
  * This wrapper keeps ESCape32 update semantics independent from TI DriverLib
- * details. Bank0 programming requires a RAM-resident transaction path and is
- * intentionally rejected by the normal DriverLib path for now.
+ * details. Inactive-bank operations use the TI high-level Flash API; active
+ * Bank0 operations use the dedicated transaction path implemented by the
+ * AM13E23019 backend.
  */
 #pragma once
 
@@ -15,9 +16,8 @@ typedef enum {
     BOOT_FLASH_ERR_RANGE = -1,
     BOOT_FLASH_ERR_ALIGNMENT = -2,
     BOOT_FLASH_ERR_CROSS_BANK = -3,
-    BOOT_FLASH_ERR_ACTIVE_BANK = -4,
-    BOOT_FLASH_ERR_DRIVER = -5,
-    BOOT_FLASH_ERR_VERIFY = -6,
+    BOOT_FLASH_ERR_DRIVER = -4,
+    BOOT_FLASH_ERR_VERIFY = -5,
 } boot_flash_status_t;
 
 bool boot_flash_app_range_valid(uint32_t address, uint32_t size);
