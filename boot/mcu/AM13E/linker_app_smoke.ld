@@ -84,5 +84,10 @@ ASSERT(ADDR(.image_header) == 0x00006100, "V2 metadata must be at 0x6100")
 ASSERT(SIZEOF(.image_header) == 32, "V2 header must occupy exactly 32 bytes")
 ASSERT(ADDR(.intvecs) == 0x00006800, "M33 vectors must begin at 0x6800")
 ASSERT(SIZEOF(.intvecs) >= 8, "M33 vectors must contain SP and PC")
+/* Strict smoke-only contract: exporting .data is intentionally disabled.
+ * Refuse an initialized-data dependency instead of silently omitting it.
+ * The real APP linker must support genuine .data load images separately.
+ */
+ASSERT(SIZEOF(.data) == 0, "Smoke fixture must not contain initialized .data")
 ASSERT(__app_flash_payload_end__ <= 0x00046000,
        "E62 v2 legacy CMD_WRITE image exceeds 256 KiB")
