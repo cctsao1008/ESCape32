@@ -17,6 +17,8 @@
 
 #pragma once
 
+/* Hardware-only timer/comparator mapping is irrelevant to host command tests. */
+#ifndef ESCAPE32_PROG_HOST_TEST
 #if DEAD_TIME < 128
 #define TIM_DTG DEAD_TIME
 #elif DEAD_TIME < 256
@@ -51,6 +53,8 @@
 #define COMP_IN1 2
 #define COMP_IN2 1
 #define COMP_IN3 3
+#endif
+
 #endif
 
 #ifndef SENS_MAP
