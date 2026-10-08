@@ -87,6 +87,11 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
             if (block != next_block)
                 return 0;
         } else if (block == 0U) {
+            /* A lost final ACK may resend an already committed block 0.
+             * Compare only; never erase or reprogram a valid image.
+             */
+            if (update_phase == UPDATE_COMPLETE && len == 1024)
+                return same_flash_block(addr, src, 1024U) ? 1 : 0;
             if (update_phase == UPDATE_RESTORE_1 && len == 1024 &&
                 pending_header_valid) {
                 for (unsigned i = 0; i < sizeof pending_header; ++i)
@@ -115,20 +120,21 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
      * No generic 8-byte program is attempted (ECC requires 16 bytes).
      */
     if (len == 8) {
-        if (block == 0U && update_phase != UPDATE_IDLE &&
-            update_phase != UPDATE_INVALIDATED_0)
+        /* Block 0 invalidation is an explicit request to begin another
+         * update. Replaying it before block 1 is safe and idempotent.
+         * Once programming began, this deliberately starts a new session.
+         */
+        if (block == 1U &&
+            update_phase != UPDATE_INVALIDATED_0 &&
+            !(update_phase == UPDATE_PROGRAM && next_block == 2U))
             return 0;
-        if (block == 1U && update_phase != UPDATE_INVALIDATED_0 &&
-            update_phase != UPDATE_PROGRAM)
-            return 0;
-        if (block == 1U && update_phase == UPDATE_PROGRAM)
-            return 0;
-        pending_header_valid = false;
+        /* Check the payload before changing the session state. */
         if (addr != first && addr != first + 1024U)
             return 0;
         for (unsigned i = 0; i < 8U; ++i)
             if ((uint8_t)src[i] != UINT8_C(0xff))
                 return 0;
+        pending_header_valid = false;
         if (addr == first &&
             boot_am13e_flash_execute((uint32_t)first, 0, 0, true, false) != DL_FLASH_SUCCESS)
             return 0;
