@@ -17,7 +17,7 @@ work_dir="$repo_root/.am13e-build/boot"
 output_dir="$sdk_build_dir/escape32_am13e23019_boot"
 hook_file="$work_dir/am13e_boot_hook.cmake"
 
-target="am13e23019_e62_boot"
+target="am13e23019_boot"
 elf="$output_dir/$target.elf"
 map="$output_dir/$target.map"
 
@@ -37,7 +37,7 @@ cmake_language(
 EOF
 
 echo
-echo "Reconfiguring TI SDK with E62 Boot target"
+echo "Reconfiguring TI SDK with AM13E23019 Boot target"
 cmake \
     -S "$SDK_ROOT" \
     -B "$sdk_build_dir" \
@@ -70,8 +70,8 @@ symbol_addr() {
 }
 
 intvecs="$(section_vma .intvecs)"
-boot_start="$(symbol_addr __e62_boot_flash_start__)"
-boot_end="$(symbol_addr __e62_boot_flash_end__)"
+boot_start="$(symbol_addr __boot_flash_start__)"
+boot_end="$(symbol_addr __boot_flash_end__)"
 fail=0
 
 check_equal() {
@@ -87,7 +87,7 @@ check_equal() {
 }
 
 echo
-echo "E62 AM13E23019 Boot ELF validation"
+echo "AM13E23019 Boot ELF validation"
 echo "====================================="
 "$size" "$elf"
 echo
@@ -96,14 +96,14 @@ check_equal ".intvecs" "$intvecs" "0x00000000"
 check_equal "boot start" "$boot_start" "0x00000000"
 check_equal "boot end" "$boot_end" "0x00004000"
 
-if "$nm" "$elf" | grep -q ' e62_boot_app_vector_sane$'; then
+if "$nm" "$elf" | grep -q ' boot_app_vector_sane$'; then
     echo "[PASS] app validate    linked"
 else
     echo "[FAIL] app validate    missing"
     fail=1
 fi
 
-if "$nm" "$elf" | grep -q ' e62_boot_jump_to_app$'; then
+if "$nm" "$elf" | grep -q ' boot_jump_to_app$'; then
     echo "[PASS] app jump        linked"
 else
     echo "[FAIL] app jump        missing"
