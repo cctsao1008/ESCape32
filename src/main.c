@@ -614,7 +614,14 @@ void main(void) {
 	}
 #endif
 	#ifdef ESCAPE32_AM13E
-	am13e_core_start_scheduler_tick((uint32_t)CLK, 16000U);
+	/* Core clock comes from the qualified board contract, not the MCPWM
+	 * clock and never the legacy STM32 CLK macro.
+	 */
+	if (!am13e_active_contract ||
+	    !am13e_contract_qualified(am13e_active_contract) ||
+	    !am13e_core_start_scheduler_tick(am13e_active_contract->core_hz,
+	                                     16000U))
+		hard_fault_handler();
 #else
 	nvic_set_priority(NVIC_PENDSV_IRQ, 0x80);
 	STK_RVR = CLK_KHZ / 16 - 1; // 16kHz
