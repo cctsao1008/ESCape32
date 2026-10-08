@@ -15,6 +15,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#define REVISION 4
+_Static_assert(REVISION == BOOT_PROTOCOL_REVISION,
+    "legacy boot revision must match common protocol revision");
+
 static uint32_t legacy_device_id(void)
 {
     return DBGMCU_IDCODE;
@@ -52,7 +56,7 @@ static void legacy_jump_app(void)
     __builtin_unreachable();
 }
 
-static void legacy_handle_update(void)
+static bool legacy_handle_update(void)
 {
     char *buffer = _ram_end;
     int position = 0;
@@ -62,7 +66,7 @@ static void legacy_handle_update(void)
          ++i) {
         int length = recvdata(buffer + position);
         if (length == -1) {
-            return;
+            return true;
         }
 
         sendval(BOOT_RES_OK);
@@ -80,6 +84,7 @@ static void legacy_handle_update(void)
      * Returning here therefore represents an update failure.
      */
     sendval(BOOT_RES_ERROR);
+    return false;
 }
 
 static void legacy_handle_setwrp(void)
