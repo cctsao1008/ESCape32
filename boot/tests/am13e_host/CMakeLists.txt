@@ -11,7 +11,8 @@ add_executable(am13e_flash_transaction_test
 target_compile_features(am13e_flash_transaction_test PRIVATE c_std_11)
 target_compile_definitions(am13e_flash_transaction_test PRIVATE AM13E_FLASH_TEST)
 target_include_directories(am13e_flash_transaction_test PRIVATE
-    "${REPO_ROOT}/boot/tests/am13e_mock")
+    "${REPO_ROOT}/boot/tests/am13e_mock"
+    "${REPO_ROOT}/boot/mcu/AM13E")
 target_compile_options(am13e_flash_transaction_test PRIVATE
     -O1 -g -Wall -Wextra -Werror)
 option(AM13E_HOST_SANITIZERS "Enable AddressSanitizer and UBSan" ON)
