@@ -8,6 +8,8 @@
 
 #include "ti_sdk_dl_config.h"
 #include "dl_ecap.h"
+#include "dl_timerg.h"
+#include "hw_bemf_am13e_events.h"
 #include "dl_cmpss_lite.h"
 
 #define ESCAPE32_AM13E_MCPWM_INST MCPWM_1_INST
@@ -39,6 +41,52 @@ static void fw1_bemf_ecap_compile_probe(void)
     DL_ECAP_enableTimeStampCapture(ECAP0);
     (void)DL_ECAP_getEventTimeStamp(ECAP0, DL_ECAP_EVENT_1);
     DL_ECAP_disableTimeStampCapture(ECAP0);
+}
+
+/*
+ * FW1 event-chain API integration. No NVIC, TBCLK, power stage or actual
+ * interrupts are enabled in this compile-only image.
+ * TIMG12 must be configured as a 32-bit down-counter with ZERO interrupt
+ * in a later product-specific initialization step.
+ */
+static am13e_bemf_event_engine_t fw1_event_engine;
+static void fw1_arm_delay(void *unused, uint32_t ticks)
+{
+    (void)unused;
+    DL_TimerG_stopCounter(TIMG12);
+    DL_TimerG_clearInterruptStatus(TIMG12, DL_TIMERG_INTERRUPT_ZERO_EVENT);
+    DL_TimerG_setLoadValue(TIMG12, ticks);
+    DL_TimerG_setTimerCount(TIMG12, ticks);
+    DL_TimerG_startCounter(TIMG12);
+}
+static void fw1_cancel_delay(void *unused)
+{
+    (void)unused;
+    DL_TimerG_stopCounter(TIMG12);
+    DL_TimerG_clearInterruptStatus(TIMG12, DL_TIMERG_INTERRUPT_ZERO_EVENT);
+}
+static void fw1_commutation_due(void *unused)
+{
+    (void)unused;
+    /* Gate-output commutation stays HW-Pending. No MCPWM action here. */
+}
+static void fw1_capture_event_compile_probe(void)
+{
+    am13e_bemf_state_t initial = { .interval = 1000U,
+        .electrical_time = 100000000U, .sync = 0U, .fast = false };
+    const am13e_bemf_event_ops_t ops = {
+        fw1_arm_delay, fw1_cancel_delay, fw1_commutation_due, 0 };
+    if (!am13e_bemf_event_init(&fw1_event_engine, &ops, initial, 0U))
+        return;
+    if (DL_ECAP_getInterruptSource(ECAP0) & DL_ECAP_ISR_SOURCE_CEVT1) {
+        uint32_t timestamp = DL_ECAP_getEventTimeStamp(ECAP0, DL_ECAP_EVENT_1);
+        DL_ECAP_clearInterrupt(ECAP0, DL_ECAP_ISR_SOURCE_CEVT1);
+        (void)am13e_bemf_event_capture(&fw1_event_engine, timestamp);
+    }
+    if (DL_TimerG_getPendingInterrupt(TIMG12) == DL_TIMERG_IIDX_ZERO) {
+        DL_TimerG_clearInterruptStatus(TIMG12, DL_TIMERG_INTERRUPT_ZERO_EVENT);
+        am13e_bemf_event_delay_elapsed(&fw1_event_engine);
+    }
 }
 
 static void am13e_motor_backend_compile_probe(void)
@@ -139,6 +187,7 @@ int main(void)
     if (run_probe) {
         am13e_motor_backend_compile_probe();
         fw1_bemf_ecap_compile_probe();
+        fw1_capture_event_compile_probe();
     }
 
     for (;;) {
