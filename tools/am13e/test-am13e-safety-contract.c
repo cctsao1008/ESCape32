@@ -13,6 +13,14 @@ int main(void)
     assert(ticks == 1);
     assert(!am13e_clock_convert_ticks(UINT32_MAX, 1, UINT32_MAX, &ticks));
 
+    uint16_t period = 0;
+    assert(!am13e_mcpwm_period_ticks(0, 24000, &period));
+    assert(!am13e_mcpwm_period_ticks(80000000, 0, &period));
+    assert(!am13e_mcpwm_period_ticks(80000000, 24000, &period));
+    assert(am13e_mcpwm_period_ticks(80000000, 20000, &period));
+    assert(period == 4000);
+    assert(!am13e_mcpwm_period_ticks(80000000, 1, &period));
+    assert(!am13e_mcpwm_period_ticks(1000, 1000, &period));
     am13e_motor_contract_t c = {0};
     am13e_motor_guard_t g;
     am13e_guard_init(&g, &c);
