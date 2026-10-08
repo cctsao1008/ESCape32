@@ -11,6 +11,7 @@
 uintptr_t boot_am13e_test_first;
 uintptr_t boot_am13e_test_end;
 extern int boot_am13e_flash_write(char *dst, const char *src, int len);
+extern void boot_am13e_test_reset_update_state(void);
 
 #define MAP_ADDRESS 0x10000000UL
 #define MAP_LENGTH  0x00080000UL
@@ -183,6 +184,44 @@ static void test_partial_program(void) {
     ++tests;
 }
 
+
+static void test_powerloss_during_program(void) {
+    /* Reset erases SRAM state, not nonvolatile Flash content. */
+    CHECK(write_block(0, invalid, 8) == 1);
+    CHECK(write_block(1, invalid, 8) == 1);
+    CHECK(write_block(2, payload, 1024) == 1);
+    boot_am13e_test_reset_update_state();
+    check_signature_absent();
+    CHECK(write_block(3, payload, 1024) == 0);
+    CHECK(write_block(0, sig, 1024) == 0);
+    CHECK(write_block(1, payload, 1024) == 0);
+    /* Explicit invalidation is required before another update can start. */
+    CHECK(write_block(0, invalid, 8) == 1);
+    CHECK(write_block(1, invalid, 8) == 1);
+    CHECK(write_block(2, payload, 1024) == 1);
+    check_signature_absent();
+    puts("PASS reset during PROGRAM: no signature / stale session");
+    ++tests;
+}
+
+static void test_powerloss_during_metadata_restore(void) {
+    CHECK(write_block(0, invalid, 8) == 1);
+    CHECK(write_block(1, invalid, 8) == 1);
+    CHECK(write_block(2, payload, 1024) == 1);
+    CHECK(write_block(0, sig, 1024) == 1);
+    check_signature_absent();
+    boot_am13e_test_reset_update_state();
+    check_signature_absent();
+    CHECK(write_block(1, payload, 1024) == 0);
+    CHECK(write_block(0, sig, 1024) == 0);
+    /* A new invalidation must restart the transaction. */
+    CHECK(write_block(0, invalid, 8) == 1);
+    CHECK(write_block(1, invalid, 8) == 1);
+    check_signature_absent();
+    puts("PASS reset during RESTORE_1: signature remains invalid");
+    ++tests;
+}
+
 int main(void) {
     void *region = mmap((void *)MAP_ADDRESS, MAP_LENGTH,
                         PROT_READ | PROT_WRITE,
@@ -206,6 +245,8 @@ int main(void) {
     test_failed_program();
     test_failed_erase();
     test_partial_program();
+    test_powerloss_during_program();
+    test_powerloss_during_metadata_restore();
     printf("PASS %u host transaction tests\n", tests);
     return 0;
 }
