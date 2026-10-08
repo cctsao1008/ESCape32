@@ -40,8 +40,8 @@ boot/mcu/AM13E23019/src/main.c
      |      APP map / APP write-block policy / Cortex-M33 handoff
      |
      +--> boot_flash
-            Bank0 / Bank1 erase-program-verify
-            RAM-resident active-bank transaction
+            contiguous MAIN-Flash erase/program/verify
+            RAM-resident same-bank transaction where required
 ~~~
 
 ## 2. Ownership Boundaries
@@ -80,8 +80,8 @@ boot_flash.c owns:
 
 - APP-range enforcement
 - 2-KiB sector erase
-- inactive-bank DriverLib path
-- active Bank0 RAM_C transaction
+- normal DriverLib path when execution-bank conflict does not exist
+- RAM_C transaction when program/erase targets the bank containing Boot code
 - Flash readback verification
 
 boot_service_port.c owns:
@@ -250,8 +250,15 @@ FW2 parameters     preserve
 APP region         erase / program / verify
 ~~~
 
-The APP region spans Bank0 and Bank1. Bank0 operations use the RAM-resident
-active-bank transaction path; Bank1 uses the normal inactive-bank DriverLib path.
+E62 treats MAIN Flash as one contiguous address space for the product/update
+model. The application is one contiguous region from 0x00006000 through
+0x0007FFFF; there is no A/B image concept, bank swap, or bank-level firmware
+selection.
+
+The AM13 device still has two physical Flash banks internally. That distinction
+is used only inside the low-level Flash backend because program/erase of the
+bank containing currently executing Boot code requires the RAM-resident
+transaction path. It does not create a product-level partition or update mode.
 
 ## 8. Current Implementation Status
 
@@ -261,8 +268,8 @@ active-bank transaction path; Bank1 uses the normal inactive-bank DriverLib path
 | Common service framing | Implemented / regression build PASS |
 | AM13 application map / handoff | Implemented / build PASS |
 | APP-only update guard | Implemented / build PASS |
-| Bank1 Flash path | Implemented / build PASS |
-| Bank0 RAM Flash path | Implemented / static placement PASS |
+| MAIN Flash non-conflicting P/E path | Implemented / build PASS |
+| MAIN Flash same-bank RAM P/E path | Implemented / static placement PASS |
 | Flash verify | Implemented / build PASS |
 | PB14 physical module boundary | Implemented |
 | PB14 RX/TX timing | Pseudocode |
