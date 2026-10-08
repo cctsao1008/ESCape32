@@ -5,12 +5,11 @@
 #include "common.h"
 #include <stdint.h>
 
-extern char __boot_flash_end__[];
 extern char __app_flash_start__[];
 extern char __boot_storage_end__[];
 
 static bool flash_range(unsigned block, unsigned length, uintptr_t *start) {
-    const uintptr_t first = (uintptr_t)__boot_flash_end__;
+    const uintptr_t first = (uintptr_t)__app_flash_start__;
     const uintptr_t limit = (uintptr_t)__boot_storage_end__;
     const uintptr_t offset = (uintptr_t)block * UINT32_C(1024);
     if (!length || (length & 3U) || limit <= first ||
@@ -32,7 +31,7 @@ bool boot_am13e_read_range(unsigned block, unsigned length, const void **address
 bool boot_am13e_write_range(unsigned block, unsigned length, char **address) {
     uintptr_t start;
     if (!address || !flash_range(block, length, &start) ||
-        start < (uintptr_t)__app_flash_start__ || (start & 15U) ||
+        (start & 15U) ||
         (length & 15U)) return false;
     *address = (char *)start;
     return true;
