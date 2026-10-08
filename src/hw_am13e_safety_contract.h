@@ -39,8 +39,12 @@ static inline bool am13e_clock_convert_ticks(uint32_t ticks,
 {
     if (!out || !ticks || !source_hz || !target_hz) return false;
     /* Conservative round-up: never schedule earlier than the requested time. */
-    uint64_t scaled = (uint64_t)ticks * target_hz + source_hz - 1U;
-    scaled /= source_hz;
+    /* Full uint32 products fit uint64, but adding source_hz - 1 can
+     * overflow. Quotient plus nonzero remainder implements ceil safely.
+     */
+    const uint64_t product = (uint64_t)ticks * (uint64_t)target_hz;
+    uint64_t scaled = product / source_hz;
+    if (product % source_hz) ++scaled;
     if (!scaled || scaled > UINT32_MAX) return false;
     *out = (uint32_t)scaled;
     return true;
