@@ -1,5 +1,50 @@
 # E62 / AM13E Host Validation
 
+## Stage C2: ARM linker + v2 image smoke (opt-in)
+
+The existing ESCape32 root CMake now offers an isolated **ARM ELF**
+address-layout smoke target. This is not motor firmware, a board-specific
+application, or a hardware-qualification image.
+
+From the repository root in the existing WSL toolchain:
+
+```bash
+git switch am13e-port-v2
+git pull --ff-only
+cmake -S . -B build-am13e -DAM13E_ENABLE_APP_SMOKE=ON
+cmake --build build-am13e --target AM13E_APP_SMOKE -j"$(nproc)"
+```
+
+The build should create these in `build-am13e/`:
+
+- `AM13E_APP_SMOKE.elf`: Cortex-M33 cross-linked ELF;
+- `AM13E_APP_SMOKE.map`: linker placement map;
+- `AM13E_APP_SMOKE.bin`: APP-base flat raw BIN starting at `0x6000`;
+- `AM13E_APP_SMOKE.e62v2.bin`: Stage C1 packed and verified image;
+- `AM13E_APP_SMOKE.e62v2.json`: image metadata manifest.
+
+This CMake target enforces linker assertions and runs a verification
+script that parses `arm-none-eabi-objdump -h` (signature `0x6000`,
+header `0x6100`, actual M33 vectors `0x6800`, ARM code after the
+vectors) and compares ELF/objcopy/packed image bytes and CRCs. It must
+not be reported as PASS until the actual WSL command succeeds.
+
+The smoke uses `boot/mcu/AM13E/linker_app_smoke.ld` and
+`boot/tests/am13e_app_link_smoke.c`. It contains a dummy WFI
+`Reset_Handler`, deliberately **not** an initialized application or
+a motor-control program. Do not flash or execute it as firmware.
+
+To opt back out:
+
+```bash
+cmake -S . -B build-am13e -DAM13E_ENABLE_APP_SMOKE=OFF
+```
+
+Next production step is to take the v2 metadata/reserved-sector/vector
+layout into a **real AM13E Rel17 APP link**, with verified startup,
+SysConfig, pin mapping and motor output safety, and to verify it against
+the existing hardware bootloader.
+
 ## Stage C1: Image Pack / Verify (host-only)
 
 The new `boot/tools/pack_am13e_v2.py` packs **only v2 APP-base flat
