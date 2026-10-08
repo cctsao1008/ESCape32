@@ -9,7 +9,6 @@
 #include <strings.h>
 #include "esc_types.h"
 #include "esc_config.h"
-#include "esc_config_defaults.h"
 #include "defs.h"
 
 extern Cfg cfg;
