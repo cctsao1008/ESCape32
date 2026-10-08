@@ -18,7 +18,6 @@ static unsigned write_calls;
 static int fail_write_on;
 static bool cut_during_write;
 static bool reset_observed;
-static bool vector_present;
 
 static void reset_mock(void)
 {
@@ -28,7 +27,6 @@ static void reset_mock(void)
     fail_write_on = -1;
     cut_during_write = false;
     reset_observed = false;
-    vector_present = false;
     boot_update_reset_session();
 }
 
@@ -49,7 +47,6 @@ bool boot_port_write_block(uint32_t offset, const char *data, uint32_t length)
         return false;
     }
     memcpy(flash + offset, data, length);
-    if (offset == 0) vector_present = true;
     return true;
 }
 
