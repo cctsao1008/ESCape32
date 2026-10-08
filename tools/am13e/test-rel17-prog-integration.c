@@ -98,7 +98,11 @@ int main(void)
     const char read_timing[] = {(char)0x2c, 0, 1, 5, 0};
     int n = execcrsfcmd(read_timing, sizeof read_timing, (char *)response);
     assert(n > 6 && response[0] == 0x2b);
+    /* The rel17 CLI does not evaluate CFG_MAP exp2; CRSF does.
+       Record the difference before making any behavioral change. */
     rearm = 0;
+    cli("set throt_mode 1", "throt_mode: 1\\nOK\\n");
+    assert(rearm == 0);
     const char write_mode[] = {(char)0x2d, 0, 1, 17, 1};
     n = execcrsfcmd(write_mode, sizeof write_mode, (char *)response);
     assert(n > 4);
