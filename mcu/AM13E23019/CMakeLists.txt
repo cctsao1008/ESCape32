@@ -67,3 +67,34 @@ target_link_options(${TARGET} PRIVATE
     "${TOOLCHAIN_SET_MAP_PREFIX}${ESCAPE32_AM13E_OUTPUT_DIR}/${TARGET}.map"
     "${TOOLCHAIN_SET_LINKER_SCRIPT_PREFIX}${LINKER_SCRIPT}"
 )
+
+
+# FW1 executable MCPWM0 vertical slice. This is a separate application target,
+# not an alias for the legacy Stage-A image or the LaunchPad MCPWM1 probe.
+set(FW1_TARGET am13e23019_fw1)
+if(NOT TARGET ${FW1_TARGET})
+    add_executable(${FW1_TARGET})
+    target_sources(${FW1_TARGET} PRIVATE
+        ${AM13E_PLATFORM_DIR}/src/fw1_runtime.c
+        ${AM13E_SYSCFG_SOURCES}
+    )
+    target_include_directories(${FW1_TARGET} PRIVATE
+        ${AM13E_PLATFORM_DIR}
+        ${AM13E_PLATFORM_DIR}/src
+        ${AM13E_PLATFORM_DIR}/../../src
+        ${AM13E_EMPTY_SYSCFG_DIR}
+    )
+    target_link_libraries(${FW1_TARGET} PRIVATE
+        arch_${TI_SDK_CONFIG} cmsis_core
+        driverlib_${TI_SDK_CONFIG}
+        utils_nortos_${TI_SDK_CONFIG}
+        ${TI_SDK_DEVICE}
+    )
+    set_target_properties(${FW1_TARGET} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${ESCAPE32_AM13E_OUTPUT_DIR}"
+    )
+    target_link_options(${FW1_TARGET} PRIVATE
+        "${TOOLCHAIN_SET_MAP_PREFIX}${ESCAPE32_AM13E_OUTPUT_DIR}/${FW1_TARGET}.map"
+        "${TOOLCHAIN_SET_LINKER_SCRIPT_PREFIX}${LINKER_SCRIPT}"
+    )
+endif()
