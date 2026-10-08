@@ -222,7 +222,31 @@ static void test_powerloss_during_metadata_restore(void) {
     ++tests;
 }
 
-int main(void) {
+/* Opt-in negative regression gate: must reject premature FINALIZE.
+ * Currently expected RED until image length/integrity is enforced.
+ * Keep it separate from the 10/10 transaction regression suite.
+ */
+static int image_integrity_negative_gate(void) {
+    CHECK(write_block(0, invalid, 8) == 1);
+    CHECK(write_block(1, invalid, 8) == 1);
+    CHECK(write_block(2, payload, 1024) == 1);
+    /* A one-block application is insufficient for the E62 image contract,
+     * yet the legacy metadata restore command can still be attempted.
+     */
+    (void)write_block(0, sig, 1024);
+    (void)write_block(1, payload, 1024);
+    const uint8_t *head = (const uint8_t *)boot_am13e_test_first;
+    if (head[0] == 0xea && head[1] == 0x32) {
+        fprintf(stderr,
+                "FAIL image integrity: signature committed after only one "
+                "application data block; no expected length / CRC checked\n");
+        return 1;
+    }
+    puts("PASS image integrity negative gate: early finalization blocked");
+    return 0;
+}
+
+int main(int argc, char **argv) {
     void *region = mmap((void *)MAP_ADDRESS, MAP_LENGTH,
                         PROT_READ | PROT_WRITE,
                         MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE,
@@ -236,6 +260,13 @@ int main(void) {
     boot_am13e_test_first = MAP_ADDRESS + APP_OFFSET;
     boot_am13e_test_end = MAP_ADDRESS + MAP_LENGTH;
     fill_blocks();
+
+    if (argc == 2 && strcmp(argv[1], "--image-integrity") == 0)
+        return image_integrity_negative_gate();
+    if (argc != 1) {
+        fprintf(stderr, "Usage: %s [--image-integrity]\n", argv[0]);
+        return 2;
+    }
 
     test_invalidation_retry();
     test_sequential_retry();
