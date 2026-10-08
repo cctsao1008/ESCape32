@@ -28,6 +28,7 @@
  */
 uint32_t crc32(const char *buf, int len) {
     if (!buf || len < 0 || (len & 3)) return 0;
+    DL_CRCP_enablePower(CRC);
     DL_CRCP_init(CRC, DL_CRCP_POLYNOMIAL_SIZE_32,
                  DL_CRCP_BIT_REVERSED,
                  DL_CRCP_INPUT_ENDIANESS_LITTLE_ENDIAN,
