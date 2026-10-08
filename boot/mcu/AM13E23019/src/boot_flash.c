@@ -1,10 +1,12 @@
 /*
  * AM13E23019 boot Flash backend.
  *
- * The TI high-level DL_Flash_* APIs are used only for Bank1 while the boot
- * image executes from Bank0. The target SDK explicitly documents that those
- * APIs must not be used on the active Flash bank. Bank0 support therefore
- * needs a separate RAM-resident transaction path.
+ * The TI high-level DL_Flash_* APIs are used for the inactive bank. The SDK
+ * explicitly excludes active-bank use from those APIs, so Bank0 uses a
+ * separate transaction path. During each actual Flash command, TI's
+ * DL_FlashCTL_executeCommand() executes from .TI.ramfunc. Interrupts are masked
+ * around the Bank0 transaction so no ISR can fetch instructions from Bank0
+ * while the bank is busy.
  */
 
 #include "boot_flash.h"
@@ -76,6 +78,170 @@ static boot_flash_status_t boot_flash_classify_write(
     return BOOT_FLASH_ERR_CROSS_BANK;
 }
 
+/*
+ * Bank0 helpers intentionally live in .TI.ramfunc.
+ *
+ * The DriverLib configuration helpers called below execute before a Flash
+ * command becomes active. The command itself is launched and polled by TI's
+ * RAM-resident DL_FlashCTL_executeCommand(), and control returns only after the
+ * Flash controller reports command completion.
+ *
+ * This is a software/static porting implementation. Active-bank behavior still
+ * requires Phase-4 validation on the target board.
+ */
+RAMFUNC static boot_flash_status_t boot_flash_bank0_erase_sector(
+    uint32_t address)
+{
+    boot_flash_status_t result = BOOT_FLASH_ERR_DRIVER;
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+
+    if (DL_FlashCTL_acquireFlashSemaphore() != DL_FLASH_SUCCESS) {
+        goto out;
+    }
+
+    DL_FlashCTL_executeClearStatus(NVMNW);
+    DL_FlashCTL_unprotectSector(
+        NVMNW, address, DL_FLASHCTL_REGION_SELECT_MAIN);
+
+    if (DL_FlashCTL_eraseMemory(
+            NVMNW, address, DL_FLASHCTL_COMMAND_SIZE_SECTOR) !=
+        DL_FLASHCTL_COMMAND_STATUS_PASSED) {
+        goto release;
+    }
+
+    for (uint32_t current = address;
+         current < (address + ESCAPE32_FLASH_SECTOR_SIZE);
+         current += 16U) {
+        if (DL_FlashCTL_blankVerify(
+                NVMNW, current, DL_FLASHCTL_REGION_SELECT_MAIN) !=
+            DL_FLASHCTL_COMMAND_STATUS_PASSED) {
+            goto release;
+        }
+    }
+
+    result = BOOT_FLASH_OK;
+
+release:
+    if (DL_FlashCTL_releaseFlashSemaphore() != DL_FLASH_SUCCESS) {
+        result = BOOT_FLASH_ERR_DRIVER;
+    }
+
+out:
+    __set_PRIMASK(primask);
+    return result;
+}
+
+RAMFUNC static boot_flash_status_t boot_flash_bank0_program(
+    uint32_t address, const uint8_t *data, uint32_t size)
+{
+    boot_flash_status_t result = BOOT_FLASH_ERR_DRIVER;
+    uint32_t primask = __get_PRIMASK();
+    uint32_t remaining = size;
+    uint32_t offset = 0U;
+    uint32_t padded[2];
+
+    __disable_irq();
+
+    if (DL_FlashCTL_acquireFlashSemaphore() != DL_FLASH_SUCCESS) {
+        goto out;
+    }
+
+    while (remaining >= 16U) {
+        DL_FlashCTL_executeClearStatus(NVMNW);
+        DL_FlashCTL_unprotectSector(
+            NVMNW, address, DL_FLASHCTL_REGION_SELECT_MAIN);
+
+        if (DL_FlashCTL_programMemory128WithECCGenerated(
+                NVMNW,
+                address,
+                (const uint32_t *)(const void *)&data[offset]) !=
+            DL_FLASHCTL_COMMAND_STATUS_PASSED) {
+            goto release;
+        }
+
+        if (DL_FlashCTL_readVerify128WithECCGenerated(
+                NVMNW,
+                address,
+                (const uint32_t *)(const void *)&data[offset]) !=
+            DL_FLASHCTL_COMMAND_STATUS_PASSED) {
+            result = BOOT_FLASH_ERR_VERIFY;
+            goto release;
+        }
+
+        address += 16U;
+        offset += 16U;
+        remaining -= 16U;
+    }
+
+    if (remaining >= 8U) {
+        DL_FlashCTL_executeClearStatus(NVMNW);
+        DL_FlashCTL_unprotectSector(
+            NVMNW, address, DL_FLASHCTL_REGION_SELECT_MAIN);
+
+        if (DL_FlashCTL_programMemory64WithECCGenerated(
+                NVMNW,
+                address,
+                (const uint32_t *)(const void *)&data[offset]) !=
+            DL_FLASHCTL_COMMAND_STATUS_PASSED) {
+            goto release;
+        }
+
+        if (DL_FlashCTL_readVerify64WithECCGenerated(
+                NVMNW,
+                address,
+                (const uint32_t *)(const void *)&data[offset]) !=
+            DL_FLASHCTL_COMMAND_STATUS_PASSED) {
+            result = BOOT_FLASH_ERR_VERIFY;
+            goto release;
+        }
+
+        address += 8U;
+        offset += 8U;
+        remaining -= 8U;
+    }
+
+    if (remaining > 0U) {
+        uint8_t *padded_bytes = (uint8_t *)(void *)padded;
+
+        for (uint32_t i = 0U; i < 8U; ++i) {
+            padded_bytes[i] = 0xFFU;
+        }
+        for (uint32_t i = 0U; i < remaining; ++i) {
+            padded_bytes[i] = data[offset + i];
+        }
+
+        DL_FlashCTL_executeClearStatus(NVMNW);
+        DL_FlashCTL_unprotectSector(
+            NVMNW, address, DL_FLASHCTL_REGION_SELECT_MAIN);
+
+        if (DL_FlashCTL_programMemory64WithECCGenerated(
+                NVMNW, address, padded) !=
+            DL_FLASHCTL_COMMAND_STATUS_PASSED) {
+            goto release;
+        }
+
+        if (DL_FlashCTL_readVerify64WithECCGenerated(
+                NVMNW, address, padded) !=
+            DL_FLASHCTL_COMMAND_STATUS_PASSED) {
+            result = BOOT_FLASH_ERR_VERIFY;
+            goto release;
+        }
+    }
+
+    result = BOOT_FLASH_OK;
+
+release:
+    if (DL_FlashCTL_releaseFlashSemaphore() != DL_FLASH_SUCCESS) {
+        result = BOOT_FLASH_ERR_DRIVER;
+    }
+
+out:
+    __set_PRIMASK(primask);
+    return result;
+}
+
 boot_flash_status_t boot_flash_erase_sector(uint32_t address)
 {
     bool bank0;
@@ -90,12 +256,8 @@ boot_flash_status_t boot_flash_erase_sector(uint32_t address)
         return status;
     }
 
-    /*
-     * Boot executes from Bank0. Do not call the normal DL_Flash_* path for
-     * active-bank P/E; a complete RAM-resident transaction will be added next.
-     */
     if (bank0) {
-        return BOOT_FLASH_ERR_ACTIVE_BANK;
+        return boot_flash_bank0_erase_sector(address);
     }
 
     return (DL_Flash_eraseSector(address) == DL_FLASH_SUCCESS)
@@ -128,7 +290,7 @@ boot_flash_status_t boot_flash_program(
     }
 
     if (bank0) {
-        return BOOT_FLASH_ERR_ACTIVE_BANK;
+        return boot_flash_bank0_program(address, data, size);
     }
 
     return (DL_Flash_program(address, (uint8_t *)(uintptr_t)data, size) ==
