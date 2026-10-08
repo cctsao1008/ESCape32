@@ -60,8 +60,8 @@ static void all_cli_parameter_reads(void)
         int prefix_len = snprintf(prefix, sizeof prefix, "%s: ", name);
         assert(prefix_len > 0 && prefix_len < (int)sizeof prefix);
         if (strncmp(response, prefix, (size_t)prefix_len) ||
-            n < 4 || strcmp(response + n - 3, "OK\\n")) {
-            fprintf(stderr, "CLI read failed id=%u name=%s reply=%s\\n",
+            n < 4 || strcmp(response + n - 3, "OK\n")) {
+            fprintf(stderr, "CLI read failed id=%u name=%s reply=%s\n",
                     id, name, response);
             assert(0);
         }
@@ -75,7 +75,7 @@ static void all_crsf_parameter_reads(void)
         const char frame[5] = {(char)0x2c, 0, 1, (char)(id + 1), 0};
         int n = execcrsfcmd(frame, sizeof frame, (char *)response);
         if (n <= 6 || response[0] != 0x2b || response[3] != id + 1) {
-            fprintf(stderr, "CRSF read failed id=%u n=%d\\n", id, n);
+            fprintf(stderr, "CRSF read failed id=%u n=%d\n", id, n);
             assert(0);
         }
     }
