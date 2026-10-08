@@ -8,7 +8,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include "core_cm33.h"
+#include "soc.h"
 #include "e62_flash_layout.h"
 
 __attribute__((noinline))
