@@ -472,6 +472,64 @@ void hw_motor_commit_update(void)
     DL_MCPWM_setGlobalLoadOneShotLatch(ESCAPE32_AM13E_MCPWM_INST);
 }
 
+
+/*
+ * FW1 runtime control (not a build-only probe).
+ * Call after the product SysConfig has configured MCPWM0 clocks, pinmux,
+ * trip-zone and gate-driver polarity. A validated board-level enable signal
+ * remains platform-owned; this API does not assume PB13 polarity.
+ */
+static inline __attribute__((always_inline))
+bool hw_motor_am13e_runtime_start(uint16_t period, uint16_t dead_time_ticks,
+                                  uint16_t duty)
+{
+    if (period < 2U || duty >= period) return false;
+    DL_MCPWM_disableTBCLK();
+    DL_MCPWM_setTimeBaseCounterMode(ESCAPE32_AM13E_MCPWM_INST,
+                                    DL_MCPWM_COUNTER_MODE_STOP_FREEZE);
+    hw_motor_am13e_force_all_float();
+    hw_motor_am13e_configure_split_deadband(dead_time_ticks);
+    hw_motor_am13e_prepare_pwm_carriers_active();
+    DL_MCPWM_setTimeBasePeriodActive(ESCAPE32_AM13E_MCPWM_INST, period);
+    DL_MCPWM_setTimeBasePeriodShadow(ESCAPE32_AM13E_MCPWM_INST, period);
+    DL_MCPWM_setTimeBaseCounter(ESCAPE32_AM13E_MCPWM_INST, 0U);
+    const DL_MCPWM_COUNTER_COMPARE_MODULE cmp[] = {
+        DL_MCPWM_COUNTER_COMPARE_1A, DL_MCPWM_COUNTER_COMPARE_1B,
+        DL_MCPWM_COUNTER_COMPARE_2A, DL_MCPWM_COUNTER_COMPARE_2B,
+        DL_MCPWM_COUNTER_COMPARE_3A, DL_MCPWM_COUNTER_COMPARE_3B
+    };
+    for (unsigned i = 0; i < 6; i++) {
+        DL_MCPWM_setCounterCompareActiveValue(
+            ESCAPE32_AM13E_MCPWM_INST, cmp[i], duty);
+        DL_MCPWM_setCounterCompareShadowValue(
+            ESCAPE32_AM13E_MCPWM_INST, cmp[i], duty);
+    }
+    DL_MCPWM_setTimeBaseCounterMode(ESCAPE32_AM13E_MCPWM_INST,
+                                    DL_MCPWM_COUNTER_MODE_UP);
+    DL_MCPWM_enableTBCLK();
+    return true;
+}
+
+static inline __attribute__((always_inline))
+bool hw_motor_am13e_runtime_commutate(unsigned positive, unsigned negative,
+                                      bool damp)
+{
+    am13e_commutation_plan_t plan;
+    if (!am13e_commutation_plan(positive, negative, damp, &plan))
+        return false;
+    hw_motor_am13e_apply_six_step_force_probe(
+        plan.positive_mask, plan.negative_mask, plan.damp);
+    return true;
+}
+
+static inline __attribute__((always_inline))
+void hw_motor_am13e_runtime_stop(void)
+{
+    hw_motor_am13e_force_all_float();
+    DL_MCPWM_setTimeBaseCounterMode(ESCAPE32_AM13E_MCPWM_INST,
+                                    DL_MCPWM_COUNTER_MODE_STOP_FREEZE);
+}
+
 /*
  * Deliberate compile-time stops for semantics that are not validated yet.
  * These macros only fire when a caller tries to use the unfinished operation.
