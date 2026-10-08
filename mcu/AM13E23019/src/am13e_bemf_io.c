@@ -3,11 +3,11 @@
 #include "dl_ecap.h"
 #include "dl_timerg.h"
 
-static am13e_rel17_capture_callback_t on_capture;
-static am13e_rel17_due_callback_t on_due;
+static am13e_bemf_capture_callback_t on_capture;
+static am13e_bemf_due_callback_t on_due;
 
-bool am13e_bemf_bind(am13e_rel17_capture_callback_t capture,
-                          am13e_rel17_due_callback_t due)
+bool am13e_bemf_bind(am13e_bemf_capture_callback_t capture,
+                          am13e_bemf_due_callback_t due)
 {
     if (!capture || !due) return false;
     on_capture = capture;
