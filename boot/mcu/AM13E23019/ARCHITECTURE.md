@@ -15,6 +15,9 @@ Reset / startup
      v
 boot/mcu/AM13E23019/src/main.c
      |
+     +--> boot_platform
+     |      deterministic SYSOSC 32-MHz Boot clock basis
+     |
      +--> boot_request
      |      application -> boot one-shot request
      |
@@ -99,17 +102,15 @@ External service line
         |
 PB14 / GPIO46
         |
-  +-----+------+
-  |            |
- RX           TX
-  |            |
-INPUTXBAR     timed GPIO / timer / DMA
-  |
-eCAP / TIMG candidate
+polling software UART
+        |
+SysTick timing @ deterministic 32-MHz SYSOSC
 ~~~
 
-Peripheral selection inside this block is detailed design. PB14 itself is not
-an optional transport selector in this port.
+The Boot service link is 38400 baud, 8N1, LSB-first, idle-high, with a
+500-ms receive timeout. This is intentionally simpler than the application
+runtime DShot/BiDShot timing path; PB14 remains the shared physical pin, but
+Boot does not need to reuse the runtime eCAP/DMA implementation.
 
 boot_request.c owns the application-to-Boot one-shot request contract.
 
@@ -177,8 +178,10 @@ Boot clears request
 PB14 programming/service mode
 ~~~
 
-The retained storage location, magic/complement format, and reset-cause handling
-remain implementation details.
+The retained request encoding now uses SYSCTL SHUTDNSTORE0..3 with
+magic/complement and reason/complement bytes. SHUTDNSTORE is retained across
+SYSRST, and Boot clears a valid request before entering the service path to
+preserve one-shot behavior.
 
 ## 5. Image Validity
 
@@ -216,28 +219,25 @@ ESC_CMD / PWM_IN / DSHOT_BIDIR / SERVICE
     -> PB14 / GPIO46
 ~~~
 
-Detailed implementation remains open:
+Current Boot implementation:
 
 ~~~text
 RX:
-    configure PB14 input
-    route through INPUTXBAR
-    capture bit timing using selected timing peripheral
-    decode service bytes
-    enforce bounded timeout
+    PB14 GPIO input + pull-up
+    wait for start-bit low with 500-ms timeout
+    sample start/data/stop bits using SysTick delays
 
 TX:
-    acquire line without contention
-    emit deterministic service-byte waveform
-    wait through final stop bit
-    release line to RX/high-impedance
-
-RX/TX turnaround:
-    preserve external bidirectional-interface requirements
+    preload idle-high
+    enable PB14 GPIO output
+    emit start + 8 data + stop bits
+    release back to input after final stop bit
 ~~~
 
-The boot protocol does not depend on whether RX is ultimately implemented with
-eCAP, TIMG, GPIO sampling, DMA, or another validated AM13 mechanism.
+The implementation follows the proven E61-TI software-UART approach but uses
+the AM13 reset-default 32-MHz SYSOSC and SysTick as the Boot timing base.
+Electrical-level behavior and baud/timing margin still require E62 hardware
+validation.
 
 ## 7. Flash Update Flow
 
@@ -271,9 +271,10 @@ transaction path. It does not create a product-level partition or update mode.
 | MAIN Flash non-conflicting P/E path | Implemented / build PASS |
 | MAIN Flash same-bank RAM P/E path | Implemented / static placement PASS |
 | Flash verify | Implemented / build PASS |
+| Boot platform / deterministic 32-MHz clock basis | Implemented / HW-Pend |
 | PB14 physical module boundary | Implemented |
-| PB14 RX/TX timing | Pseudocode |
-| Boot-entry retained request | Pseudocode |
+| PB14 38400-baud RX/TX timing | Implemented / HW-Pend |
+| Boot-entry retained request | Implemented / HW-Pend |
 | Image header / CRC / valid record | Pseudocode |
 | Flash protection policy | Detailed design |
 | Optional Boot self-update | Deferred |
