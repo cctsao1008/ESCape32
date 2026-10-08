@@ -99,7 +99,9 @@ void boot_protocol_run(const boot_protocol_ops_t *ops)
 
         case BOOT_CMD_UPDATE:
             if (ops->handle_update != NULL) {
-                ops->handle_update();
+                if (ops->handle_update()) {
+                    goto try_app;
+                }
             } else {
                 ops->send_value(BOOT_RES_ERROR);
             }
