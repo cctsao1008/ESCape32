@@ -2,6 +2,7 @@
 set(TARGET am13e23019_boot)
 set(TI_SDK_CONFIG ti_sdk_cfg_default)
 set(BOOT_DIR ${CMAKE_CURRENT_LIST_DIR})
+set(BOOT_COMMON_DIR ${CMAKE_CURRENT_LIST_DIR}/../../src)
 set(PLATFORM_DIR ${CMAKE_CURRENT_LIST_DIR}/../../../mcu/AM13E23019)
 
 if(TARGET ${TARGET})
@@ -17,11 +18,13 @@ add_executable(${TARGET})
 target_sources(${TARGET} PRIVATE
     ${BOOT_DIR}/src/main.c
     ${BOOT_DIR}/src/boot_flash.c
+    ${BOOT_COMMON_DIR}/protocol.c
 )
 
 target_include_directories(${TARGET} PRIVATE
     ${BOOT_DIR}
     ${BOOT_DIR}/src
+    ${BOOT_COMMON_DIR}
     ${PLATFORM_DIR}
 )
 
