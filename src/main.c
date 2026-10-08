@@ -641,9 +641,6 @@ void main(void) {
 #else
 	if (cfg.arm || (csr & RCC_CSR_WWDGRSTF)) { // Arming required
 	rearm:
-#if defined(ESCAPE32_AM13E)
-#error "E62 hardware port required: 250ms arming interval"
-#else
 		TIM6_PSC = CLK_KHZ / 10 - 1; // 0.1ms resolution
 		TIM6_ARR = 2499; // 250ms
 		TIM6_CR1 = TIM_CR1_URS;
@@ -661,7 +658,6 @@ void main(void) {
 		rearm = 0;
 		TIM6_CR1 = 0;
 		playmusic(hall ? "G_GC" : "GC", cfg.volume);
-#endif /* ESCAPE32_AM13E */
 	}
 #endif /* ESCAPE32_AM13E: startup arming policy */
 #endif
