@@ -356,11 +356,12 @@ static int test_packed_image_transaction(const char *filename) {
     }
     CHECK(packed[0] == 0xea && packed[1] == 0x32);
     CHECK(boot_am13e_test_first != AM13E_IMAGE_APP_BASE);
-    CHECK((uint32_t)packed[AM13E_IMAGE_HEADER_OFFSET + 12U] |
-          ((uint32_t)packed[AM13E_IMAGE_HEADER_OFFSET + 13U] << 8) |
-          ((uint32_t)packed[AM13E_IMAGE_HEADER_OFFSET + 14U] << 16) |
-          ((uint32_t)packed[AM13E_IMAGE_HEADER_OFFSET + 15U] << 24)
-          == (uint32_t)file_size);
+    const uint32_t declared_length =
+        (uint32_t)packed[AM13E_IMAGE_HEADER_OFFSET + 12U] |
+        ((uint32_t)packed[AM13E_IMAGE_HEADER_OFFSET + 13U] << 8) |
+        ((uint32_t)packed[AM13E_IMAGE_HEADER_OFFSET + 14U] << 16) |
+        ((uint32_t)packed[AM13E_IMAGE_HEADER_OFFSET + 15U] << 24);
+    CHECK(declared_length == (uint32_t)file_size);
 
     memset((void *)boot_am13e_test_first, 0xff,
            (size_t)(boot_am13e_test_end - boot_am13e_test_first));
