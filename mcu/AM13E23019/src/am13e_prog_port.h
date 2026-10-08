@@ -3,15 +3,19 @@
  */
 #pragma once
 #include <stddef.h>
+#include <string.h>
 #include <stdint.h>
 #include "esc_types.h"
 #include "esc_config.h"
 #include "esc_config_defaults.h"
 
+/* CFG_MAP CRSF serialization uses the canonical rel17 parameter defaults. */
 extern Cfg cfg;
 extern int throt, erpm, temp1, temp2, volt, curr, csum, beepval;
 extern char analog, telphid, rearm;
 
+int execcmd(char *str);
+int execcrsfcmd(const char *buf, int len, char *res);
 int savecfg(void);
 int resetcfg(void);
 int playmusic(const char *music, int volume);
