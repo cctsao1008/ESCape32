@@ -37,7 +37,9 @@ function(add_target_am13e name)
         "${CMAKE_CURRENT_SOURCE_DIR}/src/esc_param_access.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/prog.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/main.c"
-        "${platform}/src/am13e_bemf_events.c"
+        # The diagnostic bring-up event engine owns its own BEMF state.
+        # The actual rel17 firmware must NOT link that second policy.
+        "${platform}/src/am13e_rel17_bemf_io.c"
         "${platform}/src/am13e_timg12.c"
         "${platform}/src/am13e_irq.c"
         ${generated})
