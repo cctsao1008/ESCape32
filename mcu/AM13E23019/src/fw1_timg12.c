@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include "dl_timerg.h"
 #include "fw1_bemf_events.h"
+#include "fw1_timg12.h"
 
 void fw1_timg12_init(void)
 {
