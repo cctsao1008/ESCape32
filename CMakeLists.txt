@@ -21,7 +21,7 @@ add_compile_options(-ffreestanding -ffunction-sections -fdata-sections -fsingle-
 add_link_options(-nostartfiles -Wl,--gc-sections)
 
 # TI AM13E is an independent platform. This stage establishes the native
-# E62 compile target; the executable/linker integration follows the C/H port.
+# AM13E compile target; the executable/linker integration follows the C/H port.
 # Keep the original legacy add_target() implementation untouched.
 function(add_target_ti_am13e name)
     set(AM13E_SDK_ROOT "$ENV{AM13E_SDK_ROOT}" CACHE PATH "TI AM13E SDK root")
@@ -147,5 +147,5 @@ add_target(TMOTOR3 STM32G071 DEAD_TIME=35 COMP_MAP=231 IO_PA6)
 add_target(TMOTOR4 STM32G071 DEAD_TIME=35 COMP_MAP=123)
 add_target(VWING1 STM32G071 DEAD_TIME=35 COMP_MAP=123 SENS_MAP=0xA5A4 VOLT_MUL=110 CURR_MUL=40 BEC_MAP=0xB35 BEC_MIN=1 LED_WS2812 LED_STAT IO_PA2 IO_AUX)
 
-# E62: TI AM13E23019 port, compiled separately from legacy MCU targets.
-add_target(E62 TI_AM13E)
+# TI AM13E23019 generic application target.
+add_target(AM13E TI_AM13E)
