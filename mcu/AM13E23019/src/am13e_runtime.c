@@ -29,7 +29,7 @@ static void am13e_apply_debug_sector(uint32_t step)
 {
     const hw_six_step_t phase = hw_six_step_decode(step, 0U);
     (void)hw_motor_am13e_runtime_commutate(
-        phase.positive, phase.negative, true);
+        phase.positive & 7U, phase.negative & 7U, true);
 }
 
 static void am13e_next_commutation(void)
