@@ -14,8 +14,10 @@ void init(void) {
     if (DL_SYSCTL_getMCLKSource() != DL_SYSCTL_MCLK_SOURCE_SYSOSC)
         for (;;) {}
 
-    if (DL_SYSCTL_getClockStatus() &
-        (DL_SYSCTL_CLK_STATUS_SYSOSC_4MHZ |
-         DL_SYSCTL_CLK_STATUS_SYSOSC_USERTRIM_FREQ))
+    /* The SDK exposes SYSOSC frequency through the CLKSTATUS bitfield.
+     * Check the complete field rather than the unavailable USERTRIM token.
+     */
+    if ((DL_SYSCTL_getClockStatus() & SYSCTL_CLKSTATUS_SYSOSCFREQ_MASK) !=
+        SYSCTL_CLKSTATUS_SYSOSCFREQ_SYSOSC32M)
         for (;;) {}
 }
