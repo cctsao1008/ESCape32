@@ -39,22 +39,22 @@ function(add_target_ti_am13e name)
     # dead time, comparator routing or output-enable values are fabricated.
     if(name MATCHES "^BOOT")
         set(am13e_sources
-            boot/src/main.c
-            boot/src/io.c
-            boot/src/util.c)
-        set(am13e_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/boot/src")
+            "${PROJECT_SOURCE_DIR}/boot/src/main.c"
+            "${PROJECT_SOURCE_DIR}/boot/src/io.c"
+            "${PROJECT_SOURCE_DIR}/boot/src/util.c")
+        set(am13e_source_dir "${PROJECT_SOURCE_DIR}/boot/src")
     else()
         set(am13e_sources
-            src/main.c
-            src/io.c
-            src/telem.c
-            src/util.c
-            src/prog.c)
-        set(am13e_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/src")
+            "${PROJECT_SOURCE_DIR}/src/main.c"
+            "${PROJECT_SOURCE_DIR}/src/io.c"
+            "${PROJECT_SOURCE_DIR}/src/telem.c"
+            "${PROJECT_SOURCE_DIR}/src/util.c"
+            "${PROJECT_SOURCE_DIR}/src/prog.c")
+        set(am13e_source_dir "${PROJECT_SOURCE_DIR}/src")
     endif()
     add_library(${name} OBJECT ${am13e_sources})
     target_compile_definitions(${name} PRIVATE
-        AM13E TARGET_NAME="${name}"
+        AM13E TARGET_NAME="${name}" ${ARGN}
         __DEVICE_SHORT__="am13e230x" __DEVICE_LONG__="AM13E230x"
         __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
     target_compile_options(${name} PRIVATE
@@ -73,7 +73,7 @@ endfunction()
 
 function(add_target name mcu)
     if(mcu STREQUAL "AM13E")
-        add_target_ti_am13e(${name})
+        add_target_ti_am13e(${name} ${ARGN})
         return()
     endif()
 	include(mcu/${mcu}/config.cmake)
