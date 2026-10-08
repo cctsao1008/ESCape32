@@ -1,172 +1,93 @@
-# AM13E Host Flash Transaction Validation
+# E62 / AM13E Host Validation
 
-## Portable image contract validator (Stage A)
+## Stage B: production image integrity integration
 
-The new `boot/mcu/AM13E/image_integrity.c` is a standalone, non-hardware
-validator built under native CMake/CTest. It reuses the **previous E62
-header fields and CRC-32/ISO-HDLC algorithm**, while intentionally following
-the **v2 memory layout**:
+The current `am13e-port-v2` build links the **same portable validator**
+(`boot/mcu/AM13E/image_integrity.c`) into all three relevant paths:
 
-- signature at APP+0 (`0x6000`);
-- header at APP+0x100 (`0x6100`);
-- M33 vectors at APP+0x800 (`0x6800`);
-- length limited to 256 KiB by the currently implemented block-addressing
-  command, not by the physical 488 KiB application partition;
-- CRC includes the signature and application data, excluding the 32-byte
-  metadata header. Before the signature is committed, validation can use
-  the 16-byte RAM-staged prefix.
+1. Host validator fixture (`am13e_image_validator`): validates the header,
+   signature, M33 vector, length and CRC-32/ISO-HDLC.
+2. Real AM13E `flash.c` (`am13e_flash_transaction`): after ordered blocks
+   2..N and final metadata blocks 0 and 1 are programmed and verified, the
+   16-byte signature remains in SRAM. The backend validates the complete
+   image with the staged 16-byte prefix and requires the header length
+   to **exactly match the number of bytes delivered by this transaction**
+   before committing signature.
+3. Real AM13E `app.c`: cold boot / application handoff must pass the
+   *committed-image* CRC check before executing the Cortex-M33 application.
 
-This validator is **not yet connected to the production finalize or
-application launch paths**. The existing negative image-integrity gate remains
-RED. Do not send a vector-first E62 v1 image to a v2 bootloader.
+The formerly RED `am13e_image_integrity_gate` is now a **mandatory CTest**
+with three checks: early finalization with missing data; early finalization
+when stale Flash bytes make CRC appear valid but the transfer is incomplete;
+and a full-length transfer with corrupted content. Each must leave the
+application signature invalid.
 
-Run the Stage A validator alongside the unchanged transaction regression:
+## Build commands
+
+Run in WSL, from the repository root:
 
 ```bash
+git switch am13e-port-v2
+git pull --ff-only
+
+cmake --build build-am13e --target BOOT5_PB14.elf -j"$(nproc)"
+
 cmake -S boot/tests/am13e_host -B build-am13e-host-tests \
-  -DCMAKE_C_COMPILER=gcc -DAM13E_ENABLE_IMAGE_INTEGRITY_GATE=OFF
-cmake --build build-am13e-host-tests -j
-ctest --test-dir build-am13e-host-tests \
-  -R '^(am13e_flash_transaction|am13e_image_validator)
-## Scope
-
-The native-GCC harness compiles the production `boot/mcu/AM13E/flash.c` with
-`AM13E_FLASH_TEST` and substitutes Flash DriverLib/CMSIS operations. It verifies
-software transaction behavior, **not** AM13E Flash Controller hardware semantics.
-
-The 10 ordinary transaction tests cover invalidation, ordered writes, retries,
-short tails, signature deferral, erase/program faults, and two simulated
-volatile-state resets. A reset in this suite leaves the emulated Flash memory
-intact; this is not an MCU power-cycle test.
-
-## Green regression gate
-
-From the repository root:
-
-```bash
-cmake -S boot/tests/am13e_host -B build-am13e-host-tests -DCMAKE_C_COMPILER=gcc \
-  -DAM13E_ENABLE_IMAGE_INTEGRITY_GATE=OFF
-cmake --build build-am13e-host-tests -j
+  -DCMAKE_C_COMPILER=gcc
+cmake --build build-am13e-host-tests -j"$(nproc)"
 ctest --test-dir build-am13e-host-tests --output-on-failure -V
 ```
 
-This runs **10 transaction checks in one CTest executable**.
+Use `&&` between build and CTest when running as one compound shell command;
+otherwise CTest could still run a previously built executable after a
+compilation error.
 
-## Known-open integrity gate (opt-in, expected RED)
+CTest targets:
+- `am13e_flash_transaction`: 10 normal/fault/reset transaction cases;
+- `am13e_image_validator`: 9 standalone image/CRC cases;
+- `am13e_image_integrity_gate`: 3 negative end-to-end finalize conditions.
 
-The current implementation can restore the legacy `0x32EA` signature after
-only one data block because there is no authoritative image length and
-whole-image CRC check before metadata finalization.
+No additional shell-based build workflow is needed.
 
-A separate negative regression gate demonstrates this *contract gap* using a
-synthetic image for which more data blocks are expected. The current
-implementation cannot distinguish this truncated transfer from a legitimately
-short image. It is intentionally **not part of the green regression suite**.
+## Image contract — **v2**, not the old vector-first .e62.bin
 
-```bash
-cmake -S boot/tests/am13e_host -B build-am13e-host-tests -DCMAKE_C_COMPILER=gcc \
-  -DAM13E_ENABLE_IMAGE_INTEGRITY_GATE=ON
-cmake --build build-am13e-host-tests -j
-ctest --test-dir build-am13e-host-tests -R '^am13e_image_integrity_gate$' \
-  --output-on-failure -V
-```
+- APP base = `0x6000`.
+- ESCape32 legacy signature (`0x32EA`, little endian) = APP + 0.
+- E62 32-byte header = APP + `0x100`.
+- Cortex-M33 initial MSP + Reset Handler = APP + `0x800`.
+- Header layout uses E62 v1's magic/version/target/length/CRC/flags
+  field definitions, but **the placement of vectors differs**.
+- Header CRC = first 28 bytes of the header.
+- Image CRC = image bytes `[0,image_length)`, excluding the 32-byte
+  header at offset `0x100`; the CRC *includes* the eventual signature,
+  supplied from SRAM for the precommit check.
+- CRC-32/ISO-HDLC: reflected polynomial `0xEDB88320`, init/xorout
+  `0xFFFFFFFF`.
+- Length must be 16-byte aligned and no more than 256 KiB, imposed
+  by the current 8-bit / 1 KiB protocol address space. This is distinct
+  from the physical 488 KiB APP partition.
+- Legacy signature-last transactions: invalidate 0/1, write blocks 2..N
+  sequentially, restore metadata blocks 0 and then 1; `0x32EA` only
+  becomes visible after successful whole-image verification.
 
-A failing integrity gate is evidence of an unresolved safety requirement,
-**not** a new compiler failure or a failure of the 10 transaction tests.
-Disable it afterward with
-`cmake -S boot/tests/am13e_host -B build-am13e-host-tests -DAM13E_ENABLE_IMAGE_INTEGRITY_GATE=OFF`.
+An earlier E62 image with vectors at `0x6000`, header at `0x6100`
+**cannot** be installed as a v2 boot image unchanged. A compatible v2
+application linker and packager are still required.
 
-## Image-contract decisions required
+## Qualification limits
 
-1. **Format conflict:** the current v2 bootloader checks `0x32EA` at
-   `__app_flash_start__` and expects the vector table one 2 KiB sector later.
-   Earlier E62 packed-image logs specify vector at `0x6000` and E62 header at
-   `0x6100`. Do not claim these images are interchangeable.
-2. **Address span:** `flash_range.c` limits the protocol block number to
-   0..255 in 1 KiB units (256 KiB addressable by the current command).
-   The previously planned E62 application partition is larger (488 KiB).
-   Decide whether to constrain the image or extend addressing without
-   changing legacy targets.
-3. **Integrity:** define an authoritative image length, CRC algorithm,
-   protected byte span, metadata placement, commit conditions, and packager/host
-   agreement before accepting any signature-based update as production-safe.
-4. **Hardware:** confirm 2 KiB erase / 16-byte program / ECC / RAM execution,
-   actual reset and UART protocol on AM13E23019.
+- Host tests run the production `flash.c` and `image_integrity.c`
+  with a RAM-backed Mock DriverLib. They do not simulate Flash ECC,
+  Bank0 active-bank command safety, RAM ISR behavior, reset/power-cycle
+  electrical effects or PB14 UART timing.
+- CRC protects against accidental truncation/corruption, **not**
+  malicious or unauthorized firmware; it is not a digital signature.
+- In-place single-bank programming can erase the old application at
+  session start. A failed transfer requires Boot recovery; it cannot
+  guarantee old-image rollback.
+- Real firmware artifact + image packer interoperability,
+  16-byte Flash programming with ECC, and actual hardware power-loss
+  testing remain open gates.
 
-Do not reinterpret Host Test PASS as Hardware or Image Integrity PASS.
- --output-on-failure -V
-```
-
-**Next integration gate:** once standalone validator tests pass, wire it into
-the v2 signature-last finalization and cold-boot application validation.
-Update the transaction fixtures to contain valid E62 metadata and test early
-finalize, CRC corruption, partial transfers, and restart. An updated v2 image
-packer will be required before hardware image installation.
-
-
-## Scope
-
-The native-GCC harness compiles the production `boot/mcu/AM13E/flash.c` with
-`AM13E_FLASH_TEST` and substitutes Flash DriverLib/CMSIS operations. It verifies
-software transaction behavior, **not** AM13E Flash Controller hardware semantics.
-
-The 10 ordinary transaction tests cover invalidation, ordered writes, retries,
-short tails, signature deferral, erase/program faults, and two simulated
-volatile-state resets. A reset in this suite leaves the emulated Flash memory
-intact; this is not an MCU power-cycle test.
-
-## Green regression gate
-
-From the repository root:
-
-```bash
-cmake -S boot/tests/am13e_host -B build-am13e-host-tests -DCMAKE_C_COMPILER=gcc \
-  -DAM13E_ENABLE_IMAGE_INTEGRITY_GATE=OFF
-cmake --build build-am13e-host-tests -j
-ctest --test-dir build-am13e-host-tests --output-on-failure -V
-```
-
-This runs **10 transaction checks in one CTest executable**.
-
-## Known-open integrity gate (opt-in, expected RED)
-
-The current implementation can restore the legacy `0x32EA` signature after
-only one data block because there is no authoritative image length and
-whole-image CRC check before metadata finalization.
-
-A separate negative regression gate demonstrates this *contract gap* using a
-synthetic image for which more data blocks are expected. The current
-implementation cannot distinguish this truncated transfer from a legitimately
-short image. It is intentionally **not part of the green regression suite**.
-
-```bash
-cmake -S boot/tests/am13e_host -B build-am13e-host-tests -DCMAKE_C_COMPILER=gcc \
-  -DAM13E_ENABLE_IMAGE_INTEGRITY_GATE=ON
-cmake --build build-am13e-host-tests -j
-ctest --test-dir build-am13e-host-tests -R '^am13e_image_integrity_gate$' \
-  --output-on-failure -V
-```
-
-A failing integrity gate is evidence of an unresolved safety requirement,
-**not** a new compiler failure or a failure of the 10 transaction tests.
-Disable it afterward with
-`cmake -S boot/tests/am13e_host -B build-am13e-host-tests -DAM13E_ENABLE_IMAGE_INTEGRITY_GATE=OFF`.
-
-## Image-contract decisions required
-
-1. **Format conflict:** the current v2 bootloader checks `0x32EA` at
-   `__app_flash_start__` and expects the vector table one 2 KiB sector later.
-   Earlier E62 packed-image logs specify vector at `0x6000` and E62 header at
-   `0x6100`. Do not claim these images are interchangeable.
-2. **Address span:** `flash_range.c` limits the protocol block number to
-   0..255 in 1 KiB units (256 KiB addressable by the current command).
-   The previously planned E62 application partition is larger (488 KiB).
-   Decide whether to constrain the image or extend addressing without
-   changing legacy targets.
-3. **Integrity:** define an authoritative image length, CRC algorithm,
-   protected byte span, metadata placement, commit conditions, and packager/host
-   agreement before accepting any signature-based update as production-safe.
-4. **Hardware:** confirm 2 KiB erase / 16-byte program / ECC / RAM execution,
-   actual reset and UART protocol on AM13E23019.
-
-Do not reinterpret Host Test PASS as Hardware or Image Integrity PASS.
+Do not claim Hardware Bring-up or End-to-End Firmware Update PASS on
+the basis of these native-GCC tests.
