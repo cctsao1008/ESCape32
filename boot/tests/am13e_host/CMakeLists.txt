@@ -49,3 +49,18 @@ add_test(NAME am13e_image_integrity_gate
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 add_test(NAME am13e_image_packer
     COMMAND "${Python3_EXECUTABLE}" "${REPO_ROOT}/boot/tests/am13e_image_packer_test.py")
+
+# Stage C3 is optional because the ARM-linked smoke image lives in a
+# separate CMake build directory, not in this native-GCC CTest tree.
+# Pass the actual absolute path. Never silently regenerate a synthetic image.
+set(AM13E_HOST_PACKED_IMAGE "" CACHE FILEPATH
+    "Real ARM ELF-derived E62 v2 packed image for transaction verification")
+if(AM13E_HOST_PACKED_IMAGE)
+    if(NOT EXISTS "${AM13E_HOST_PACKED_IMAGE}")
+        message(FATAL_ERROR
+            "AM13E_HOST_PACKED_IMAGE does not exist: ${AM13E_HOST_PACKED_IMAGE}")
+    endif()
+    add_test(NAME am13e_linked_image_transaction
+        COMMAND am13e_flash_transaction_test
+            --flash-image "${AM13E_HOST_PACKED_IMAGE}")
+endif()
