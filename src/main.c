@@ -126,8 +126,12 @@ static int getcode(void) {
 
 static void nextstep(void) {
 	if (sine) { // Sine startup
+#if defined(ESCAPE32_AM13E)
+#error "E62 hardware port required: sine startup timer"
+#else
 		TIM_ARR(IFTIM) = IFTIM_OCR = sine;
 		TIM_EGR(IFTIM) = TIM_EGR_UG;
+#endif /* ESCAPE32_AM13E */
 		if (!prep && step) step = step * 60 - 59; // Switch over from 6-step
 		if (reverse) {
 			if (--step < 1) step = 360;
@@ -151,8 +155,12 @@ static void nextstep(void) {
 		if (prep) return;
 		hw_motor_sine_enable_outputs();
 		hw_motor_commit_update();
+#if defined(ESCAPE32_AM13E)
+#error "E62 hardware port required: sine BEMF disable"
+#else
 		TIM_DIER(IFTIM) = 0;
 		compctl(0);
+#endif /* ESCAPE32_AM13E */
 		sync = 0;
 		prep = 1;
 		return;
@@ -192,6 +200,9 @@ static void nextstep(void) {
 		val = ival;
 		cnt = 0;
 	}
+#if defined(ESCAPE32_AM13E)
+#error "E62 hardware port required: comparator and eCAP rearm"
+#else
 	if (ertm < 100) { // 600K+ ERPM
 #ifdef TIM1_CCR5
 		TIM1_CCR5 = 0;
@@ -235,6 +246,7 @@ static void nextstep(void) {
 	}
 	TIM_SR(IFTIM) = 0; // Clear BEMF events before enabling interrupts
 	TIM_DIER(IFTIM) = TIM_DIER_UIE | IFTIM_ICIE;
+#endif /* ESCAPE32_AM13E */
 	buf[step - 1] = hall > 4000 ? hall << IFTIM_XRES : ival;
 	if (sync < 6) return;
 	ertm = (buf[0] + buf[1] + buf[2] + buf[3] + buf[4] + buf[5]) >> (IFTIM_XRES + 1); // Electrical revolution time (us)
@@ -260,6 +272,7 @@ static void laststep(void) {
 	step = 0;
 }
 
+#if !defined(ESCAPE32_AM13E)
 void tim1_com_isr(void) {
 	if (!(TIM1_DIER & TIM_DIER_COMIE)) return;
 #if !defined STM32G4 && !defined AT32F4
@@ -281,6 +294,7 @@ void tim1_com_isr(void) {
 	TIM1_SR = ~TIM_SR_COMIF;
 	nextstep();
 }
+#endif /* legacy TIM1 COM ISR */
 
 #ifdef ESCAPE32_AM13E
 /* The E62 capture IRQ delivers eCAP ticks. Normalize to 1-MHz rel17
@@ -449,6 +463,9 @@ void pend_sv_handler(void) {
 
 void hard_fault_handler(void) {
 	ledctl(1); // Indicate error
+#if defined(ESCAPE32_AM13E)
+#error "E62 hardware port required: fault shutdown watchdog"
+#else
 	TIM1_EGR = TIM_EGR_BG;
 	TIM6_PSC = CLK_KHZ / 10 - 1; // 0.1ms resolution
 	TIM6_ARR = 9999;
@@ -457,11 +474,16 @@ void hard_fault_handler(void) {
 	TIM6_CR1 = TIM_CR1_CEN | TIM_CR1_OPM;
 	while (TIM6_CR1 & TIM_CR1_CEN); // Wait for 1s
 	WWDG_CR = WWDG_CR_WDGA; // Trigger watchdog reset
+#endif /* ESCAPE32_AM13E */
 	for (;;); // Never return
 }
 
 static void delayf(void) {
+#if defined(ESCAPE32_AM13E)
+#error "E62 hardware port required: arming timer refresh"
+#else
 	TIM6_EGR = TIM_EGR_UG; // Reset arming timeout
+#endif /* ESCAPE32_AM13E */
 }
 
 static void beep(void) {
@@ -537,6 +559,9 @@ void main(void) {
 #ifndef ANALOG
 	initio();
 #endif
+#if defined(ESCAPE32_AM13E)
+#error "E62 hardware port required: MCPWM/BEMF initialization"
+#else
 	TIM1_BDTR = TIM_DTG | TIM_BDTR_OSSR | TIM_BDTR_MOE;
 	TIM1_ARR = CLK_KHZ / 24 - 1;
 	TIM1_CR1 = TIM_CR1_CEN | TIM_CR1_ARPE;
@@ -550,6 +575,7 @@ void main(void) {
 	TIM_CR1(IFTIM) = TIM_CR1_URS;
 	TIM_EGR(IFTIM) = TIM_EGR_UG;
 	TIM_CR1(IFTIM) = TIM_CR1_CEN | TIM_CR1_ARPE | TIM_CR1_URS;
+#endif /* ESCAPE32_AM13E */
 #ifdef HALL_MAP
 	if (!brushed && getcode() != 7) { // Hybrid mode
 		TIM3_CCMR1 = TIM_CCMR1_CC1S_IN_TRC | TIM_CCMR1_IC1F_DTF_DIV_8_N_8;
