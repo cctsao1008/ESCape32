@@ -30,6 +30,8 @@ REGION_ALIAS("REGION_ARM_EXTAB", FLASH_IMAGE);
 
 __boot_flash_start__ = ORIGIN(FLASH_IMAGE);
 __boot_flash_end__ = ORIGIN(FLASH_IMAGE) + LENGTH(FLASH_IMAGE);
+/* Reference AM13E23019 512 KiB main Flash limit; board-qualified only. */
+__boot_storage_end__ = 0x00080000;
 
 SECTIONS
 {
