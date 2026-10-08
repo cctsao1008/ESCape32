@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include "rel17_prog_host_shim.h"
+#include "esc_param_metadata.h"
 
 Cfg cfg = {.id = 1, .revision = 17, .revpatch = 0, .name = "E62"};
 int throt, erpm, temp1, temp2, volt, curr, csum, beepval;
@@ -43,6 +44,43 @@ static void cli(const char *command, const char *expected)
         assert(0);
     }
 }
+static void all_cli_parameter_reads(void)
+{
+    for (unsigned id = 0; id < esc_param_count(); ++id) {
+        const char *name = esc_param_name(id);
+        char command[64], response[4096];
+        assert(name);
+        int command_len = snprintf(command, sizeof command, "get %s", name);
+        assert(command_len > 0 && command_len < (int)sizeof command);
+        strcpy(response, command);
+        int n = execcmd(response);
+        assert(n > 0 && n < (int)sizeof response);
+        response[n] = 0;
+        char prefix[64];
+        int prefix_len = snprintf(prefix, sizeof prefix, "%s: ", name);
+        assert(prefix_len > 0 && prefix_len < (int)sizeof prefix);
+        if (strncmp(response, prefix, (size_t)prefix_len) ||
+            n < 4 || strcmp(response + n - 3, "OK\\n")) {
+            fprintf(stderr, "CLI read failed id=%u name=%s reply=%s\\n",
+                    id, name, response);
+            assert(0);
+        }
+    }
+}
+
+static void all_crsf_parameter_reads(void)
+{
+    for (unsigned id = 0; id < esc_param_count(); ++id) {
+        unsigned char response[512] = {0};
+        const char frame[5] = {(char)0x2c, 0, 1, (char)(id + 1), 0};
+        int n = execcrsfcmd(frame, sizeof frame, (char *)response);
+        if (n <= 6 || response[0] != 0x2b || response[3] != id + 1) {
+            fprintf(stderr, "CRSF read failed id=%u n=%d\\n", id, n);
+            assert(0);
+        }
+    }
+}
+
 int main(void)
 {
     checkcfg();
@@ -53,6 +91,8 @@ int main(void)
     cli("get unknown", "ERROR\n");
     cli("set duty_min 4", "duty_min: 4\nOK\n");
     cli("get duty_min", "duty_min: 4\nOK\n");
+    all_cli_parameter_reads();
+    all_crsf_parameter_reads();
 
     unsigned char response[512] = {0};
     const char read_timing[] = {(char)0x2c, 0, 1, 5, 0};
