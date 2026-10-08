@@ -36,8 +36,10 @@ boot/mcu/AM13E23019/src/main.c
      |      optional UPDATE / SETWRP
      |
      +--> boot_image
-     |      vector sanity now
-     |      image record / CRC later
+     |      vector + fixed image header + payload CRC
+     |
+     +--> boot_update
+     |      sequential single-image WRITE transaction
      |
      +--> boot_port
      |      APP map / APP write-block policy / Cortex-M33 handoff
@@ -115,6 +117,14 @@ Boot does not need to reuse the runtime eCAP/DMA implementation.
 boot_request.c owns the application-to-Boot one-shot request contract.
 
 boot_image.c owns application launch-validity policy.
+
+boot_update.c owns the single-image update transaction:
+
+- WRITE must start/restart at APP offset 0;
+- subsequent WRITE blocks must be contiguous;
+- the first sector contains both vector and image header, so the previous image
+  is invalidated as soon as a new block-0 write begins;
+- there is no A/B slot, bank swap, or rollback image.
 
 ## 3. Reset / Boot Flow
 
@@ -195,20 +205,26 @@ AND
 reset entry inside APP region
 ~~~
 
-Planned policy:
+Implemented policy:
 
 ~~~text
 vector sanity
 AND
-image header target/version/bounds
+fixed header @ APP_BASE + 0x100
 AND
-payload CRC
+header magic / version / target / bounds
 AND
-completed-update valid record
+header CRC-32
+AND
+payload CRC-32
 ~~~
 
-The parameter regions must not be used as the sole application-valid marker
-because they are preserved during application reflashing.
+The 32-byte header is carried inside the normal application image. The payload
+CRC excludes the header itself, avoiding CRC self-reference. An interrupted
+update leaves either an invalid vector/header or a payload CRC mismatch.
+
+The parameter regions are not used as the application-valid marker because
+they are preserved during application reflashing.
 
 ## 6. PB14 Service Transport
 
@@ -247,7 +263,19 @@ Normal application update:
 Boot region        preserve
 FW1 parameters     preserve
 FW2 parameters     preserve
-APP region         erase / program / verify
+APP region         one contiguous image
+
+WRITE block 0      start/restart transaction
+                   erase/program first APP sector
+                   invalidate previous image
+
+WRITE block N      require contiguous offset
+                   erase/program as required
+                   verify each write
+
+service timeout    validate vector + header + CRC
+                   valid   -> launch APP
+                   invalid -> remain Boot/recovery
 ~~~
 
 E62 treats MAIN Flash as one contiguous address space for the product/update
@@ -275,7 +303,8 @@ transaction path. It does not create a product-level partition or update mode.
 | PB14 physical module boundary | Implemented |
 | PB14 38400-baud RX/TX timing | Implemented / HW-Pend |
 | Boot-entry retained request | Implemented / HW-Pend |
-| Image header / CRC / valid record | Pseudocode |
+| Image header / header CRC / payload CRC | Implemented / HW-Pend |
+| Sequential single-image update transaction | Implemented / HW-Pend |
 | Flash protection policy | Detailed design |
 | Optional Boot self-update | Deferred |
 | Target-board validation | Pending hardware |
