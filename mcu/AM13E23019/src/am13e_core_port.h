@@ -3,6 +3,7 @@
  */
 #pragma once
 #include <stdint.h>
+#include <stdbool.h>
 #include "cmsis_gcc.h"
 #include "core_cm33.h"
 
@@ -19,14 +20,20 @@ static inline void am13e_core_suspend_thread(void)
 {
     SCB->SCR |= SCB_SCR_SLEEPONEXIT_Msk;
 }
-static inline void am13e_core_start_scheduler_tick(uint32_t core_hz, uint32_t tick_hz)
+static inline bool am13e_core_start_scheduler_tick(uint32_t core_hz,
+                                                      uint32_t tick_hz)
 {
-    /* The board-validated CLK is required by config.h before this can build.
-     * Use the same 16-kHz tick policy as rel17.
+    /* No clock tree values are inferred here. SysTick has a 24-bit reload
+     * and runs from the Cortex-M33 core clock; reject truncation.
      */
+    if (!core_hz || !tick_hz || core_hz % tick_hz) return false;
+    const uint32_t ticks = core_hz / tick_hz;
+    if (ticks < 2U || ticks > 0x1000000U) return false;
     NVIC_SetPriority(PendSV_IRQn, 0x80U >> (8U - __NVIC_PRIO_BITS));
-    SysTick->LOAD = core_hz / tick_hz - 1U;
+    SysTick->CTRL = 0U;
+    SysTick->LOAD = ticks - 1U;
     SysTick->VAL = 0U;
     SysTick->CTRL = SysTick_CTRL_CLKSOURCE_Msk |
                     SysTick_CTRL_TICKINT_Msk | SysTick_CTRL_ENABLE_Msk;
+    return true;
 }
