@@ -26,5 +26,15 @@ size="$toolchain/bin/arm-none-eabi-size"
 "$nm" "$elf" | grep -q ' fw1_debug_enable$' || {
     echo "[FAIL] FW1 runtime debug enable control missing" >&2; exit 1;
 }
+# Package FW1 ELF itself (Stage-A bringup packaging is separate).
+objcopy="$toolchain/bin/arm-none-eabi-objcopy"
+out="$build/escape32_am13e23019"
+raw="$out/$target.raw.bin"
+packed="$out/$target.e62.bin"
+manifest="$out/$target.e62.json"
+"$objcopy" -O binary "$elf" "$raw"
+python3 "$root/tools/am13e/pack-am13e-image.py" "$raw" "$packed" --manifest "$manifest"
+test -s "$packed" && test -s "$manifest" || { echo "[FAIL] FW1 package missing" >&2; exit 1; }
+echo "[PASS] FW1 E62 image packed: $packed"
 echo "[PASS] E62 FW1 MCPWM0 runtime ELF linked at APP_BASE 0x6000"
 echo "[NOTE] Full ESCape32 runtime, MCPWM0 product pinmux, trip-zone and BEMF ISR still pending"
