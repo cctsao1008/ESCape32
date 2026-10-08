@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 #include "dl_flash.h"
+#include "image_integrity.h"
 
 uintptr_t boot_am13e_test_first;
 uintptr_t boot_am13e_test_end;
@@ -270,19 +271,51 @@ static void test_powerloss_during_metadata_restore(void) {
  * The host sends only data block 2 for a 5-block firmware image.
  */
 static int image_integrity_negative_gate(void) {
+    /* Case 1: missing blocks leave erased Flash; CRC must reject. */
     CHECK(write_block(0, invalid, 8) == 1);
     CHECK(write_block(1, invalid, 8) == 1);
     CHECK(write_block(2, firmware + 2048U, 1024) == 1);
     CHECK(write_block(0, sig, 1024) == 1);
     CHECK(write_block(1, payload, 1024) == 0);
-    const uint8_t *head = (const uint8_t *)boot_am13e_test_first;
-    if (head[0] == 0xea && head[1] == 0x32) {
-        fprintf(stderr,
-                "FAIL image integrity: signature committed after only one "
-                "application data block; no expected length / CRC checked\n");
-        return 1;
-    }
-    puts("PASS image integrity negative gate: early finalization blocked");
+    check_signature_absent();
+    puts("PASS early finalize rejected with missing data / invalid CRC");
+
+    /* Case 2: the missing bytes happen to match the intended image.
+     * CRC is valid, but this transaction did not receive those blocks.
+     * The exact received-length condition must independently reject it.
+     */
+    boot_am13e_test_reset_update_state();
+    memset((void *)boot_am13e_test_first, 0xff,
+           (size_t)(boot_am13e_test_end - boot_am13e_test_first));
+    memcpy((void *)(boot_am13e_test_first + 3072U),
+           firmware + 3072U, IMAGE_BYTES - 3072U);
+    CHECK(write_block(0, invalid, 8) == 1);
+    CHECK(write_block(1, invalid, 8) == 1);
+    CHECK(write_block(2, firmware + 2048U, 1024) == 1);
+    CHECK(write_block(0, sig, 1024) == 1);
+    CHECK(write_block(1, payload, 1024) == 0);
+    CHECK(boot_am13e_image_check(
+              boot_am13e_test_first, boot_am13e_test_end,
+              sig, 16U, NULL) == AM13E_IMAGE_VALID);
+    check_signature_absent();
+    puts("PASS early finalize rejected despite matching stale Flash / valid CRC");
+
+    /* Case 3: every data block arrived but payload was corrupted. */
+    boot_am13e_test_reset_update_state();
+    memset((void *)boot_am13e_test_first, 0xff,
+           (size_t)(boot_am13e_test_end - boot_am13e_test_first));
+    uint8_t damaged[1024];
+    memcpy(damaged, firmware + 3072U, sizeof damaged);
+    damaged[128] ^= 0x01U;
+    CHECK(write_block(0, invalid, 8) == 1);
+    CHECK(write_block(1, invalid, 8) == 1);
+    CHECK(write_block(2, firmware + 2048U, 1024) == 1);
+    CHECK(write_block(3, damaged, 1024) == 1);
+    CHECK(write_block(4, firmware + 4096U, 1024) == 1);
+    CHECK(write_block(0, sig, 1024) == 1);
+    CHECK(write_block(1, payload, 1024) == 0);
+    check_signature_absent();
+    puts("PASS full-length corrupted image rejected by CRC");
     return 0;
 }
 
