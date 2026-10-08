@@ -23,7 +23,7 @@ set pagination off
 set architecture arm
 file $tmp/handoff.elf
 target remote localhost:$port
-printf "[INFO] reset PC=0x%x MSP=0x%x\\n", $pc, $msp
+printf "[INFO] reset PC=0x%x MSP=0x%x\\n", \$pc, \$msp
 hbreak app_landed
 continue
 set \$vtor = *(unsigned int*)0xE000ED08
