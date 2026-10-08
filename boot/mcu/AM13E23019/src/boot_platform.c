@@ -11,9 +11,10 @@
 bool boot_platform_init(void)
 {
     /*
-     * A SYSRST returns MCLK to SYSOSC at the 32-MHz base frequency. Keep the
-     * transition explicit so Boot does not inherit an application HSCLK/PLL
-     * assumption if entry behavior changes later.
+     * A SYSRST returns MCLK to SYSOSC. Keep the transition explicit so Boot
+     * does not inherit an application HSCLK/PLL assumption if entry behavior
+     * changes later. The Boot timing contract uses the normal 32-MHz SYSOSC
+     * base mode and explicitly rejects the 4-MHz SYSOSC mode below.
      */
     if (DL_SYSCTL_getMCLKSource() == DL_SYSCTL_MCLK_SOURCE_HSCLK) {
         DL_SYSCTL_switchMCLKfromHSCLKtoSYSOSC();
@@ -22,9 +23,7 @@ bool boot_platform_init(void)
     DL_SYSCTL_setMCLKDivider(DL_SYSCTL_MCLK_DIV_1_DIV_1);
 
     uint32_t clock_status = DL_SYSCTL_getClockStatus();
-    if ((clock_status &
-            (DL_SYSCTL_CLK_STATUS_SYSOSC_4MHZ |
-             DL_SYSCTL_CLK_STATUS_SYSOSC_USERTRIM_FREQ)) != 0U) {
+    if ((clock_status & DL_SYSCTL_CLK_STATUS_SYSOSC_4MHZ) != 0U) {
         return false;
     }
 
