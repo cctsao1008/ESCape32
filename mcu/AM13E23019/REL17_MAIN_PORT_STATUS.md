@@ -52,3 +52,10 @@ Do **not** use the existing bring-up image as evidence of rel17 main.c integrati
 Host regression: `bash tools/am13e/run-am13e-safety-contract-host-test.sh` saves `build-am13e/logs/e62-am13e-safety-contract-host.log`. Host PASS does not replace E62 target Cross-Compile, board-level measurements or physical motor safety validation.
 
 **Porting status: all four tracks active; integrated firmware and hardware validation incomplete.**
+
+## Direct main.c BEMF ISR migration
+
+- Under `ESCAPE32_AM13E`, the STM32-specific `iftim_isr()` is excluded and replaced by `am13e_bemf_capture()` callback processing the **original** `ival / ertm / sync / fast` state, then calling `am13e_bemf_arm_delay()` for TIMG12. The delay-expiry callback calls original `nextstep()`.
+- eCAP ticks are explicitly converted to 1-MHz BEMF policy units and back (overflow checked), then the I/O layer converts to qualified TIMG12 ticks. No equality of unrelated clock domains is assumed.
+- `am13e_bemf_connect()` is intentionally not called from `main()` until a verified board contract exists; **thus this is a compiled code path, not a working motor-control loop**.
+- Nextstep/startup/duty/fault code still contains STM32 register access; the build remains blocked. AQ, dead-band and trip path assertions must not be disabled to force a build.
