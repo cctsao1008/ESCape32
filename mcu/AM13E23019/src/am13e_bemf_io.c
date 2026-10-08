@@ -5,24 +5,32 @@
 
 static am13e_bemf_capture_callback_t on_capture;
 static am13e_bemf_due_callback_t on_due;
+static uint32_t ecap_hz, timg12_hz;
 
 bool am13e_bemf_bind(am13e_bemf_capture_callback_t capture,
-                          am13e_bemf_due_callback_t due)
+                          am13e_bemf_due_callback_t due,
+                     const am13e_motor_contract_t *contract)
 {
-    if (!capture || !due) return false;
+    if (!capture || !due || !am13e_contract_qualified(contract)) return false;
+    ecap_hz = contract->ecap_hz;
+    timg12_hz = contract->timg12_hz;
     on_capture = capture;
     on_due = due;
     return true;
 }
 
-void am13e_bemf_arm_delay(uint32_t ticks)
+bool am13e_bemf_arm_delay(uint32_t elapsed_ecap_ticks)
 {
-    /* Tick units must already be converted to TIMG12's clock domain. */
+    uint32_t ticks;
+    if (!on_capture || !on_due ||
+        !am13e_clock_convert_ticks(elapsed_ecap_ticks, ecap_hz,
+                                   timg12_hz, &ticks)) return false;
     DL_TimerG_stopCounter(TIMG12);
     DL_TimerG_clearInterruptStatus(TIMG12, DL_TIMERG_INTERRUPT_ZERO_EVENT);
     DL_TimerG_setLoadValue(TIMG12, ticks);
     DL_TimerG_setTimerCount(TIMG12, ticks);
     DL_TimerG_startCounter(TIMG12);
+    return true;
 }
 
 void am13e_bemf_cancel_delay(void)
