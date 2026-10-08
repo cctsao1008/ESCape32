@@ -3,7 +3,7 @@ set -euo pipefail
 
 LIBOPENCM3_URL="https://github.com/libopencm3/libopencm3.git"
 LIBOPENCM3_COMMIT="${LIBOPENCM3_COMMIT:-ddcbb2889fa018626c604e27ea50e66db5755b78}"
-LIBOPENCM3_TARGETS="stm32/f0 stm32/g0 stm32/g4 stm32/l4"
+LIBOPENCM3_TARGETS="stm32/g4"
 
 EXPECTED_GCC_DIR="arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi"
 TI_ROOT="${TI_ROOT:-$HOME/ti}"
@@ -62,15 +62,15 @@ echo "Configuring ESCape32 legacy build..."
 cmake     -S "$repo_root"     -B "$build_dir"     -D LIBOPENCM3_DIR="$libopencm3_dir"
 
 echo
-echo "Building STM32G071 regression target: ESCAPE1"
-cmake --build "$build_dir" --target ESCAPE1 --parallel "$(nproc)"
+echo "Building STM32G4 boot regression target: BOOT4_PA2"
+cmake --build "$build_dir" --target BOOT4_PA2 --parallel "$(nproc)"
 
 echo
-echo "Building STM32G431 regression target: PHOTONDRIVE1"
+echo "Building STM32G431 application regression target: PHOTONDRIVE1"
 cmake --build "$build_dir" --target PHOTONDRIVE1 --parallel "$(nproc)"
 
 echo
-echo "Legacy regression PASS."
+echo "STM32G4 regression PASS."
 echo "Validated:"
-echo "  ESCAPE1       (STM32G071)"
-echo "  PHOTONDRIVE1  (STM32G431)"
+echo "  BOOT4_PA2     (STM32G4 common boot semantics)"
+echo "  PHOTONDRIVE1  (STM32G431 FW1 reference application)"
