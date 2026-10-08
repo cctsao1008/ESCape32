@@ -103,6 +103,13 @@ void main(void) {
 				break;
 			}
 			case CMD_UPDATE: { // Update bootloader
+#if defined(AM13E)
+				/* Self-update must execute from a verified RAM-resident writer.
+				 * The STM32 _rom/_ram_end buffering contract is not portable.
+				 * Platform code must validate the whole image before touching boot Flash.
+				 */
+				boot_am13e_self_update();
+#else
 				char *buf = _ram_end; // Use upper SRAM as buffer
 				int pos = 0;
 				for (int i = 0, n = (_rom_end - _rom) >> 10; i < n; ++i) {
@@ -115,6 +122,7 @@ void main(void) {
 				update(_rom, buf, pos);
 				sendval(RES_ERROR);
 				break;
+#endif
 			}
 			case CMD_SETWRP: // Set write protection
 				switch (recvval()) {
