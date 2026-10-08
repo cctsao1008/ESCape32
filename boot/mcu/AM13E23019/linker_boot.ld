@@ -51,6 +51,7 @@ SECTIONS
          * backend as unused.
          */
         KEEP (*(.text.boot_flash_*))
+        KEEP (*(.text.boot_port_*))
         KEEP (*(.text.boot_protocol_*))
         . = ALIGN(0x8);
         *(.text.*)
