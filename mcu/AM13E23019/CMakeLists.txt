@@ -75,10 +75,10 @@ set(FW1_TARGET am13e23019_fw1)
 if(NOT TARGET ${FW1_TARGET})
     add_executable(${FW1_TARGET})
     target_sources(${FW1_TARGET} PRIVATE
-        ${AM13E_PLATFORM_DIR}/src/fw1_runtime.c
-        ${AM13E_PLATFORM_DIR}/src/fw1_bemf_events.c
-        ${AM13E_PLATFORM_DIR}/src/fw1_timg12.c
-        ${AM13E_PLATFORM_DIR}/src/fw1_irq.c
+        ${AM13E_PLATFORM_DIR}/src/am13e_runtime.c
+        ${AM13E_PLATFORM_DIR}/src/am13e_bemf_events.c
+        ${AM13E_PLATFORM_DIR}/src/am13e_timg12.c
+        ${AM13E_PLATFORM_DIR}/src/am13e_irq.c
         ${AM13E_SYSCFG_SOURCES}
     )
     target_include_directories(${FW1_TARGET} PRIVATE
