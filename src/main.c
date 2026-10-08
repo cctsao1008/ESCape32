@@ -613,6 +613,7 @@ void main(void) {
 	int csr = RCC_CSR;
 	RCC_CSR = RCC_CSR_RMVF; // Clear reset flags
 #endif /* ESCAPE32_AM13E */
+#if !defined(ESCAPE32_AM13E)
 	if (!(csr & (RCC_CSR_IWDGRSTF | RCC_CSR_WWDGRSTF))) { // Power-on
 		const char *str = cfg.music;
 		if (str[0] == '~') playsound(_eod, clamp(atoi(str + 1), 0, 100));
@@ -625,6 +626,10 @@ void main(void) {
 		}
 #endif
 	}
+#endif /* legacy MCU reset-cause-dependent startup notification */
+#if defined(ESCAPE32_AM13E)
+#error "E62 hardware port required: qualified reset-cause and zero-throttle arming policy"
+#else
 	if (cfg.arm || (csr & RCC_CSR_WWDGRSTF)) { // Arming required
 	rearm:
 #if defined(ESCAPE32_AM13E)
@@ -649,6 +654,7 @@ void main(void) {
 		playmusic(hall ? "G_GC" : "GC", cfg.volume);
 #endif /* ESCAPE32_AM13E */
 	}
+#endif /* ESCAPE32_AM13E: startup arming policy */
 #endif
 	laststep();
 #if SENS_CNT >= 1
