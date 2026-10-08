@@ -25,3 +25,11 @@
 - Motor phase output stays disabled until valid startup conditions and gate-driver safety are established.
 
 Do **not** use the existing bring-up image as evidence of rel17 main.c integration. Existing E62 binary hashes refer to the earlier bring-up target.
+
+## BEMF state ownership (migration in progress)
+
+- The authoritative rel17 state variables are `ival`, `ertm`, `sync`, `fast` in `src/main.c`.
+- `src/hw_bemf_rel17_bridge.h` translates **that same state** via `hw_bemf_rel17_process()` into arm/cancel timer intents; `tools/am13e/run-rel17-bemf-bridge-host-test.sh` tests the portable contract.
+- The older `am13e_bemf_events.c` maintains **separate** `engine.policy` state for the diagnostic bring-up path. **Do not attach it directly to the rel17 main control loop.** Its eCAP/TIMG backend must instead consume rel17 bridge actions, with qualified timestamp epochs and clock domains.
+- The bridge has **not** been connected to AM13E IRQs or peripheral registers. Main firmware cross-build remains blocked by documented clock, comparator and motor safety constraints.
+- Build logs: `build-am13e/logs/e62-rel17-main-build.log` (do not use `/tmp`).
