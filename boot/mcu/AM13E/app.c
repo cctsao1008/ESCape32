@@ -6,8 +6,7 @@
 */
 #include "common.h"
 #include <stdint.h>
-#include <cmsis_gcc.h>
-#include <core_cm33.h>
+#include <soc.h>
 
 extern char __app_flash_start__[];
 extern char __app_vector_start__[];
