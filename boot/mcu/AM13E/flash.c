@@ -12,6 +12,13 @@
 extern char __app_flash_start__[];
 extern char __boot_storage_end__[];
 
+/* RAM-only staging of the application signature program unit.
+ * Never publish the valid signature before both final metadata blocks
+ * have been verified. Reset loses the staged signature safely.
+ */
+static uint8_t pending_header[16];
+static bool pending_header_valid;
+
 /* Called from Flash; runs wholly in SRAM while its target bank is busy.
  * No application Flash reads or protocol I/O occur in this critical region.
  */
@@ -53,6 +60,7 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
      * No generic 8-byte program is attempted (ECC requires 16 bytes).
      */
     if (len == 8) {
+        pending_header_valid = false;
         if (addr != first && addr != first + 1024U)
             return 0;
         for (unsigned i = 0; i < 8U; ++i)
@@ -70,6 +78,33 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
     if (((unsigned)len & 15U) != 0U)
         return 0;
 
+    /* The host restores metadata block 0 before metadata block 1.
+     * Delay the first 16-byte program unit (which contains 0x32ea)
+     * until block 1 has been written and read back successfully.
+     * This prevents an interrupted metadata restore from publishing
+     * a valid signature prematurely.
+     */
+    if (addr == first) {
+        if (len != 1024)
+            return 0;
+        pending_header_valid = false;
+        for (unsigned i = 0; i < sizeof pending_header; ++i)
+            pending_header[i] = (uint8_t)src[i];
+        if (boot_am13e_flash_execute((uint32_t)addr + 16U,
+                                     (uint8_t *)(uintptr_t)(src + 16),
+                                     (uint32_t)len - 16U, false,
+                                     true) != DL_FLASH_SUCCESS)
+            return 0;
+        const volatile uint8_t *verify = (const volatile uint8_t *)addr;
+        for (int i = 16; i < len; ++i)
+            if (verify[i] != (uint8_t)src[i])
+                return 0;
+        pending_header_valid = true;
+        return 1;
+    }
+    if (addr == first + 1024U && (len != 1024 || !pending_header_valid))
+        return 0;
+
     /* Only erase on the first 1 KiB block of each 2 KiB sector.
      * The host protocol MUST transmit ordered blocks; an interruption
      * between blocks can leave an incomplete application image.
@@ -84,6 +119,19 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
     for (int i = 0; i < len; ++i) {
         if (verify[i] != (uint8_t)src[i])
             return 0;
+    }
+
+    if (addr == first + 1024U) {
+        pending_header_valid = false;
+        if (boot_am13e_flash_execute((uint32_t)first,
+                                     pending_header,
+                                     sizeof pending_header,
+                                     false, true) != DL_FLASH_SUCCESS)
+            return 0;
+        const volatile uint8_t *header = (const volatile uint8_t *)first;
+        for (unsigned i = 0; i < sizeof pending_header; ++i)
+            if (header[i] != pending_header[i])
+                return 0;
     }
     return 1;
 }
