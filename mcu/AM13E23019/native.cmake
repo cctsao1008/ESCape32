@@ -33,6 +33,7 @@ function(add_target_am13e name)
         "${CMAKE_CURRENT_SOURCE_DIR}/src/esc_math.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/esc_config.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/src/esc_cmd_parse.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/esc_param_metadata.c"
         "${platform}/src/am13e_runtime.c"
         "${platform}/src/am13e_bemf_events.c"
         "${platform}/src/am13e_timg12.c"
