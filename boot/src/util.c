@@ -18,8 +18,22 @@
 #include "common.h"
 
 #if defined(AM13E)
-/* CRC, Flash programming and protection are implemented by the AM13E
- * boot MCU backend. Do not compile legacy FLASH/CRC register accesses.
+/* STM32 CRC peripheral configuration in the original bootloader uses
+ * reflected input/output and a final inversion. Reproduce that wire CRC
+ * in software without importing any legacy peripheral registers.
+ */
+uint32_t crc32(const char *buf, int len) {
+    uint32_t crc = UINT32_C(0xffffffff);
+    if (!buf || len < 0 || (len & 3)) return 0;
+    for (int i = 0; i < len; ++i) {
+        crc ^= (uint8_t)buf[i];
+        for (unsigned bit = 0; bit < 8; ++bit)
+            crc = (crc >> 1) ^ ((crc & 1U) ? UINT32_C(0xedb88320) : 0U);
+    }
+    return ~crc;
+}
+/* Flash programming, protection and reset remain backend-owned.
+ * No fabricated Flash operations or write-protection defaults.
  */
 #else
 #ifndef FLASH_CR_STRT
