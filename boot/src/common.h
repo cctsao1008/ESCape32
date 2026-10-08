@@ -90,6 +90,9 @@ void setwrp(int type);
 /* Required MCU backend hooks; no dummy implementations. */
 bool boot_am13e_take_reboot_ack(void);
 uint32_t boot_am13e_device_id(void);
+/* Resolve only validated Flash ranges, including overflow/alignment checks. */
+bool boot_am13e_read_range(unsigned block, unsigned length, const void **address);
+bool boot_am13e_write_range(unsigned block, unsigned length, char **address);
 bool boot_am13e_application_valid(void);
 __attribute__((noreturn)) void boot_am13e_launch_application(void);
 #endif
