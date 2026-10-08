@@ -15,9 +15,8 @@
 
 #define ESCAPE32_AM13E_MCPWM_INST MCPWM0
 #include "hw_motor_am13e.h"
+#include "hw_six_step.h"
 
-static const uint8_t am13e_positive[6] = {4U, 1U, 1U, 2U, 2U, 4U};
-static const uint8_t am13e_negative[6] = {2U, 2U, 4U, 4U, 1U, 1U};
 
 volatile uint32_t am13e_debug_step;
 volatile uint32_t am13e_debug_enable;
@@ -25,14 +24,21 @@ volatile uint32_t am13e_debug_bemf_interval;
 volatile uint32_t am13e_debug_bemf_ready; /* must remain 0 until TIMG initialized */
 volatile uint32_t am13e_debug_command_seq; /* increment after updating step/enable */
 
+/* Bring-up adapter only: rel17 owns sector-to-phase policy. */
+static void am13e_apply_debug_sector(uint32_t step)
+{
+    const hw_six_step_t phase = hw_six_step_decode(step, 0U);
+    (void)hw_motor_am13e_runtime_commutate(
+        phase.positive, phase.negative, true);
+}
+
 static void am13e_next_commutation(void)
 {
     uint32_t step = am13e_debug_step;
     step = (step < 1U || step >= 6U) ? 1U : step + 1U;
     am13e_debug_step = step;
     if (am13e_debug_bemf_ready == 1U) am13e_bemf_ecap_start_epoch();
-    (void)hw_motor_am13e_runtime_commutate(
-        am13e_positive[step - 1U], am13e_negative[step - 1U], true);
+    am13e_apply_debug_sector(step);
 }
 
 
@@ -80,8 +86,7 @@ int main(void)
             uint32_t step = am13e_debug_step;
             if (enable == 1U && step >= 1U && step <= 6U) {
                 if (am13e_debug_bemf_ready == 1U) am13e_bemf_ecap_start_epoch();
-                (void)hw_motor_am13e_runtime_commutate(
-                    am13e_positive[step - 1U], am13e_negative[step - 1U], true);
+                am13e_apply_debug_sector(step);
             } else {
                 (void)hw_motor_am13e_runtime_commutate(0U, 0U, false);
             }
