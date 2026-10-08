@@ -19,6 +19,7 @@
 #include "esc_cmd_parse.h"
 
 #include "esc_param_map.h"
+#include "esc_param_access.h"
 
 static int beep = -1;
 
@@ -74,6 +75,32 @@ static void appendbyte(char **pos, int val) {
 #define setval(str, key) \
 	if (!esc_cmd_getval(str, &val)) goto error; \
 	cfg.key = val; \
+
+/* Numeric CLI get uses the same canonical Cfg accessor as E62. */
+#define getpairval(idx, key) do { \
+    int readback; \
+    if (!esc_param_get_numeric(&cfg, idx, &readback)) goto error; \
+    appendstr(&pos, #key); \
+    appendstr(&pos, ": "); \
+    appendval(&pos, readback); \
+    appendstr(&pos, "\\n"); \
+} while (0)
+#define getpairstr(idx, key) do { appendpair(str, key); } while (0)
+
+/* Preserve rel17 CLI coercion when user input is outside the metadata range.
+ * Canonical writes use shared access and normalization; fallback uses the
+ * original assignment/checkcfg path. */
+#define setpairval(str, idx, key) do { \
+    if (!esc_cmd_getval(str, &val)) goto error; \
+    if (!esc_param_set_numeric(&cfg, idx, val)) { \
+        cfg.key = val; \
+        checkcfg(); \
+    } \
+} while (0)
+#define setpairstr(str, idx, key) do { \
+    setstr(str, key); \
+    checkcfg(); \
+} while (0)
 
 #define setbeepstr(str)
 
@@ -146,7 +173,7 @@ CFG_MAP(XX)
 			switch (esc_cmd_getidx(args[1], keys)) {
 #define XX(idx, type, key, def, opt, dec, min, max, step, exp1, exp2) \
 				case idx: \
-					appendpair(type, key); \
+					getpair##type(idx, key); \
 					setbeep##type(cfg.key); \
 					break;
 CFG_MAP(XX)
@@ -160,8 +187,7 @@ CFG_MAP(XX)
 			switch (esc_cmd_getidx(args[1], keys)) {
 #define XX(idx, type, key, def, opt, dec, min, max, step, exp1, exp2) \
 				case idx: \
-					set##type(args[2], key); \
-					checkcfg(); \
+					setpair##type(args[2], idx, key); \
 					appendpair(type, key); \
 					setbeep##type(cfg.key); \
 					break;
