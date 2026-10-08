@@ -59,3 +59,11 @@ Host regression: `bash tools/am13e/run-am13e-safety-contract-host-test.sh` saves
 - eCAP ticks are explicitly converted to 1-MHz BEMF policy units and back (overflow checked), then the I/O layer converts to qualified TIMG12 ticks. No equality of unrelated clock domains is assumed.
 - `am13e_bemf_connect()` is intentionally not called from `main()` until a verified board contract exists; **thus this is a compiled code path, not a working motor-control loop**.
 - Nextstep/startup/duty/fault code still contains STM32 register access; the build remains blocked. AQ, dead-band and trip path assertions must not be disabled to force a build.
+
+## Source-wide MCU isolation pass
+
+- Legacy libopencm3 MCU implementations `src/io.c`, `src/telem.c`, and `src/util.c` now use a file-level `#if defined(ESCAPE32_AM13E)` / `#else` split. The AM13E branch provides **no fake function definitions**; original legacy sources remain unchanged in `#else`.
+- `src/hw_platform.h` and `src/hw_motor.h` already choose independent AM13E vs legacy backends.
+- `src/main.c` and `src/prog.c` remain mixed, with platform-specific sections gated. Portable `esc_*.c` remains intentionally common to all MCU builds.
+- Run `python3 tools/am13e/audit-source-isolation.py` in the full checkout. It enumerates **all actual src/*.c files**, flags unknown files instead of assuming the GitHub single-file connector delivered a complete tree.
+- This is source ownership isolation, not completion of the AM13E board I/O, watchdog, trip, PWM, pin mapping, or firmware linker integration.
