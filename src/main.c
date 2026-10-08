@@ -23,6 +23,8 @@
 #include "hw_bemf_rel17_bridge.h"
 #ifdef ESCAPE32_AM13E
 #include "am13e_core_port.h"
+#include "am13e_bemf_io.h"
+#include <limits.h>
 #endif
 
 #define REVISION 17
@@ -280,6 +282,54 @@ void tim1_com_isr(void) {
 	nextstep();
 }
 
+#ifdef ESCAPE32_AM13E
+/* The E62 capture IRQ delivers eCAP ticks. Normalize to 1-MHz rel17
+ * policy units (IFTIM_XRES=0 equivalent), never assume eCAP is 1 MHz.
+ * The qualified clock contract is provided by the E62 board bring-up.
+ */
+static const am13e_motor_contract_t *am13e_active_contract;
+
+static void am13e_bemf_capture(uint32_t elapsed_ecap_ticks)
+{
+    if (!am13e_active_contract) return; /* Never arm an unqualified timer. */
+    uint32_t capture_us;
+    if (!am13e_clock_convert_ticks(elapsed_ecap_ticks,
+                                   am13e_active_contract->ecap_hz,
+                                   1000000U, &capture_us) ||
+        capture_us > INT32_MAX) return;
+    hw_bemf_rel17_state_t state = {ival, ertm, sync, fast};
+    const hw_bemf_rel17_bridge_action_t action = hw_bemf_rel17_bridge_event(
+        &state, false, true, (int)capture_us, 0, cfg.timing);
+    if (!action.arm_delay) return;
+    uint32_t delay_ecap_ticks;
+    if (!am13e_clock_convert_ticks((uint32_t)action.delay_ticks,
+                                   1000000U, am13e_active_contract->ecap_hz,
+                                   &delay_ecap_ticks)) return;
+    if (!am13e_bemf_arm_delay(delay_ecap_ticks)) return;
+    ival = state.interval;
+    ertm = state.electrical_time;
+    sync = state.sync;
+    fast = state.fast;
+}
+
+static void am13e_bemf_commutation_due(void)
+{
+    nextstep();
+}
+
+/* Board startup must call this only AFTER comparator phase routing, eCAP
+ * epoch, clock domains and MCPWM safe output states have been qualified.
+ * This does not itself enable NVIC or gate-driver outputs.
+ */
+static bool am13e_bemf_connect(const am13e_motor_contract_t *contract)
+{
+    if (!am13e_contract_qualified(contract)) return false;
+    if (!am13e_bemf_bind(am13e_bemf_capture, am13e_bemf_commutation_due,
+                         contract)) return false;
+    am13e_active_contract = contract;
+    return true;
+}
+#else
 void iftim_isr(void) { // BEMF zero-crossing
 	int er = TIM_DIER(IFTIM);
 	int sr = TIM_SR(IFTIM);
@@ -305,6 +355,7 @@ void iftim_isr(void) { // BEMF zero-crossing
 	TIM_DIER(IFTIM) = 0;
 }
 
+#endif
 #ifdef HALL_MAP
 void tim3_isr(void) { // Any change on Hall sensor inputs
 	if (TIM3_SR & TIM_SR_UIF) { // Timeout
