@@ -24,6 +24,7 @@ target_sources(${TARGET} PRIVATE
     ${BOOT_DIR}/src/boot_service_port.c
     ${BOOT_DIR}/src/boot_service_pb14.c
     ${BOOT_DIR}/src/boot_flash.c
+    ${BOOT_COMMON_DIR}/crc32.c
     ${BOOT_COMMON_DIR}/protocol.c
     ${BOOT_COMMON_DIR}/service_io.c
 )
