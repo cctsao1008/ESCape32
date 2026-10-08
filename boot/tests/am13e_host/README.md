@@ -1,5 +1,46 @@
 # E62 / AM13E Host Validation
 
+## Stage C1: Image Pack / Verify (host-only)
+
+The new `boot/tools/pack_am13e_v2.py` packs **only v2 APP-base flat
+raw binaries**, not old vector-first `.e62.bin` files, and does **not**
+flash the MCU.
+
+Expected raw binary input:
+- First file byte represents physical APP base `0x6000`, **not** the
+  start of an ELF section or the M33 vector table itself.
+- First two bytes at APP+0 must be erased `FF FF` or already contain
+  ESCape32 `EA 32`. The packer writes the final `EA 32`.
+- Metadata slot at APP+0x100 (32 bytes) must be all `FF` or all `00`.
+- M33 Vector Table at APP+0x800 (physical address `0x6800`) must
+  contain a valid secure SRAM stack pointer and Thumb Reset Handler.
+- Max packed image length 256 KiB; image is padded to 16-byte boundary
+  with `FF`. Original file length is not recoverable separately after
+  padding; `image_length` in metadata includes padding.
+
+From the repository root:
+
+```bash
+python3 boot/tools/pack_am13e_v2.py pack \
+    path/to/app-flat-at-0x6000.bin path/to/app-v2.e62.bin \
+    --manifest path/to/app-v2.e62.json
+
+python3 boot/tools/pack_am13e_v2.py verify path/to/app-v2.e62.bin
+```
+
+The `am13e_image_packer` CTest performs CLI roundtrip,
+metadata/CRC-byte coverage checks, alignment, old format rejection,
+bounds, corruption and truncation.
+
+**Important:** the `AM13E` application target in the current
+`am13e-port-v2` root CMake is still an **OBJECT library**. It
+does not yet produce a linked, address-qualified v2 application ELF
+or v2 raw binary. Do not take an arbitrary `objcopy -O binary`
+output and assume it starts at APP base `0x6000`.
+A v2 Application Linker and its app binary generation remain Stage C2.
+No linked application artifact or live ESC firmware update has been
+qualified by this host-only packer.
+
 ## Stage B: production image integrity integration
 
 The current `am13e-port-v2` build links the **same portable validator**
