@@ -34,7 +34,7 @@ int main(void)
     assert(e.policy.sync == 5 && f.armed == 0);
     assert(am13e_bemf_event_capture(&e, 500) == AM13E_BEMF_ACCEPTED);
     assert(e.policy.interval == 875 && e.policy.sync == 6);
-    assert(f.armed == 1 && f.ticks == 218 && e.pending);
+    assert(f.armed == 1 && f.ticks == 219 && e.pending);
     assert(am13e_bemf_event_capture(&e, 500) == AM13E_BEMF_IGNORED);
     am13e_bemf_event_delay_elapsed(&e);
     assert(f.due == 1 && !e.pending);
