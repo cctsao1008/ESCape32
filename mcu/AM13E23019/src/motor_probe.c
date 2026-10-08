@@ -91,6 +91,13 @@ static void fw1_capture_event_compile_probe(void)
 
 static void am13e_motor_backend_compile_probe(void)
 {
+    /* Exercise executable FW1 start/commutate/stop code in the compile
+     * probe; run_probe remains false in the bench fixture's main().
+     */
+    (void)hw_motor_am13e_runtime_start(8000U, 40U, 2000U);
+    (void)hw_motor_am13e_runtime_commutate(4U, 2U, true);
+    (void)hw_motor_am13e_runtime_commutate(0U, 0U, false);
+    hw_motor_am13e_runtime_stop();
     hw_motor_am13e_configure_split_deadband(40);
     hw_motor_sine_update(8000, 1000, 2000, 4000);
 
