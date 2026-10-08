@@ -102,3 +102,10 @@ const boot_protocol_ops_t *boot_service_port_bind(
 
     return &protocol_ops;
 }
+
+
+__attribute__((weak))
+const boot_service_transport_ops_t *boot_service_transport_get(void)
+{
+    return NULL;
+}
