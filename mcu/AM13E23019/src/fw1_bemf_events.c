@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include "dl_timerg.h"
 #include "dl_ecap.h"
+#include "fw1_bemf_events.h"
 #include "hw_bemf_am13e_events.h"
 
 static am13e_bemf_event_engine_t engine;
