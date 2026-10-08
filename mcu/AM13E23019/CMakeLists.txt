@@ -76,6 +76,7 @@ if(NOT TARGET ${FW1_TARGET})
     add_executable(${FW1_TARGET})
     target_sources(${FW1_TARGET} PRIVATE
         ${AM13E_PLATFORM_DIR}/src/fw1_runtime.c
+        ${AM13E_PLATFORM_DIR}/src/fw1_bemf_events.c
         ${AM13E_SYSCFG_SOURCES}
     )
     target_include_directories(${FW1_TARGET} PRIVATE
