@@ -50,6 +50,21 @@ SECTIONS
         KEEP (*(.vtable))
     } > REGION_DATA
 
+    /*
+     * TI flash service must execute entirely from SRAM while writing
+     * the executing Flash bank. Route all SDK flash driver text first,
+     * before the catch-all .text section can consume those sections.
+     */
+    .TI.ramfunc : {
+        __ramfunct_load__ = LOADADDR(.TI.ramfunc);
+        __ramfunct_start__ = .;
+        *dl_flash.c.obj(.text .text.*)
+        *dl_flashctl.c.obj(.text .text.*)
+        *(.TI.ramfunc .TI.ramfunc.*)
+        . = ALIGN(0x8);
+        __ramfunct_end__ = .;
+    } > REGION_TEXT_RAM AT> REGION_TEXT
+
     .text : {
         CREATE_OBJECT_SYMBOLS
         KEEP (*(.text))
@@ -76,14 +91,6 @@ SECTIONS
         KEEP (*(.fini*))
         . = ALIGN(0x8);
     } > REGION_TEXT AT> REGION_TEXT
-
-    .TI.ramfunc : {
-        __ramfunct_load__ = LOADADDR(.TI.ramfunc);
-        __ramfunct_start__ = .;
-        *(.TI.ramfunc)
-        . = ALIGN(0x8);
-        __ramfunct_end__ = .;
-    } > REGION_TEXT_RAM AT> REGION_TEXT
 
     .rodata : {
         *(.rodata)
@@ -180,3 +187,7 @@ ASSERT(__app_vector_start__ == 0x00006800, "Application vector base mismatch");
 ASSERT((__app_flash_start__ % 0x800) == 0, "Application must start on a Flash sector");
 ASSERT(__app_flash_start__ >= __boot_flash_end__, "Application overlaps bootloader");
 ASSERT(__boot_storage_end__ == 0x00080000, "Flash limit mismatch");
+
+ASSERT(DL_Flash_eraseSector >= ORIGIN(RAM_C) && DL_Flash_eraseSector < ORIGIN(RAM_C) + LENGTH(RAM_C), "Sector erase must reside in SRAM");
+ASSERT(DL_Flash_program >= ORIGIN(RAM_C) && DL_Flash_program < ORIGIN(RAM_C) + LENGTH(RAM_C), "Flash programming must reside in SRAM");
+ASSERT(DL_FlashCTL_executeCommand >= ORIGIN(RAM_C) && DL_FlashCTL_executeCommand < ORIGIN(RAM_C) + LENGTH(RAM_C), "Flash command execution must reside in SRAM");
