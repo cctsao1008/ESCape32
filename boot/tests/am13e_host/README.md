@@ -1,5 +1,46 @@
 # E62 / AM13E Host Validation
 
+## Stage C3: real ARM-linked packed image through production flash.c
+
+Stage C2 produces a linked ARM image with its **physical** Reset Handler
+at 0x6811 (subject to ARM compiler output). Stage C3 tests that image against
+the **actual production** `boot/mcu/AM13E/flash.c` transaction implementation,
+via the native-GCC Mock Flash controller.
+
+The host maps Flash at `0x10006000` because Linux cannot directly map
+the MCU's low Flash addresses. The validator now checks Reset_Handler
+against the fixed **physical** E62 APP base `0x6000`, not the host
+pointer address. The ordinary host fixtures were adjusted accordingly.
+
+After successful Stage C2 ARM link + pack:
+
+```bash
+cmake -S boot/tests/am13e_host -B build-am13e-host-tests \
+  -DCMAKE_C_COMPILER=gcc \
+  -DAM13E_HOST_PACKED_IMAGE="$PWD/build-am13e/AM13E_APP_SMOKE.e62v2.bin"
+cmake --build build-am13e-host-tests -j"$(nproc)"
+ctest --test-dir build-am13e-host-tests --output-on-failure -V
+```
+
+This opts in a **fifth** CTest target,
+`am13e_linked_image_transaction`. It reads the actual packed image file,
+executes invalidation writes, streams 1-KiB-aligned blocks (including the
+short 32-byte final block), stages/restores metadata, tests duplicate
+metadata block 0, compares Flash byte-for-byte, checks full image CRC and
+validates a simulated post-reset launchable image. It does not rewrite
+the application vector or CRC to fit the host mmap address.
+
+For a quick independent run after host build:
+
+```bash
+./build-am13e-host-tests/am13e_flash_transaction_test --flash-image \
+  build-am13e/AM13E_APP_SMOKE.e62v2.bin
+```
+
+This remains host emulation: AM13E Flash ECC, active-bank RAM execution,
+PB14 UART framing and actual reset/handoff are NOT exercised. The input is
+a *smoke ELF*, not production motor-control Firmware.
+
 ## Stage C2: ARM linker + v2 image smoke (opt-in)
 
 The existing ESCape32 root CMake now offers an isolated **ARM ELF**
