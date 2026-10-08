@@ -17,6 +17,12 @@
 
 #include "common.h"
 
+#if defined(TI_AM13E)
+/* The shared boot framing below is platform-independent. The AM13E
+ * backend must supply initio(), recvbuf() and sendbuf(). No STM32
+ * register or timer implementation is compiled for TI_AM13E.
+ */
+#else
 #ifdef AT32F4
 #define USART2_TDR USART2_DR
 #define USART2_RDR USART2_DR
@@ -155,6 +161,8 @@ void sendbuf(const char *buf, int len) {
 	TIM3_EGR = TIM_EGR_UG;
 }
 #endif
+
+#endif /* TI_AM13E */
 
 int recvval(void) {
 	char buf[2];
