@@ -78,7 +78,7 @@ function(add_target_ti_am13e name)
                 -Wl,--require-defined=recvbuf
                 -Wl,--require-defined=sendbuf
                 -Wl,--require-defined=crc32
-                -Wl,--require-defined=write
+                -Wl,--require-defined=boot_am13e_flash_write
                 -Wl,--require-defined=boot_am13e_launch_application)
             set(am13e_binary ${name}.elf)
         else()
