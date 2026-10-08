@@ -6,6 +6,7 @@
 #include "arch_interrupt.h"
 #include "hw/hw_ints.h"
 #include "fw1_bemf_events.h"
+#include "fw1_irq.h"
 
 static void fw1_ecap0_irq(void)
 {
