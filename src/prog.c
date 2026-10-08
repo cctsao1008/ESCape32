@@ -16,6 +16,7 @@
 */
 
 #include "common.h"
+#include "esc_cmd_parse.h"
 
 #define CFG_MAP(XX) \
 	XX( 0, val, arm,         ARM,         "off;on",                                        -1,    0,    1,  0, 0, 0) \
@@ -80,27 +81,6 @@ static int split(char *str, char **vec, int len, const char *sep) {
 	return idx;
 }
 
-static int getidx(const char *str, const char *const vec[]) {
-	int idx = 0;
-	const char *const *pos = vec;
-	for (const char *val; (val = *pos++) && strcasecmp(val, str); ++idx);
-	return idx;
-}
-
-static int getval(const char *str, int *val) {
-	char *end;
-	int res = strtol(str, &end, 10);
-	if (*end) return 0;
-	*val = res;
-	return 1;
-}
-
-static int getint(const char *buf, int len) {
-	int res = 0;
-	while (len--) res <<= 8, res |= *buf++;
-	return res;
-}
-
 static void appendstr(char **pos, const char *str) {
 	*pos = stpcpy(*pos, str);
 }
@@ -141,7 +121,7 @@ static void appendbyte(char **pos, int val) {
 #define setstr(str, key) strlcpy(cfg.key, str, sizeof cfg.key)
 
 #define setval(str, key) \
-	if (!getval(str, &val)) goto error; \
+	if (!esc_cmd_getval(str, &val)) goto error; \
 	cfg.key = val; \
 
 #define setbeepstr(str)
@@ -164,7 +144,7 @@ CFG_MAP(XX)
 	if (!narg) return 0;
 	int val;
 	char *pos = str;
-	switch (getidx(args[0], cmds)) {
+	switch (esc_cmd_getidx(args[0], cmds)) {
 		case 0: // 'help'
 			appendstr(&pos,
 				"Usage:\n"
@@ -212,7 +192,7 @@ CFG_MAP(XX)
 			break;
 		case 3: // 'get <param>'
 			if (narg != 2) goto error;
-			switch (getidx(args[1], keys)) {
+			switch (esc_cmd_getidx(args[1], keys)) {
 #define XX(idx, type, key, def, opt, dec, min, max, step, exp1, exp2) \
 				case idx: \
 					appendpair(type, key); \
@@ -226,7 +206,7 @@ CFG_MAP(XX)
 			break;
 		case 4: // 'set <param> <value>'
 			if (narg != 3) goto error;
-			switch (getidx(args[1], keys)) {
+			switch (esc_cmd_getidx(args[1], keys)) {
 #define XX(idx, type, key, def, opt, dec, min, max, step, exp1, exp2) \
 				case idx: \
 					set##type(args[2], key); \
@@ -249,11 +229,11 @@ CFG_MAP(XX)
 		case 7: // 'play <music> [<volume>]'
 			if (narg < 2 || narg > 3) goto error;
 			val = cfg.volume;
-			if (narg == 3 && (!getval(args[2], &val) || val < 1 || val > 100)) goto error;
+			if (narg == 3 && (!esc_cmd_getval(args[2], &val) || val < 1 || val > 100)) goto error;
 			if (!playmusic(args[1], val)) goto error;
 			break;
 		case 8: // 'throt <value>'
-			if (narg != 2 || !getval(args[1], &val) || val < -2000 || val > 2000) goto error;
+			if (narg != 2 || !esc_cmd_getval(args[1], &val) || val < -2000 || val > 2000) goto error;
 			throt = val;
 			analog = 0;
 			break;
@@ -329,7 +309,7 @@ error:
 	appendstr0(&pos, cfg.key); \
 
 #define setcrsfval(key, buf, len) \
-	cfg.key = getint(buf, len); \
+	cfg.key = esc_cmd_getint(buf, len); \
 	checkcfg(); \
 	appendint(&pos, cfg.key, len); \
 
@@ -341,7 +321,7 @@ static void processcrsfcmd(char **pos, const char *name, const char *buf, int le
 		res[4] = 0;
 		res[5] = 0;
 		*pos = res + 6;
-		switch (getint(buf, len)) {
+		switch (esc_cmd_getint(buf, len)) {
 			case 1:
 				if (msg) {
 					str = msg;
