@@ -16,8 +16,7 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
     uintptr_t addr = (uintptr_t)dst;
     uintptr_t end = (uintptr_t)__boot_storage_end__;
     uintptr_t first = (uintptr_t)__app_flash_start__;
-    if (!src || len <= 0 || (addr & 15U) != 0U ||
-        ((unsigned)len & 15U) != 0U || addr < first ||
+    if (!src || len <= 0 || (addr & 15U) != 0U || addr < first ||
         addr >= end || (unsigned)len > end - addr ||
         (unsigned)len > 1024U)
         return 0;
@@ -28,6 +27,29 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
      */
     if ((addr / DL_FLASH_BANK_SIZE) ==
         ((uintptr_t)&boot_am13e_flash_write / DL_FLASH_BANK_SIZE))
+        return 0;
+
+    /* WiFi-Link signature invalidation: two 8-byte all-FF writes to
+     * application blocks 0 and 1. The first erases the full 2 KiB
+     * metadata sector; the second only confirms that it is blank.
+     * No generic 8-byte program is attempted (ECC requires 16 bytes).
+     */
+    if (len == 8) {
+        if (addr != first && addr != first + 1024U)
+            return 0;
+        for (unsigned i = 0; i < 8U; ++i)
+            if ((uint8_t)src[i] != UINT8_C(0xff))
+                return 0;
+        if (addr == first &&
+            DL_Flash_eraseSector((uint32_t)first) != DL_FLASH_SUCCESS)
+            return 0;
+        const volatile uint8_t *check = (const volatile uint8_t *)first;
+        for (unsigned i = 0; i < DL_FLASH_SECTOR_SIZE; ++i)
+            if (check[i] != UINT8_C(0xff))
+                return 0;
+        return 1;
+    }
+    if (((unsigned)len & 15U) != 0U)
         return 0;
 
     /* Only erase on the first 1 KiB block of each 2 KiB sector.
