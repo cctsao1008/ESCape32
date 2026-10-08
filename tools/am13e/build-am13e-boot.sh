@@ -144,8 +144,8 @@ check_ram_symbol() {
     fi
 }
 
-check_ram_symbol "bank0 erase" "$bank0_erase"
-check_ram_symbol "bank0 program" "$bank0_program"
+check_ram_symbol "same-bank erase" "$bank0_erase"
+check_ram_symbol "same-bank program" "$bank0_program"
 check_ram_symbol "Flash cmd exec" "$flash_exec"
 
 if [ -n "$ramfunc" ] && (( ramfunc >= 0x00c18000 && ramfunc < 0x00c20000 )); then
@@ -187,8 +187,8 @@ echo "  AM13E service transport adapter linked"
 echo "  fixed PB14 service transport architecture linked"
 echo "  boot-entry request scaffold linked"
 echo "  image-validity policy scaffold linked"
-echo "  Bank1 erase/program DriverLib path linked"
-echo "  Bank0 erase/program transaction linked in RAM_C"
+echo "  MAIN-Flash normal DriverLib P/E path linked"
+echo "  MAIN-Flash same-bank P/E transaction linked in RAM_C"
 echo "  TI Flash command executor linked in RAM_C"
 echo
 echo "Pseudocode / detailed design remaining:"
