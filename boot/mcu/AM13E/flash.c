@@ -45,6 +45,21 @@ static unsigned next_block = 2U;
 static unsigned last_block = 256U;
 static unsigned last_length;
 
+/* Test-only simulation of a reset: volatile session state is lost while
+ * Flash contents remain intact. Never compiled into an AM13E firmware build.
+ */
+#ifdef AM13E_FLASH_TEST
+void boot_am13e_test_reset_update_state(void) {
+    for (unsigned i = 0; i < sizeof pending_header; ++i)
+        pending_header[i] = 0U;
+    pending_header_valid = false;
+    update_phase = UPDATE_IDLE;
+    next_block = 2U;
+    last_block = 256U;
+    last_length = 0U;
+}
+#endif
+
 static bool same_flash_block(uintptr_t addr, const char *src, unsigned len) {
     const volatile uint8_t *flash = (const volatile uint8_t *)addr;
     for (unsigned i = 0; i < len; ++i)
