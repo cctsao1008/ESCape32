@@ -136,11 +136,15 @@ static int getcode(void) {
 static void nextstep(void) {
 	if (sine) { // Sine startup
 #if defined(ESCAPE32_AM13E)
-#error "E62 hardware port required: sine startup timer"
+		/* Legacy sine carrier and phase compare offsets assume TIM1, one
+		 * CLK domain, and DEAD_TIME added to compare. None of those values
+		 * describes an E62 MCPWM sine drive without board qualification.
+		 * Keep all legacy sine register/compare work out of AM13E builds.
+		 */
+#error "E62 requires a board-qualified MCPWM sine startup implementation"
 #else
 		TIM_ARR(IFTIM) = IFTIM_OCR = sine;
 		TIM_EGR(IFTIM) = TIM_EGR_UG;
-#endif /* ESCAPE32_AM13E */
 		if (!prep && step) step = step * 60 - 59; // Switch over from 6-step
 		if (reverse) {
 			if (--step < 1) step = 360;
@@ -173,6 +177,7 @@ static void nextstep(void) {
 		sync = 0;
 		prep = 1;
 		return;
+#endif /* ESCAPE32_AM13E: legacy sine startup */
 	}
 #ifdef HALL_MAP
 	static const char map[][2] = {{2, 4}, {4, 6}, {3, 5}, {6, 2}, {1, 3}, {5, 1}}; // Hall sensor code mapping
