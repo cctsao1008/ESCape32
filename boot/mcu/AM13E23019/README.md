@@ -29,7 +29,9 @@ Implemented and build-validated:
   executor linked in `.TI.ramfunc` / RAM_C;
 - readback verification;
 - common ESCape32 boot command engine under `boot/src/protocol.c`;
-- AM13E boot platform adapter under `boot/mcu/AM13E23019/src/boot_port.c`.
+- common ESCape32 service framing under `boot/src/service_io.c`;
+- AM13E boot platform adapter under `boot/mcu/AM13E23019/src/boot_port.c`;
+- AM13E service-transport adapter under `boot/mcu/AM13E23019/src/boot_service_port.c`, including the ESCape32-compatible software CRC-32 implementation.
 
 The common protocol engine preserves the upstream command IDs and the
 PROBE / INFO / READ / WRITE command flow. UPDATE and SETWRP remain optional
@@ -37,8 +39,7 @@ platform/manufacturing extensions.
 
 ## Next work
 
-The next implementation step is the generic service-I/O backend required to
-connect the AM13E target to `boot_protocol_run()`.
+The generic service-I/O contract is now in place. The next implementation step is to bind a physical AM13E byte transport to `boot_service_port_bind()` and then enter `boot_protocol_run()`.
 
 The physical service binding must stay outside the common command engine.
 PB14/GPIO46 is the current runtime PWM/DShot/BiDShot pin, but its reuse for
@@ -46,7 +47,7 @@ service/update remains subject to the product HW architecture / TI review.
 
 Still open:
 
-- service-I/O backend and physical binding;
+- physical service transport binding and target-specific byte timing;
 - application-to-boot entry request encoding;
 - image header / integrity / valid-record representation;
 - Flash protection detailed design;
