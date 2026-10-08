@@ -324,6 +324,11 @@ static void am13e_bemf_capture(uint32_t elapsed_ecap_ticks)
     const hw_bemf_rel17_bridge_action_t action = hw_bemf_rel17_bridge_event(
         &state, false, true, (int)capture_us, 0, cfg.timing);
     if (!action.arm_delay) return;
+    /* Negative/zero policy delays must never wrap into a huge uint32 timer. */
+    if (action.delay_ticks <= 0) {
+        am13e_bemf_cancel_delay();
+        return;
+    }
     uint32_t delay_ecap_ticks;
     if (!am13e_clock_convert_ticks((uint32_t)action.delay_ticks,
                                    1000000U, am13e_active_contract->ecap_hz,
@@ -794,11 +799,24 @@ void main(void) {
 		if (++n == 8) n = 0;
 		if (curduty > newduty ? sync < 6 || (curduty -= b) < newduty : (curduty += b) > newduty) curduty = newduty; // Duty cycle slew rate limiting
 	setduty:
+#if defined(ESCAPE32_AM13E)
+		/* MCPWM compare is expressed directly in the qualified time-base
+		 * domain. Dead-band belongs to the separate MCPWM DB path and must
+		 * not be treated as the STM32 TIM1 duty-offset constant.
+		 * Guard against invalid periods before scaling.
+		 */
+		if (!am13e_active_contract ||
+		    !am13e_contract_qualified(am13e_active_contract) ||
+		    arr < 2 || arr > UINT16_MAX)
+			hard_fault_handler();
+		ccr = scale(curduty, 0, 2000, 0, arr - 1);
+#else
 #ifdef FULL_DUTY // Allow 100% duty cycle
 		ccr = scale(curduty, 0, 2000, lock || (running && cfg.damp) ? DEAD_TIME : 0, arr--);
 #else
 		ccr = scale(curduty, 0, 2000, lock || (running && cfg.damp) ? DEAD_TIME : 0, brushed ? arr - (CLK_MHZ * 3 >> 1) : arr);
 #endif
+#endif /* legacy STM32 compare calculation */
 #if defined(ESCAPE32_AM13E)
 		/* Actual MCPWM shadow writes; hardware output enable stays gated by
 		 * qualified MCPWM/AQ/dead-band/trip configuration.
