@@ -23,11 +23,16 @@ set pagination off
 set architecture arm
 file $tmp/handoff.elf
 target remote localhost:$port
-printf "[INFO] reset PC=0x%x MSP=0x%x\\n", \$pc, \$msp
+printf "[INFO] reset PC=0x%x SP=0x%x\\n", \$pc, \$sp
+x/2wx 0x00000000
+x/2wx 0x00006000
+set \$sp = *(unsigned int*)0x00000000
+set \$pc = boot_reset
+set \$xpsr = 0x01000000
 hbreak app_landed
 continue
 set \$vtor = *(unsigned int*)0xE000ED08
-set \$marker = *(unsigned int*)0x20000100
+set \$marker = *(unsigned int*)0x28000100
 if \$vtor != 0x6000
   printf "[FAIL] VTOR = 0x%x\\n", \$vtor
   quit 1
@@ -36,11 +41,11 @@ if \$marker != 0x5a
   printf "[FAIL] APP marker = 0x%x\\n", \$marker
   quit 1
 end
-if \$msp != 0x20008000
-  printf "[FAIL] MSP = 0x%x\\n", \$msp
+if \$sp != 0x28008000
+  printf "[FAIL] SP = 0x%x\\n", \$sp
   quit 1
 end
-printf "[PASS] QEMU Cortex-M33 reached APP at 0x6000; VTOR / MSP / APP marker correct\\n"
+printf "[PASS] QEMU Cortex-M33 instruction handoff at 0x6000; VTOR / SP / APP marker correct (GDB-seeded entry)\\n"
 quit 0
 EOF
 "$qemu" -M mps2-an505 -cpu cortex-m33 -nographic \
