@@ -44,7 +44,7 @@ typedef struct {
      * UPDATE and SETWRP are optional platform/manufacturing extensions.
      * If supplied, the callback owns the command-specific sub-protocol.
      */
-    void (*handle_update)(void);
+    bool (*handle_update)(void);
     void (*handle_setwrp)(void);
 
     bool (*app_valid)(void);
