@@ -1,3 +1,9 @@
+#if defined(ESCAPE32_AM13E)
+/* Legacy STM32/AT32 board init, GPIO, timers and sound output are not
+ * valid for the TI AM13E. The AM13E target must supply platform-native
+ * functions; this legacy implementation is excluded, not stubbed.
+ */
+#else /* legacy MCU support */
 /*
 ** Copyright (C) Arseny Vakhrushev <arseny.vakhrushev@me.com>
 **
@@ -500,3 +506,5 @@ void playsound(const char *buf, int vol) { // AU file format, 8-bit linear PCM, 
 	resetcom();
 	busy = 0;
 }
+
+#endif /* ESCAPE32_AM13E */
