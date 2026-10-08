@@ -53,7 +53,9 @@ Implemented and build-validated:
 - deterministic 32-MHz Boot platform/clock basis;
 - fixed PB14 38400-baud polling service transport;
 - application vector/reset sanity check;
-- image-validity policy layer with future header/CRC pseudocode;
+- fixed 32-byte E62 image header at APP + 0x100;
+- header CRC-32 + payload CRC-32 launch validation;
+- sequential single-image WRITE transaction starting at APP offset 0;
 - application-to-Boot one-shot request stored in SYSCTL SHUTDNSTORE bytes;
 - direct Cortex-M33 VTOR/MSP/reset-entry handoff;
 - application-only read/write range mapping;
@@ -71,7 +73,7 @@ platform/manufacturing extensions.
 ## Detailed design remaining
 
 - PB14 electrical/timing validation on E62 hardware;
-- image header / integrity / valid-record representation;
+- service-tool use of the packed E62 image format;
 - Flash protection policy;
 - optional bootloader self-update;
 - on-target validation of PB14 service, MAIN-Flash P/E across the full APP
