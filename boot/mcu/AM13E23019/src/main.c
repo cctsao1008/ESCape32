@@ -14,6 +14,8 @@
  * encoding may still be pseudocode, but the module boundaries are fixed here.
  */
 
+#include <stddef.h>
+
 #include "boot_image.h"
 #include "boot_port.h"
 #include "boot_request.h"
