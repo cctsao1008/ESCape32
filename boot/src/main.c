@@ -65,7 +65,18 @@ void main(void) {
 				if (num == -1) goto done;
 				int cnt = recvval();
 				if (cnt == -1) goto done;
+#if defined(AM13E)
+				/* The MCU backend validates address arithmetic and readable Flash. */
+				const void *read_addr = 0;
+				const unsigned read_len = (unsigned)(cnt + 1) << 2;
+				if (!boot_am13e_read_range((unsigned)num, read_len, &read_addr)) {
+					sendval(RES_ERROR);
+					break;
+				}
+				senddata(read_addr, (int)read_len);
+#else
 				senddata(_rom_end + (num << 10), (cnt + 1) << 2);
+#endif
 				break;
 			}
 			case CMD_WRITE: { // Write block
@@ -74,7 +85,17 @@ void main(void) {
 				char buf[1024];
 				int len = recvdata(buf);
 				if (len == -1) goto done;
+#if defined(AM13E)
+				/* Reject out-of-region or unaligned writes before touching Flash. */
+				char *write_addr = 0;
+				if (!boot_am13e_write_range((unsigned)num, (unsigned)len, &write_addr)) {
+					sendval(RES_ERROR);
+					break;
+				}
+				sendval(write(write_addr, buf, len) ? RES_OK : RES_ERROR);
+#else
 				sendval(write(_rom_end + (num << 10), buf, len) ? RES_OK : RES_ERROR);
+#endif
 				break;
 			}
 			case CMD_UPDATE: { // Update bootloader
