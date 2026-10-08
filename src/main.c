@@ -30,6 +30,15 @@
 #define REVISION 17
 #define REVPATCH 3
 
+/* BEMF policy units: AM13E capture callback normalizes to 1 MHz.
+ * Legacy timer resolution remains the original MCU-defined IFTIM_XRES.
+ */
+#if defined(ESCAPE32_AM13E)
+#define ESC_BEMF_TIME_SHIFT 0
+#else
+#define ESC_BEMF_TIME_SHIFT IFTIM_XRES
+#endif
+
 const Cfg cfgdata = {
 	.id = 0x32ea,
 	.revision = REVISION,
@@ -187,14 +196,14 @@ static void nextstep(void) {
 	hw_motor_apply_six_step(p, n, cfg.damp);
 	compctl(pcc);
 	pcc = cc;
-	if (ival > 1000 << IFTIM_XRES) {
-		val = 1000 << IFTIM_XRES;
+	if (ival > 1000 << ESC_BEMF_TIME_SHIFT) {
+		val = 1000 << ESC_BEMF_TIME_SHIFT;
 		cnt = 0;
 	} else if (++cnt == 6) {
 		if (abs(val - ival) > ival >> 1) { // Probably desync
 			sync = 0;
 			fast = 0;
-			ival = 5000 << IFTIM_XRES;
+			ival = 5000 << ESC_BEMF_TIME_SHIFT;
 			ertm = 100000000;
 		}
 		val = ival;
@@ -247,9 +256,9 @@ static void nextstep(void) {
 	TIM_SR(IFTIM) = 0; // Clear BEMF events before enabling interrupts
 	TIM_DIER(IFTIM) = TIM_DIER_UIE | IFTIM_ICIE;
 #endif /* ESCAPE32_AM13E */
-	buf[step - 1] = hall > 4000 ? hall << IFTIM_XRES : ival;
+	buf[step - 1] = hall > 4000 ? hall << ESC_BEMF_TIME_SHIFT : ival;
 	if (sync < 6) return;
-	ertm = (buf[0] + buf[1] + buf[2] + buf[3] + buf[4] + buf[5]) >> (IFTIM_XRES + 1); // Electrical revolution time (us)
+	ertm = (buf[0] + buf[1] + buf[2] + buf[3] + buf[4] + buf[5]) >> (ESC_BEMF_TIME_SHIFT + 1); // Electrical revolution time (us)
 #ifdef ERPM_PIN
 	if (step == 1) GPIO(ERPM_PORT, BSRR) = 1 << (ERPM_PIN + 16);
 	else if (step == 4) GPIO(ERPM_PORT, BSRR) = 1 << ERPM_PIN;
@@ -378,13 +387,13 @@ void tim3_isr(void) { // Any change on Hall sensor inputs
 		if (sine || !step) return;
 		sync = 0;
 		fast = 0;
-		ival = 10000 << IFTIM_XRES;
+		ival = 10000 << ESC_BEMF_TIME_SHIFT;
 		ertm = 100000000;
 		return;
 	}
 	hall = (TIM3_CCR1 + hall * 3) >> 2;
 	if (hall < 5000 || sine || !step) return;
-	ival = hall << IFTIM_XRES;
+	ival = hall << ESC_BEMF_TIME_SHIFT;
 	TIM1_EGR = TIM_EGR_COMG;
 	TIM_EGR(IFTIM) = TIM_EGR_UG;
 	TIM_DIER(IFTIM) = 0;
@@ -570,7 +579,7 @@ void main(void) {
 #else
 	TIM1_CR2 = TIM_CR2_CCPC | TIM_CR2_CCUS | TIM_CR2_MMS_COMPARE_PULSE; // TRGO=OC1
 #endif
-	TIM_PSC(IFTIM) = (CLK_MHZ >> (IFTIM_XRES + 1)) - 1; // 125/250/500ns resolution
+	TIM_PSC(IFTIM) = (CLK_MHZ >> (ESC_BEMF_TIME_SHIFT + 1)) - 1; // 125/250/500ns resolution
 	TIM_ARR(IFTIM) = 0;
 	TIM_CR1(IFTIM) = TIM_CR1_URS;
 	TIM_EGR(IFTIM) = TIM_EGR_UG;
@@ -680,7 +689,7 @@ void main(void) {
 			if (sync < 6 || erpm < 800 || lock == 2) { // Drag brake
 #ifdef PARK_PIN
 				if (cfg.prot_park && running && park()) { // Parking
-					sine = (1000 << IFTIM_XRES) / cfg.prot_park;
+					sine = (1000 << ESC_BEMF_TIME_SHIFT) / cfg.prot_park;
 					ertm = 100000000;
 					erpm = 0;
 					goto skipduty;
@@ -714,11 +723,11 @@ void main(void) {
 			braking = 0;
 		}
 		if (range + (sine ? delta : -delta) < input) newduty = scale(input, range + delta, 2000, cfg.duty_min * 20, cfg.duty_max * 20);
-		else sine = scale(input, 0, range - delta, 1000 << IFTIM_XRES, cfg.prot_stall ? (333333 << IFTIM_XRES) / cfg.prot_stall : 145 << IFTIM_XRES);
+		else sine = scale(input, 0, range - delta, 1000 << ESC_BEMF_TIME_SHIFT, cfg.prot_stall ? (333333 << ESC_BEMF_TIME_SHIFT) / cfg.prot_stall : 145 << ESC_BEMF_TIME_SHIFT);
 		if (sine) { // Sine startup
 			if (!newduty) {
 				if (!ertm) goto skipduty;
-				ertm = sine * (180 >> IFTIM_XRES);
+				ertm = sine * (180 >> ESC_BEMF_TIME_SHIFT);
 				erpm = 60000000 / ertm;
 				goto skipduty;
 			}
@@ -727,19 +736,23 @@ void main(void) {
 				int a = step - 1;
 				int b = a / 60;
 				int c = b * 60;
+#if defined(ESCAPE32_AM13E)
+#error "E62 hardware port required: sine-to-six-step commutation timer"
+#else
 				IFTIM_OCR = sine * (reverse ? (void)(++b == 6 && (b = 0)), a - c + 1 : c - a + 60); // Commutation delay
-				TIM_ARR(IFTIM) = (1 << (IFTIM_XRES + 16)) - 1;
+				TIM_ARR(IFTIM) = (1 << (ESC_BEMF_TIME_SHIFT + 16)) - 1;
 				TIM_EGR(IFTIM) = TIM_EGR_UG;
+#endif /* ESCAPE32_AM13E */
 				step = b + 1;
 			}
 			sine = 0;
 			prep = 0;
 			sync = 0;
 			fast = 0;
-			ival = 10000 << IFTIM_XRES;
+			ival = 10000 << ESC_BEMF_TIME_SHIFT;
 			nextstep();
 			__enable_irq();
-			initpid(&bpid, 10000 << IFTIM_XRES);
+			initpid(&bpid, 10000 << ESC_BEMF_TIME_SHIFT);
 			curduty = 0;
 			boost = 0;
 		}
@@ -818,7 +831,7 @@ void main(void) {
 			}
 			__disable_irq();
 			step = oldstep;
-			ival = 10000 << IFTIM_XRES;
+			ival = 10000 << ESC_BEMF_TIME_SHIFT;
 			ertm = 100000000;
 			nextstep();
 #if defined(ESCAPE32_AM13E)
@@ -830,11 +843,11 @@ void main(void) {
 #else
 			TIM1_DIER |= TIM_DIER_COMIE;
 #endif
-			TIM_ARR(IFTIM) = IFTIM_OCR = (1 << (IFTIM_XRES + 16)) - 1;
+			TIM_ARR(IFTIM) = IFTIM_OCR = (1 << (ESC_BEMF_TIME_SHIFT + 16)) - 1;
 			TIM_EGR(IFTIM) = TIM_EGR_UG;
 #endif /* ESCAPE32_AM13E */
 			__enable_irq();
-			initpid(&bpid, 10000 << IFTIM_XRES);
+			initpid(&bpid, 10000 << ESC_BEMF_TIME_SHIFT);
 			boost = 0;
 		} else if (!running && step) { // Stop motor
 #if defined(ESCAPE32_AM13E)
@@ -876,7 +889,7 @@ void main(void) {
 		else rearm = 1; // Low voltage cutoff after 3s
 #endif
 #endif
-		boost = cfg.prot_stall ? clamp(boost + (calcpid(&bpid, hall > 4000 ? hall : ival >> IFTIM_XRES, 20000000 / cfg.prot_stall - 800) >> 16), 0, 160) : 0; // Up to 8%
+		boost = cfg.prot_stall ? clamp(boost + (calcpid(&bpid, hall > 4000 ? hall : ival >> ESC_BEMF_TIME_SHIFT, 20000000 / cfg.prot_stall - 800) >> 16), 0, 160) : 0; // Up to 8%
 #if SENS_CNT >= 2
 		choke = cfg.prot_curr ? clamp(choke + (calcpid(&cpid, curr, cfg.prot_curr * 100) >> 10), 0, 2000) : 0;
 #endif
