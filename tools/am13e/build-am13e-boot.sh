@@ -10,7 +10,7 @@ GCC_ROOT="${GCC_ARM_TOOLCHAIN_PATH:-$TI_ROOT/$EXPECTED_GCC_DIR}"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
-boot_src="$repo_root/boot/mcu/am13e23019"
+boot_src="$repo_root/boot/mcu/AM13E23019"
 
 sdk_build_dir="$SDK_ROOT/build/am13e230x/m33_gcc_arm_debug"
 work_dir="$repo_root/.am13e-build/boot"
