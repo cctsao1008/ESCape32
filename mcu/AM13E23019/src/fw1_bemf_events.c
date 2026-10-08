@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "dl_timerg.h"
+#include "dl_ecap.h"
 #include "hw_bemf_am13e_events.h"
 
 static am13e_bemf_event_engine_t engine;
@@ -75,4 +76,20 @@ void fw1_bemf_event_timg12_irq(void)
 void fw1_bemf_event_timeout(unsigned timer_xres)
 {
     if (initialized) am13e_bemf_event_timeout(&engine, timer_xres);
+}
+
+/*
+ * Hardware eCAP Event-1 entry for FW1: CAP1 is a timer count, not
+ * intrinsically an ESCape32 commutation interval. The caller must reset
+ * the eCAP elapsed-time epoch at each commutation before arming capture.
+ * The eCAP event and timer clock domains must be configured consistently.
+ */
+bool fw1_bemf_event_ecap0_event1(void)
+{
+    uint16_t status = DL_ECAP_getInterruptSource(ECAP0);
+    if ((status & DL_ECAP_ISR_SOURCE_CEVT1) == 0U)
+        return false;
+    uint32_t captured = DL_ECAP_getEventTimeStamp(ECAP0, DL_ECAP_EVENT_1);
+    DL_ECAP_clearInterrupt(ECAP0, DL_ECAP_ISR_SOURCE_CEVT1);
+    return fw1_bemf_event_capture_interval(captured);
 }
