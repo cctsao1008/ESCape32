@@ -875,7 +875,14 @@ void main(void) {
 		__WFI();
 		if (tick & 0xf) continue; // 16kHz -> 1kHz
 #ifndef ANALOG
+#if defined(ESCAPE32_AM13E)
+		/* Legacy rearm label is unavailable on AM13E. The qualified
+		 * fault/rearm state machine must be implemented before enabling
+		 * this target; startup already retains a compile-time gate.
+		 */
+#else
 		if (rearm && !running) goto rearm;
+#endif /* ESCAPE32_AM13E */
 		if (++auxup == 100) { // Restore brake after 100ms timeout
 			brake = cfg.duty_drag;
 			auxup = 0;
