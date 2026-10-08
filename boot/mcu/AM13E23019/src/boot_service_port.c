@@ -8,6 +8,7 @@
 
 #include "boot_image.h"
 #include "boot_port.h"
+#include "boot_update.h"
 #include "crc32.h"
 #include "service_io.h"
 
@@ -73,7 +74,7 @@ const boot_protocol_ops_t *boot_service_port_bind(
         .send_data = service_send_data,
         .device_id = service_device_id,
         .map_read = boot_port_map_read,
-        .write_block = boot_port_write_block,
+        .write_block = boot_update_write_block,
         .handle_update = NULL,
         .handle_setwrp = NULL,
         .app_valid = boot_image_launchable,
