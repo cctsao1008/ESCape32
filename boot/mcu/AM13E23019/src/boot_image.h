@@ -1,16 +1,18 @@
 /*
  * AM13E23019 boot image policy.
  *
- * Architecture first: vector sanity is implemented now. Header/CRC/valid-record
- * policy is intentionally represented but not yet enforced.
+ * A launchable application requires both a sane Cortex-M33 vector table and a
+ * valid E62 image header/CRC record.
  */
 #pragma once
 
 #include <stdbool.h>
 
 typedef enum {
-    BOOT_IMAGE_INVALID = 0,
-    BOOT_IMAGE_VECTOR_VALID,
+    BOOT_IMAGE_INVALID_VECTOR = 0,
+    BOOT_IMAGE_INVALID_HEADER,
+    BOOT_IMAGE_INVALID_HEADER_CRC,
+    BOOT_IMAGE_INVALID_IMAGE_CRC,
     BOOT_IMAGE_FULLY_VALID,
 } boot_image_status_t;
 
