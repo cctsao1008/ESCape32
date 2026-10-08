@@ -243,7 +243,7 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
 
     if (addr == first + 1024U) {
         /* The host protocol has no end-of-image command. Therefore we
-         * require the authenticated image length to match exactly the
+         * require the CRC-validated image length to match exactly the
          * sequential data span acknowledged in this transaction.
          * Flash bytes for the metadata sector have now been programmed
          * and read back, but the application signature is still erased.
