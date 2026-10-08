@@ -2,5 +2,4 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
-#include "cmsis_gcc.h"
-#include "am13e230x.h"
+#include "hw/soc.h"
