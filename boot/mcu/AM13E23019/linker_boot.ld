@@ -1,5 +1,5 @@
 /*
- * E62 AM13E23019 common bootloader linker script.
+ * AM13E23019 common bootloader linker script.
  * Derived from TI SDK 26.01.00.03 GCC layout.
  */
 _Min_Heap_Size  = 0x1000;
@@ -25,8 +25,8 @@ REGION_ALIAS("REGION_TEXT_RAM", RAM_C);
 REGION_ALIAS("REGION_ARM_EXIDX", FLASH_IMAGE);
 REGION_ALIAS("REGION_ARM_EXTAB", FLASH_IMAGE);
 
-__e62_boot_flash_start__ = ORIGIN(FLASH_IMAGE);
-__e62_boot_flash_end__ = ORIGIN(FLASH_IMAGE) + LENGTH(FLASH_IMAGE);
+__boot_flash_start__ = ORIGIN(FLASH_IMAGE);
+__boot_flash_end__ = ORIGIN(FLASH_IMAGE) + LENGTH(FLASH_IMAGE);
 
 SECTIONS
 {
@@ -152,6 +152,6 @@ SECTIONS
     PROVIDE(__stack = __StackTop);
 }
 
-ASSERT(ADDR(.intvecs) == 0x00000000, "E62 boot vector table must start at 0x00000000");
-ASSERT(__e62_boot_flash_start__ == 0x00000000, "E62 boot start mismatch");
-ASSERT(__e62_boot_flash_end__ == 0x00004000, "E62 boot end mismatch");
+ASSERT(ADDR(.intvecs) == 0x00000000, "Boot vector table must start at 0x00000000");
+ASSERT(__boot_flash_start__ == 0x00000000, "Boot start mismatch");
+ASSERT(__boot_flash_end__ == 0x00004000, "Boot end mismatch");
