@@ -880,7 +880,13 @@ void main(void) {
 			boost = 0;
 		} else if (!running && step) { // Stop motor
 #if defined(ESCAPE32_AM13E)
-#error "E62 hardware port required: commutation stop"
+			__disable_irq();
+			am13e_bemf_cancel_delay();
+			hw_motor_am13e_runtime_stop();
+			/* Actual gate-disable and asynchronous trip effectiveness
+			 * remain board-level safety blockers.
+			 */
+#error "E62 hardware port required: qualified motor disable/trip"
 #else
 			__disable_irq();
 #ifdef SW_BLANKING
