@@ -1,6 +1,6 @@
 /* ESCape32 rel17 configuration normalization, independent of Flash I/O. */
 #include "esc_config.h"
-#include "defs.h"
+#include "esc_config_defaults.h"
 
 static inline int cfg_min(int a, int b) { return a < b ? a : b; }
 static inline int cfg_max(int a, int b) { return a > b ? a : b; }
