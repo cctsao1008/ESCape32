@@ -35,6 +35,27 @@ function(add_target_am13e name)
         "${platform}/src/am13e_timg12.c"
         "${platform}/src/am13e_irq.c"
         ${generated})
+    # Compile real rel17 main.c as an opt-in diagnostic object, not a firmware.
+    option(ESCAPE32_AM13E_REL17_PROBE "Compile rel17 main.c against AM13E headers" OFF)
+    if(ESCAPE32_AM13E_REL17_PROBE)
+        add_library(${name}_rel17_probe OBJECT "${CMAKE_CURRENT_SOURCE_DIR}/src/main.c")
+        target_include_directories(${name}_rel17_probe PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/src" "${platform}/src")
+        target_include_directories(${name}_rel17_probe SYSTEM PRIVATE
+            "${AM13E_SYSCFG_DIR}"
+            "${AM13E_SDK_ROOT}/source/device/am13e230x/include"
+            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x"
+            "${AM13E_SDK_ROOT}/source/arch/include"
+            "${AM13E_SDK_ROOT}/source/arch/m33/include"
+            "${AM13E_SDK_ROOT}/source/cmsis/Core/Include"
+            "${AM13E_SDK_ROOT}/source/device/am13e230x/include/hw"
+            "${AM13E_SDK_ROOT}/source/compiler/m33_gcc_arm")
+        target_compile_definitions(${name}_rel17_probe PRIVATE
+            ESCAPE32_AM13E ESCAPE32_AM13E_MCPWM_INST=MCPWM0
+            __DEVICE_SHORT__="am13e230x" __DEVICE_LONG__="AM13E230x"
+            __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
+        target_compile_options(${name}_rel17_probe PRIVATE ${am13e_opts})
+    endif()
     # Own headers retain all ESCape32 warning diagnostics.
     target_include_directories(${name}.elf PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
