@@ -1,3 +1,10 @@
+#if defined(ESCAPE32_AM13E)
+/* The AM13E platform does not compile this legacy libopencm3 peripheral
+ * implementation. E62 I/O lives in mcu/AM13E23019/src, with a separate
+ * board-qualified driver implementation still required where applicable.
+ * No dummy peripheral definitions or no-op callbacks are supplied here.
+ */
+#else /* STM32 / AT32 legacy peripheral implementation */
 /*
 ** Copyright (C) Arseny Vakhrushev <arseny.vakhrushev@me.com>
 **
@@ -1035,3 +1042,5 @@ static void cliirq(void) {
 	}
 }
 #endif
+
+#endif /* ESCAPE32_AM13E */
