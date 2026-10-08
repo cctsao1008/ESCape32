@@ -66,12 +66,12 @@ will require any linked `.vtable` to remain at TI's baseline address
 `0x20000000`.
 
 
-## Stage Boot-A — common boot/application launch contract
+## Boot Porting — common boot/application launch contract
 
-The AM13E bootloader has a separate build-only Stage Boot-A target under
-`boot/mcu/am13e23019`.
+The AM13E bootloader has a separate target under
+`boot/mcu/AM13E23019`.
 
-It implements only architecture-fixed behavior:
+The current implementation establishes the architecture-fixed behavior:
 
 - boot image owns `0x00000000..0x00003FFF`;
 - application starts at `0x00006000`;
