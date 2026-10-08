@@ -7,6 +7,7 @@
 #include <stddef.h>
 
 #include "boot_flash.h"
+#include "boot_io.h"
 #include "flash_layout.h"
 #include "soc.h"
 
@@ -51,6 +52,8 @@ void boot_port_jump_to_app(void)
     SysTick->CTRL = 0U;
     SysTick->LOAD = 0U;
     SysTick->VAL  = 0U;
+
+    boot_io_prepare_app_handoff();
 
     SCB->VTOR = ESCAPE32_APP_BASE;
     __DSB();
