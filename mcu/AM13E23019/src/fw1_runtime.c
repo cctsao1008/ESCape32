@@ -28,6 +28,7 @@ static void fw1_next_commutation(void)
     uint32_t step = fw1_debug_step;
     step = (step < 1U || step >= 6U) ? 1U : step + 1U;
     fw1_debug_step = step;
+    if (fw1_debug_bemf_ready == 1U) fw1_bemf_ecap_start_epoch();
     (void)hw_motor_am13e_runtime_commutate(
         fw1_positive[step - 1U], fw1_negative[step - 1U], true);
 }
@@ -73,6 +74,7 @@ int main(void)
             uint32_t enable = fw1_debug_enable;
             uint32_t step = fw1_debug_step;
             if (enable == 1U && step >= 1U && step <= 6U) {
+                if (fw1_debug_bemf_ready == 1U) fw1_bemf_ecap_start_epoch();
                 (void)hw_motor_am13e_runtime_commutate(
                     fw1_positive[step - 1U], fw1_negative[step - 1U], true);
             } else {
