@@ -17,6 +17,7 @@
 
 #include "common.h"
 #include "hw_motor.h"
+#include "hw_six_step.h"
 
 #define REVISION 17
 #define REVPATCH 3
@@ -161,13 +162,11 @@ static void nextstep(void) {
 	} else {
 		if (++step > 6) step = 1;
 	}
-	static const uint16_t seq[] = {0x175, 0xd9, 0x1ab, 0x72, 0x1de, 0xac}; // Commutation sequence
 	static int pcc, val, cnt, buf[6];
-	int x = seq[step - 1];
-	int m = x >> 3; // Energized phase mask
-	int p = x & m; // Positive phase
-	int n = ~x & m; // Negative phase
-	int cc = m >> 3 ^ reverse << 2; // Floating phase
+	const hw_six_step_t phase = hw_six_step_decode((unsigned)step, (unsigned)reverse);
+	int p = (int)phase.positive;
+	int n = (int)phase.negative;
+	int cc = (int)phase.comparator;
 	if (cfg.throt_ztc && !throt) p = n = 0; // Zero-throttle coasting
 	hw_motor_apply_six_step(p, n, cfg.damp);
 	compctl(pcc);
