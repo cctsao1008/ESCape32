@@ -71,18 +71,18 @@ def pack(raw: bytes) -> bytes:
     if len(raw) < VECTOR_OFFSET + 16:
         raise ImageError("Raw flat binary does not include the APP+0x800 vector table")
     if raw[HEADER_OFFSET:HEADER_OFFSET + HEADER_SIZE] not in (
-        b"\\xff" * HEADER_SIZE, b"\\x00" * HEADER_SIZE
+        b"\xff" * HEADER_SIZE, b"\x00" * HEADER_SIZE
     ):
         raise ImageError("Image header slot at APP+0x100 must be uninitialized (all FF/00)")
-    if raw[:2] not in (b"\\xff\\xff", b"\\xea\\x32"):
+    if raw[:2] not in (b"\xff\xff", b"\xea\x32"):
         raise ImageError("Image base must contain erased or ESCape32 signature bytes")
     image = bytearray(raw)
-    image.extend(b"\\xff" * ((-len(image)) & 15))
+    image.extend(b"\xff" * ((-len(image)) & 15))
     if len(image) > MAX_LENGTH:
         raise ImageError("16-byte padded image exceeds 256 KiB")
-    image[0:2] = b"\\xea\\x32"
+    image[0:2] = b"\xea\x32"
     _vectors(image)
-    image[HEADER_OFFSET:HEADER_OFFSET + HEADER_SIZE] = b"\\xff" * HEADER_SIZE
+    image[HEADER_OFFSET:HEADER_OFFSET + HEADER_SIZE] = b"\xff" * HEADER_SIZE
     crc = _payload_crc(image)
     first28 = struct.pack("<IHHIIIII", HEADER_MAGIC, VERSION, HEADER_SIZE,
                           TARGET_ID, len(image), crc, 0, 0)
@@ -97,7 +97,7 @@ def verify(image: bytes) -> dict[str, int | str]:
     if len(image) < VECTOR_OFFSET + 16 or len(image) > MAX_LENGTH or len(image) & 15:
         raise ImageError("Invalid image size or alignment")
     _reject_v1_vectors(image)
-    if image[:2] != b"\\xea\\x32":
+    if image[:2] != b"\xea\x32":
         raise ImageError("ESCape32 signature missing at APP+0")
     fields = struct.unpack_from(HEADER_FORMAT, image, HEADER_OFFSET)
     magic, version, size, target, length, image_crc, flags, reserved, hdr_crc = fields
@@ -143,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
             args.output.write_bytes(result)
             summary = verify(result)
             if args.manifest:
-                args.manifest.write_text(json.dumps(summary, indent=2) + "\\n")
+                args.manifest.write_text(json.dumps(summary, indent=2) + "\n")
         else:
             summary = verify(args.image.read_bytes())
         print(json.dumps(summary, indent=2))
