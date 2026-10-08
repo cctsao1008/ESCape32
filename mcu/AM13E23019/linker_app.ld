@@ -1,5 +1,5 @@
 /*
- * E62 AM13E23019 application linker script.
+ * AM13E23019 application linker script.
  * Derived from TI SDK 26.01.00.03 GCC layout.
  */
 _Min_Heap_Size  = 0x1000;
@@ -25,8 +25,8 @@ REGION_ALIAS("REGION_TEXT_RAM", RAM_C);
 REGION_ALIAS("REGION_ARM_EXIDX", FLASH_IMAGE);
 REGION_ALIAS("REGION_ARM_EXTAB", FLASH_IMAGE);
 
-__e62_app_flash_start__ = ORIGIN(FLASH_IMAGE);
-__e62_app_flash_end__ = ORIGIN(FLASH_IMAGE) + LENGTH(FLASH_IMAGE);
+__app_flash_start__ = ORIGIN(FLASH_IMAGE);
+__app_flash_end__ = ORIGIN(FLASH_IMAGE) + LENGTH(FLASH_IMAGE);
 
 SECTIONS
 {
@@ -152,6 +152,6 @@ SECTIONS
     PROVIDE(__stack = __StackTop);
 }
 
-ASSERT(ADDR(.intvecs) == 0x00006000, "E62 APP vector table must start at 0x00006000");
-ASSERT(__e62_app_flash_start__ == 0x00006000, "E62 APP start mismatch");
-ASSERT(__e62_app_flash_end__ == 0x00080000, "E62 APP end mismatch");
+ASSERT(ADDR(.intvecs) == 0x00006000, "APP vector table must start at 0x00006000");
+ASSERT(__app_flash_start__ == 0x00006000, "APP start mismatch");
+ASSERT(__app_flash_end__ == 0x00080000, "APP end mismatch");
