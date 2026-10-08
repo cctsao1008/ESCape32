@@ -16,6 +16,7 @@
 */
 
 #include "common.h"
+#include "service_io.h"
 
 #ifdef AT32F4
 #define USART2_TDR USART2_DR
@@ -156,27 +157,24 @@ void sendbuf(const char *buf, int len) {
 }
 #endif
 
+static const boot_service_io_ops_t legacy_service_io = {
+	.recv_buffer = recvbuf,
+	.send_buffer = sendbuf,
+	.crc32 = crc32,
+};
+
 int recvval(void) {
-	char buf[2];
-	return recvbuf(buf, 2) && (buf[0] ^ buf[1]) == 0xff ? buf[0] : -1;
+	return boot_service_recv_value(&legacy_service_io);
 }
 
 void sendval(int val) {
-	char buf[2] = {val, ~val};
-	sendbuf(buf, 2);
+	boot_service_send_value(&legacy_service_io, val);
 }
 
 int recvdata(char *buf) {
-	int cnt = recvval();
-	if (cnt == -1) return -1;
-	int len = (cnt + 1) << 2;
-	uint32_t crc;
-	return recvbuf(buf, len) && recvbuf((char *)&crc, 4) && crc32(buf, len) == crc ? len : -1;
+	return boot_service_recv_data(&legacy_service_io, buf);
 }
 
 void senddata(const char *buf, int len) {
-	uint32_t crc = crc32(buf, len);
-	sendval((len >> 2) - 1);
-	sendbuf(buf, len);
-	sendbuf((char *)&crc, 4);
+	boot_service_send_data(&legacy_service_io, buf, len);
 }
