@@ -173,3 +173,7 @@ SECTIONS
 ASSERT(ADDR(.intvecs) == 0x00000000, "Boot vector table must start at 0x00000000");
 ASSERT(__boot_flash_start__ == 0x00000000, "Boot start mismatch");
 ASSERT(__boot_flash_end__ == 0x00004000, "Boot end mismatch");
+ASSERT(__app_flash_start__ == 0x00006000, "Application base mismatch");
+ASSERT((__app_flash_start__ % 0x800) == 0, "Application must start on a Flash sector");
+ASSERT(__app_flash_start__ >= __boot_flash_end__, "Application overlaps bootloader");
+ASSERT(__boot_storage_end__ == 0x00080000, "Flash limit mismatch");
