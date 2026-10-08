@@ -56,7 +56,11 @@ void main(void) {
 #else
 				int mcu = DBGMCU_IDCODE;
 #endif
+#if defined(AM13E)
+				char buf[32] = {REVISION, boot_am13e_io_id(), mcu, mcu >> 8, mcu >> 16, mcu >> 24};
+#else
 				char buf[32] = {REVISION, IO_PIN, mcu, mcu >> 8, mcu >> 16, mcu >> 24};
+#endif
 				senddata(buf, sizeof buf);
 				break;
 			}
