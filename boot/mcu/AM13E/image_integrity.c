@@ -64,8 +64,11 @@ boot_am13e_image_status_t boot_am13e_image_check(
     const uintptr_t entry = (uintptr_t)(pc & ~UINT32_C(1));
     if ((sp & 7U) || sp < UINT32_C(0x20000008) ||
         sp > UINT32_C(0x20018000) || (pc & 1U) == 0U ||
-        entry < first + AM13E_IMAGE_VECTOR_OFFSET ||
-        entry >= first + len)
+        /* first is a *host pointer* in native tests. The M33 reset PC
+         * must be checked against the device's PHYSICAL image address.
+         */
+        entry < AM13E_IMAGE_APP_BASE + AM13E_IMAGE_VECTOR_OFFSET ||
+        entry >= AM13E_IMAGE_APP_BASE + len)
         return AM13E_IMAGE_INVALID_VECTOR;
 
     uint32_t crc = UINT32_C(0xffffffff);
