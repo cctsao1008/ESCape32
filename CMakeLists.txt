@@ -208,7 +208,14 @@ if(AM13E_ENABLE_APP_SMOKE)
 
     add_custom_command(
         OUTPUT "${am13e_smoke_raw}"
+        # The zero-size .data section is ALLOC/LOAD with VMA/LMA
+        # 0x20000000 on GNU ld. objcopy --gap-fill would otherwise
+        # expand the 0x6000-based flat BIN to ~512 MiB. This opt-in
+        # smoke fixture asserts SIZEOF(.data)==0 in its linker script,
+        # so excluding it is safe. Production APP must retain a
+        # proper initialized-data load image and is NOT covered here.
         COMMAND "${AM13E_OBJCOPY}" -O binary --gap-fill=0xff
+            --remove-section=.data
             "$<TARGET_FILE:AM13E_APP_SMOKE.elf>" "${am13e_smoke_raw}"
         DEPENDS AM13E_APP_SMOKE.elf "${am13e_smoke_script}"
         VERBATIM)
