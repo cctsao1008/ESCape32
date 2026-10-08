@@ -167,6 +167,69 @@ function(add_target name mcu)
 	add_custom_target(flash-${name} COMMAND st-flash --reset --connect-under-reset --format ihex write ${hex} DEPENDS ${hex})
 endfunction()
 
+# Stage C2: opt-in ARM application LINK SMOKE (not production FW1/FW2).
+# Uses the same ESCape32 root CMake toolchain and existing SDK installation.
+# The application code remains an OBJECT library until full rel17 porting.
+option(AM13E_ENABLE_APP_SMOKE
+    "Enable E62 v2 ARM app-link / packer smoke validation" OFF)
+if(AM13E_ENABLE_APP_SMOKE)
+    set(am13e_smoke_script
+        "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/linker_app_smoke.ld")
+    set(am13e_smoke_source
+        "${PROJECT_SOURCE_DIR}/boot/tests/am13e_app_link_smoke.c")
+    set(am13e_smoke_packer
+        "${PROJECT_SOURCE_DIR}/boot/tools/pack_am13e_v2.py")
+    set(am13e_smoke_verify
+        "${PROJECT_SOURCE_DIR}/boot/tests/am13e_app_link_smoke_test.py")
+    find_program(AM13E_OBJCOPY arm-none-eabi-objcopy)
+    find_program(AM13E_OBJDUMP arm-none-eabi-objdump)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    if(NOT AM13E_OBJCOPY OR NOT AM13E_OBJDUMP)
+        message(FATAL_ERROR
+            "Stage C2 requires arm-none-eabi-objcopy and arm-none-eabi-objdump")
+    endif()
+
+    add_executable(AM13E_APP_SMOKE.elf "${am13e_smoke_source}")
+    target_compile_options(AM13E_APP_SMOKE.elf PRIVATE
+        -march=armv8.1-m.main -mthumb
+        -mfpu=fpv5-sp-d16 -mfloat-abi=hard)
+    target_link_options(AM13E_APP_SMOKE.elf PRIVATE
+        -march=armv8.1-m.main -mthumb
+        -mfpu=fpv5-sp-d16 -mfloat-abi=hard
+        -nostdlib -Wl,--no-undefined
+        "-T${am13e_smoke_script}"
+        "-Wl,-Map,${CMAKE_CURRENT_BINARY_DIR}/AM13E_APP_SMOKE.map")
+    set(am13e_smoke_raw
+        "${CMAKE_CURRENT_BINARY_DIR}/AM13E_APP_SMOKE.bin")
+    set(am13e_smoke_packed
+        "${CMAKE_CURRENT_BINARY_DIR}/AM13E_APP_SMOKE.e62v2.bin")
+    set(am13e_smoke_manifest
+        "${CMAKE_CURRENT_BINARY_DIR}/AM13E_APP_SMOKE.e62v2.json")
+
+    add_custom_command(
+        OUTPUT "${am13e_smoke_raw}"
+        COMMAND "${AM13E_OBJCOPY}" -O binary --gap-fill=0xff
+            "$<TARGET_FILE:AM13E_APP_SMOKE.elf>" "${am13e_smoke_raw}"
+        DEPENDS AM13E_APP_SMOKE.elf "${am13e_smoke_script}"
+        VERBATIM)
+    add_custom_command(
+        OUTPUT "${am13e_smoke_packed}" "${am13e_smoke_manifest}"
+        COMMAND "${Python3_EXECUTABLE}" "${am13e_smoke_packer}" pack
+            "${am13e_smoke_raw}" "${am13e_smoke_packed}"
+            --manifest "${am13e_smoke_manifest}"
+        COMMAND "${Python3_EXECUTABLE}" "${am13e_smoke_packer}" verify
+            "${am13e_smoke_packed}"
+        COMMAND "${Python3_EXECUTABLE}" "${am13e_smoke_verify}"
+            "${am13e_smoke_raw}" "${am13e_smoke_packed}"
+            "${am13e_smoke_manifest}" "${AM13E_OBJDUMP}"
+            "$<TARGET_FILE:AM13E_APP_SMOKE.elf>"
+        DEPENDS "${am13e_smoke_raw}"
+            "${am13e_smoke_packer}" "${am13e_smoke_verify}"
+        VERBATIM)
+    add_custom_target(AM13E_APP_SMOKE DEPENDS
+        "${am13e_smoke_packed}" "${am13e_smoke_manifest}")
+endif()
+
 add_subdirectory(boot)
 
 add_target(AART1 AT32F421 DEAD_TIME=0 COMP_MAP=123 ARM=0 VOLUME=0 INPUT_MODE=1 ANALOG_CHAN=6 ANALOG_MIN=270 ANALOG_MAX=1440 DUTY_MIN=100 DUTY_SPUP=25 FULL_DUTY IO_RXTX)
