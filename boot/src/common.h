@@ -18,6 +18,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdbool.h>
 #if defined(AM13E)
 /* AM13E peripheral declarations belong to the MCU boot backend. */
 #else
@@ -74,3 +75,11 @@ uint32_t crc32(const char *buf, int len);
 int write(char *dst, const char *src, int len);
 void update(char *dst, const char *src, int len) __attribute__((__long_call__));
 void setwrp(int type);
+
+#if defined(AM13E)
+/* Required MCU backend hooks; no dummy implementations. */
+bool boot_am13e_take_reboot_ack(void);
+uint32_t boot_am13e_device_id(void);
+bool boot_am13e_application_valid(void);
+__attribute__((noreturn)) void boot_am13e_launch_application(void);
+#endif
