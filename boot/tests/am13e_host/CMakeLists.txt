@@ -21,6 +21,22 @@ if(AM13E_HOST_SANITIZERS AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
         -fsanitize=address,undefined)
 endif()
 add_test(NAME am13e_flash_transaction COMMAND am13e_flash_transaction_test)
+
+add_executable(am13e_image_integrity_test
+    "${REPO_ROOT}/boot/tests/am13e_image_integrity_test.c"
+    "${REPO_ROOT}/boot/mcu/AM13E/image_integrity.c")
+target_compile_features(am13e_image_integrity_test PRIVATE c_std_11)
+target_include_directories(am13e_image_integrity_test PRIVATE
+    "${REPO_ROOT}/boot/mcu/AM13E")
+target_compile_options(am13e_image_integrity_test PRIVATE
+    -O1 -g -Wall -Wextra -Werror)
+if(AM13E_HOST_SANITIZERS AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(am13e_image_integrity_test PRIVATE
+        -fsanitize=address,undefined -fno-omit-frame-pointer)
+    target_link_options(am13e_image_integrity_test PRIVATE
+        -fsanitize=address,undefined)
+endif()
+add_test(NAME am13e_image_validator COMMAND am13e_image_integrity_test)
 # This is intentionally RED with the current signature-only update contract.
 # Opt in explicitly; never mask the failure with WILL_FAIL or mark it PASS.
 option(AM13E_ENABLE_IMAGE_INTEGRITY_GATE
