@@ -107,7 +107,10 @@ add_target(TMOTOR4 STM32G071 DEAD_TIME=35 COMP_MAP=123)
 add_target(VWING1 STM32G071 DEAD_TIME=35 COMP_MAP=123 SENS_MAP=0xA5A4 VOLT_MUL=110 CURR_MUL=40 BEC_MAP=0xB35 BEC_MIN=1 LED_WS2812 LED_STAT IO_PA2 IO_AUX)
 
 
-# TI AM13E23019 uses the normal ESCape32 add_target() dispatch.
 # TI SDK is an external MCU support dependency (like libopencm3).
-include(mcu/AM13E23019/native.cmake)
-add_target(E62 AM13E23019)
+# Opt in to avoid requiring the TI SDK during legacy ESCape32 builds.
+option(ESCAPE32_ENABLE_AM13E "Register the E62 AM13E23019 target" OFF)
+if(ESCAPE32_ENABLE_AM13E)
+    include(mcu/AM13E23019/native.cmake)
+    add_target(E62 AM13E23019)
+endif()
