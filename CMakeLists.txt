@@ -52,19 +52,41 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/src/prog.c")
         set(am13e_source_dir "${PROJECT_SOURCE_DIR}/src")
     endif()
-    add_library(${name} OBJECT ${am13e_sources})
-    target_compile_definitions(${name} PRIVATE
+    if(name MATCHES "^BOOT")
+        set(AM13E_BOOT_LINKER_SCRIPT "" CACHE FILEPATH
+            "AM13E boot linker script selected for the target board")
+        if(AM13E_BOOT_LINKER_SCRIPT)
+            if(NOT EXISTS "${AM13E_BOOT_LINKER_SCRIPT}")
+                message(FATAL_ERROR "AM13E_BOOT_LINKER_SCRIPT does not exist")
+            endif()
+            add_executable(${name}.elf ${am13e_sources})
+            target_link_options(${name}.elf PRIVATE
+                -Wl,-Map,${CMAKE_CURRENT_BINARY_DIR}/${name}.map
+                -T${AM13E_BOOT_LINKER_SCRIPT}
+                -Wl,--no-undefined)
+            set(am13e_binary ${name}.elf)
+        else()
+            # Without a validated board linker contract this stage compiles
+            # sources only. Never report it as a linked firmware image.
+            add_library(${name} OBJECT ${am13e_sources})
+            set(am13e_binary ${name})
+        endif()
+    else()
+        add_library(${name} OBJECT ${am13e_sources})
+        set(am13e_binary ${name})
+    endif()
+    target_compile_definitions(${am13e_binary} PRIVATE
         AM13E TARGET_NAME="${name}" ${ARGN}
         __DEVICE_SHORT__="am13e230x" __DEVICE_LONG__="AM13E230x"
         __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
-    target_compile_options(${name} PRIVATE
+    target_compile_options(${am13e_binary} PRIVATE
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
         -mfloat-abi=hard -fno-branch-count-reg)
-    target_include_directories(${name} PRIVATE "${am13e_source_dir}")
+    target_include_directories(${am13e_binary} PRIVATE "${am13e_source_dir}")
     if(name MATCHES "^BOOT")
-        target_include_directories(${name} PRIVATE "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E")
+        target_include_directories(${am13e_binary} PRIVATE "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E")
     endif()
-    target_include_directories(${name} SYSTEM PRIVATE
+    target_include_directories(${am13e_binary} SYSTEM PRIVATE
         "${AM13E_SYSCFG_DIR}"
         "${AM13E_SDK_ROOT}/ti_sdk_config/am13e230x/default/device_support/include"
         "${AM13E_SDK_ROOT}/source/device/am13e230x/include"
