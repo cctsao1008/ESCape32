@@ -38,6 +38,14 @@ static void release_line(void) {
     DL_GPIO_disableOutput(BOOT_IO_PORT, BOOT_IO_MASK);
 }
 
+/* Protocol IO ID 4 is reserved here for the AM13E PB14 boot service.
+ * This is a new host/target pairing, not the legacy STM32 PB4 ID 3.
+ * Host discovery support must be updated before interoperability testing.
+ */
+uint8_t boot_am13e_io_id(void) {
+    return 4U;
+}
+
 void initio(void) {
     DL_GPIO_enablePower(BOOT_IO_PORT);
     DL_GPIO_initDigitalInput(IOMUX_PINCM_PB14);
