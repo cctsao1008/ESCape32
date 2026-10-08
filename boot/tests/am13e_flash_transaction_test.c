@@ -24,6 +24,7 @@ static unsigned erase_count;
 static unsigned program_count;
 static unsigned fail_next_erase;
 static unsigned fail_next_program;
+static unsigned fail_partial_program;
 
 uint32_t DL_Flash_eraseSector(uint32_t addr) {
     ++erase_count;
@@ -39,6 +40,16 @@ uint32_t DL_Flash_eraseSector(uint32_t addr) {
 uint32_t DL_Flash_program(uint32_t addr, uint8_t *src, uint32_t len) {
     ++program_count;
     if (fail_next_program) { --fail_next_program; return DL_FLASH_ERROR; }
+    if (fail_partial_program) {
+        --fail_partial_program;
+        if (len < 16U || (addr & 15U)) return DL_FLASH_ERROR;
+        uint8_t *partial = (uint8_t *)(uintptr_t)addr;
+        for (unsigned i = 0; i < 16U; ++i) {
+            if ((uint8_t)(partial[i] & src[i]) != src[i]) return DL_FLASH_ERROR;
+            partial[i] &= src[i];
+        }
+        return DL_FLASH_ERROR;
+    }
     if (!src || !len || (addr & 15U) || (len & 15U) ||
         (uintptr_t)addr < boot_am13e_test_first ||
         (uintptr_t)addr > boot_am13e_test_end - len)
@@ -146,6 +157,32 @@ static void test_failed_program(void) {
     ++tests;
 }
 
+static void test_failed_erase(void) {
+    /* A rejected erase must not advance the protocol transaction. */
+    fail_next_erase = 1;
+    CHECK(write_block(0, invalid, 8) == 0);
+    CHECK(write_block(0, invalid, 8) == 1);
+    CHECK(write_block(1, invalid, 8) == 1);
+    check_signature_absent();
+    puts("PASS injected erase error / restart");
+    ++tests;
+}
+
+static void test_partial_program(void) {
+    /* Program first 16 bytes, report failure, retry the same 1 KiB block. */
+    unsigned prior_erases = erase_count;
+    fail_partial_program = 1;
+    CHECK(write_block(2, payload, 1024) == 0);
+    CHECK(erase_count == prior_erases + 1);
+    check_signature_absent();
+    CHECK(write_block(2, payload, 1024) == 1);
+    const uint8_t *flash = (const uint8_t *)(boot_am13e_test_first + 2048U);
+    CHECK(memcmp(flash, payload, 1024U) == 0);
+    check_signature_absent();
+    puts("PASS injected partial-program failure / retry");
+    ++tests;
+}
+
 int main(void) {
     void *region = mmap((void *)MAP_ADDRESS, MAP_LENGTH,
                         PROT_READ | PROT_WRITE,
@@ -167,6 +204,8 @@ int main(void) {
     test_restore_and_retry();
     test_restart();
     test_failed_program();
-    printf("PASS %u host transaction tests\\n", tests);
+    test_failed_erase();
+    test_partial_program();
+    printf("PASS %u host transaction tests\n", tests);
     return 0;
 }
