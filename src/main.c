@@ -19,6 +19,7 @@
 #include "hw_motor.h"
 #include "hw_six_step.h"
 #include "hw_bemf_rel17_math.h"
+#include "hw_bemf_rel17_state.h"
 
 #define REVISION 17
 #define REVPATCH 3
@@ -278,26 +279,24 @@ void tim1_com_isr(void) {
 void iftim_isr(void) { // BEMF zero-crossing
 	int er = TIM_DIER(IFTIM);
 	int sr = TIM_SR(IFTIM);
-	if ((er & TIM_DIER_UIE) && (sr & TIM_SR_UIF)) { // Timeout
+	const int timeout = (er & TIM_DIER_UIE) && (sr & TIM_SR_UIF);
+	const int capture = !timeout && (er & IFTIM_ICIE) ? IFTIM_ICR : 0;
+	hw_bemf_rel17_state_t state = {ival, ertm, sync, fast};
+	const hw_bemf_rel17_event_t event = hw_bemf_rel17_process(
+		&state, timeout, !!(er & IFTIM_ICIE), capture, IFTIM_XRES, cfg.timing);
+	if (event.action == HW_BEMF_REL17_IGNORE) return;
+	ival = state.interval;
+	ertm = state.electrical_time;
+	sync = state.sync;
+	fast = state.fast;
+	if (event.action == HW_BEMF_REL17_TIMEOUT) {
 		TIM_SR(IFTIM) = ~TIM_SR_UIF;
 		TIM_DIER(IFTIM) = 0;
-		sync = 0;
-		fast = 0;
-		ival = 10000 << IFTIM_XRES;
-		ertm = 100000000;
 		return;
 	}
-	if (!(er & IFTIM_ICIE)) return;
-	int t = IFTIM_ICR; // Time since last zero-crossing
-	if (t < ival >> 1) return;
-	const hw_bemf_rel17_result_t bemf =
-		hw_bemf_rel17_calculate(t, ival, ertm, cfg.timing);
-	fast = bemf.fast; // Fast acceleration/deceleration
-	ival = bemf.interval; // Commutation interval
-	IFTIM_OCR = bemf.delay; // Commutation delay
+	IFTIM_OCR = event.delay; // Commutation delay
 	TIM_EGR(IFTIM) = TIM_EGR_UG;
 	TIM_DIER(IFTIM) = 0;
-	if (sync < 6) ++sync;
 }
 
 #ifdef HALL_MAP
