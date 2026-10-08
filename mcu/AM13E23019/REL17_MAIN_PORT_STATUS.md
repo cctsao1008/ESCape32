@@ -41,3 +41,14 @@ Do **not** use the existing bring-up image as evidence of rel17 main.c integrati
 - `am13e_bemf_bind()` is a declaration of callbacks **only**, not a hardware-ready signal. It does not configure/enable eCAP, TIMG12 or NVIC.
 - Actual rel17 callback binding and capture-unit conversion remain pending validated comparator source, eCAP epoch and clock relationship. The real E62 firmware remains compile-blocked by `CLK`, `DEAD_TIME`, `COMP_MAP`, STM32 register accesses, and safe output-state mapping.
 - Do not interpret IRQ code compilation or host BEMF tests as proof of motor control integration.
+
+## Integrated motor-control contract (four concurrent workstreams)
+
+1. **MCPWM/commutation:** `hw_motor_am13e_commutation.h` validates six-step phase masks; `hw_am13e_safety_contract.h` adds output-qualification and arming gates. Real AQ / dead-band, gate-driver polarity and trip response are **NOT qualified**. Existing `_Static_assert` blocks remain.
+2. **BEMF / eCAP / TIMG12:** `am13e_bemf_io.c` binds only when the qualification contract is satisfied and converts eCAP ticks to TIMG12 ticks with round-up and overflow rejection. Binding is still **not called from `main.c`** and no comparator source or IRQ enable is implied.
+3. **Clock contract:** individual core, MCPWM, eCAP and TIMG12 frequencies are required fields, not an invented single `CLK`. Clock and dead-time values in host tests are **fixtures only** and must not be treated as E62 board settings.
+4. **Fault and recovery:** pure-C fault latch, zero-throttle interlock and explicit clear/re-arm gate are implemented and host-testable. The real MCPWM trip input, watchdog action, hardware output shutdown and reset-cause mapping are **not wired**; therefore this is **not** a production-safe hardware fault path.
+
+Host regression: `bash tools/am13e/run-am13e-safety-contract-host-test.sh` saves `build-am13e/logs/e62-am13e-safety-contract-host.log`. Host PASS does not replace E62 target Cross-Compile, board-level measurements or physical motor safety validation.
+
+**Porting status: all four tracks active; integrated firmware and hardware validation incomplete.**
