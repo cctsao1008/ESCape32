@@ -37,20 +37,30 @@ function(add_target_ti_am13e name)
         CACHE PATH "AM13E SysConfig generated headers (temporary)")
     # This target compiles the original rel17 sources. No board clock,
     # dead time, comparator routing or output-enable values are fabricated.
-    add_library(${name} OBJECT
-        src/main.c
-        src/io.c
-        src/telem.c
-        src/util.c
-        src/prog.c)
+    if(name MATCHES "^BOOT")
+        set(am13e_sources
+            boot/src/main.c
+            boot/src/io.c
+            boot/src/util.c)
+        set(am13e_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/boot/src")
+    else()
+        set(am13e_sources
+            src/main.c
+            src/io.c
+            src/telem.c
+            src/util.c
+            src/prog.c)
+        set(am13e_source_dir "${CMAKE_CURRENT_SOURCE_DIR}/src")
+    endif()
+    add_library(${name} OBJECT ${am13e_sources})
     target_compile_definitions(${name} PRIVATE
-        TI_AM13E TARGET_NAME="${name}"
+        AM13E TARGET_NAME="${name}"
         __DEVICE_SHORT__="am13e230x" __DEVICE_LONG__="AM13E230x"
         __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
     target_compile_options(${name} PRIVATE
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
         -mfloat-abi=hard -fno-branch-count-reg)
-    target_include_directories(${name} PRIVATE src)
+    target_include_directories(${name} PRIVATE "${am13e_source_dir}")
     target_include_directories(${name} SYSTEM PRIVATE
         "${AM13E_SYSCFG_DIR}"
         "${AM13E_SDK_ROOT}/source/device/am13e230x/include"
@@ -62,7 +72,7 @@ function(add_target_ti_am13e name)
 endfunction()
 
 function(add_target name mcu)
-    if(mcu STREQUAL "TI_AM13E")
+    if(mcu STREQUAL "AM13E")
         add_target_ti_am13e(${name})
         return()
     endif()
@@ -148,4 +158,4 @@ add_target(TMOTOR4 STM32G071 DEAD_TIME=35 COMP_MAP=123)
 add_target(VWING1 STM32G071 DEAD_TIME=35 COMP_MAP=123 SENS_MAP=0xA5A4 VOLT_MUL=110 CURR_MUL=40 BEC_MAP=0xB35 BEC_MIN=1 LED_WS2812 LED_STAT IO_PA2 IO_AUX)
 
 # TI AM13E23019 generic application target.
-add_target(AM13E TI_AM13E)
+add_target(AM13E AM13E)
