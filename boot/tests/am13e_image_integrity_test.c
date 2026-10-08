@@ -67,7 +67,7 @@ static void fixture(void) {
     image[1] = 0x32;
     put32(image + AM13E_IMAGE_VECTOR_OFFSET, UINT32_C(0x20001000));
     put32(image + AM13E_IMAGE_VECTOR_OFFSET + 4U,
-          (uint32_t)(first + AM13E_IMAGE_VECTOR_OFFSET + 0x80U) | 1U);
+          AM13E_IMAGE_APP_BASE + AM13E_IMAGE_VECTOR_OFFSET + 0x80U + 1U);
     uint8_t *h = image + AM13E_IMAGE_HEADER_OFFSET;
     put32(h + 0U, AM13E_IMAGE_MAGIC);
     put16(h + 4U, AM13E_IMAGE_HEADER_VERSION);
@@ -115,7 +115,7 @@ static void run_tests(void) {
 
     fixture();
     put32(image + AM13E_IMAGE_VECTOR_OFFSET + 4U,
-          (uint32_t)(first + IMAGE_LEN + 0x80U) | 1U);
+          AM13E_IMAGE_APP_BASE + IMAGE_LEN + 0x80U + 1U);
     CHECK(check() == AM13E_IMAGE_INVALID_VECTOR);
     puts("PASS reset entry outside validated image rejected"); ++tests;
 
