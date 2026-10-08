@@ -17,6 +17,7 @@
 #include <stddef.h>
 
 #include "boot_image.h"
+#include "boot_io.h"
 #include "boot_platform.h"
 #include "boot_port.h"
 #include "boot_request.h"
@@ -29,6 +30,9 @@
 int main(void)
 {
     bool platform_ready = boot_platform_init();
+    if (platform_ready) {
+        platform_ready = boot_io_init_safe_state();
+    }
     boot_request_reason_t request = boot_request_detect();
 
     if (request != BOOT_REQUEST_NONE) {
