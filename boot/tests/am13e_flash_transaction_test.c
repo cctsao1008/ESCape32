@@ -280,18 +280,21 @@ static int image_integrity_negative_gate(void) {
     check_signature_absent();
     puts("PASS early finalize rejected with missing data / invalid CRC");
 
-    /* Case 2: the missing bytes happen to match the intended image.
-     * CRC is valid, but this transaction did not receive those blocks.
-     * The exact received-length condition must independently reject it.
+    /* Case 2: block 4 already contains matching data from a previous
+     * installation, but the current transfer only sends blocks 2 and 3.
+     * Block 4 lives in the NEXT 2 KiB sector; block 2 erases blocks 2/3,
+     * so preloading block 3 here would incorrectly lose the stale data.
+     * All image bytes + CRC are valid, but the received span is incomplete.
      */
     boot_am13e_test_reset_update_state();
     memset((void *)boot_am13e_test_first, 0xff,
            (size_t)(boot_am13e_test_end - boot_am13e_test_first));
-    memcpy((void *)(boot_am13e_test_first + 3072U),
-           firmware + 3072U, IMAGE_BYTES - 3072U);
+    memcpy((void *)(boot_am13e_test_first + 4096U),
+           firmware + 4096U, IMAGE_BYTES - 4096U);
     CHECK(write_block(0, invalid, 8) == 1);
     CHECK(write_block(1, invalid, 8) == 1);
     CHECK(write_block(2, firmware + 2048U, 1024) == 1);
+    CHECK(write_block(3, firmware + 3072U, 1024) == 1);
     CHECK(write_block(0, sig, 1024) == 1);
     CHECK(write_block(1, payload, 1024) == 0);
     CHECK(boot_am13e_image_check(
