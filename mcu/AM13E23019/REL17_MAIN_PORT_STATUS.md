@@ -36,8 +36,8 @@ Do **not** use the existing bring-up image as evidence of rel17 main.c integrati
 
 ## October rel17 BEMF hardware I/O cutover
 
-- E62 build now includes `am13e_rel17_bemf_io.c` rather than the bring-up `am13e_bemf_events.c` event engine. No duplicate BEMF policy state is linked from this path.
+- E62 build now includes `am13e_bemf_io.c` rather than the bring-up `am13e_bemf_events.c` event engine. No duplicate BEMF policy state is linked from this path.
 - `am13e_irq.c` and `am13e_timg12.c` dispatch eCAP0/TIMG12 events to this hardware-only I/O. All callbacks are **unbound** until the original `src/main.c` registers its rel17 capture and commutation handlers.
-- `am13e_rel17_bemf_bind()` is a declaration of callbacks **only**, not a hardware-ready signal. It does not configure/enable eCAP, TIMG12 or NVIC.
+- `am13e_bemf_bind()` is a declaration of callbacks **only**, not a hardware-ready signal. It does not configure/enable eCAP, TIMG12 or NVIC.
 - Actual rel17 callback binding and capture-unit conversion remain pending validated comparator source, eCAP epoch and clock relationship. The real E62 firmware remains compile-blocked by `CLK`, `DEAD_TIME`, `COMP_MAP`, STM32 register accesses, and safe output-state mapping.
 - Do not interpret IRQ code compilation or host BEMF tests as proof of motor control integration.
