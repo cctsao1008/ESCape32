@@ -8,6 +8,7 @@
 #include <dl_flash.h>
 #include <soc.h>
 #include <stdint.h>
+#include "image_integrity.h"
 
 #ifdef AM13E_FLASH_TEST
 extern uintptr_t boot_am13e_test_first;
@@ -241,6 +242,21 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
     }
 
     if (addr == first + 1024U) {
+        /* The host protocol has no end-of-image command. Therefore we
+         * require the authenticated image length to match exactly the
+         * sequential data span acknowledged in this transaction.
+         * Flash bytes for the metadata sector have now been programmed
+         * and read back, but the application signature is still erased.
+         */
+        uint32_t image_length = 0U;
+        const uint32_t received_length =
+            (uint32_t)last_block * 1024U + (uint32_t)last_length;
+        if (boot_am13e_image_check(first, end, pending_header,
+                                   sizeof pending_header, &image_length) !=
+                AM13E_IMAGE_VALID ||
+            image_length != received_length)
+            return 0;
+
         pending_header_valid = false;
         if (boot_am13e_flash_execute((uint32_t)first,
                                      pending_header,
