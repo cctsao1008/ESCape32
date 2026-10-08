@@ -16,6 +16,7 @@ add_executable(${TARGET})
 
 target_sources(${TARGET} PRIVATE
     ${E62_BOOT_DIR}/src/main.c
+    ${E62_BOOT_DIR}/src/boot_flash.c
 )
 
 target_include_directories(${TARGET} PRIVATE
