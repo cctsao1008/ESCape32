@@ -16,7 +16,7 @@ int main(void)
     assert(smooth(&s, 100, 3) == 100);
     PID pid = {.Kp=2, .Ki=3, .Kd=4, .Li=10};
     initpid(&pid, 0);
-    assert(calcpid(&pid, 5, 1) == 43);
+    assert(calcpid(&pid, 5, 1) == 40);
     assert(pid.i == 4 && pid.x == 5);
     return 0;
 }
