@@ -9,8 +9,9 @@
 #include <stdint.h>
 #include "ti_sdk_dl_config.h"
 #include "fw1_bemf_events.h"
-void fw1_timg12_init(void);
-bool fw1_register_bemf_irqs(void);
+#include "fw1_timg12.h"
+#include "fw1_irq.h"
+
 
 #define ESCAPE32_AM13E_MCPWM_INST MCPWM0
 #include "hw_motor_am13e.h"
