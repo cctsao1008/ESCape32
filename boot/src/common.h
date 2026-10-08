@@ -18,7 +18,7 @@
 #pragma once
 
 #include <stdint.h>
-#if defined(TI_AM13E)
+#if defined(AM13E)
 /* AM13E peripheral declarations belong to the MCU boot backend. */
 #else
 #include <libopencm3/cm3/scb.h>
@@ -37,7 +37,7 @@
 #endif
 #include "config.h"
 
-#if defined(TI_AM13E)
+#if defined(AM13E)
 /* Pin identifiers and peripheral clock conversion are backend-owned. */
 #ifndef IO_PB14
 #error "AM13E boot target requires an explicit service I/O pin"
