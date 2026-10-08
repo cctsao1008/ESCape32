@@ -7,6 +7,7 @@
 #include "common.h"
 #include <stdint.h>
 #include <soc.h>
+#include "image_integrity.h"
 
 extern char __app_flash_start__[];
 extern char __app_vector_start__[];
@@ -43,13 +44,24 @@ static bool boot_app_vectors(uint32_t *sp, uint32_t *pc) {
 }
 
 bool boot_am13e_application_valid(void) {
+    const uintptr_t first = (uintptr_t)__app_flash_start__;
+    const uintptr_t end = (uintptr_t)__boot_storage_end__;
+    /* Check the *committed* Flash image on every cold boot, not just
+     * the ESCape32 signature and plausible M33 entry address.
+     */
+    if ((uintptr_t)__app_vector_start__ !=
+            first + AM13E_IMAGE_VECTOR_OFFSET ||
+        boot_am13e_image_check(first, end, 0, 0U, 0) !=
+            AM13E_IMAGE_VALID)
+        return false;
     uint32_t sp, pc;
     return boot_app_vectors(&sp, &pc);
 }
 
 __attribute__((noreturn)) void boot_am13e_launch_application(void) {
     uint32_t sp, pc;
-    if (!boot_app_vectors(&sp, &pc))
+    if (!boot_am13e_application_valid() ||
+        !boot_app_vectors(&sp, &pc))
         for (;;) {}
 
     __disable_irq();
