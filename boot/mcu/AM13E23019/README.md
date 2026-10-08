@@ -19,6 +19,10 @@ Current image contract:
 Normal application update preserves the bootloader and both 4-KiB parameter
 regions.
 
+There is no A/B image, bank swap, or bank-level firmware selection. E62 treats
+MAIN Flash as one contiguous product/update address space; physical Flash-bank
+boundaries matter only to the AM13 low-level program/erase implementation.
+
 ## Architecture baseline
 
 ~~~text
@@ -51,9 +55,11 @@ Implemented and build-validated:
 - application-to-Boot request layer with retained-request pseudocode;
 - direct Cortex-M33 VTOR/MSP/reset-entry handoff;
 - application-only read/write range mapping;
-- Bank1 Flash erase/program through TI DriverLib;
-- Bank0 active-bank erase/program transaction with the critical Flash command
-  executor linked in `.TI.ramfunc` / RAM_C;
+- contiguous MAIN-Flash erase/program handling;
+- normal TI DriverLib P/E when no execution-bank conflict exists;
+- RAM_C-resident same-bank P/E transaction when the target bank contains
+  currently executing Boot code, with the critical Flash command executor
+  linked in `.TI.ramfunc`;
 - readback verification.
 
 The common protocol engine preserves the upstream command IDs and the
@@ -70,5 +76,5 @@ platform/manufacturing extensions.
 - image header / integrity / valid-record representation;
 - Flash protection policy;
 - optional bootloader self-update;
-- on-target validation of PB14 service, Bank0/Bank1 Flash P/E, reset, APP jump,
-  and recovery behavior.
+- on-target validation of PB14 service, MAIN-Flash P/E across the full APP
+  region, reset, APP jump, and recovery behavior.
