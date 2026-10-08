@@ -23,6 +23,15 @@ The build should create these in `build-am13e/`:
 - `AM13E_APP_SMOKE.e62v2.bin`: Stage C1 packed and verified image;
 - `AM13E_APP_SMOKE.e62v2.json`: image metadata manifest.
 
+This smoke target uses `objcopy --remove-section=.data` because the
+zero-length ARM linker `.data` section is marked `ALLOC, LOAD` at
+`0x20000000`. Without excluding it, GNU objcopy's `--gap-fill=0xff`
+can expand a `0x6000`-based flat binary to 536,846,336 bytes.
+The smoke linker simultaneously asserts `SIZEOF(.data) == 0`.
+This exclusion is **only valid for this initialized-data-free smoke**;
+a future real application with nonempty initialized `.data` needs its
+load address placed inside Flash and included in the packed image.
+
 This CMake target enforces linker assertions and runs a verification
 script that parses `arm-none-eabi-objdump -h` (signature `0x6000`,
 header `0x6100`, actual M33 vectors `0x6800`, ARM code after the
