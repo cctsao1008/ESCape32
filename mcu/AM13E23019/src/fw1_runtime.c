@@ -20,6 +20,7 @@ volatile uint32_t fw1_debug_step;
 volatile uint32_t fw1_debug_enable;
 volatile uint32_t fw1_debug_bemf_interval;
 volatile uint32_t fw1_debug_bemf_ready; /* must remain 0 until TIMG initialized */
+volatile uint32_t fw1_debug_command_seq; /* increment after updating step/enable */
 
 static void fw1_next_commutation(void)
 {
@@ -50,8 +51,7 @@ int main(void)
      * control path exercisable without replacing the ESCape32 control loop.
      */
     (void)fw1_bemf_event_setup(fw1_next_commutation, 1000U, 100000000U, 0U);
-    uint32_t last_enable = 0U;
-    uint32_t last_step = 0U;
+    uint32_t last_command_seq = 0U;
     for (;;) {
         /* Debug-only event injection; future eCAP ISR will supply interval. */
         if (fw1_debug_bemf_ready == 1U && fw1_debug_bemf_interval != 0U) {
@@ -61,17 +61,17 @@ int main(void)
         }
         if (fw1_debug_bemf_ready == 1U)
             fw1_bemf_event_timg12_irq();
-        uint32_t enable = fw1_debug_enable;
-        uint32_t step = fw1_debug_step;
-        if (enable != last_enable || step != last_step) {
+        uint32_t command_seq = fw1_debug_command_seq;
+        if (command_seq != last_command_seq) {
+            uint32_t enable = fw1_debug_enable;
+            uint32_t step = fw1_debug_step;
             if (enable == 1U && step >= 1U && step <= 6U) {
                 (void)hw_motor_am13e_runtime_commutate(
                     fw1_positive[step - 1U], fw1_negative[step - 1U], true);
             } else {
                 (void)hw_motor_am13e_runtime_commutate(0U, 0U, false);
             }
-            last_enable = enable;
-            last_step = step;
+            last_command_seq = command_seq;
         }
     }
 }
