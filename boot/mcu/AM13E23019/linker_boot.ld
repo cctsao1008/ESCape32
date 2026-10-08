@@ -44,6 +44,13 @@ SECTIONS
     .text : {
         CREATE_OBJECT_SYMBOLS
         KEEP (*(.text))
+        /*
+         * Keep the boot Flash wrapper reachable in the build-only baseline
+         * even before the command parser calls it. This makes the ELF build
+         * validate its DriverLib dependencies instead of silently GC'ing the
+         * backend as unused.
+         */
+        KEEP (*(.text.boot_flash_*))
         . = ALIGN(0x8);
         *(.text.*)
         . = ALIGN(0x8);
