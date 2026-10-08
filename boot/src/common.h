@@ -43,12 +43,6 @@
 #ifndef IO_PB14
 #error "AM13E boot target requires an explicit service I/O pin"
 #endif
-/* The service protocol pin identifier must be defined by the AM13E
- * backend after protocol compatibility has been reviewed.
- */
-#ifndef IO_PIN
-#error "AM13E boot service protocol IO_PIN identifier is not defined"
-#endif
 #else
 #define CLK_CNT(rate) ((CLK + ((rate) >> 1)) / (rate))
 
@@ -90,6 +84,7 @@ void setwrp(int type);
 /* Required MCU backend hooks; no dummy implementations. */
 bool boot_am13e_take_reboot_ack(void);
 uint32_t boot_am13e_device_id(void);
+uint8_t boot_am13e_io_id(void);
 /* Resolve only validated Flash ranges, including overflow/alignment checks. */
 bool boot_am13e_read_range(unsigned block, unsigned length, const void **address);
 bool boot_am13e_write_range(unsigned block, unsigned length, char **address);
