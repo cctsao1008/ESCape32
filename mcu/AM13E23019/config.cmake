@@ -1,0 +1,16 @@
+# ESCape32 native MCU configuration. TI SDK is an external dependency.
+# SDK libraries must be built once for AM13E230x / m33_gcc_arm_debug.
+set(AM13E_SDK_ROOT "$ENV{AM13E_SDK_ROOT}" CACHE PATH "External TI AM13E SDK root")
+if(NOT AM13E_SDK_ROOT)
+    if(DEFINED ENV{TI_ROOT})
+        set(AM13E_SDK_ROOT "$ENV{TI_ROOT}/am13e230x_sdk_26_01_00_03" CACHE PATH "" FORCE)
+    else()
+        set(AM13E_SDK_ROOT "$ENV{HOME}/ti/am13e230x_sdk_26_01_00_03" CACHE PATH "" FORCE)
+    endif()
+endif()
+if(NOT EXISTS "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_mcpwm.h")
+    message(FATAL_ERROR "AM13E SDK not found: ${AM13E_SDK_ROOT}; pass -DAM13E_SDK_ROOT=/path/to/sdk")
+endif()
+set(AM13E_SDK_BUILD "${AM13E_SDK_ROOT}/build/am13e230x/m33_gcc_arm_debug" CACHE PATH "External SDK library build")
+set(AM13E_SYSCFG_DIR "${AM13E_SDK_ROOT}/examples/empty/am13e230x_lp/m33_nortos/cmake_syscfg_generated" CACHE PATH "Generated SysConfig source (temporary until E62 product syscfg)")
+set(am13e_opts -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16 -mfloat-abi=hard -fno-branch-count-reg)
