@@ -1,6 +1,6 @@
 # AM13E Application Clock Requirement — LaunchPad 25 MHz XTAL
 
-Status: **25 MHz XTAL / 200 MHz MCLK clock policy accepted and source backend implemented**. No ARM GCC build of this backend or hardware clock qualification has yet been received; no complete Application ELF.
+Status: **25 MHz XTAL / 200 MHz MCLK source compiled on ARM GCC** (9/9 Application objects, user WSL logs). Real TI DriverLib dependency objects and a full Application ELF are still pending; no clock or power-stage hardware qualification.
 
 ## Primary evidence — TI LP-AM13E230
 
@@ -84,9 +84,32 @@ status checks validate the configured source, not independent
 silicon clock accuracy.
 
 Current CMake target is still object-only, not a runnable ELF.
-Code requires WSL ARM GCC compile verification. The board-safe
+ARM GCC 15.2.1 Object Compile of the PLL backend was confirmed by the user-provided `e1c-pll200-build.log`. This validates C compilation, not the configuration on silicon. The board-safe
 `am13e_app_motor_runtime_enable_interrupts()` remains
 an unresolved and mandatory platform Link barrier.
+
+## Real TI DriverLib dependencies (pending refreshed WSL build)
+
+The user's nine-Object ARM build passed without warnings. A
+cross-object `nm` audit resolved **44** symbols and reported **62**
+undefined symbols, including two actual TI SDK dependencies:
+
+- `DL_Common_delayCycles` — defined in
+  `source/driverlib/am13e230x/dl_common.c`.
+- `DL_FRI_setReadWaitStates` — defined in
+  `source/driverlib/am13e230x/dl_fri.c`, tagged `.TI.ramfunc`.
+
+Both **genuine SDK source files** are now in the AM13E Application
+Object Target. The expected new total is **11 objects**, subject to
+WSL recompilation and symbol audit; no dummy implementation exists.
+TI startup copies `.TI.ramfunc` to SRAM before calling `main()`.
+The actual final application link must verify the RAM VMA/Flash LMA
+and that `DL_FRI_setReadWaitStates` resides in that section.
+
+The clock code also now checks retained SYSPLL/XTAL GOOD-or-OFF
+status before disabling them (per the DriverLib reset-state
+guidance). The bounded poll counts are not hard real-time deadlines
+and XTAL X1/X2 board pad/IOMUX initialization remains unimplemented.
 
 ## Firmware vs physical hardware qualification
 
