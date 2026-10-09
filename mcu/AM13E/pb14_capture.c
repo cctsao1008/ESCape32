@@ -65,6 +65,7 @@ static AM13E_PB14_Decoder decoder;
 static volatile uint32_t initialized;
 static volatile uint32_t capture_pairs;
 static volatile uint32_t capture_overruns;
+static volatile uint32_t invalid_capture_groups;
 static volatile uint32_t unexpected_gpio1_irqs;
 static uint32_t calib_counter;
 static uint32_t calib_start;
@@ -184,6 +185,16 @@ void ECAP0_IRQHandler(void)
         am13e_pb14_decoder_abort(&decoder);
         return;
     }
+    if (!am13e_pb14_capture_group_valid(start1, end1, start2, end2,
+                                        decoder.tick_hz)) {
+        /* Invalid ordering can also indicate an overwritten capture
+         * register. Do not deliver either pulse to the throttle logic.
+         * A silent period >50ms will drop one capture pair by design.
+         */
+        ++invalid_capture_groups;
+        am13e_pb14_decoder_abort(&decoder);
+        return;
+    }
     capture_pairs += 2U;
     /* Both pulses pass through the same Rel17 PWM/DShot callbacks.
      * No motor output, fake watchdog or BiDShot TX path is introduced.
@@ -238,6 +249,7 @@ void am13e_app_pb14_status(AM13E_PB14_Status *out)
     if (out == NULL) return;
     out->capture_pairs = capture_pairs;
     out->capture_overruns = capture_overruns;
+    out->invalid_capture_groups = invalid_capture_groups;
     out->good_pwm = decoder.good_pwm;
     out->good_dshot_rx = decoder.good_dshot;
     out->rejected = decoder.rejected;

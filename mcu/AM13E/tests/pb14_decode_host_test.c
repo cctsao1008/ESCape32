@@ -65,6 +65,23 @@ int main(void)
     assert(seen_dshot==2);
     feed_frame(&d,valid,3000000U,333U,0);
     assert(seen_dshot==3 && d.good_dshot==1U);
-    puts("PB14 PWM/DShot RX + capture-abort host test PASS");
+    /* Non-DSHOT accepted cases: servo width/period and 32-bit wrap. */
+    assert(am13e_pb14_capture_group_valid(
+        100000U, 100150U, 100333U, 100580U, 200000000U));
+    assert(am13e_pb14_capture_group_valid(
+        100000U, 300000U, 4100000U, 4360000U, 200000000U));
+    assert(am13e_pb14_capture_group_valid(
+        UINT32_C(0xfffffff0), 0x60U, 0x155U, 0x1f0U, 200000000U));
+
+    /* Corrupt/non-monotonic timestamps must not feed throttle. */
+    assert(!am13e_pb14_capture_group_valid(
+        4000U, 3800U, 4500U, 4650U, 200000000U));
+    assert(!am13e_pb14_capture_group_valid(
+        4000U, 4000U, 4500U, 4650U, 200000000U));
+    assert(!am13e_pb14_capture_group_valid(
+        4000U, 4100U, 4099U, 4200U, 200000000U));
+    assert(!am13e_pb14_capture_group_valid(
+        4000U, 4100U, 4200U, 4250U, 0U));
+    puts("PB14 PWM/DShot RX + capture-abort/group-validation host test PASS");
     return 0;
 }

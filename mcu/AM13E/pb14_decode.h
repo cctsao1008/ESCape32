@@ -20,6 +20,14 @@ typedef struct {
     uint8_t inverted;
 } AM13E_PB14_Decoder;
 
+/* Conservative four-edge capture sanity check. Uses calibrated eCAP Hz.
+ * Recognizes rollover; rejects impossible pulse widths or edge ordering.
+ * Returns 0 on uncalibrated clock or invalid group.
+ */
+int am13e_pb14_capture_group_valid(uint32_t start1, uint32_t end1,
+                                   uint32_t start2, uint32_t end2,
+                                   uint32_t tick_hz);
+
 /* Protocol dispatch owns the original ESCape32 policy, not this decoder. */
 typedef void (*AM13E_PB14_PwmCallback)(unsigned int pulse_us);
 typedef int (*AM13E_PB14_DshotCallback)(uint16_t frame, int inverted);

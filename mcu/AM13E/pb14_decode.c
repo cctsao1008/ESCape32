@@ -5,6 +5,27 @@
 #include "pb14_decode.h"
 #include <stddef.h>
 
+/* Require plausible, forward-ordered edges in one four-event ECAP0
+ * group. Subtraction is modulo-2^32, so a genuine TSCTR wrap works.
+ * Reject a group spanning an implausibly long pulse or idle gap.
+ * This guard cannot detect a COMPLETE four-event register overwrite:
+ * only the hardware latency / DMA measurement can establish that.
+ */
+int am13e_pb14_capture_group_valid(uint32_t start1, uint32_t end1,
+                                   uint32_t start2, uint32_t end2,
+                                   uint32_t tick_hz)
+{
+    const uint32_t ticks_per_us = tick_hz / UINT32_C(1000000);
+    if (!ticks_per_us || ticks_per_us > 200U) return 0;
+    const uint32_t width1 = end1 - start1;
+    const uint32_t gap = start2 - end1;
+    const uint32_t width2 = end2 - start2;
+    const uint32_t max_width = ticks_per_us * UINT32_C(2500);
+    const uint32_t max_gap = ticks_per_us * UINT32_C(50000);
+    return width1 && width1 <= max_width && gap && gap <= max_gap &&
+           width2 && width2 <= max_width;
+}
+
 static void clear_frame(AM13E_PB14_Decoder *d)
 {
     d->bits = 0U;
