@@ -1,5 +1,53 @@
 # E62 / AM13E Host Validation
 
+## Stage D1: actual ESCape32 CMD_WRITE protocol over mock transport
+
+This host test now compiles the **real production sources**:
+`boot/src/main.c` (entry renamed only in the host wrapper),
+`boot/src/io.c` (recvval/recvdata/senddata),
+`boot/mcu/AM13E/flash_range.c`,
+`boot/mcu/AM13E/flash.c` and
+`boot/mcu/AM13E/image_integrity.c`.
+
+The mocked boundary is **only** the PB14 byte-stream transport, TI Flash
+controller and CRCP engine. Host CRC-32/ISO-HDLC software emulates protocol
+CRC; equivalence of TI's actual CRCP configuration remains to be proven.
+
+With the Stage C2 packed ARM image already built:
+
+```bash
+cmake -S boot/tests/am13e_host -B build-am13e-host-tests \
+  -DCMAKE_C_COMPILER=gcc \
+  -DAM13E_HOST_PACKED_IMAGE="$PWD/build-am13e/AM13E_APP_SMOKE.e62v2.bin"
+cmake --build build-am13e-host-tests -j"$(nproc)" && \
+ctest --test-dir build-am13e-host-tests --output-on-failure -V
+```
+
+This adds a **sixth** CTest target `am13e_boot_protocol`. It sends
+the real binary using the ESCape32 wire format:
+
+- each command, block index and count is transmitted as
+  `value, value XOR 0xFF` (two octets);
+- `CMD_WRITE=3` carries `count=(bytes/4)-1`, data and a little-endian
+  CRC32; a complete 1-KiB block therefore uses `count=0xFF`;
+- the test covers `CMD_PROBE`, `CMD_INFO`, out-of-order block refusal,
+  malformed CRC and its **absence of ACK** (current shared behavior),
+  successful retry, duplicate block, deferred signature, metadata restore,
+  `CMD_READ` framing and refusal of dangerous `CMD_UPDATE`/`CMD_SETWRP`;
+- final programmed Flash bytes must match the actual ARM-linked packed
+  image, and the whole-image validator must pass.
+
+The AM13E-specific `recvval` branch now treats wire octets as unsigned;
+this avoids signed-`char` mis-decoding of `0xFF` (full 1024-byte
+payload count) on toolchains with `-fsigned-char`. Legacy MCU branches
+are unchanged.
+
+**Caution:** neither this test nor any previous stage has validated
+physical PB14 GPIO timing, 38400-baud open-drain behavior, an actual
+WiFi-Link programmer, the TI CRCP peripheral, power-loss electrical
+behavior, or production motor-control firmware. This is a command/framing
+**host** integration test, not a successful on-board firmware update.
+
 ## Stage C3: real ARM-linked packed image through production flash.c
 
 Stage C2 produces a linked ARM image with its **physical** Reset Handler
