@@ -63,7 +63,11 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/irq_vectors.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/reset_cause.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/system_runtime.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_xtal25_pll200.c")
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_xtal25_pll200.c"
+            # Genuine TI DriverLib objects: delayCycles (common) and
+            # Flash read wait-state RAMFUNC (FRI); no replacement stubs.
+            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_common.c"
+            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_fri.c")
         set(am13e_source_dir "${PROJECT_SOURCE_DIR}/src")
     endif()
     if(name MATCHES "^BOOT")
