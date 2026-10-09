@@ -50,6 +50,21 @@ static int wait_clock_good(uint32_t mask, uint32_t required, uint32_t budget)
     return 0;
 }
 
+/* The TI SYSCTL contract requires an oscillator/PLL to have reached
+ * its stable GOOD or OFF state before being disabled. Lower reset
+ * levels can retain configuration from a prior application instance.
+ * This is only a finite software-poll budget, not a timed timeout.
+ */
+static int wait_clock_good_or_off(uint32_t good, uint32_t off, uint32_t budget)
+{
+    for (uint32_t i = 0U; i < budget; ++i) {
+        if ((DL_SYSCTL_getClockStatus() & (good | off)) != 0U) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 uint32_t am13e_app_clock_configure_xtal25(void)
 {
     /* Do not switch a running motor controller's clocks or unmask IRQ. */
@@ -75,6 +90,11 @@ uint32_t am13e_app_clock_configure_xtal25(void)
     /* Ensure the XTAL is off and a prior retained digital HFCLK_IN
      * selection cannot masquerade as the Y1 crystal.
      */
+    if (!wait_clock_good_or_off(SYSCTL_CLKSTATUS_HFCLKGOOD_MASK,
+                                SYSCTL_CLKSTATUS_HFCLKOFF_MASK,
+                                AM13E_XTAL_POLL_LIMIT)) {
+        return 0U;
+    }
     SYSCTL->SOCLOCK.XTALCR |= SYSCTL_XTALCR_OSCOFF_MASK;
     if (!wait_clock_good(SYSCTL_CLKSTATUS_HFCLKOFF_MASK,
                          DL_SYSCTL_CLK_STATUS_HFCLK_OFF,
@@ -103,6 +123,11 @@ uint32_t am13e_app_clock_configure_xtal25(void)
      * its startup loop is unbounded; mirror its validated register
      * sequence with explicit limits.
      */
+    if (!wait_clock_good_or_off(SYSCTL_CLKSTATUS_SYSPLLGOOD_MASK,
+                                SYSCTL_CLKSTATUS_SYSPLLOFF_MASK,
+                                AM13E_PLL_POLL_LIMIT)) {
+        return 0U;
+    }
     DL_SYSCTL_disableSYSPLL();
     if (!wait_clock_good(SYSCTL_CLKSTATUS_SYSPLLOFF_MASK,
                          DL_SYSCTL_CLK_STATUS_SYSPLL_OFF,
