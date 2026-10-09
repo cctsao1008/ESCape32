@@ -255,6 +255,9 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Usage: %s path/to/AM13E_APP_SMOKE.e62v2.bin\n", argv[0]);
         return 2;
     }
+    /* Reference golden vector, independent of the generated frames. */
+    CHECK(software_crc((const uint8_t *)"123456789", 9U) ==
+          UINT32_C(0xcbf43926));
     size_t image_length = 0U;
     uint8_t *image = load_image(argv[1], &image_length);
     void *mapped = mmap((void *)(uintptr_t)MAP_ADDRESS, MAP_LENGTH,
