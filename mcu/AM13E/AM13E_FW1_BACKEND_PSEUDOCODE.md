@@ -4,9 +4,30 @@
 **Source of missing-symbol evidence:** E1-Z `e1z-fw1-link.log` (32 distinct unresolved symbols / 44 references). E1-Z ARM GNU Object Compile passed with zero warnings after repairing the E1-Y DMA macro regression.
 **Reference boundaries:** Original ESCape32 Rel17 `src/main.c`, `src/io.c`, `src/telem.c`, `src/util.c`, `src/prog.c`; AM13E target-specific contracts in `mcu/AM13E/*.h`; AM13E230x TI TRM/SDK; project SW/HW architecture baseline v1.6.
 
+## Current implementation ledger — after E1-AB through E1-AE
+
+**Source integration status, not an ELF/HW success claim.** The 32/44 number below is the **last measured E1-Z linker baseline**, prior to the new motor files. Do not overwrite it with an estimated count until an ARM GNU rebuild and strict FW1 link have been captured.
+
+| Backend function / hardware resource | Current source state | Verification remaining |
+|---|---|---|
+| `am13e_app_motor_init` | **SOURCE IMPLEMENTED (inactive preflight only)** in `motor_safety.c`: real MCPWM0 SDK init; counter Stop/Freeze, six AQ outputs low, PA8/PA11/PA9/PA30/PA10/PA31 remain GPIO Input/Hi-Z, register readback | ARM GNU, TRM register timing, board pad state, external gate behavior |
+| `am13e_app_motor_fault_shutdown` | **SOURCE IMPLEMENTED (MCU-side shutdown fallback)**: latch fault, stop MCPWM timebase and disconnect MCU PWM pads; does not assert any unverified PB13 gate polarity | Prove actual driver shutdown and hardware comparator-to-MCPWM bounded trip |
+| `am13e_app_motor_fault_reset` | **SOURCE IMPLEMENTED (non-returning fault hold)**, pending board-safe reset release conditions | Physical fault and post-reset behavior |
+| `MCPWM0_IRQHandler` | Strong SDK startup vector, read Trip Zone/interrupt flags, ACK, enter latched fault path; **does not implement/enable the physical over-current Trip Source** | IRQ vector/map check; fault injection, latency, and hardware trip independent of CPU |
+| `am13e_app_motor_sine_schedule_us` | **SOURCE IMPLEMENTED**: TIMG12 100MHz BUSCLK one-shot schedule, real TIMER IRQ to unchanged Rel17 `nextstep` callback | ARM GNU, scope timing/jitter and priority tests |
+| `am13e_app_motor_bemf_commutation_delay_us` | **SOURCE IMPLEMENTED** using the same TIMG12 one-shot; previously not visible in the 32-symbol link baseline | IRQ dispatch from physical BEMF zero-cross, timing proof |
+| Rel17 six-step `p/n/cc` decoding | **SOURCE IMPLEMENTED** as pure-C `motor_phase_plan.{c,h}` with the **unmasked** six original `p/n` values. `cc` is comparator code, not a float-phase mask | Host Test, later real MCPWM action-qualifier adaptation and scope |
+| Motor microsecond conversion | Pure-C `motor_timer_math.{c,h}` with overflow checks | Host Test and peripheral clock measurement |
+
+**Still intentionally unresolved:** `am13e_app_motor_runtime_enable_interrupts` and `am13e_app_motor_commutation_enable` cannot legitimately release the inverter before the PB13 enable polarity, real hardware over-current source → PWMXBAR → MCPWM Trip Zone path, inactive fault action, timer/dead-time policy and relevant board protection checks are verified. This is a real firmware safety dependency, not removal of any Rel17 feature. `sine_write`, `sixstep_write`, `pwm_apply`, comparator/BEMF configuration, the watchdog, UART, audio and config-flash driver also remain unimplemented.
+
+**Required build gates:** `cmake --build build-am13e --target AM13E -j"$(nproc)"`, and separately `cmake --build build-am13e --target AM13E_FW1.elf -j"$(nproc)"`. The latter must continue to use `-Wl,--no-undefined`. The known `linker_app_reference.ld` is a historical Boot-v2 linker smoke contract, **not** a qualified production image linker map. All motor outputs must remain inactive until production HW/Flash/vector contracts are reconciled.
+
+**Host tests added:** `tests/motor_phase_plan_host_test.c`, `tests/motor_timer_math_host_test.c`. They do not test MCU GPIO/MCPWM/TIMG12 silicon behavior.
+
 ## Contract and integration rules
 
-- A **function mentioned here does not have an implementation**. Never add `return 1;`, empty `void` bodies, or dummy callback handlers to satisfy `-Wl,--no-undefined`.
+- This document records the **E1-Z missing-symbol baseline**; some entries now have real source implementations as tracked in the current ledger above. Never add `return 1;`, empty `void` bodies, or dummy callback handlers to satisfy `-Wl,--no-undefined`.
 - Keep original Rel17 application as the only policy owner, and all AM13E register/clock/interrupt/pin handling in `mcu/AM13E/`. This document is a *plan*, not an alternate firmware.
 - Keep exact existing prototypes in `motor_backend.h`, `io_backend.h`, `telem_backend.h` and `util_backend.h`; `compctl(int)` is declared in `src/common.h`.
 - **Motor bridge safety:** MCPWM0 outputs PA8/PA11, PA9/PA30, PA10/PA31; PB13 GPIO45 gate enable (electrical polarity NOT yet qualified); PB15 GPIO47 nFAULT active-low backup input; HW comparator → PWMXBAR → MCPWM trip is mandatory and not replaced by PB15 software IRQ or SysTick polling.
@@ -617,4 +638,4 @@ Review order for each real implementation: Rel17 equivalent behavior → verifie
 [ ] Hardware test waveform / log / acceptance data attached
 ```
 
-**Important:** All pseudocode above is intentionally *descriptive*, not buildable C. This file does not change the number of unresolved symbols; each symbol is resolved only by its later real MCU backend.
+**Important:** All illustrative pseudocode above remains descriptive; the separate new MCU C files listed in the current ledger contain actual source implementations awaiting ARM GNU/hardware verification. This Markdown file alone does not influence linking.
