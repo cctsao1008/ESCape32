@@ -10,7 +10,8 @@
  * and bidirectional DSHOT turnaround. No STM32 TIMx aliases permitted.
  *
  * Upon receipt of a complete 16-bit DSHOT frame (including 4-bit CRC),
- * call am13e_app_io_dshot_packet(). Parameter bidirectional_invert is
+ * call am13e_app_io_dshot_packet(). A return of 1 indicates a valid
+ * frame, 0 indicates CRC rejection and requires capture resync. Parameter bidirectional_invert is
  * true only when the physical DSHOT RX path uses inverted CRC semantics.
  * This callback validates the CRC and executes the common Rel17 DSHOT
  * throttle/command logic. The caller MUST verify frame length, bit
@@ -22,6 +23,8 @@
  *
  * am13e_app_io_watchdog_feed() is a real hardware watchdog callback;
  * absent a real backend, final ELF must not link. No dummy feeding.
+ * am13e_app_io_servo_pulse() is passed a *validated* 800..2200us width;
+ * caller must qualify timing/faults and feed watchdog as required.
  * Other physical PWM/Oneshot/serial input event surfaces are pending.
  */
 #pragma once
@@ -31,7 +34,8 @@
 
 #include <stdint.h>
 
-void am13e_app_io_dshot_packet(uint16_t frame, int bidirectional_invert);
+int am13e_app_io_dshot_packet(uint16_t frame, int bidirectional_invert);
+void am13e_app_io_servo_pulse(unsigned int pulse_us);
 int am13e_app_io_cli_line(char *line);
 
 /* Must be implemented by the AM13E board backend. */
