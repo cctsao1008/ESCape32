@@ -20,6 +20,7 @@
 #if defined(AM13E)
 #include "motor_backend.h"
 #include "irq_vectors.h"
+#include "adc_runtime.h"
 /* Logical microsecond commutation timebase, not a TI register mapping. */
 #define MOTOR_TIME_SHIFT 0
 #else
@@ -696,6 +697,10 @@ void main(void) {
 #endif
 	init();
 	initgpio();
+#if defined(AM13E)
+    /* Real ADC0 PA6 NTC/PA28 VBUS raw acquisition, no motor outputs. */
+    am13e_app_adc_init();
+#endif
 #if !defined(AM13E) || LED_CNT > 0
 	/* No LED wiring is defined for the generic AM13E target. */
 	initled();
