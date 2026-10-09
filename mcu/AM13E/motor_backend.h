@@ -12,6 +12,15 @@
  * - Hardware backend is responsible for break/dead-time, shoot-through
  *   protection, comparator routing, interrupt priorities and fail-safe state.
  * - No power-stage output may be enabled before hardware qualification.
+ * - Hardware backend owns IRQ ACK before invoking on_* event callbacks.
+ * - bemf_interval_select() selects the filter and arms physical BEMF events.
+ * - sine_write(): a/b/c are 0..359 phase indexes into Rel17 sinedata[],
+ *   power is the original Rel17 logical modulation amplitude.
+ * - pwm_apply() MUST retain Rel17's frequency ramp, logical duty clamps,
+ *   active-freewheel and FULL_DUTY semantics; no constant-PWM shortcut.
+ * - arming_window_* enforces 250ms of uninterrupted neutral input.
+ * - reset_flags maps the device's physical reset reason; it is NOT a
+ *   fabricated MCU register value.
  *
  * Exact timing/behavior must be verified against Rel17 before motor testing.
  */
@@ -28,7 +37,6 @@ void am13e_app_motor_commutation_commit(void);
 void am13e_app_motor_sixstep_write(int positive_mask, int negative_mask,
                                    int floating_phase, int damp, int reverse);
 void am13e_app_motor_bemf_interval_select(int ertm_us);
-void am13e_app_motor_bemf_start(void);
 void am13e_app_motor_bemf_stop(void);
 void am13e_app_motor_bemf_commutation_delay_us(int delay_us);
 void am13e_app_motor_bemf_sine_exit_us(int delay_us);
