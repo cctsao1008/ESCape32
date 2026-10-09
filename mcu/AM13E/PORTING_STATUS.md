@@ -3,6 +3,70 @@
 This is an **application** work log, not a board-validation report.
 Boot service remains independently versioned and is not changed here.
 
+## E1-C 8-object integration and updated 8 MHz XTAL requirement (2026-10-09)
+
+User-supplied `e1c-systick-symbols.log` reports 8 objects,
+**43 cross-object resolved** and **60 unresolved**:
+
+| Category | Open symbols |
+| --- | ---: |
+| AM13E hardware/backend | 37 |
+| Board/peripheral services | 6 |
+| ARM C Runtime / compatibility | 13 |
+| Production linker | 4 |
+
+`init` and `am13e_app_motor_runtime_tick_init` are now
+RESOLVED between objects. This is sufficient evidence for
+**8-object cross-object symbol integration**; a fresh explicit
+Build Log or successful build command is still required to
+confirm the latest compiler run. The symbol log does not
+verify on-target clock/timing behavior.
+
+**Clock requirement changed:** external **8 MHz quartz XTAL** on
+X1/X2 is the user-selected reference. The previous 32 MHz SYSOSC
+is only the unchanged Boot handoff clock, *not* the final
+Application clock. New `CLOCK_CONTRACT.md` documents a TI
+documentation discrepancy: Datasheet Rev A explicitly allows
+8 MHz (4–25 MHz feature range / 4–48 MHz electrical range),
+while TRM Rev B describes 10–25 MHz for a crystal. Verify with
+TI for the exact silicon before hardware qualification.
+No external oscillator activation has been claimed.
+
+**Code update (NOT WSL compiled yet):**
+- New declaration-only `clock_backend.h` requires
+  `am13e_app_clock_configure_xtal8()` from the actual
+  X1/X2 / HFCLK / optional SYSPLL backend.
+- `system_runtime.c` no longer hardcodes 32 MHz SysTick or
+  2000 cycles. On entry `init()` validates Boot SYSOSC as a
+  precondition, then requires XTAL-derived MCLK/HSCLK and
+  `HFCLKGOOD`. SysTick reload is derived from the *verified*
+  MCLK Hz, at 16 kHz; no blind assumption that XTAL=CPU MCLK.
+- Real PLL/MCLK target, 8 MHz oscillator startup time,
+  pinmux, power/bus divisors and clock proof still pending.
+- The new unresolved symbol is an **intentional link blocker**.
+  If no other symbols are emitted the next audit should show
+  43 resolved and 61 undefined, but this is not yet verified.
+- The independent `am13e_app_motor_runtime_enable_interrupts`
+  board-safety barrier still must be implemented.
+
+```bash
+cd ~/github/ESCape32
+git switch am13e-port-v2
+git pull --ff-only
+set -o pipefail
+
+cmake --build build-am13e --target AM13E -j"$(nproc)" \
+  2>&1 | tee build-am13e/e1c-xtal-clock-contract-build.log
+
+python3 mcu/AM13E/tools/check_object_symbols.py \
+  build-am13e/CMakeFiles/AM13E.dir/src/*.obj \
+  build-am13e/CMakeFiles/AM13E.dir/mcu/AM13E/*.obj \
+  | tee build-am13e/e1c-xtal-clock-contract-symbols.log
+```
+
+**The updated clock source is a contract boundary, not an 8 MHz
+oscillator running on silicon or an Application ELF.**
+
 ## E1-C reset-cause WSL PASS; baseline SYSOSC/SysTick backend awaiting compile (2026-10-09)
 
 Newest user `e1c-resetcause-build.log` records
