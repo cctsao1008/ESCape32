@@ -1,13 +1,13 @@
 /*
- * ESCape32 Rel17 AM13E — external 8 MHz XTAL clock integration.
+ * ESCape32 Rel17 AM13E — external 25 MHz XTAL clock integration.
  *
- * XTAL=8 MHz is a BOARD REQUIREMENT, not the CPU clock rate.
+ * XTAL=25 MHz is a BOARD REQUIREMENT, not the CPU clock rate.
  * Board-approved MCLK (XTAL direct or XTAL->SYSPLL) is still OPEN.
  *
  * This file implements the fail-closed clock/timebase handshake and
  * SysTick after a real clock backend has configured hardware. It
  * does not fabricate PLL settings, XTAL pinmux or oscillator timing.
- * Final ELF cannot link without am13e_app_clock_configure_xtal8().
+ * Final ELF cannot link without am13e_app_clock_configure_xtal25().
  */
 #include "common.h" /* init() declaration and TI CMSIS */
 #include "motor_backend.h"
@@ -22,7 +22,7 @@ static uint32_t app_mclk_hz;
 
 /* Application init() runs with Boot PRIMASK still set and inherited
  * SYSOSC 32 MHz (temporary handoff clock; not Application policy).
- * The requested 8 MHz XTAL must be qualified and brought up by a
+ * The LaunchPad-reference 25 MHz XTAL must be qualified and brought up by a
  * real backend, which selects and verifies the final MCLK.
  */
 void init(void)
@@ -33,7 +33,7 @@ void init(void)
         for (;;) { __NOP(); }
     }
 
-    const uint32_t hz = am13e_app_clock_configure_xtal8();
+    const uint32_t hz = am13e_app_clock_configure_xtal25();
 
     /* No synthetic MCLK defaults: reject invalid/unquantized rates
      * before committing to Rel17's 16 kHz SysTick scheduler.
