@@ -1,6 +1,6 @@
 # AM13E Application Clock Requirement — LaunchPad 25 MHz XTAL
 
-Status: **25 MHz XTAL / 200 MHz MCLK source compiled on ARM GCC** (9/9 Application objects, user WSL logs). Real TI DriverLib dependency objects and a full Application ELF are still pending; no clock or power-stage hardware qualification.
+Status: **25 MHz XTAL / 200 MHz nominal SYSPLL clock backend: 11/11 ARM Objects PASS** (GCC 15.2.1). Both actual TI DriverLib dependency objects resolve. The real TI Flash wait-state RAMFUNC also passed a **non-flashable synthetic Linker/Vector fixture**. Full Rel17 Application ELF and on-silicon clock/power-stage qualification remain pending.
 
 ## Primary evidence — TI LP-AM13E230
 
@@ -88,23 +88,26 @@ ARM GCC 15.2.1 Object Compile of the PLL backend was confirmed by the user-provi
 `am13e_app_motor_runtime_enable_interrupts()` remains
 an unresolved and mandatory platform Link barrier.
 
-## Real TI DriverLib dependencies (pending refreshed WSL build)
+## Real TI DriverLib dependencies — compile + synthetic RAMFUNC linker probe PASS
 
-The user's nine-Object ARM build passed without warnings. A
-cross-object `nm` audit resolved **44** symbols and reported **62**
-undefined symbols, including two actual TI SDK dependencies:
+The latest **11/11** GCC 15.2.1 Application Object build passed.
+The cross-object `nm` audit resolved **46** references and reported
+**60** still undefined; both previously unresolved TI functions are
+now satisfied by genuine TI SDK objects:
 
 - `DL_Common_delayCycles` — defined in
   `source/driverlib/am13e230x/dl_common.c`.
 - `DL_FRI_setReadWaitStates` — defined in
   `source/driverlib/am13e230x/dl_fri.c`, tagged `.TI.ramfunc`.
 
-Both **genuine SDK source files** are now in the AM13E Application
-Object Target. The expected new total is **11 objects**, subject to
-WSL recompilation and symbol audit; no dummy implementation exists.
-TI startup copies `.TI.ramfunc` to SRAM before calling `main()`.
-The actual final application link must verify the RAM VMA/Flash LMA
-and that `DL_FRI_setReadWaitStates` resides in that section.
+Both **genuine SDK source files** are in the AM13E Application
+Object Target, and their real objects compiled under the selected
+toolchain. The WSL `e1c-real-fri-ramfunc-link-probe.log` confirms
+that **real** `DL_FRI_setReadWaitStates` resides inside SRAM_C
+`.TI.ramfunc` with a distinct Flash LMA in the non-flashable
+synthetic linker fixture, alongside the real TI Startup/Vector mapping.
+The actual full Rel17 Application link must independently verify
+the production MAP/ELF placement and startup handoff.
 
 The clock code also now checks retained SYSPLL/XTAL GOOD-or-OFF
 status before disabling them (per the DriverLib reset-state
