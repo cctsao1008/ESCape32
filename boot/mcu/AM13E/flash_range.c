@@ -5,12 +5,22 @@
 #include "common.h"
 #include <stdint.h>
 
+#ifdef AM13E_FLASH_TEST
+/* Host test-only: use the same mapped Flash bounds as flash.c. */
+extern uintptr_t boot_am13e_test_first;
+extern uintptr_t boot_am13e_test_end;
+#define BOOT_APP_FIRST boot_am13e_test_first
+#define BOOT_APP_END boot_am13e_test_end
+#else
 extern char __app_flash_start__[];
 extern char __boot_storage_end__[];
+#define BOOT_APP_FIRST ((uintptr_t)__app_flash_start__)
+#define BOOT_APP_END ((uintptr_t)__boot_storage_end__)
+#endif
 
 static bool flash_range(unsigned block, unsigned length, uintptr_t *start) {
-    const uintptr_t first = (uintptr_t)__app_flash_start__;
-    const uintptr_t limit = (uintptr_t)__boot_storage_end__;
+    const uintptr_t first = BOOT_APP_FIRST;
+    const uintptr_t limit = BOOT_APP_END;
     const uintptr_t offset = (uintptr_t)block * UINT32_C(1024);
     if (!length || length > 1024U || (length & 3U) || block > 255U || limit <= first ||
         block > UINT32_MAX / UINT32_C(1024) ||
