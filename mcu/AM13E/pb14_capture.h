@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 void initio(void); /* Original Rel17 entry, real MCU initialization. */
+void am13e_pb14_resume_rx(void);
 void am13e_app_pb14_systick(void); /* 16 kHz reference & RX-only end-of-frame */
 void ECAP0_IRQHandler(void);
 

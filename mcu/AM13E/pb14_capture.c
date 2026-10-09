@@ -15,6 +15,7 @@
 #include "pb14_capture.h"
 #include "pb14_decode.h"
 #include "io_backend.h"
+#include "pb14_bidir_tx.h"
 #include <soc.h>
 #include <dl_gpio.h>
 #include <dl_ecap.h>
@@ -138,6 +139,7 @@ void initio(void)
     am13e_pb14_decoder_reset(&decoder, 0U, inverted_rx);
     calib_counter = 0U;
     calib_start = DL_ECAP_getTimeStampCounter(PB14_ECAP);
+    am13e_pb14_bidir_tx_init();
     initialized = 1U;
     /* Equal to 16 kHz SysTick priority (0): neither exception may
      * preempt the other while mutating the decoder.
@@ -196,6 +198,7 @@ void ECAP0_IRQHandler(void)
         return;
     }
     capture_pairs += 2U;
+    const uint32_t good_before = decoder.good_dshot;
     /* Both pulses pass through the same Rel17 PWM/DShot callbacks.
      * No motor output, fake watchdog or BiDShot TX path is introduced.
      */
@@ -205,6 +208,11 @@ void ECAP0_IRQHandler(void)
     am13e_pb14_decoder_pulse(&decoder, start2, end2,
                              am13e_app_io_servo_pulse,
                              am13e_app_io_dshot_packet);
+    /* Reply to CRC-valid inverted DShot, anchored to the final edge. */
+    if (inverted_rx && decoder.good_dshot != good_before) {
+        (void)am13e_pb14_bidir_tx_start(end2, start2 - start1,
+                                       decoder.tick_hz);
+    }
 }
 
 /* Called by the real 16kHz TI SysTick vector only after GPIO + eCAP
@@ -213,6 +221,7 @@ void ECAP0_IRQHandler(void)
 void am13e_app_pb14_systick(void)
 {
     if (!initialized) return;
+    am13e_pb14_bidir_tx_systick();
     if (++calib_counter == 16U) {
         const uint32_t now = DL_ECAP_getTimeStampCounter(PB14_ECAP);
         const uint32_t ticks = now - calib_start;
@@ -231,6 +240,21 @@ void am13e_app_pb14_systick(void)
                                 DL_ECAP_getTimeStampCounter(PB14_ECAP),
                                 am13e_app_io_dshot_packet);
     }
+}
+
+void am13e_pb14_resume_rx(void)
+{
+    if (!initialized) input_fail_closed();
+    DL_ECAP_stopCounter(PB14_ECAP);
+    DL_ECAP_resetCounters(PB14_ECAP);
+    DL_ECAP_clearInterrupt(PB14_ECAP, PB14_ECAP_EXPECTED_FLAGS);
+    DL_ECAP_clearGlobalInterrupt(PB14_ECAP);
+    DL_ECAP_enableTimeStampCapture(PB14_ECAP);
+    DL_ECAP_startCounter(PB14_ECAP);
+    calib_start = DL_ECAP_getTimeStampCounter(PB14_ECAP);
+    calib_counter = 0U;
+    NVIC_ClearPendingIRQ(ECAP0_INT_IRQn);
+    NVIC_EnableIRQ(ECAP0_INT_IRQn);
 }
 
 void am13e_app_io_on_gpio1_interrupt(uint32_t pending)

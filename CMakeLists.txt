@@ -75,6 +75,8 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/pb14_capture.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/pb14_decode.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_codec.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_timing.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/pb14_bidir_tx.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/system_runtime.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/arming_window.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_xtal25_pll200.c"
@@ -83,7 +85,9 @@ function(add_target_ti_am13e name)
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_common.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_fri.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_adc.c"
-            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_ecap.c")
+            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_ecap.c"
+            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_timer.c"
+            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_dma.c")
         set(am13e_source_dir "${PROJECT_SOURCE_DIR}/src")
     endif()
     if(name MATCHES "^BOOT")
