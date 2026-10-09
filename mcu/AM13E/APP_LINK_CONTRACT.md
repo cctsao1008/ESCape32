@@ -120,7 +120,17 @@ only after board startup has installed a safe motor-output state,
 configured vectors/priorities and relevant peripheral drivers.
 Otherwise a real 16 kHz SysTick and PendSV scheduling cannot run.
 Do not enable interrupts speculatively before safety initialization.
-This requirement is P0 for the boot handoff smoke test.
+The AM13E Application now calls the **declaration-only**
+`am13e_app_motor_runtime_enable_interrupts()` immediately after
+`am13e_app_motor_runtime_tick_init()`, after the Application's
+input/telemetry and power-stage init calls. That required board backend
+must validate safe output gating, vector setup, priorities and pending
+faults *before* clearing PRIMASK. There is deliberately no fallback
+implementation or unconditional `__enable_irq()` in generic code.
+
+The integration point is now explicit, but **real unmasking remains
+unimplemented and untested**; failure to implement it must prevent
+Link PASS. This requirement is P0 for the boot handoff smoke test.
 
 TI's SystemInit call is also commented out in the inspected SDK
 startup. Board clock and power initialization remains an explicit
