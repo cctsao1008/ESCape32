@@ -3,6 +3,82 @@
 This is an **application** work log, not a board-validation report.
 Boot service remains independently versioned and is not changed here.
 
+## E1-C reset-cause WSL PASS; baseline SYSOSC/SysTick backend awaiting compile (2026-10-09)
+
+Newest user `e1c-resetcause-build.log` records
+`[1/1] Building ... mcu/AM13E/reset_cause.c.obj` with no
+diagnostics. The `e1c-resetcause-symbols.log` audit confirms:
+
+| Evidence | Value |
+| --- | ---: |
+| ARM Object Compile | **7/7 PASS** |
+| Cross-object resolved | **41** |
+| Still undefined | **62** |
+| AM13E backend declarations awaiting implementation | **38** |
+| Board/peripheral services | **7** |
+| ARM libc/compat candidates (archive checked separately) | **13** |
+| Production linker symbols | **4** |
+
+`am13e_app_motor_reset_flags` moved from OPEN to
+cross-object RESOLVED, exactly as expected. This demonstrates
+Source Integration; actual watchdog reset causes have not been
+stimulated or measured on hardware.
+
+The uploaded `compile_commands.json` contains **7** actual
+AM13E translation units, each compiled by the SAME ARM GCC
+**15.2.1** binary under `/home/build/ti/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi/bin`;
+AM13E compiles use `-march=armv8.1-m.main -mthumb
+-mfpu=fpv5-sp-d16 -mfloat-abi=hard` and TI SDK include
+paths. The extra `.ninja_*` and `build.ninja` files are
+build metadata, not extra runtime pass evidence.
+
+### Next independent board-neutral runtime slice
+
+Added `mcu/AM13E/system_runtime.c` and selected it in
+the AM13E Application Object target. This module:
+
+- implements the previously missing `init(void)` via TI
+  `DL_SYSCTL_getMCLKSource()` and `getClockStatus()`.
+  It checks the inherited reset-default **32 MHz SYSOSC**;
+  if conditions differ, execution halts closed instead of
+  generating an invalid 16 kHz software timebase.
+- implements `am13e_app_motor_runtime_tick_init()` using
+  `DL_SYSTICK_init(2000)`, the actual 32 MHz / 16 kHz
+  contract, CMSIS PendSV logical IRQ priority 8 and SysTick
+  logical priority 0. It arms SysTick but **does not clear PRIMASK**.
+- preserves the deliberately undefined
+  `am13e_app_motor_runtime_enable_interrupts()` safety
+  barrier; it must be supplied with real board output/IRQ
+  qualification. This is NOT a motor-ready power-up routine,
+  PLL clock plan, MCPWM timer setup, or an instruction to flash.
+
+**This newly added Object has not yet been compiled in WSL.**
+The latest verified count remains 7/7; after successful build
+the next target will have 8 Objects and the predicted combined
+symbol count is 43 resolved / 60 undefined, unless new
+DriverLib dependencies are emitted. Both numbers must be
+confirmed by the actual audit, not assumed.
+
+Run in WSL:
+
+```bash
+cd ~/github/ESCape32
+git switch am13e-port-v2
+git pull --ff-only
+set -o pipefail
+
+cmake --build build-am13e --target AM13E -j"$(nproc)" \
+  2>&1 | tee build-am13e/e1c-systick-build.log
+
+python3 mcu/AM13E/tools/check_object_symbols.py \
+  build-am13e/CMakeFiles/AM13E.dir/src/*.obj \
+  build-am13e/CMakeFiles/AM13E.dir/mcu/AM13E/*.obj \
+  | tee build-am13e/e1c-systick-symbols.log
+```
+
+The Boot image, application linker reference, runtime IRQ
+unmask barrier and Legacy MCU target paths remain separate.
+
 ## E1-C matching-toolchain verification CLOSED (2026-10-09)
 
 Latest user WSL logs use the **same toolchain as the Application
