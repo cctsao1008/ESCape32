@@ -36,6 +36,15 @@ ELF using a mock driver and NOT the completed FW1.
 - Main `add_target(AM13E AM13E)` retains all 5 Rel17
   translation units + genuine AM13E adaptations and
   DriverLib, including 250ms arming support.
+- The separate **`AM13E_FW1.elf`** opt-in strict Link Gate
+  links `$<TARGET_OBJECTS:AM13E>` (all original Rel17 and
+  implemented platform objects) plus the genuine TI Startup.
+  Uses `--no-undefined` and explicit real vector symbol
+  requirements. This is the actual complete-FW1 link
+  progress metric; without the real PWM/BEMF/I/O/safety
+  backends it SHOULD fail with meaningful unresolved
+  symbol errors, rather than creating a false ELF.
+  Its current linker is still **non-production**.
 
 **Not yet verified:** compilation, ELF linking and MAP
 for this newly added diagnostic target. First use the
@@ -51,6 +60,11 @@ git pull --ff-only
 set -o pipefail
 cmake --build build-am13e --target AM13E_CLOCK.elf -j"$(nproc)" \
   2>&1 | tee build-am13e/e1e-first-real-elf.log
+
+# Then obtain the REAL Rel17 firmware link blockers. Nonzero
+# exit is currently expected; never reinterpret it as PASS.
+cmake --build build-am13e --target AM13E_FW1.elf -j"$(nproc)" \
+  2>&1 | tee build-am13e/e1e-fw1-real-link-errors.log
 
 file build-am13e/AM13E_CLOCK.elf
 arm-none-eabi-readelf -h -S build-am13e/AM13E_CLOCK.elf \
