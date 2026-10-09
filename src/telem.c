@@ -17,6 +17,9 @@
 
 #include "common.h"
 
+#if defined(AM13E)
+#include "telem_backend.h"
+#else
 #ifndef USART1_DMA_BASE
 #define USART1_DMA_BASE DMA1_BASE
 #endif
@@ -25,6 +28,7 @@
 #define USART1_TDR USART1_DR
 #define USART1_RDR USART1_DR
 #endif
+#endif /* legacy libopencm3 USART / DMA definitions */
 
 static int ibusfunc(int len);
 static int sportfunc(int len);
@@ -36,6 +40,25 @@ static char *iopos = iobuf;
 static char *ioend = iobuf;
 
 void inittelem(void) {
+#if defined(AM13E)
+    /*
+     * Protocol selection is shared with the legacy firmware. Physical
+     * UART/DMA modes belong to the AM13E telemetry transport backend.
+     * No registers or clock/pin assumptions are made at this stage.
+     */
+    switch (telmode) {
+        case 2: iofunc = ibusfunc; break;   /* iBUS */
+        case 3: iofunc = sportfunc; break;  /* S.Port */
+#ifndef DISABLE_MSB
+        case 5: iofunc = msbfunc; break;    /* MSB */
+#endif
+#ifndef DISABLE_HOTT
+        case 6: iofunc = hottfunc; break;   /* HoTT */
+#endif
+        default: iofunc = NULL; break;
+    }
+    am13e_telem_hw_init(telmode, iobuf, sizeof iobuf, iofunc != NULL);
+#else
 #ifndef AT32F4
 	USART1_RTOR = 10;
 	USART1_CR2 = USART_CR2_RTOEN;
@@ -86,8 +109,10 @@ void inittelem(void) {
 	DMA_CPAR(USART1_DMA_BASE, USART1_TX_DMA) = (uint32_t)&USART1_TDR;
 	DMA_CMAR(USART1_DMA_BASE, USART1_TX_DMA) = (uint32_t)iobuf;
 	DMA_CNDTR(USART1_DMA_BASE, USART1_RX_DMA) = sizeof iobuf;
+#endif /* AM13E */
 }
 
+#if !defined(AM13E)
 void usart1_isr(void) {
 	if (USART1_CR1 & USART_CR1_TCIE) {
 		DMA_CCR(USART1_DMA_BASE, USART1_TX_DMA) = 0;
@@ -138,6 +163,36 @@ void usart1_tx_dma_isr(void) {
 	}
 	__enable_irq();
 }
+#else
+/*
+ * The AM13E backend delivers a completed frame into iobuf and calls
+ * this hook. A positive length is a synchronous reply in the same
+ * buffer. HoTT may return -1 and schedule delayed byte output.
+ */
+int am13e_telem_on_rx_frame(unsigned int received) {
+    if (!iofunc || received > sizeof iobuf) return 0;
+    return iofunc((int)received);
+}
+
+/*
+ * Called only after an asynchronous queued-buffer TX completes.
+ * Preserve Rel17's pending-tail progression without STM32 DMA registers.
+ * Backend must provide nonblocking tx_start while IRQs are masked.
+ */
+void am13e_telem_on_tx_done(void) {
+    __disable_irq();
+    if (iopos > ioend) {
+        char *next = ioend;
+        unsigned int length = (unsigned int)(iopos - ioend);
+        ioend = iopos;
+        am13e_telem_hw_tx_start(next, length);
+    } else {
+        iopos = iobuf;
+        ioend = iobuf;
+    }
+    __enable_irq();
+}
+#endif /* legacy USART/DMA ISR vs AM13E transport callbacks */
 
 static int ibusresp(char a, int x) {
 	char b = x, c = x >> 8;
@@ -279,12 +334,20 @@ static int hottfunc(int len) {
 	iocnt = 5; // Output delay
 	iopos = iobuf;
 	ioend = iobuf + 45;
+#if defined(AM13E)
+    am13e_telem_hw_pause_rx();
+#else
 	USART1_CR1 = USART_CR1_UE | USART_CR1_TE;
+#endif
 	return -1;
 }
 
 static void sendkiss(void) {
+#if defined(AM13E)
+    if (am13e_telem_hw_tx_busy()) return;
+#else
 	if (DMA_CCR(USART1_DMA_BASE, USART1_TX_DMA) & DMA_CCR_EN) return;
+#endif
 	int a = erpm * 41 >> 12;
 	iobuf[0] = temp1;
 	iobuf[1] = volt >> 8;
@@ -296,8 +359,12 @@ static void sendkiss(void) {
 	iobuf[7] = a >> 8;
 	iobuf[8] = a;
 	iobuf[9] = crc8(iobuf, 9);
+#if defined(AM13E)
+    am13e_telem_hw_tx_start(iobuf, 10);
+#else
 	DMA_CNDTR(USART1_DMA_BASE, USART1_TX_DMA) = 10;
 	DMA_CCR(USART1_DMA_BASE, USART1_TX_DMA) = DMA_CCR_EN | DMA_CCR_TCIE | DMA_CCR_DIR | DMA_CCR_MINC | DMA_CCR_PSIZE_8BIT | DMA_CCR_MSIZE_8BIT;
+#endif
 }
 
 static void sendcrsf(void) {
@@ -366,8 +433,13 @@ void sendtelem(void) {
 			--iocnt;
 			return;
 		}
+#if defined(AM13E)
+        uint8_t byte = (uint8_t)*iopos++;
+        am13e_telem_hw_tx_byte(byte, iopos == ioend);
+#else
 		USART1_TDR = *iopos++; // Clear TXE+TC
 		if (iopos == ioend) USART1_CR1 = USART_CR1_UE | USART_CR1_TE | USART_CR1_TCIE;
+#endif
 	}
 	if (tick & 0x1f0) return; // 1ms -> 32ms
 	switch (telmode) {
@@ -411,7 +483,11 @@ void sendtelemdata(const char *buf, int len) {
 	if (!len) return;
 	memcpy(pos, buf, len);
 	if (pos != iobuf) return;
+#if defined(AM13E)
+    am13e_telem_hw_tx_start(iobuf, (unsigned int)len);
+#else
 	DMA_CMAR(USART1_DMA_BASE, USART1_TX_DMA) = (uint32_t)iobuf;
 	DMA_CNDTR(USART1_DMA_BASE, USART1_TX_DMA) = len;
 	DMA_CCR(USART1_DMA_BASE, USART1_TX_DMA) = DMA_CCR_EN | DMA_CCR_TCIE | DMA_CCR_DIR | DMA_CCR_MINC | DMA_CCR_PSIZE_8BIT | DMA_CCR_MSIZE_8BIT;
+#endif
 }
