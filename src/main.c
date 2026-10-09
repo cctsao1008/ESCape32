@@ -656,6 +656,9 @@ void main(void) {
 #ifndef ANALOG
 	initio();
 #endif
+#if defined(AM13E)
+    am13e_app_motor_init();
+#else
 	TIM1_BDTR = TIM_DTG | TIM_BDTR_OSSR | TIM_BDTR_MOE;
 	TIM1_ARR = CLK_KHZ / 24 - 1;
 	TIM1_CR1 = TIM_CR1_CEN | TIM_CR1_ARPE;
@@ -686,19 +689,32 @@ void main(void) {
 		hall = 0x10000;
 	}
 #endif
+#endif /* !AM13E initial TIM1 / BEMF / Hall setup */
+#if defined(AM13E)
+    am13e_app_motor_runtime_tick_init();
+#else
 	nvic_set_priority(NVIC_PENDSV_IRQ, 0x80);
 	STK_RVR = CLK_KHZ / 16 - 1; // 16kHz
 	STK_CVR = 0;
 	STK_CSR = STK_CSR_ENABLE | STK_CSR_TICKINT | STK_CSR_CLKSOURCE_AHB;
+#endif
 #ifndef ANALOG
 #if SENS_CNT >= 1
 	int cells = cfg.prot_cells;
 	while (!ready) __WFI(); // Wait for sensors
 	if (!cells) cells = (volt + 439) / 440; // Assume maximum 4.4V per battery cell
 #endif
+#if defined(AM13E)
+    int reset_flags = am13e_app_motor_reset_flags();
+    int watchdog_poweron = !!(reset_flags & AM13E_APP_RESET_WATCHDOG);
+    int watchdog_arm = !!(reset_flags & AM13E_APP_RESET_FORCE_ARM);
+#else
 	int csr = RCC_CSR;
 	RCC_CSR = RCC_CSR_RMVF; // Clear reset flags
-	if (!(csr & (RCC_CSR_IWDGRSTF | RCC_CSR_WWDGRSTF))) { // Power-on
+    int watchdog_poweron = !!(csr & (RCC_CSR_IWDGRSTF | RCC_CSR_WWDGRSTF));
+    int watchdog_arm = !!(csr & RCC_CSR_WWDGRSTF);
+#endif
+	if (!watchdog_poweron) { // Power-on
 		const char *str = cfg.music;
 		if (str[0] == '~') playsound(_eod, clamp(atoi(str + 1), 0, 100));
 		else playmusic(str, cfg.volume);
@@ -710,8 +726,20 @@ void main(void) {
 		}
 #endif
 	}
-	if (cfg.arm || (csr & RCC_CSR_WWDGRSTF)) { // Arming required
+	if (cfg.arm || watchdog_arm) { // Arming required
 	rearm:
+#if defined(AM13E)
+        am13e_app_motor_arming_window_start();
+        throt = 1;
+        while (!am13e_app_motor_arming_window_expired()) {
+            __WFI();
+            beep();
+            if (throt) am13e_app_motor_arming_window_restart();
+        }
+        throt = 0;
+        rearm = 0;
+        am13e_app_motor_arming_window_stop();
+#else
 		TIM6_PSC = CLK_KHZ / 10 - 1; // 0.1ms resolution
 		TIM6_ARR = 2499; // 250ms
 		TIM6_CR1 = TIM_CR1_URS;
@@ -728,6 +756,7 @@ void main(void) {
 		throt = 0;
 		rearm = 0;
 		TIM6_CR1 = 0;
+#endif
 		playmusic(hall ? "G_GC" : "GC", cfg.volume);
 	}
 #endif
