@@ -323,7 +323,9 @@ option(AM13E_BUILD_CLOCK_DIAGNOSTIC
 if(AM13E_BUILD_CLOCK_DIAGNOSTIC)
     set(am13e_clock_diag_linker
         "${PROJECT_SOURCE_DIR}/mcu/AM13E/linker_app_reference.ld")
-    add_executable(AM13E_CLOCK.elf
+    # Opt-in only: never make legacy/default builds depend on
+    # an intentionally pre-production diagnostic ELF.
+    add_executable(AM13E_CLOCK.elf EXCLUDE_FROM_ALL
         "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_diagnostic_entry.c"
         "${PROJECT_SOURCE_DIR}/mcu/AM13E/system_runtime.c"
         "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_xtal25_pll200.c"
