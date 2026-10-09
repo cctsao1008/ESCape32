@@ -1,7 +1,7 @@
 /*
  * ESCape32 Rel17 AM13E23019 — 25MHz XTAL -> 200MHz CPU clock.
  *
- * Target: TI AM13E2X SDK 26.01.00 / TI LaunchPad Y1 X1/X2 reference.
+ * Target: ESCape32 Rel17 AM13E23019; TI SDK is the MCU driver layer.
  * This configures genuine SYSCTL/FRI registers; no mock CLK source.
  *
  * SYSPLL formula: 25MHz / 2 * (31 + 1) / 2 = 200MHz.
@@ -104,7 +104,7 @@ uint32_t am13e_app_clock_configure_xtal25(void)
 
     /* Crystal / two-pin mode, NOT HFCLK_IN single-ended mode.
      * This does not configure user board routing/load capacitors.
-     * X1/X2 must already be reserved for Y1; no GPIO reuse allowed.
+     * X1/X2 are reserved for HFXT by the HW architecture; no GPIO reuse.
      */
     SYSCTL->SOCLOCK.XTALCR &= ~SYSCTL_XTALCR_SE_MASK;
     SYSCTL->SOCLOCK.HSCLKEN &= ~SYSCTL_HSCLKEN_USEEXTHFCLK_MASK;
