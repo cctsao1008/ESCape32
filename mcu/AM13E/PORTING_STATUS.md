@@ -3,6 +3,41 @@
 This is an **application** work log, not a board-validation report.
 Boot service remains independently versioned and is not changed here.
 
+## E1-E first real ELF Link FAIL — CMake path quoting fixed (2026-10-09)
+
+User-supplied WSL `e1e-first-real-elf.log` confirms:
+- 6 source objects built for **AM13E_CLOCK.elf**: TI GCC startup,
+  TI DriverLib `dl_common.c` and `dl_fri.c`, AM13E Clock
+  backend, `system_runtime.c`, and diagnostic entry.
+- TI SDK startup emits one `-Wpedantic` warning at the initial
+  MSP vector entry: ISO C object-pointer/function-pointer cast.
+  It is SDK-origin and is **not** the ELF link failure.
+- Link failed before script loading because CMake generated
+  `-T\\\"/path/linker_app_reference.ld\\\"`, which passed
+  literal double quote characters in the Linker Script filename:
+  `ld: cannot open linker script file "...": No such file or directory`.
+- **CMake-only fix committed**: quote the *complete CMake
+  argument* `"-T${...}"` and `"-Wl,-Map,${...}"` instead
+  of embedding double quotes inside those flags. Both
+  `AM13E_CLOCK.elf` and `AM13E_FW1.elf` were fixed.
+- No firmware motor behavior, TI SDK, HW config, Boot policy,
+  Flash transport or linker memory layout was modified.
+
+**PENDING:** rerun WSL ELF link. Do not claim `AM13E_CLOCK.elf`
+or `AM13E_FW1.elf` exists until the user provides successful
+link/build results. The first is still a minimal clock/startup
+diagnostic only; the second is the strict full-Rel17 link gate,
+which still awaits real peripheral backends.
+
+```bash
+cd ~/github/ESCape32
+git switch am13e-port-v2
+git pull --ff-only
+set -o pipefail
+cmake --build build-am13e --target AM13E_CLOCK.elf -j"$(nproc)" \
+  2>&1 | tee build-am13e/e1e-clock-elf-relink.log
+```
+
 ## First real AM13E ELF build gate — source submitted, WSL LINK PENDING
 
 The main goal remains **complete ESCape32 Rel17 FW1 porting**.
