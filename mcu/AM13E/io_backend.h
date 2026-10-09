@@ -40,3 +40,9 @@ int am13e_app_io_cli_line(char *line);
 
 /* Must be implemented by the AM13E board backend. */
 void am13e_app_io_watchdog_feed(void);
+
+/* GPIO1 vector sharing contract: called ONLY for enabled non-PB15
+ * GPIO1 interrupts. The physical PB14 input backend must identify and
+ * acknowledge its own source(s). Do not provide a link-only no-op.
+ */
+void am13e_app_io_on_gpio1_interrupt(uint32_t pending);

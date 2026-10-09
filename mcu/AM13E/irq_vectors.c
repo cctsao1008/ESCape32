@@ -6,6 +6,8 @@
  */
 #include "irq_vectors.h"
 #include "gpio_runtime.h"
+#include "io_backend.h"
+#include <dl_gpio.h>
 
 void SysTick_Handler(void)
 {
@@ -15,8 +17,8 @@ void SysTick_Handler(void)
      * hard_fault_handler() requires the real motor shutdown/reset backend;
      * it must never be replaced with a fake-success callback.
      *
-     * PB14 is NOT serviced here and GPIO1_IRQn is NOT claimed: the real
-     * input-capture / DShot IRQ ownership remains a separate contract.
+     * PB14 is NOT serviced in the SysTick path. GPIO1 has a shared
+     * real IRQ vector below; PB14 events require an input backend.
      */
     if (am13e_app_nfault_asserted()) {
         hard_fault_handler();
@@ -33,4 +35,29 @@ void PendSV_Handler(void)
 void HardFault_Handler(void)
 {
     hard_fault_handler();
+}
+
+/* Strong TI CMSIS vector: GPIO1 is shared by PB15 and any PB14 GPIO
+ * events. The original ESCape32 control policy remains in src/main.c.
+ * Hardware MCPWM Trip-Zone (not implemented here) is required for
+ * bounded-latency protection of the power stage.
+ */
+void GPIO1_IRQHandler(void)
+{
+    const uint32_t pending = DL_GPIO_getEnabledInterruptStatus(GPIO1,
+                                                               UINT32_MAX);
+    if ((pending & AM13E_APP_NFAULT_PIN_MASK) != 0U) {
+        /* Acknowledge ONLY PB15, never another client's interrupt. */
+        DL_GPIO_clearInterruptStatus(GPIO1, AM13E_APP_NFAULT_PIN_MASK);
+        __disable_irq();
+        hard_fault_handler();
+        for (;;) { __NOP(); }
+    }
+    /* Do not silently discard future PB14 DShot/command GPIO events.
+     * Their real backend MUST acknowledge and handle assigned sources.
+     * Intentionally unresolved until input capture has been ported.
+     */
+    if (pending != 0U) {
+        am13e_app_io_on_gpio1_interrupt(pending);
+    }
 }

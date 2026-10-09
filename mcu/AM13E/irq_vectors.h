@@ -22,3 +22,5 @@ void hard_fault_handler(void);
 void SysTick_Handler(void);
 void PendSV_Handler(void);
 void HardFault_Handler(void);
+/* GPIO1 is a shared vector, currently PB15 nFAULT + reserved PB14 input. */
+void GPIO1_IRQHandler(void);

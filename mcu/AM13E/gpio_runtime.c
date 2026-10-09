@@ -49,7 +49,28 @@ void initgpio(void)
         gpio_fail_closed();
     }
 
+    /* PB15 nFAULT active-low: listen only for the physical falling edge.
+     * Do not alter PB14 capture routing, GPIO1 port-wide interrupt masks,
+     * or any PWM/gate-driver output. IRQ vector ownership is shared.
+     * Software SysTick checking remains a backup for a line already low.
+     */
+    DL_GPIO_setPinsPolarity(AM13E_NFAULT_GPIO,
+                            DL_GPIO_PIN_EDGE_FALL(15U),
+                            DL_GPIO_BIT_MASK(15U));
+    DL_GPIO_clearInterruptStatus(AM13E_NFAULT_GPIO, AM13E_NFAULT_PIN);
+    DL_GPIO_enableInterrupt(AM13E_NFAULT_GPIO, AM13E_NFAULT_PIN);
+    if (DL_GPIO_getEnabledInterrupts(AM13E_NFAULT_GPIO,
+                                     AM13E_NFAULT_PIN) != AM13E_NFAULT_PIN ||
+        (DL_GPIO_getPinsPolarity(AM13E_NFAULT_GPIO) &
+         DL_GPIO_BIT_MASK(15U)) != DL_GPIO_PIN_EDGE_FALL(15U)) {
+        gpio_fail_closed();
+    }
     nfault_input_initialized = 1U;
+    /* Boot still holds PRIMASK. An IRQ cannot run until the real motor
+     * backend completes the board-qualified safe IRQ-unmask barrier.
+     */
+    NVIC_SetPriority(GPIO1_INT_IRQn, 0U);
+    NVIC_EnableIRQ(GPIO1_INT_IRQn);
 }
 
 int am13e_app_nfault_asserted(void)
