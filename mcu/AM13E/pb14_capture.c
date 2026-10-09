@@ -30,6 +30,14 @@ extern void hard_fault_handler(void);
 #define PB14_GPIO_NUMBER 46U
 #define PB14_ECAP       ECAP0
 
+/* ECFLG latches capture events regardless of ECEINT mask. CEVT1 is
+ * expected with CEVT2, and CTROVF is a normal 32-bit TSCTR rollover.
+ * Only CEVT2 is enabled as the actual interrupt source.
+ */
+#define PB14_ECAP_EXPECTED_FLAGS (DL_ECAP_ISR_SOURCE_CEVT1 | \
+                                  DL_ECAP_ISR_SOURCE_CEVT2 | \
+                                  DL_ECAP_ISR_SOURCE_CTROVF)
+
 _Static_assert(IOMUX_PINCM_PB14 == 46, "E62 PB14/GPIO46 changed");
 
 static AM13E_PB14_Decoder decoder;
@@ -88,12 +96,12 @@ void initio(void)
         inverted_rx ? DL_ECAP_EVENT_FALLING_EDGE : DL_ECAP_EVENT_RISING_EDGE;
     cap.captureModeConfig.captureEvent2Polarity =
         inverted_rx ? DL_ECAP_EVENT_RISING_EDGE : DL_ECAP_EVENT_FALLING_EDGE;
-    cap.captureModeConfig.resetCounter = true;
+    cap.captureModeConfig.resetCounter = true; /* init-only, not every edge */
     cap.captureModeConfig.reArm = true;
     cap.interruptsConfig.interruptSourceEnableMask = DL_ECAP_ISR_SOURCE_CEVT2;
     DL_ECAP_init(PB14_ECAP, &cap);
     DL_ECAP_enableTimeStampCapture(PB14_ECAP);
-    DL_ECAP_clearInterrupt(PB14_ECAP, DL_ECAP_ISR_SOURCE_CEVT2);
+    DL_ECAP_clearInterrupt(PB14_ECAP, PB14_ECAP_EXPECTED_FLAGS);
     DL_ECAP_clearGlobalInterrupt(PB14_ECAP);
     DL_ECAP_startCounter(PB14_ECAP);
 
@@ -112,13 +120,22 @@ void initio(void)
 void ECAP0_IRQHandler(void)
 {
     const uint16_t flags = DL_ECAP_getInterruptSource(PB14_ECAP);
-    if (!initialized || (flags & ~DL_ECAP_ISR_SOURCE_CEVT2) != 0U) {
+    /* The CEVT1 flag remains latched despite its ECEINT mask being off.
+     * Ignore normal CEVT1/32-bit rollover, but reject unexpected flags
+     * and any IRQ that does not contain the completed CEVT2 pulse.
+     */
+    if (!initialized || (flags & ~PB14_ECAP_EXPECTED_FLAGS) != 0U ||
+        (flags & DL_ECAP_ISR_SOURCE_CEVT2) == 0U) {
         input_fail_closed();
     }
     if (flags & DL_ECAP_ISR_SOURCE_CEVT2) {
         const uint32_t start = DL_ECAP_getEventTimeStamp(PB14_ECAP, DL_ECAP_EVENT_1);
         const uint32_t end = DL_ECAP_getEventTimeStamp(PB14_ECAP, DL_ECAP_EVENT_2);
-        DL_ECAP_clearInterrupt(PB14_ECAP, DL_ECAP_ISR_SOURCE_CEVT2);
+        /* Acknowledge the associated CEVT1 flag too. Clearing only CEVT2
+         * leaves a stale event source and causes false subsequent faults.
+         * CTR overflow is modulo-correct for unsigned timestamps.
+         */
+        DL_ECAP_clearInterrupt(PB14_ECAP, flags & PB14_ECAP_EXPECTED_FLAGS);
         DL_ECAP_clearGlobalInterrupt(PB14_ECAP);
         ++capture_pairs;
         /* Valid pulses alone may feed Rel17. No simulated throttle.
@@ -127,8 +144,6 @@ void ECAP0_IRQHandler(void)
         am13e_pb14_decoder_pulse(&decoder, start, end,
                                  am13e_app_io_servo_pulse,
                                  am13e_app_io_dshot_packet);
-    } else {
-        DL_ECAP_clearGlobalInterrupt(PB14_ECAP);
     }
 }
 
