@@ -1,7 +1,7 @@
 # AM13E Rel17 FW1 — Missing Backend Implementation Pseudocode
 
 **Status:** Design / TODO; intentionally **NOT compiled**; no MCU callback stubs or fake return values.
-**Source of missing-symbol evidence:** `e1x-fw1-link.log` (32 distinct unresolved symbols, 44 linker references). The later E1-Y logs do **not** constitute a completed strict-link run because the DMA macro error stopped object compilation. Do not claim the symbol set is an exhaustive final ELF audit until compilation and link are rerun.
+**Source of missing-symbol evidence:** E1-Z `e1z-fw1-link.log` (32 distinct unresolved symbols / 44 references). E1-Z ARM GNU Object Compile passed with zero warnings after repairing the E1-Y DMA macro regression.
 **Reference boundaries:** Original ESCape32 Rel17 `src/main.c`, `src/io.c`, `src/telem.c`, `src/util.c`, `src/prog.c`; AM13E target-specific contracts in `mcu/AM13E/*.h`; AM13E230x TI TRM/SDK; project SW/HW architecture baseline v1.6.
 
 ## Contract and integration rules
@@ -239,9 +239,364 @@ Existing contract: `mcu/AM13E/util_backend.h`.
    validate destination equals FW1 config partition 0x4000..0x4fff and source/byte count, reject FW2 0x5000..0x5fff and Boot 0x0000..0x3fff; align erase to physical 2KiB sectors; run TI flash programming from RAM with interrupts/flash ECC constraints; verify readback and fail on power-loss or programming error; return nonzero ONLY on verified success
    ```
 
+## TI SDK 26.01.00.03 — Implementation Porting Guide
+
+**Read this before implementing any of the 32 callbacks.** The existing symbol list above is a behavioral *TODO*. The entries below add original Rel17 call sites, SDK-declared API names, suggested porting actions, and actual test gates. Each entry is a C-comment-form **instruction**, not implementation or a claim that hardware works.
+
+**Evidence labels**: [REL17] = call site grounded in current FW1 linker/source; [SDK DECLARED] = name confirmed in the uploaded `am13e2x_sdk-main.zip` under `source/driverlib/am13e230x/`; [PORTING PROPOSED] = engineering plan, not implemented; [HW VALIDATION] = a required silicon/board demonstration.
+
+**E1-Z state (2026-10-10):** ARM GNU object compile PASS, zero warnings. FW1 strict link still FAIL, **32 unique symbols / 44 references**. The E1-Y DMA interrupt macro issue is repaired; these backends remain genuinely unresolved.
+
+### Common porting method and TI SDK mapping
+
+1. Read the Rel17 call site and check *units, owner, trigger and return semantics* in `src/main.c`, `src/io.c`, `src/telem.c`, `src/util.c`. Preserve `src/{main,io,telem,util,prog}.c` application behavior.
+2. Check exact C signature in `mcu/AM13E/{motor,io,telem,util}_backend.h`; `compctl(int)` is declared in `src/common.h`. Do not invent new register-facing prototypes in application code.
+3. Check DriverLib's *header and signature*, relevant parameter struct, clock, IRQ flag/ACK and reset/Power Domain requirement. Verified SDK headers include `dl_mcpwm.h`, `dl_cmpss_lite.h`, `dl_xbar.h`, `dl_timer.h`, `dl_dma.h`, `dl_unicommuart.h`, `dl_unicomm.h`, `dl_flashctl.h`, `dl_flash.h`, `dl_wwdt.h`, `dl_gpio.h`, `dl_sysctl.h`. Names being present does **not** prove their configuration or physical route is correct.
+4. Construct a backend owner for each MCU resource: MCPWM0 + Trip Zone; comparator/filter and BEMF; commutation timer and IRQ; separate bidirectional command input; UART DMA + half-duplex; audio mode; Flash/ECC. Document ISR ownership, preemption and failure behavior.
+5. Confirm HW Baseline pins: MCPWM0 U PA8/PA11, V PA9/PA30, W PA10/PA31; PB13 GPIO45 power gate (polarity unverified); PB15 GPIO47 nFAULT; PB14 GPIO46 DShot RX/BiDShot TX (not 5-V tolerant). Physical hardware trip is **CMPSS→PWMXBAR→MCPWM**, *not* PB15 software IRQ alone. Do not conflate BEMF comparators with the overcurrent trip comparator.
+6. **Known SDK mismatches:** Device TRM maps DMA index 39 to ECAP0 but SDK labels it `DL_DMA_TRIGGER_SOURCE_ECAP1DMA`; `DL_DMA_INTERRUPT_DATA_ERROR` expands to absent `DMA_IMASK_DATAERR_SET` in this AM13E230x device header. Validate device registers against TRM, never copy generic enum names blindly.
+7. Rel17 command watchdog, MCU WWDT and 250ms neutral arming timer are distinct features. Do not satisfy an unimplemented input watchdog by refreshing WWDT unconditionally.
+8. Firmware config range is FW1 `0x4000..0x4fff`, FW2 `0x5000..0x5fff`. `dl_flashctl.h` declares `DL_FLASHCTL_SECTOR_SIZE (2048U)`; verify erase/program/ECC and RAM-execution rules and never touch frozen Boot or FW2 by accident.
+
+### Per-symbol commented instructions (32 symbols)
+
+#### `am13e_app_motor_init`
+
+```c
+// [REL17] src/main.c:713
+// [SDK HEADERS] dl_mcpwm.h / dl_cmpss_lite.h / dl_xbar.h / dl_timer.h / dl_gpio.h / dl_sysctl.h
+// [SDK DECLARED] DL_MCPWM_initParamsSetDefault, DL_MCPWM_init, DL_MCPWM_configureTimeBase, DL_MCPWM_configureDeadBand, DL_MCPWM_configureTripZone, DL_XBAR_selectPWMXBARSource
+// [PORTING PROPOSED] Configure real inactive MCPWM0 outputs and trip wiring before six PWM pins/gate power can be enabled; initialize validated BEMF comparator paths separately
+// [HW VALIDATION] Scope six outputs, dead time and fault trip with gate drive isolated; verify PB13 polarity
+```
+
+#### `am13e_app_motor_runtime_enable_interrupts`
+
+```c
+// [REL17] src/main.c:750
+// [SDK HEADERS] dl_mcpwm.h / dl_cmpss_lite.h / dl_xbar.h / dl_timer.h / dl_gpio.h / dl_sysctl.h
+// [SDK DECLARED] DL_MCPWM_clearInterrupt, DL_MCPWM_enableInterrupt, DL_SYSCTL_getClockStatus, NVIC_SetPriority, NVIC_EnableIRQ
+// [PORTING PROPOSED] Check VTOR/IRQ ownership, MCLK and MCU fault routes, hardware trip, inactive PWM and PB15 nFAULT; only then unmask PRIMASK
+// [HW VALIDATION] Bad clock/vector/nFAULT/Trip Zone must prevent enable and reach fail-closed path
+```
+
+#### `am13e_app_motor_pwm_apply`
+
+```c
+// [REL17] src/main.c:934
+// [SDK HEADERS] dl_mcpwm.h / dl_cmpss_lite.h / dl_xbar.h / dl_timer.h / dl_gpio.h / dl_sysctl.h
+// [SDK DECLARED] DL_MCPWM_setTimeBasePeriodShadow, DL_MCPWM_setCounterCompareShadowValue, DL_MCPWM_setCounterCompareShadowLoadMode
+// [PORTING PROPOSED] Convert Rel17 logical duty 0..2000 plus variable freq, ertm, damping, lock and brushed into synchronized PWM shadow register updates
+// [HW VALIDATION] Sweep duty and 16..96kHz configured range; compare complementary timing to Rel17
+```
+
+#### `am13e_app_motor_sine_schedule_us`
+
+```c
+// [REL17] src/main.c:141
+// [SDK HEADERS] dl_mcpwm.h / dl_cmpss_lite.h / dl_xbar.h / dl_timer.h / dl_gpio.h / dl_sysctl.h
+// [SDK DECLARED] DL_Timer_initTimerMode, DL_Timer_enableInterrupt, DL_Timer_startCounter, DL_Timer_clearInterruptStatus
+// [PORTING PROPOSED] Convert logical microseconds to measured timer ticks; program one-shot and IRQ ACK then invoke Rel17 commutation callback exactly once
+// [HW VALIDATION] Capture scheduled delays/jitter at sine startup range
+```
+
+#### `am13e_app_motor_sine_write`
+
+```c
+// [REL17] src/main.c:157
+// [SDK HEADERS] dl_mcpwm.h / dl_cmpss_lite.h / dl_xbar.h / dl_timer.h / dl_gpio.h / dl_sysctl.h
+// [SDK DECLARED] DL_MCPWM_setCounterCompareShadowValue, DL_MCPWM_configureActionQualifierActions
+// [PORTING PROPOSED] Calculate phase compare values from original Rel17 sinedata[] and a/b/c indices/power; preserve safe complementary actions
+// [HW VALIDATION] Check all phase indices at low/high power and no output overlap
+```
+
+#### `am13e_app_motor_sine_finish`
+
+```c
+// [REL17] src/main.c:172
+// [SDK HEADERS] dl_mcpwm.h / dl_cmpss_lite.h / dl_xbar.h / dl_timer.h / dl_gpio.h / dl_sysctl.h
+// [SDK DECLARED] DL_MCPWM_configureLoadMode, DL_MCPWM_forceGlobalLoadOneShotEvent
+// [PORTING PROPOSED] Handover sine startup to six-step on a PWM synchronization event; keep trip latched
+// [HW VALIDATION] Scope sine-to-commutation transition for spurious output pulses
+```
+
+#### `am13e_app_motor_sixstep_write`
+
+```c
+// [REL17] src/main.c:215
+// [SDK HEADERS] dl_mcpwm.h / dl_cmpss_lite.h / dl_xbar.h / dl_timer.h / dl_gpio.h / dl_sysctl.h
+// [SDK DECLARED] DL_MCPWM_configureActionQualifierActions, DL_MCPWM_setCounterCompareShadowValue
+// [PORTING PROPOSED] Build six-step truth table for positive/negative/floating phase and damp/reverse; stage legal waveform without activating partial phase state
+// [HW VALIDATION] Exhaust 6 steps and reverse, brake, coast and illegal-mask cases
+```
+
+#### `am13e_app_motor_sixstep_idle`
+
+```c
+// [REL17] src/main.c:384
+// [SDK HEADERS] dl_mcpwm.h / dl_cmpss_lite.h / dl_xbar.h / dl_timer.h / dl_gpio.h / dl_sysctl.h
+// [SDK DECLARED] DL_MCPWM_setActionQualifierSWAction, DL_MCPWM_configureActionQualifierActions
+// [PORTING PROPOSED] Produce Rel17 neutral mode including configured active brake vs coast; preserve external trip
+// [HW VALIDATION] Scope all six outputs for neutral, drag, active brake
+```
+
+#### `am13e_app_motor_brushed_write`
+
+```c
+// [REL17] src/main.c:953
+// [SDK HEADERS] dl_mcpwm.h / dl_cmpss_lite.h / dl_xbar.h / dl_timer.h / dl_gpio.h / dl_sysctl.h
+// [SDK DECLARED] DL_MCPWM_configureActionQualifierActions, DL_MCPWM_setCounterCompareShadowValue
+// [PORTING PROPOSED] Translate original brushed reverse and damp into MCPWM outputs with verified dead time/physical polarity
+// [HW VALIDATION] Capture forward, reverse and braking transitions without shoot-through
+```
+
+#### `am13e_app_motor_commutation_commit`
+
+```c
+// [REL17] src/main.c:396,998
+// [SDK HEADERS] dl_mcpwm.h / dl_cmpss_lite.h / dl_xbar.h / dl_timer.h / dl_gpio.h / dl_sysctl.h
+// [SDK DECLARED] DL_MCPWM_enableGlobalLoad, DL_MCPWM_setGlobalLoadTrigger, DL_MCPWM_forceGlobalLoadOneShotEvent
+// [PORTING PROPOSED] Atomically latch prepared phase, action qualifier and compare values on a known PWM boundary
+// [HW VALIDATION] Measure phase sequencing with IRQ contention and fault during update
+```
+
+#### `am13e_app_motor_commutation_enable`
+
+```c
+// [REL17] src/main.c:999,1017
+// [SDK HEADERS] dl_mcpwm.h / dl_cmpss_lite.h / dl_xbar.h / dl_timer.h / dl_gpio.h / dl_sysctl.h
+// [SDK DECLARED] DL_MCPWM_getTripZoneFlagStatus, DL_MCPWM_enableTripZoneSignals, DL_GPIO_readPins, DL_GPIO_setPins
+// [PORTING PROPOSED] Enable only after Rel17 arm criteria, inactive PB15 nFAULT, verified PB13 polarity and independent hardware trip; disable to physically safe state
+// [HW VALIDATION] Inject trip and gate fault before and during enable; reject bad hardware state
+```
+
+#### `am13e_app_motor_bemf_interval_select`
+
+```c
+// [REL17] src/main.c:318
+// [SDK HEADERS] dl_mcpwm.h / dl_cmpss_lite.h / dl_xbar.h / dl_timer.h / dl_gpio.h / dl_sysctl.h
+// [SDK DECLARED] DL_CMPSSLITE_configHighComparator, DL_CMPSSLITE_configFilterHigh, DL_CMPSSLITE_enableModule, DL_XBAR_selectOutputXBARSource
+// [PORTING PROPOSED] Select the actual floating phase CMPSS0/1/3 and zero-cross edge, blank switching spikes and arm capture timing; BEMF is not overcurrent trip
+// [HW VALIDATION] Inject phase U/V/W BEMF and confirm polarity, filtering, interval timestamps
+```
+
+#### `am13e_app_motor_bemf_stop`
+
+```c
+// [REL17] src/main.c:1018
+// [SDK HEADERS] dl_mcpwm.h / dl_cmpss_lite.h / dl_xbar.h / dl_timer.h / dl_gpio.h / dl_sysctl.h
+// [SDK DECLARED] DL_CMPSSLITE_getStatus, DL_Timer_disableInterrupt, DL_Timer_clearInterruptStatus
+// [PORTING PROPOSED] Cancel BEMF/commutation events and acknowledge IRQ without disabling separate hardware overcurrent protection
+// [HW VALIDATION] No stale zero-cross events; hardware overcurrent trip remains effective
+```
+
+#### `am13e_app_motor_bemf_sine_exit_us`
+
+```c
+// [REL17] src/main.c:894,1000
+// [SDK HEADERS] dl_mcpwm.h / dl_cmpss_lite.h / dl_xbar.h / dl_timer.h / dl_gpio.h / dl_sysctl.h
+// [SDK DECLARED] DL_Timer_initTimerMode, DL_Timer_stopCounter, DL_Timer_startCounter
+// [PORTING PROPOSED] Implement sine-exit timeout/cancel from actual timer rate; examine Rel17 meaning of 0xffff sentinel before deciding handling
+// [HW VALIDATION] Test 0, typical, 0xffff and rapid repeated scheduling
+```
+
+#### `compctl`
+
+```c
+// [REL17] src/main.c:188,302,400; src/common.h
+// [SDK HEADERS] dl_mcpwm.h / dl_cmpss_lite.h / dl_xbar.h / dl_timer.h / dl_gpio.h / dl_sysctl.h
+// [SDK DECLARED] DL_CMPSSLITE_configHighComparator, DL_CMPSSLITE_configFilterHigh, DL_SYSCTL_setCompartorHPMux, DL_XBAR_selectOutputXBARSource
+// [PORTING PROPOSED] First reverse-map original compctl phase-mask semantics; select the real comparator mux/edge/filter while preserving independent fault path
+// [HW VALIDATION] Verify all 6 BEMF commutation edges plus forced-zero/stop inputs
+```
+
+#### `am13e_app_commutation_reset`
+
+```c
+// [REL17] src/util.c:606
+// [SDK HEADERS] dl_mcpwm.h / dl_cmpss_lite.h / dl_xbar.h / dl_timer.h / dl_gpio.h / dl_sysctl.h
+// [SDK DECLARED] DL_MCPWM_setActionQualifierSWAction, DL_MCPWM_configureActionQualifierActions
+// [PORTING PROPOSED] Restore resetcom output and software state after audio while retaining trip and idle behavior
+// [HW VALIDATION] No drive pulse during resetcom, including faulted and audio cases
+```
+
+#### `am13e_app_motor_fault_shutdown`
+
+```c
+// [REL17] src/main.c:595
+// [SDK HEADERS] dl_mcpwm.h / dl_cmpss_lite.h / dl_xbar.h / dl_timer.h / dl_gpio.h / dl_sysctl.h
+// [SDK DECLARED] DL_MCPWM_getTripZoneFlagStatus, DL_MCPWM_setTripZoneAction, DL_MCPWM_enableTripZoneSignals, DL_GPIO_clearPins
+// [PORTING PROPOSED] Make comparator-to-PWMXBAR-to-MCPWM fault independent of CPU; immediately force proven inactive bridge and latch fault; PB13 action only after polarity verification
+// [HW VALIDATION] Scope shutdown with CPU IRQ masked, test overcurrent plus PB15 secondary path
+```
+
+#### `am13e_app_motor_fault_reset`
+
+```c
+// [REL17] src/main.c:600
+// [SDK HEADERS] dl_mcpwm.h / dl_cmpss_lite.h / dl_xbar.h / dl_timer.h / dl_gpio.h / dl_sysctl.h
+// [SDK DECLARED] DL_SYSCTL_resetDevice, DL_MCPWM_getTripZoneFlagStatus
+// [PORTING PROPOSED] After verified bridge shutdown, diagnose/reset or trap permanently; do not return into motor code as success
+// [HW VALIDATION] Reset during trip and retained/clearable fault states
+```
+
+#### `am13e_app_io_watchdog_feed`
+
+```c
+// [REL17] src/io.c:534,542
+// [SDK HEADERS] dl_wwdt.h / dl_timer.h
+// [SDK DECLARED] DL_WWDT_initWatchdogMode, DL_WWDT_restart, DL_Timer_getTimerCount
+// [PORTING PROPOSED] Supervise only Rel17 validated DShot CRC/PWM command events; distinguish command-loss supervision from hardware WWDT and 250ms arming timer
+// [HW VALIDATION] CRC corrupt frames must not refresh timeout; motor enters safe response on signal loss
+```
+
+#### `am13e_telem_hw_init`
+
+```c
+// [REL17] src/telem.c:60
+// [SDK HEADERS] dl_unicommuart.h / dl_unicomm.h / dl_dma.h
+// [SDK DECLARED] DL_UNICOMM_setIPMode, DL_UART_init, DL_UART_setClockConfig, DL_UART_configBaudRate, DL_UART_setDirection
+// [PORTING PROPOSED] Configure PA22/PA23 UART and protocol specific baud, inversion/duplex, RX buffer, IRQ and DMA ownership; preserve Rel17 telem_mode selection
+// [HW VALIDATION] KISS/iBUS/S.Port/CRSF/MSB/HoTT baud and frame timing
+```
+
+#### `am13e_telem_hw_pause_rx`
+
+```c
+// [REL17] src/telem.c:338
+// [SDK HEADERS] dl_unicommuart.h / dl_unicomm.h / dl_dma.h
+// [SDK DECLARED] DL_UART_disableDMAReceiveEvent, DL_UART_disableInterrupt, DL_UART_isRXFIFOEmpty, DL_DMA_disableChannel
+// [PORTING PROPOSED] Pause RX only after account for DMA in-flight bytes, IRQ acknowledgement and half-duplex turn; preserve caller buffer
+// [HW VALIDATION] HoTT RX->TX turnaround with burst traffic and no lost/misowned bytes
+```
+
+#### `am13e_telem_hw_tx_busy`
+
+```c
+// [REL17] src/telem.c:347
+// [SDK HEADERS] dl_unicommuart.h / dl_unicomm.h / dl_dma.h
+// [SDK DECLARED] DL_UART_isBusy, DL_UART_isTXFIFOEmpty
+// [PORTING PROPOSED] Use true peripheral TX and DMA activity, not software queue state alone
+// [HW VALIDATION] No TX buffer reuse before final UART stop bit
+```
+
+#### `am13e_telem_hw_tx_byte`
+
+```c
+// [REL17] src/telem.c:438
+// [SDK HEADERS] dl_unicommuart.h / dl_unicomm.h / dl_dma.h
+// [SDK DECLARED] DL_UART_transmitData, DL_UART_getRawInterruptStatus, DL_UART_isBusy
+// [PORTING PROPOSED] Transmit exactly one deferred HoTT byte on real UART, retain pacing and last_byte semantics
+// [HW VALIDATION] Logic analyzer measures inter-byte delay and RX recovery
+```
+
+#### `am13e_telem_hw_tx_start`
+
+```c
+// [REL17] src/telem.c:363,487
+// [SDK HEADERS] dl_unicommuart.h / dl_unicomm.h / dl_dma.h
+// [SDK DECLARED] DL_UART_enableDMATransmitEvent, DL_DMA_setSrcAddr, DL_DMA_setTransferSize, DL_DMA_enableChannel
+// [PORTING PROPOSED] Asynchronously send Rel17 buffer, hold ownership until physical DMA/UART complete and invoke am13e_telem_on_tx_done once
+// [HW VALIDATION] Stress multi-frame transmissions and half-duplex conflicts
+```
+
+#### `am13e_app_audio_music_begin`
+
+```c
+// [REL17] src/util.c:660
+// [SDK HEADERS] dl_mcpwm.h / dl_timer.h
+// [SDK DECLARED] DL_MCPWM_configureTimeBase, DL_MCPWM_configureActionQualifierActions, DL_Timer_initTimerMode
+// [PORTING PROPOSED] Acquire MCPWM for motor-powered music only when motor idle, retain dead time and hardware trip
+// [HW VALIDATION] No unexpected gate drive when score starts
+```
+
+#### `am13e_app_audio_music_note`
+
+```c
+// [REL17] src/util.c:698
+// [SDK HEADERS] dl_mcpwm.h / dl_timer.h
+// [SDK DECLARED] DL_MCPWM_setTimeBasePeriodShadow, DL_MCPWM_setCounterCompareShadowValue
+// [PORTING PROPOSED] Convert Rel17 semitone, octave and volume to real PWM period/compare without raw STM32 TIM registers
+// [HW VALIDATION] Measure notes, octave, duty and amplitude versus Rel17
+```
+
+#### `am13e_app_audio_music_pause`
+
+```c
+// [REL17] src/util.c:682
+// [SDK HEADERS] dl_mcpwm.h / dl_timer.h
+// [SDK DECLARED] DL_MCPWM_setActionQualifierSWAction, DL_MCPWM_setCounterCompareShadowValue
+// [PORTING PROPOSED] Implement score pause as inactive physical waveform with original duration; preserve trip
+// [HW VALIDATION] Verify silence and no accidental gate pulse
+```
+
+#### `am13e_app_audio_music_tick`
+
+```c
+// [REL17] src/util.c:632
+// [SDK HEADERS] dl_mcpwm.h / dl_timer.h
+// [SDK DECLARED] DL_Timer_getRawInterruptStatus, DL_Timer_clearInterruptStatus, DL_MCPWM_setCounterCompareShadowValue
+// [PORTING PROPOSED] Service real PWM/sample cadence during delayf, independent of input watchdog and arming refresh
+// [HW VALIDATION] One commutation event per intended tick, no synthetic time
+```
+
+#### `am13e_app_audio_pcm_begin`
+
+```c
+// [REL17] src/util.c:733
+// [SDK HEADERS] dl_mcpwm.h / dl_timer.h
+// [SDK DECLARED] DL_Timer_initTimerMode, DL_Timer_enableInterrupt, DL_MCPWM_configureTimeBase
+// [PORTING PROPOSED] Program AU PCM sample clock and valid motor output ownership, preserve hardware trip
+// [HW VALIDATION] Check configured sample rate and waveform under low volume
+```
+
+#### `am13e_app_audio_pcm_sample`
+
+```c
+// [REL17] src/util.c:761
+// [SDK HEADERS] dl_mcpwm.h / dl_timer.h
+// [SDK DECLARED] DL_Timer_getRawInterruptStatus, DL_Timer_clearInterruptStatus, DL_MCPWM_setCounterCompareShadowValue
+// [PORTING PROPOSED] Wait for or queue actual sample period; map signed 8-bit PCM to safe PWM without skipping
+// [HW VALIDATION] Compare recorded PWM against known PCM fixture and verify no underrun
+```
+
+#### `am13e_app_audio_end`
+
+```c
+// [REL17] src/util.c:717,774
+// [SDK HEADERS] dl_mcpwm.h / dl_timer.h
+// [SDK DECLARED] DL_Timer_stopCounter, DL_MCPWM_setActionQualifierSWAction, DL_MCPWM_configureLoadMode
+// [PORTING PROPOSED] Stop audio timer, return bridge ownership to neutral motor state without clearing fault
+// [HW VALIDATION] End sound during idle and forced fault; no drive glitch
+```
+
+#### `am13e_app_cfg_commit`
+
+```c
+// [REL17] src/util.c:550
+// [SDK HEADERS] dl_flashctl.h / dl_flash.h
+// [SDK DECLARED] DL_FLASHCTL_SECTOR_SIZE, DL_FlashCTL_eraseMemory, DL_FlashCTL_programMemory128WithECCGenerated, DL_FlashCTL_readVerify128WithECCGenerated, DL_FlashCTL_getCommandStatus
+// [PORTING PROPOSED] Validate [destination, length] wholly within FW1 config 0x4000..0x4fff; 2048-byte sector boundaries; RAMFUNC/ECC-safe erase and program; readback before success; preserve FW2 and Boot
+// [HW VALIDATION] Power-cycle persistence, boundary writes, power-fail injection, FW2 0x5000 and Boot unchanged
+```
+
+### WSL development and evidence workflow
+
+```bash
+SDK="${AM13E_SDK_ROOT:-$HOME/ti/am13e230x_sdk_26_01_00_03}"
+rg -n 'DL_MCPWM_configureTripZone|DL_XBAR_selectPWMXBARSource' \
+  "$SDK/source/driverlib/am13e230x"/{dl_mcpwm.h,dl_xbar.h}
+rg -n 'DL_CMPSSLITE_configHighComparator|DL_UART_init|DL_FlashCTL_eraseMemory' \
+  "$SDK/source/driverlib/am13e230x"/{dl_cmpss_lite.h,dl_unicommuart.h,dl_flashctl.h}
+cmake --build build-am13e --target AM13E -j"$(nproc)"
+cmake --build build-am13e --target AM13E_FW1.elf -j"$(nproc)"
+```
+
+Review order for each real implementation: Rel17 equivalent behavior → verified SDK signature/register mapping → own ISR/DMA resource and failure path → ARM GNU compile → strict FW1 link → oscilloscope/electrical acceptance. **Never add empty C bodies or fake success returns to make a missing symbol disappear.**
+
 ## Implementation order and acceptance gates
 
-1. **Fix toolchain regression first.** The E1-Y SDK macro `DL_DMA_INTERRUPT_DATA_ERROR` expands to `DMA_IMASK_DATAERR_SET`, absent from AM13E230x `hw_dma.h`. Preserve implemented Channel Completion / Address Error masks; verify the corrected object compile before treating a new link log as current.
+1. **Compiler regression fixed in E1-Z.** The E1-Y SDK macro `DL_DMA_INTERRUPT_DATA_ERROR` expands to `DMA_IMASK_DATAERR_SET`, absent from AM13E230x `hw_dma.h`. The corrected Channel Completion / Address Error masks compile cleanly; retain this mismatch as a SDK caveat.
 2. **Motor fault foundation**: establish real `am13e_app_motor_fault_shutdown`, `fault_reset`, power/GPIO/MCPWM inactive and hardware Trip Zone, then `motor_init` and `runtime_enable_interrupts`. Validate inactive outputs and fault state with supply/gate-drive appropriately isolated.
 3. **Motor PWM/commutation**: implement full Rel17 sine, six-step, brush/damp, shadow-update and logical duty/frequency behavior; verify complementary interlock and trip response with scope.
 4. **BEMF**: implement comparator selection, edge/filter/blanking and timed callbacks; verify capture timestamps, zero-cross polarity and commutation event sequence.
