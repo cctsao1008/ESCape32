@@ -3,6 +3,58 @@
 This is an **application** work log, not a board-validation report.
 Boot service remains independently versioned and is not changed here.
 
+## E1-C runtime barrier WSL PASS + linker/libc probes (2026-10-09)
+
+Newest user WSL build: `[1/1] Building ... src/main.c.obj` PASS,
+with no warnings. Combined object symbol inventory still resolves 40
+internal references; open symbols now total **63**:
+
+| Open class | Count |
+| --- | ---: |
+| AM13E required hardware/backend | 39 |
+| Board/peripheral services | 7 |
+| C runtime/compatibility candidates | 13 |
+| Linker/startup | 4 |
+
+The increase from 62 to 63 is **exactly**
+`am13e_app_motor_runtime_enable_interrupts`, intentionally left
+undefined until a safe board implementation exists.
+
+Two opt-in, build-only audit tools were added:
+- `mcu/AM13E/tools/probe_app_linker.py` temporarily compiles a
+  **synthetic non-flashable fixture**, the real TI startup source
+  and the committed strong `irq_vectors.c`. It links to
+  `mcu/AM13E/linker_app_reference.ld`, checks actual GNU ARM
+  linker placement of config RAM, `.data` LMA/VMA, RAMFUNC,
+  vector slot values and image boundary; all fixture ELF/MAP/BIN
+  files are deleted after the test. **Not Rel17 firmware**.
+- `mcu/AM13E/tools/check_c_runtime.py` checks symbols exported
+  by the installed Cortex-M33 hard-float Newlib archives.
+  `itoa` / `strlcpy` availability is currently **unknown**;
+  archive presence still does not prove actual link success.
+
+Neither tool has been run on WSL. Do not claim that the linker
+script or Newlib functions passed the actual GNU ARM checks.
+
+### WSL next commands
+
+```bash
+cd ~/github/ESCape32
+git switch am13e-port-v2
+git pull --ff-only
+
+python3 mcu/AM13E/tools/probe_app_linker.py \
+  --sdk-root "$HOME/ti/am13e230x_sdk_26_01_00_03" \
+  | tee build-am13e/e1c-linker-probe.log
+
+python3 mcu/AM13E/tools/check_c_runtime.py \
+  | tee build-am13e/e1c-libc-symbols.log
+```
+
+Results must be assessed independently; a linker fixture PASS does
+not remove any of the 46 open board/backend symbols or qualify
+actual motor/power-stage hardware.
+
 ## E1-C WSL verified + nonproduction linker boundary (2026-10-09)
 
 Latest user WSL output after `irq_vectors.c` integration:
