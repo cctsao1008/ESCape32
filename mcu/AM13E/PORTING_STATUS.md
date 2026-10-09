@@ -3,6 +3,55 @@
 This is an **application** work log, not a board-validation report.
 Boot service remains independently versioned and is not changed here.
 
+## ESCape32 architecture-alignment rebuild PASS (2026-10-09)
+
+User WSL `architecture-alignment.log` records successful
+**11/11 Object Compile PASS** after removing the TI
+example-board SysConfig default from the ESCape32 root
+CMake target. The actual 11 C objects consist of five
+original Rel17 sources, four AM13E platform adapters
+and two genuine TI DriverLib implementations. The
+incremental output shows no compiler errors or warnings.
+
+**Scope:** confirmation of the current ESCape32 CMake
+Application OBJECT target, **not** a complete Rel17
+ELF/BIN, proof of every included header's provenance,
+a new Symbol Inventory, actual Boot handoff or any
+clock / motor hardware behavior.
+
+An inspection of the actual ESCape32 Boot reference
+and SW Architecture Baseline v1.6 revealed concrete
+interface gaps; detailed code-backed audit now lives in
+`mcu/AM13E/BOOT_APP_INTEGRATION_GAPS.md`:
+
+- `boot/src/main.c` transports the block index via
+  8-bit `recvval()`; `flash_range.c` explicitly rejects
+  `block > 255`. With 1 KiB blocks this supports only
+  256 KiB, not the SW baseline's full 488 KiB APP span.
+- `image_integrity.h` caps transport image length at
+  256 KiB, and `image_integrity.c` checks the cap.
+- The old Boot-format metadata/entry uses APP
+  `0x6000`, image header `0x6100`, vectors
+  `0x6800`. The exact product Application-startup
+  contract remains a Detailed Design decision to be
+  reconciled with packer/Boot/Linker.
+- The old reference Linker defines `FLASH_CFG` as
+  8 KiB; SW v1.6 instead requires two independently
+  owned **4 KiB** FW1/FW2 parameter areas.
+- Boot update bounds already start at APP_BASE, so
+  application-only writes have an existing useful
+  implementation basis, pending code/hardware checks.
+
+No wire protocol, Boot code, production linker, FW1
+control logic or physical power-stage driver was modified.
+Do not widen constants alone and report the full 488 KiB
+update problem as solved.
+
+**Next:** Agree on extended ESCape32 service transport
+addressing and APP image/vector/header contract before
+coding those cross-component changes. Confirm Legacy
+target regression separately after future source changes.
+
 ## ARCHITECTURE AUTHORITY CORRECTION — SW/HW Baseline v1.6
 
 **This entry supersedes earlier wording that treated a TI
