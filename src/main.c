@@ -88,7 +88,12 @@ Cfg cfg = cfgdata;
 
 int throt, brake, ertm, erpm, temp1, temp2, volt, curr, csum, dshotval, beepval = -1;
 char analog, telreq, telmode, telphid, flipdir, beacon, dshotext, rearm, auxup;
+#if defined(AM13E)
+/* ISR-written 16kHz timebase, read by AM13E motor runtime. */
+volatile uint32_t tick;
+#else
 uint32_t tick;
+#endif
 
 static int oldstep, step, sine, ival, cutback;
 static char prep, sync, fast, lock, led, ready, reverse;
