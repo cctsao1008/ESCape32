@@ -3,7 +3,7 @@
  * bidirectional, level-compatible and contention-safe interface.
  *
  * Receive: GPIO46 -> INPUTXBAR1 -> ECAP0 (32bit timestamps).
- * eCAP captures START/END edges in continuous two-event mode.
+ * eCAP captures two complete pulses per four-event group (CEVT4 IRQ).
  * Rel17 policy stays in src/io.c via original servo/DShot callbacks.
  * BiDShot reply waveform, DMA TX and RX->TX turnaround are NOT enabled;
  * no GPIO output is configured here. TX must meet TI Review/timing gate.
@@ -30,12 +30,14 @@ extern void hard_fault_handler(void);
 #define PB14_GPIO_NUMBER 46U
 #define PB14_ECAP       ECAP0
 
-/* ECFLG latches capture events regardless of ECEINT mask. CEVT1 is
- * expected with CEVT2, and CTROVF is a normal 32-bit TSCTR rollover.
- * Only CEVT2 is enabled as the actual interrupt source.
+/* ECFLG latches all four capture events despite only CEVT4 having
+ * interrupt enabled; 32-bit TSCTR wrap is a normal counter event.
+ * The group contains two pulses: CAP1->CAP2 and CAP3->CAP4.
  */
 #define PB14_ECAP_EXPECTED_FLAGS (DL_ECAP_ISR_SOURCE_CEVT1 | \
                                   DL_ECAP_ISR_SOURCE_CEVT2 | \
+                                  DL_ECAP_ISR_SOURCE_CEVT3 | \
+                                  DL_ECAP_ISR_SOURCE_CEVT4 | \
                                   DL_ECAP_ISR_SOURCE_CTROVF)
 
 _Static_assert(IOMUX_PINCM_PB14 == 46, "E62 PB14/GPIO46 changed");
@@ -91,14 +93,21 @@ void initio(void)
     cap.captureModeConfig.input = DL_ECAP_INPUT_INPUTXBAR1;
     cap.captureModeConfig.prescalerValue = 0U; /* no edge prescale */
     cap.captureModeConfig.continouousOrOneShot = DL_ECAP_CONTINUOUS_CAPTURE_MODE;
-    cap.captureModeConfig.wrapOrStopAtEvent = DL_ECAP_EVENT_2;
+    /* Batch two pulses per ISR. DShot600 nominal IRQ rate is lowered
+     * from ~600k/s to ~300k/s; measured capture reliability is pending.
+     */
+    cap.captureModeConfig.wrapOrStopAtEvent = DL_ECAP_EVENT_4;
     cap.captureModeConfig.captureEvent1Polarity =
         inverted_rx ? DL_ECAP_EVENT_FALLING_EDGE : DL_ECAP_EVENT_RISING_EDGE;
     cap.captureModeConfig.captureEvent2Polarity =
         inverted_rx ? DL_ECAP_EVENT_RISING_EDGE : DL_ECAP_EVENT_FALLING_EDGE;
+    cap.captureModeConfig.captureEvent3Polarity =
+        cap.captureModeConfig.captureEvent1Polarity;
+    cap.captureModeConfig.captureEvent4Polarity =
+        cap.captureModeConfig.captureEvent2Polarity;
     cap.captureModeConfig.resetCounter = true; /* init-only, not every edge */
     cap.captureModeConfig.reArm = true;
-    cap.interruptsConfig.interruptSourceEnableMask = DL_ECAP_ISR_SOURCE_CEVT2;
+    cap.interruptsConfig.interruptSourceEnableMask = DL_ECAP_ISR_SOURCE_CEVT4;
     DL_ECAP_init(PB14_ECAP, &cap);
     DL_ECAP_enableTimeStampCapture(PB14_ECAP);
     DL_ECAP_clearInterrupt(PB14_ECAP, PB14_ECAP_EXPECTED_FLAGS);
@@ -120,31 +129,34 @@ void initio(void)
 void ECAP0_IRQHandler(void)
 {
     const uint16_t flags = DL_ECAP_getInterruptSource(PB14_ECAP);
-    /* The CEVT1 flag remains latched despite its ECEINT mask being off.
-     * Ignore normal CEVT1/32-bit rollover, but reject unexpected flags
-     * and any IRQ that does not contain the completed CEVT2 pulse.
+    /* CEVT1..3 latch as normal data flags while only CEVT4 requests
+     * an IRQ. CTROVF is legal for the free-running unsigned TSCTR.
+     * A missing CEVT4 is not an actionable complete capture group.
      */
     if (!initialized || (flags & ~PB14_ECAP_EXPECTED_FLAGS) != 0U ||
-        (flags & DL_ECAP_ISR_SOURCE_CEVT2) == 0U) {
+        (flags & DL_ECAP_ISR_SOURCE_CEVT4) == 0U) {
         input_fail_closed();
     }
-    if (flags & DL_ECAP_ISR_SOURCE_CEVT2) {
-        const uint32_t start = DL_ECAP_getEventTimeStamp(PB14_ECAP, DL_ECAP_EVENT_1);
-        const uint32_t end = DL_ECAP_getEventTimeStamp(PB14_ECAP, DL_ECAP_EVENT_2);
-        /* Acknowledge the associated CEVT1 flag too. Clearing only CEVT2
-         * leaves a stale event source and causes false subsequent faults.
-         * CTR overflow is modulo-correct for unsigned timestamps.
-         */
-        DL_ECAP_clearInterrupt(PB14_ECAP, flags & PB14_ECAP_EXPECTED_FLAGS);
-        DL_ECAP_clearGlobalInterrupt(PB14_ECAP);
-        ++capture_pairs;
-        /* Valid pulses alone may feed Rel17. No simulated throttle.
-         * CRC and motor input watchdog remain in original src/io.c.
-         */
-        am13e_pb14_decoder_pulse(&decoder, start, end,
-                                 am13e_app_io_servo_pulse,
-                                 am13e_app_io_dshot_packet);
-    }
+    /* Read all four timestamps before acknowledging the group; there
+     * is no guarantee against register overwrite at high edge rates.
+     * Overrun/DShot600 throughput requires a board latency or DMA gate.
+     */
+    const uint32_t start1 = DL_ECAP_getEventTimeStamp(PB14_ECAP, DL_ECAP_EVENT_1);
+    const uint32_t end1 = DL_ECAP_getEventTimeStamp(PB14_ECAP, DL_ECAP_EVENT_2);
+    const uint32_t start2 = DL_ECAP_getEventTimeStamp(PB14_ECAP, DL_ECAP_EVENT_3);
+    const uint32_t end2 = DL_ECAP_getEventTimeStamp(PB14_ECAP, DL_ECAP_EVENT_4);
+    DL_ECAP_clearInterrupt(PB14_ECAP, flags & PB14_ECAP_EXPECTED_FLAGS);
+    DL_ECAP_clearGlobalInterrupt(PB14_ECAP);
+    capture_pairs += 2U;
+    /* Both pulses pass through the same Rel17 PWM/DShot callbacks.
+     * No motor output, fake watchdog or BiDShot TX path is introduced.
+     */
+    am13e_pb14_decoder_pulse(&decoder, start1, end1,
+                             am13e_app_io_servo_pulse,
+                             am13e_app_io_dshot_packet);
+    am13e_pb14_decoder_pulse(&decoder, start2, end2,
+                             am13e_app_io_servo_pulse,
+                             am13e_app_io_dshot_packet);
 }
 
 /* Called by the real 16kHz TI SysTick vector only after GPIO + eCAP
