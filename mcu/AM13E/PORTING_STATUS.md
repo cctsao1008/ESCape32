@@ -3,6 +3,57 @@
 This is an **application** work log, not a board-validation report.
 Boot service remains independently versioned and is not changed here.
 
+## Current gate status — E1-B complete (2026-10-09)
+
+**Validated via user WSL ARM GCC build logs:** all FIVE Rel17
+Application translation units compile to ARM Cortex-M33 objects.
+
+| Source | Stage E1-B object build |
+| --- | --- |
+| `src/prog.c` | PASS |
+| `src/telem.c` | PASS |
+| `src/util.c` | PASS |
+| `src/io.c` | PASS |
+| `src/main.c` | PASS (3 nonfatal `-Wmissing-prototypes` warnings) |
+
+The newest `e1b-main.log` shows only
+`[1/1] Building C object CMakeFiles/AM13E.dir/src/main.c.obj`,
+followed by warnings for `sys_tick_handler()`,
+`pend_sv_handler()`, and `hard_fault_handler()`; no error
+or failed build step. All earlier four object PASSes are from
+preceding WSL build logs. **E1-B: 5/5 Object Compile PASS.**
+
+This is **not** application link PASS, hardware driver PASS, legacy
+regression PASS, or boot-to-application PASS. `add_target(AM13E AM13E)`
+still creates an OBJECT library, not an executable. The motor,
+input, telemetry, GPIO, Flash, and audio backends are explicitly
+unimplemented. No production Application ELF/BIN exists yet.
+
+### E1-C entry checklist (pending)
+
+1. Perform *cross-object* unresolved symbol inventory using
+   `arm-none-eabi-nm -u build-am13e/CMakeFiles/AM13E.dir/src/*.obj`
+   and distinguish inter-object dependencies from real missing
+   platform services. Do not silently weak-define missing drivers.
+2. Match `sys_tick_handler` / `pend_sv_handler` /
+   `hard_fault_handler` to the **actual TI startup vector** names.
+   These three prototype warnings are not proof of IRQ-vector
+   attachment. Review startup, IRQ precedence and fail-safe reset.
+3. Define the production application memory and startup contract:
+   current Boot uses reference Application flash start `0x6000`,
+   metadata in the first sector, vectors at `0x6800`; **not**
+   an authorization to reuse the dummy app-smoke linker.
+   Audit ELF LMA/VMA, `.data` initialization, `.bss`, stack,
+   VTOR, config Flash, ECC and application image packaging.
+4. Implement **actual** AM13E hardware backends with safe outputs
+   and board-qualified clocks/pinmux before linking a runnable image.
+   An ELF obtained by dummy implementations is not accepted.
+5. Run legacy STM32/AT32/GD32 regression checks independently.
+
+Earlier 2/5, 3/5 and 4/5 sections below are historical gate
+snapshots, **not** current status. Do not read historical “pending”
+text as overruling this confirmed 5/5 result.
+
 ## E1-A: platform/header isolation
 
 Evidence: first WSL ARM GCC build log after commits
