@@ -3,6 +3,86 @@
 This is an **application** work log, not a board-validation report.
 Boot service remains independently versioned and is not changed here.
 
+## ARCHITECTURE AUTHORITY CORRECTION — SW/HW Baseline v1.6
+
+**This entry supersedes earlier wording that treated a TI
+evaluation-board example, generic TI-SDK Application, or the
+current Boot smoke linker as the product design authority.**
+
+Authority, ordered by responsibility:
+
+| Owner | Scope |
+| --- | --- |
+| Product Software Architecture Baseline **v1.6** | firmware behavior, FW1/FW2, parameter/update policy |
+| Product Hardware Architecture Baseline **v1.6** | pins, MCU instance allocation, HFXT, sense/protection |
+| ESCape32 **Rel17 source and root CMake** | FW1 application, algorithms, housekeeping and canonical build |
+| TI SDK / DriverLib / CMSIS | MCU peripheral support, equivalent to libopencm3 on legacy STM32 |
+| Existing AM13E Boot implementation | implementation reference for Flash/VTOR/jump, **not** a policy override |
+
+**Canonical build is unchanged: `add_target(AM13E AM13E)`.**
+The TI-specific `add_target_ti_am13e` helper is only a
+platform branch within ESCape32's own CMake. The TI SDK
+is not promoted to standalone firmware/Application build owner.
+
+The previous automatic include of
+`examples/empty/am13e230x_lp/m33_nortos/cmake_syscfg_generated`
+has been removed from `CMakeLists.txt`. A dedicated
+`AM13E_PROJECT_SYSCFG_DIR` may be supplied only for
+product-owned generated configuration; default is empty.
+The device/DriverLib/CMSIS header paths from TI SDK remain.
+
+**Product HW input:** external HFXT uses **PC16_X1 / PC17_X2**,
+and is NOT single-ended HFCLK_IN. Physical pin mapping
+for MCPWM0, CMPSS0/1/3, ADC and PB14 is the HW Baseline's
+responsibility. The 25 MHz HFXT and 200 MHz CPU clock are
+later confirmed **detailed implementation decisions**, not
+values frozen by the v1.6 architecture text. Active Clock
+source comments and `CLOCK_CONTRACT.md` were corrected
+accordingly; no PLL/motor behavior was changed in this pass.
+
+**P0 legacy Boot differences needing deliberate reconciliation:**
+
+- SW Baseline: **16 KiB Boot**; **FW1 params 4 KiB**
+  `0x4000..0x4FFF`, **FW2 params 4 KiB**
+  `0x5000..0x5FFF`; **one 488 KiB App**
+  `0x6000..0x7FFFF`.
+- Older Boot smoke format: max **256 KiB** image, metadata
+  `0x6100`, vectors `0x6800`, combined 8 KiB config.
+  These are tested implementation details, NOT validated
+  product Application layout decisions.
+- APP_BASE `0x6000` and the vector/startup placement
+  require explicit packaging/Boot/linker agreement. Do not
+  silently infer that a passing `0x6800` smoke vector
+  fulfills the product baseline's fixed application entry.
+- Existing `linker_app_reference.ld` and
+  `probe_app_linker.py` are **historical non-production
+  Boot-format fixtures**. Their recorded linker/RAMFUNC
+  tests remain valid for what they actually check, not
+  as a v1.6 architecture-conformant firmware gate.
+- FW1 firmware settings writeback must be bounded to its
+  own **4 KiB** sector; no writes to FW2 params. FW2
+  similarly owns only its separate 4 KiB region.
+- No Boot, linker production format, ESCape32 application
+  algorithm, or board-specific hardware implementation
+  was changed during this architecture review.
+
+**Evidence preservation:** user WSL 11/11 ARM Object Compile,
+46 resolved cross-object symbols, 60 still undefined, and
+the real TI Flash RAMFUNC synthetic link probe remain
+valid, but **the updated CMake include-path policy has
+not been rebuilt in WSL yet**.
+
+Next acceptance checks:
+
+1. Rebuild the existing ESCape32 `AM13E` Object target with
+   the new include path and confirm no TI example-board
+   generated headers are used.
+2. Resolve the parameter separation, 488 KiB transport,
+   and APP_BASE/vector format before a production linker.
+3. Implement device/peripheral backends against the HW
+   Baseline; use TI DriverLib only for low-level register
+   access, and Boot code only as reference.
+
 ## E1-C REAL TI FRI RAMFUNC Linker Probe PASS (2026-10-09)
 
 User WSL `e1c-real-fri-ramfunc-link-probe.log` confirms
