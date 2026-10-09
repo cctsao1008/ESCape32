@@ -559,11 +559,13 @@ void pend_sv_handler(void) {
 }
 
 void hard_fault_handler(void) {
-	ledctl(1); // Indicate error
 #if defined(AM13E)
+    /* Gate-disable must precede cosmetic LED handling on power-stage faults. */
     am13e_app_motor_fault_shutdown();
+    ledctl(1);
     am13e_app_motor_fault_reset();
 #else
+	ledctl(1); // Indicate error
 	TIM1_EGR = TIM_EGR_BG;
 	TIM6_PSC = CLK_KHZ / 10 - 1; // 0.1ms resolution
 	TIM6_ARR = 9999;
@@ -638,7 +640,12 @@ static int park(void) {
 }
 #endif
 
+#if defined(AM13E)
+/* TI GCC startup calls extern int main(void); legacy targets retain void. */
+int main(void) {
+#else
 void main(void) {
+#endif
 	memcpy(_cfg_start, _cfg, _cfg_end - _cfg_start); // Copy configuration to SRAM
 	checkcfg();
 	const int brushed = cfg.brushed;
