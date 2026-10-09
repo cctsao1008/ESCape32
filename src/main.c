@@ -395,6 +395,34 @@ static void laststep(void) {
 	step = 0;
 }
 
+/* Shared Rel17 sensorless BEMF control policy.
+ *
+ * Keep zero-cross filtering, acceleration detection and timing advance
+ * in the original Application, not in a second AM13E motor controller.
+ * Legacy IFTIM capture values use MOTOR_TIME_SHIFT; the AM13E
+ * adapter supplies the same logical units (microseconds, shift = 0).
+ *
+ * Hardware-specific IRQ acknowledgement, timer scheduling and
+ * PWM/commutation output state remain with their respective MCU ports.
+ */
+static void bemf_timeout_reset(void) {
+    sync = 0;
+    fast = 0;
+    ival = 10000 << MOTOR_TIME_SHIFT;
+    ertm = 100000000;
+}
+
+/* Return a positive commutation delay for an accepted crossing.
+ * Return zero for an early/spurious capture; do not change state.
+ */
+static int bemf_zero_cross_delay(int capture_ticks) {
+    if (capture_ticks < ival >> 1) return 0;
+    int u = ival * 3;
+    fast = (capture_ticks < u >> 2 || capture_ticks > u >> 1) && ertm < 2000;
+    ival = (capture_ticks + u) >> 2;
+    return max((ival - (ival * cfg.timing >> 5)) >> 1, 1);
+}
+
 #if !defined(AM13E)
 void tim1_com_isr(void) {
 	if (!(TIM1_DIER & TIM_DIER_COMIE)) return;
@@ -424,19 +452,14 @@ void iftim_isr(void) { // BEMF zero-crossing
 	if ((er & TIM_DIER_UIE) && (sr & TIM_SR_UIF)) { // Timeout
 		TIM_SR(IFTIM) = ~TIM_SR_UIF;
 		TIM_DIER(IFTIM) = 0;
-		sync = 0;
-		fast = 0;
-		ival = 10000 << MOTOR_TIME_SHIFT;
-		ertm = 100000000;
+		bemf_timeout_reset();
 		return;
 	}
 	if (!(er & IFTIM_ICIE)) return;
 	int t = IFTIM_ICR; // Time since last zero-crossing
-	if (t < ival >> 1) return;
-	int u = ival * 3;
-	fast = (t < u >> 2 || t > u >> 1) && ertm < 2000; // Fast acceleration/deceleration
-	ival = (t + u) >> 2; // Commutation interval
-	IFTIM_OCR = max((ival - (ival * cfg.timing >> 5)) >> 1, 1); // Commutation delay
+	int delay_ticks = bemf_zero_cross_delay(t);
+	if (!delay_ticks) return;
+	IFTIM_OCR = delay_ticks; // Commutation delay, original IFTIM units
 	TIM_EGR(IFTIM) = TIM_EGR_UG;
 	TIM_DIER(IFTIM) = 0;
 	if (sync < 6) ++sync;
@@ -448,10 +471,7 @@ void tim3_isr(void) { // Any change on Hall sensor inputs
 		TIM3_SR = ~TIM_SR_UIF;
 		hall = 0x10000;
 		if (sine || !step) return;
-		sync = 0;
-		fast = 0;
-		ival = 10000 << MOTOR_TIME_SHIFT;
-		ertm = 100000000;
+		bemf_timeout_reset();
 		return;
 	}
 	hall = (TIM3_CCR1 + hall * 3) >> 2;
@@ -476,19 +496,12 @@ void am13e_app_motor_on_commutation_event(void) {
  */
 void am13e_app_motor_on_bemf_event(int capture_us, int timeout) {
     if (timeout) {
-        sync = 0;
-        fast = 0;
-        ival = 10000;
-        ertm = 100000000;
+        bemf_timeout_reset();
         return;
     }
-    int t = capture_us;
-    if (t < ival >> 1) return;
-    int u = ival * 3;
-    fast = (t < u >> 2 || t > u >> 1) && ertm < 2000;
-    ival = (t + u) >> 2;
-    am13e_app_motor_bemf_commutation_delay_us(
-        max((ival - (ival * cfg.timing >> 5)) >> 1, 1));
+    int delay_us = bemf_zero_cross_delay(capture_us);
+    if (!delay_us) return;
+    am13e_app_motor_bemf_commutation_delay_us(delay_us);
     if (sync < 6) ++sync;
 }
 #endif /* AM13E */
