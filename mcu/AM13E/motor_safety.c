@@ -10,6 +10,7 @@
  * product arming barrier; do not provide a no-op to make FW1 link.
  */
 #include "motor_backend.h"
+#include "motor_event_timer.h"
 #include <soc.h>
 #include <dl_mcpwm.h>
 #include <dl_gpio.h>
@@ -149,6 +150,7 @@ void am13e_app_motor_init(void)
         am13e_app_motor_fault_shutdown();
         am13e_app_motor_fault_reset();
     }
+    am13e_app_motor_timing_init();
     safety_initialized = 1U; /* Inactive-preflight only, NOT motor ready. */
 }
 
