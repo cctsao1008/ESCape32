@@ -3,6 +3,52 @@
 This is an **application** work log, not a board-validation report.
 Boot service remains independently versioned and is not changed here.
 
+## E1-C WSL verified + nonproduction linker boundary (2026-10-09)
+
+Latest user WSL output after `irq_vectors.c` integration:
+
+- AM13E Application **6/6 OBJECT BUILD PASS**:
+  five original Rel17 sources + one TI exception vector bridge.
+- Combined symbol inventory: **40** references resolved between
+  these objects, **62** still undefined: **38** declared AM13E
+  backend hooks, **7** board/peripheral services, **13** C
+  runtime/compatibility candidates, **4** linker symbols.
+- `HardFault_Handler`, `PendSV_Handler`, `SysTick_Handler`
+  each appear as strong `T` symbols in the relocatable adapter.
+  Their `00000000` address in the relocatable object is normal
+  for separate `-ffunction-sections`; **final Vector Table Slot
+  values have not been inspected yet**.
+- New production-*reference* `mcu/AM13E/linker_app_reference.ld`
+  records current Boot image/metadata/vectors, mutable `.cfg`
+  SRAM working image, TI startup `.data`/BSS/RAMFUNCT and
+  256 KiB transport cap. It is **not wired to CMake**, not
+  syntax-tested by ARM ld and **must not be flashed**.
+- New explicit declaration-only
+  `am13e_app_motor_runtime_enable_interrupts()` is called after
+  Application motor/tick setup and requires the board backend to
+  verify safe outputs, vectors and IRQ priorities before unmasking
+  PRIMASK. No fake success/no-op implementation was added.
+- **The last CMake+ARM build was before these latest linker/
+  runtime-barrier edits.** Compile verification is needed again.
+
+**Next WSL checks:**
+
+```bash
+cd ~/github/ESCape32
+git switch am13e-port-v2
+git pull --ff-only
+set -o pipefail
+cmake --build build-am13e --target AM13E -j"$(nproc) \
+  2>&1 | tee build-am13e/e1c-runtime-barrier.log
+python3 mcu/AM13E/tools/check_object_symbols.py \
+  build-am13e/CMakeFiles/AM13E.dir/src/*.obj \
+  build-am13e/CMakeFiles/AM13E.dir/mcu/AM13E/*.obj \
+  | tee build-am13e/e1c-runtime-symbols.log
+```
+
+Do not interpret unresolved backend symbols as unexpected errors:
+they are intentional link blockers until real board drivers exist.
+
 ## E1-C entry — symbols, TI vectors and handoff (2026-10-09)
 
 User `nm -u` output confirms five Rel17 sources refer to four
