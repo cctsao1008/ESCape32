@@ -1,6 +1,6 @@
 # ESCape32 AM13E — Boot / Application Integration Gaps
 
-**Status:** Source-backed interface audit; **NOT** a production linker
+**Status:** Source-backed interface audit; **256 KiB transport is accepted for current FW1/FW2**, NOT a production linker
 approval, Boot implementation change or Flash protocol change.
 
 ## Source-of-truth order
@@ -20,8 +20,8 @@ approval, Boot implementation change or Flash protocol change.
 | Gate | SW v1.6 required behavior | Present Boot / Application reference | Status |
 | --- | --- | --- | --- |
 | Flash partitions | Boot `0x0000..0x3FFF`; FW1 cfg `0x4000..0x4FFF`; FW2 cfg `0x5000..0x5FFF`; single APP `0x6000..0x7FFFF` (488 KiB) | Older reference linker reserves combined 8 KiB `FLASH_CFG` and only builds App Flash through `0x45FFF` | **Mismatch**; linker must model split cfg and entire 488 KiB allocation |
-| Transport addressing | Reflash a single Application over its allocated region, preserving both cfg regions | `boot/src/main.c` gets block number with one-byte `recvval()`. `boot/mcu/AM13E/flash_range.c` rejects `block > 255`, with 1024-byte blocks | **P0 blocker** for full 488 KiB: would require indices 0..487, outside 8-bit protocol. Do not merely increase a C range constant |
-| Image length validator | Image integrity and Application capacity compatible with v1.6 | `boot/mcu/AM13E/image_integrity.h` defines `AM13E_IMAGE_MAX_TRANSPORT_BYTES=(256*1024)`; `image_integrity.c` enforces it | **P0 blocker**: new host/Boot/validator length policy must be agreed and implemented together |
+| Transport addressing | Preserve 1 KiB blocks and the current **256 KiB image limit**; FW1/FW2 are currently expected to fit | Boot block index is 8-bit (0..255) | **ACCEPTED NOW**, not a blocker; verify each actual firmware image fits before release |
+| Image length validator | Current FW1/FW2 images shall fit <=256 KiB; 488 KiB is the allocated Flash region, NOT a demand for full-span transfer | Boot validator caps transfer to 256 KiB | **ACCEPTED NOW**; actual firmware-size verification remains pending |
 | APP entry and vector | Fixed APP_BASE `0x6000`, valid vector/startup entry at Application base | `image_integrity.h` uses APP_BASE `0x6000`, but `AM13E_IMAGE_VECTOR_OFFSET=0x800`; `app.c` sets VTOR to `0x6800`; old linker places vectors at `0x6800`; header at `0x6100` | **Format contract unresolved**: reconcile image base, vector location, signature/header, reset entry and packing before production linker |
 | FW1/FW2 cfg independence | FW1 only 4 KiB, FW2 only 4 KiB, preserve across application update | `linker_app_reference.ld` defines `FLASH_CFG` 8 KiB with `_cfg=0x4000`; no explicit FW1 4 KiB upper bound in linker | **Risk / incomplete:** FW1 storage must be capped to 4 KiB; FW2 must never be erased during FW1 parameter commit |
 | Boot application-only erase | Erase/program/verify only APP, preserve Boot and both configs | `flash_range.c` bounds reads/writes starting at `__app_flash_start__`; good separation at entry, subject to validated linker symbols and erase-sector bounds | **Partially aligned**; verify actual erase addresses and code paths at final Link/Hardware gates |
@@ -49,21 +49,19 @@ approval, Boot implementation change or Flash protocol change.
 
 ## Recommended sequence (do not change policy by inference)
 
-1. Define **one** ESCape32-compatible, extended application
-   update transport addressing contract capable of representing
-   the 488 KiB range; assess old WiFi-Link interoperability
-   and host programmer behavior. No wire format selected yet.
-2. Define exact APP image entry, M33 vectors, signature,
-   metadata and CRC relationship. Preserve ESCape32 application
-   control flow; do not let an old smoke test choose the format.
-3. Derive Boot/linker/packer parameters from the agreed contract;
-   prove independent FW1/FW2 4 KiB parameter protection and
-   application-only update.
-4. Implement the minimum platform-specific changes inside
-   the ESCape32 repository with TI DriverLib as the MCU layer.
-5. Test host transport, bounds, packet retries, power-loss
-   recovery, linker/startup and real final Application ELF
-   as **separate** gates.
+1. **Port ESCape32 Rel17 FW1 to AM13E first**: implement the
+   real MCPWM0 6-step, CMPSS BEMF, PB14 input/telemetry,
+   ADC/safety, timer and GPIO backends from HW Baseline v1.6.
+2. Preserve current **256 KiB image transport**. Validate
+   final FW1/FW2 ELF/BIN sizes; extending transport is deferred
+   until an actual firmware image needs it.
+3. Reconcile FW1/FW2 independent 4 KiB config protection
+   and APP vector/header/packer semantics before hardware boot.
+4. Link the real ESCape32 Application using TI DriverLib as
+   low-level MCU support; no fabricated hardware drivers.
+5. Test safety, protocol, timebase and control behavior before
+   any power-stage enable. Revisit extended transport only if
+   the size constraint becomes material.
 
 ## Compile gate completed
 
