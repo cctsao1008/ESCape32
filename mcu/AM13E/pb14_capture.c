@@ -18,6 +18,7 @@
 #include <soc.h>
 #include <dl_gpio.h>
 #include <dl_ecap.h>
+#include <dl_dma.h>
 #include <dl_xbar.h>
 #include <stddef.h>
 
@@ -29,6 +30,24 @@ extern void hard_fault_handler(void);
 #define PB14_PINCM       IOMUX_PINCM_PB14
 #define PB14_GPIO_NUMBER 46U
 #define PB14_ECAP       ECAP0
+
+/* AM13E230x TRM SPRUJF2B (rev B), Tables 11-3 and 24-4:
+ *   DMA source index 39 = ECAP0DMA; 40 = ECAP1DMA.
+ * The TI SDK 26.01.00.03 dl_dma.h enum has a one-instance naming
+ * offset: ECAP1DMA=39, ECAP2DMA=40, despite device ECAP0/ECAP1 only.
+ * Do NOT select 40 for PB14/ECAP0 simply by reading the SDK label.
+ *
+ * Future ECAP0 DMA integration must use source index 39, and must
+ * separately prove the trigger routing, block completion, atomicity and
+ * capture-overwrite behavior on silicon. No DMA is enabled in FW1 yet.
+ */
+#define AM13E_PB14_ECAP0_DMA_TRIGGER_INDEX 39U
+_Static_assert((unsigned)DL_DMA_TRIGGER_SOURCE_ECAP1DMA ==
+                   AM13E_PB14_ECAP0_DMA_TRIGGER_INDEX,
+               "SDK ECAP DMA trigger map differs from AM13E230x TRM");
+_Static_assert((unsigned)DL_DMA_TRIGGER_SOURCE_ECAP2DMA == 40U,
+               "SDK second ECAP DMA trigger label or index changed");
+
 
 /* ECFLG latches all four capture events despite only CEVT4 having
  * interrupt enabled; 32-bit TSCTR wrap is a normal counter event.
