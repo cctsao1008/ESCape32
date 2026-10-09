@@ -12,6 +12,17 @@ static void clear_frame(AM13E_PB14_Decoder *d)
     d->last_bit_period = 0U;
 }
 
+void am13e_pb14_decoder_abort(AM13E_PB14_Decoder *d)
+{
+    if (d == NULL) return;
+    ++d->rejected;
+    d->active = 0U;
+    d->last_start = 0U;
+    d->last_end = 0U;
+    d->pending_width = 0U;
+    clear_frame(d);
+}
+
 void am13e_pb14_decoder_reset(AM13E_PB14_Decoder *d, uint32_t tick_hz, int inverted)
 {
     if (d == NULL) return;

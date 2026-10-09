@@ -53,6 +53,18 @@ int main(void)
     am13e_pb14_decoder_reset(&d,200000000U,0);
     feed_frame(&d,(uint16_t)(valid^1U),1400000U,1333U,0); /* bad CRC */
     assert(seen_dshot==2 && d.good_dshot==0U && d.rejected>0U);
-    puts("PB14 PWM/DShot RX pure host test PASS");
+    /* Simulate capture phase advancing during a four-event read:
+     * an aborted partial packet must not reach the Rel17 callback.
+     * Subsequent complete, CRC-valid packets must still be accepted.
+     */
+    am13e_pb14_decoder_reset(&d,200000000U,0);
+    am13e_pb14_decoder_pulse(&d,2000000U,2000250U,on_pwm,on_dshot);
+    am13e_pb14_decoder_pulse(&d,2000333U,2000483U,on_pwm,on_dshot);
+    am13e_pb14_decoder_abort(&d);
+    assert(d.rejected==1U && d.active==0U && d.decoded_bits==0U);
+    assert(seen_dshot==2);
+    feed_frame(&d,valid,3000000U,333U,0);
+    assert(seen_dshot==3 && d.good_dshot==1U);
+    puts("PB14 PWM/DShot RX + capture-abort host test PASS");
     return 0;
 }

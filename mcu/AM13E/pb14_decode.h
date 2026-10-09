@@ -28,5 +28,10 @@ void am13e_pb14_decoder_reset(AM13E_PB14_Decoder *d, uint32_t tick_hz, int inver
 void am13e_pb14_decoder_pulse(AM13E_PB14_Decoder *d, uint32_t start,
                               uint32_t end, AM13E_PB14_PwmCallback pwm,
                               AM13E_PB14_DshotCallback dshot);
+/* Drop a suspect capture group without retaining a partial DShot frame.
+ * Preserve raw clock calibration and diagnostic totals.
+ */
+void am13e_pb14_decoder_abort(AM13E_PB14_Decoder *d);
+
 void am13e_pb14_decoder_idle(AM13E_PB14_Decoder *d, uint32_t now,
                              AM13E_PB14_DshotCallback dshot);

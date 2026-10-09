@@ -45,6 +45,7 @@ _Static_assert(IOMUX_PINCM_PB14 == 46, "E62 PB14/GPIO46 changed");
 static AM13E_PB14_Decoder decoder;
 static volatile uint32_t initialized;
 static volatile uint32_t capture_pairs;
+static volatile uint32_t capture_overruns;
 static volatile uint32_t unexpected_gpio1_irqs;
 static uint32_t calib_counter;
 static uint32_t calib_start;
@@ -137,16 +138,33 @@ void ECAP0_IRQHandler(void)
         (flags & DL_ECAP_ISR_SOURCE_CEVT4) == 0U) {
         input_fail_closed();
     }
-    /* Read all four timestamps before acknowledging the group; there
-     * is no guarantee against register overwrite at high edge rates.
-     * Overrun/DShot600 throughput requires a board latency or DMA gate.
+    /* ECCTL2 MODCNTRSTS is the NEXT capture slot. Immediately after
+     * CEVT4 a clean group must point at CAP1. If this phase has already
+     * advanced, at least one new edge may have overwritten old data.
+     * Check before AND after copying CAP1..CAP4. This detects some,
+     * but not all, overruns (a whole 4-edge wrap is indistinguishable).
+     * SDK ECAP0 -> DMA trigger availability is NOT established.
      */
+    const DL_ECAP_EVENT phase_before =
+        DL_ECAP_getModuloCounterStatus(PB14_ECAP);
     const uint32_t start1 = DL_ECAP_getEventTimeStamp(PB14_ECAP, DL_ECAP_EVENT_1);
     const uint32_t end1 = DL_ECAP_getEventTimeStamp(PB14_ECAP, DL_ECAP_EVENT_2);
     const uint32_t start2 = DL_ECAP_getEventTimeStamp(PB14_ECAP, DL_ECAP_EVENT_3);
     const uint32_t end2 = DL_ECAP_getEventTimeStamp(PB14_ECAP, DL_ECAP_EVENT_4);
+    const DL_ECAP_EVENT phase_after =
+        DL_ECAP_getModuloCounterStatus(PB14_ECAP);
     DL_ECAP_clearInterrupt(PB14_ECAP, flags & PB14_ECAP_EXPECTED_FLAGS);
     DL_ECAP_clearGlobalInterrupt(PB14_ECAP);
+    if (phase_before != DL_ECAP_EVENT_1 ||
+        phase_after != DL_ECAP_EVENT_1) {
+        /* Never forward a mixed-period group to Rel17 throttle.
+         * Count the observed slip and invalidate the partial frame.
+         * This does not prove an absence of full-wrap data loss.
+         */
+        ++capture_overruns;
+        am13e_pb14_decoder_abort(&decoder);
+        return;
+    }
     capture_pairs += 2U;
     /* Both pulses pass through the same Rel17 PWM/DShot callbacks.
      * No motor output, fake watchdog or BiDShot TX path is introduced.
@@ -200,6 +218,7 @@ void am13e_app_pb14_status(AM13E_PB14_Status *out)
 {
     if (out == NULL) return;
     out->capture_pairs = capture_pairs;
+    out->capture_overruns = capture_overruns;
     out->good_pwm = decoder.good_pwm;
     out->good_dshot_rx = decoder.good_dshot;
     out->rejected = decoder.rejected;
