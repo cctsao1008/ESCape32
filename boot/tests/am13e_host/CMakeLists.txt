@@ -63,4 +63,33 @@ if(AM13E_HOST_PACKED_IMAGE)
     add_test(NAME am13e_linked_image_transaction
         COMMAND am13e_flash_transaction_test
             --flash-image "${AM13E_HOST_PACKED_IMAGE}")
+
+    # Stage D1: compile actual shared ESCape32 main.c / io.c framing,
+    # real AM13E Flash-range and Flash-write paths, with mock PB14/DriverLib.
+    add_executable(am13e_boot_protocol_test
+        "${REPO_ROOT}/boot/tests/am13e_protocol_host_test.c"
+        "${REPO_ROOT}/boot/tests/am13e_protocol_entry.c"
+        "${REPO_ROOT}/boot/src/io.c"
+        "${REPO_ROOT}/boot/mcu/AM13E/flash_range.c"
+        "${REPO_ROOT}/boot/mcu/AM13E/flash.c"
+        "${REPO_ROOT}/boot/mcu/AM13E/image_integrity.c")
+    target_compile_features(am13e_boot_protocol_test PRIVATE c_std_11)
+    target_compile_definitions(am13e_boot_protocol_test PRIVATE
+        AM13E AM13E_FLASH_TEST IO_PB14)
+    target_include_directories(am13e_boot_protocol_test PRIVATE
+        "${REPO_ROOT}/boot/src"
+        "${REPO_ROOT}/boot/mcu/AM13E"
+        "${REPO_ROOT}/boot/tests/am13e_mock")
+    # Force the platform's most error-prone signedness. The 0xff
+    # 1-KiB count must decode correctly regardless of target ABI.
+    target_compile_options(am13e_boot_protocol_test PRIVATE
+        -O1 -g -Wall -Wextra -Werror -fsigned-char)
+    if(AM13E_HOST_SANITIZERS AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(am13e_boot_protocol_test PRIVATE
+            -fsanitize=address,undefined -fno-omit-frame-pointer)
+        target_link_options(am13e_boot_protocol_test PRIVATE
+            -fsanitize=address,undefined)
+    endif()
+    add_test(NAME am13e_boot_protocol
+        COMMAND am13e_boot_protocol_test "${AM13E_HOST_PACKED_IMAGE}")
 endif()
