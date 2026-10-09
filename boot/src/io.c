@@ -166,7 +166,20 @@ void sendbuf(const char *buf, int len) {
 
 int recvval(void) {
 	char buf[2];
-	return recvbuf(buf, 2) && (buf[0] ^ buf[1]) == 0xff ? buf[0] : -1;
+	if (!recvbuf(buf, 2)) return -1;
+#if defined(AM13E)
+	/* Count=0xff represents the full 1024-byte payload.
+	 * Signed char promotion can otherwise turn the complement byte
+	 * 0xff into -1, incorrectly rejecting a valid frame.
+	 * Treat both wire octets as unsigned, independent of toolchain ABI.
+	 */
+	uint8_t value = (uint8_t)buf[0];
+	uint8_t complement = (uint8_t)buf[1];
+	return (uint8_t)(value ^ complement) == UINT8_C(0xff)
+		? (int)value : -1;
+#else
+	return (buf[0] ^ buf[1]) == 0xff ? buf[0] : -1;
+#endif
 }
 
 void sendval(int val) {
