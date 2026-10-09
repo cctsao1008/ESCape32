@@ -6,9 +6,10 @@
  * This backend supplies only the elapsed-time mechanism, derived from
  * the REAL 16kHz SysTick already installed by system_runtime.c.
  *
- * Does not configure a motor, watchdog, timer peripheral or GPIO;
- * specifically does NOT substitute for the still-required real
- * am13e_app_motor_arming_watchdog_refresh() implementation.
+ * Does not configure a motor, hardware watchdog, timer peripheral or GPIO.
+ * The Rel17 audio/beacon callbacks restart this arming window, just as
+ * their STM32 implementations reset the TIM6 arming timeout. Actual
+ * DShot input watchdog servicing remains a SEPARATE MCU backend task.
  *
  * 32-bit unsigned subtraction works across the SysTick wraparound
  * provided the relevant interval is < 2^31 ticks (~37 hours at 16kHz).

@@ -19,6 +19,7 @@
 
 #if defined(AM13E)
 #include "util_backend.h"
+#include "motor_backend.h" /* Real 250 ms arming timeout, not WWDT feed */
 #endif
 
 /* STM32/AT32/GD32-specific GPIO and Flash register definitions. */
@@ -623,6 +624,11 @@ void resetcom(void) {
 
 static void delayf(void) {
 #if defined(AM13E)
+    /* Match the original TIM6_EGR arming-timeout restart during
+     * blocking music playback. Do not mistake it for WWDT feeding.
+     * The audio output timing remains owned by the hardware backend.
+     */
+    am13e_app_motor_arming_window_restart();
     am13e_app_audio_music_tick();
 #else
 	TIM6_EGR = TIM_EGR_UG; // Reset arming timeout

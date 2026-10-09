@@ -66,8 +66,10 @@ int am13e_app_motor_reset_flags(void);
 void am13e_app_motor_arming_window_start(void);
 int am13e_app_motor_arming_window_expired(void);
 void am13e_app_motor_arming_window_restart(void);
+/* Used also by the Rel17 music/beacon delay callbacks to emulate
+ * STM32 TIM6 update/reset of the arming timeout, not WWDT refresh.
+ */
 void am13e_app_motor_arming_window_stop(void);
-void am13e_app_motor_arming_watchdog_refresh(void);
 
 /* Driver dispatches hardware-validated events into shared Rel17 logic. */
 void am13e_app_motor_on_commutation_event(void);

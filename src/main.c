@@ -598,7 +598,11 @@ void hard_fault_handler(void) {
 
 static void delayf(void) {
 #if defined(AM13E)
-    am13e_app_motor_arming_watchdog_refresh();
+    /* Legacy TIM6_EGR restarts the 250 ms arming timer; it does NOT
+     * service a hardware window watchdog. Use the existing SysTick-based
+     * Rel17 arming window while keeping the I/O watchdog independent.
+     */
+    am13e_app_motor_arming_window_restart();
 #else
 	TIM6_EGR = TIM_EGR_UG; // Reset arming timeout
 #endif
