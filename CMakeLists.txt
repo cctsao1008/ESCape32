@@ -58,7 +58,9 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/src/io.c"
             "${PROJECT_SOURCE_DIR}/src/telem.c"
             "${PROJECT_SOURCE_DIR}/src/util.c"
-            "${PROJECT_SOURCE_DIR}/src/prog.c")
+            "${PROJECT_SOURCE_DIR}/src/prog.c"
+            # Only TI/CMSIS vector bridge; five Rel17 sources are unchanged.
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/irq_vectors.c")
         set(am13e_source_dir "${PROJECT_SOURCE_DIR}/src")
     endif()
     if(name MATCHES "^BOOT")
