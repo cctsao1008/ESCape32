@@ -389,6 +389,7 @@ static void laststep(void) {
 	step = 0;
 }
 
+#if !defined(AM13E)
 void tim1_com_isr(void) {
 	if (!(TIM1_DIER & TIM_DIER_COMIE)) return;
 #if !defined STM32G4 && !defined AT32F4
@@ -455,8 +456,38 @@ void tim3_isr(void) { // Any change on Hall sensor inputs
 	TIM_DIER(IFTIM) = 0;
 	if (sync < 6) ++sync;
 }
-#endif
+#endif /* HALL_MAP legacy IRQ */
+#endif /* !AM13E: legacy TIM1 / BEMF / Hall ISRs */
 
+#if defined(AM13E)
+/* Physical commutation IRQ must acknowledge the device event first. */
+void am13e_app_motor_on_commutation_event(void) {
+    nextstep();
+}
+
+/* This callback receives *validated* BEMF timing in logical microseconds.
+ * The backend owns sampling, comparator selection, filtering and IRQ ack.
+ */
+void am13e_app_motor_on_bemf_event(int capture_us, int timeout) {
+    if (timeout) {
+        sync = 0;
+        fast = 0;
+        ival = 10000;
+        ertm = 100000000;
+        return;
+    }
+    int t = capture_us;
+    if (t < ival >> 1) return;
+    int u = ival * 3;
+    fast = (t < u >> 2 || t > u >> 1) && ertm < 2000;
+    ival = (t + u) >> 2;
+    am13e_app_motor_bemf_commutation_delay_us(
+        max((ival - (ival * cfg.timing >> 5)) >> 1, 1));
+    if (sync < 6) ++sync;
+}
+#endif /* AM13E */
+
+/* Rel17 ADC scaling and protection logic is shared unchanged. */
 void adcdata(int t, int u, int v, int c, int a) {
 	static int z = 3300, st = -1, su = -1, sa = -1;
 	if ((c -= z) >= 0) ready = 1;
@@ -499,8 +530,13 @@ void adcdata(int t, int u, int v, int c, int a) {
 }
 
 void sys_tick_handler(void) {
+#if defined(AM13E)
+    SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+    SCB->SCR = 0;
+#else
 	SCB_ICSR = SCB_ICSR_PENDSVSET; // Continue with low priority
 	SCB_SCR = 0; // Resume main loop
+#endif
 	if (++tick == tickv) tickf = 0;
 }
 
@@ -523,6 +559,10 @@ void pend_sv_handler(void) {
 
 void hard_fault_handler(void) {
 	ledctl(1); // Indicate error
+#if defined(AM13E)
+    am13e_app_motor_fault_shutdown();
+    am13e_app_motor_fault_reset();
+#else
 	TIM1_EGR = TIM_EGR_BG;
 	TIM6_PSC = CLK_KHZ / 10 - 1; // 0.1ms resolution
 	TIM6_ARR = 9999;
@@ -531,11 +571,16 @@ void hard_fault_handler(void) {
 	TIM6_CR1 = TIM_CR1_CEN | TIM_CR1_OPM;
 	while (TIM6_CR1 & TIM_CR1_CEN); // Wait for 1s
 	WWDG_CR = WWDG_CR_WDGA; // Trigger watchdog reset
+#endif
 	for (;;); // Never return
 }
 
 static void delayf(void) {
+#if defined(AM13E)
+    am13e_app_motor_arming_watchdog_refresh();
+#else
 	TIM6_EGR = TIM_EGR_UG; // Reset arming timeout
+#endif
 }
 
 static void beep(void) {
@@ -555,7 +600,7 @@ static void beep(void) {
 	beepval = -1;
 }
 
-#ifdef PARK_PIN
+#if defined(PARK_PIN) && !defined(AM13E)
 static uint8_t park1;
 static uint16_t park2, park3;
 
