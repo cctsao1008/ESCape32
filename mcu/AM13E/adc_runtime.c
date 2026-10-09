@@ -12,6 +12,8 @@
  */
 #include "adc_runtime.h"
 #include "clock_backend.h"
+/* Rel17 owns the public adctrig() declaration; include its canonical API. */
+#include "common.h"
 #include <soc.h>
 #include <dl_adc.h>
 #include <dl_gpio.h>
