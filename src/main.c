@@ -571,16 +571,25 @@ void pend_sv_handler(void) {
 	sendtelem();
 	if (tick & 0xf) return; // 16kHz -> 1kHz
 	adctrig();
+#if !defined(AM13E) || LED_CNT > 0
+	/* The generic AM13E target has no assigned LED pins (LED_CNT == 0).
+	 * No LED GPIO backend is required for an unpopulated option. If an
+	 * AM13E board enables LEDs, its real backend must resolve ledctl().
+	 */
 	static char a = -1;
 	int b = cfg.led ? cfg.led : led;
 	if (a != b) ledctl(a = b); // Update LED
+#endif
 }
 
 void hard_fault_handler(void) {
 #if defined(AM13E)
     /* Gate-disable must precede cosmetic LED handling on power-stage faults. */
     am13e_app_motor_fault_shutdown();
+#if LED_CNT > 0
+    /* Optional diagnostic indication, never a substitute for shutdown. */
     ledctl(1);
+#endif
     am13e_app_motor_fault_reset();
 #else
 	ledctl(1); // Indicate error
@@ -681,7 +690,10 @@ void main(void) {
 #endif
 	init();
 	initgpio();
+#if !defined(AM13E) || LED_CNT > 0
+	/* No LED wiring is defined for the generic AM13E target. */
 	initled();
+#endif
 	inittelem();
 #ifndef ANALOG
 	initio();
