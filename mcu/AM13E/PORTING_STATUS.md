@@ -3,6 +3,109 @@
 This is an **application** work log, not a board-validation report.
 Boot service remains independently versioned and is not changed here.
 
+## E1-D FW1 full ESCape32 port — 256 KiB accepted; real arming runtime added
+
+**Current E62 decision:** keep the existing **256 KiB**
+ESCape32 Boot/WiFi-Link transport limit. Both FW1 and FW2
+are currently expected to fit it; check the final binary
+sizes before release. The SW v1.6 **488 KiB APP region**
+remains allocated in Flash but is NOT a requirement to
+transport a full 488 KiB image today. Extended addressing
+is **deferred, not P0**. Older ledger entries treating
+256 KiB as a blocking issue are explicitly superseded.
+
+**Main engineering focus: complete ESCape32 Rel17 FW1
+Application MCU port**, not additional Boot smoke fixtures.
+
+Last actual user WSL evidence: `architecture-alignment.log`
+shows **11/11 object compile PASS** (5 original ESCape32
+sources + 4 AM13E adaptations + 2 TI DriverLib sources).
+The current new source changes are **NOT yet WSL compiled**.
+
+### Newly implemented, pending compile
+
+- Added `mcu/AM13E/arming_window.c` to root ESCape32's
+  `add_target(AM13E AM13E)` object build. It provides
+  **four real Rel17 motor arming-window functions**:
+  `start`, `expired`, `restart`, `stop`.
+- Uses the real **16 kHz SysTick / 4 = 4,000 ticks**
+  for the **250 ms uninterrupted neutral** requirement.
+  Timer arithmetic is rollover-safe for the intended interval.
+  No fabricated motor timer, dummy GPIO or watchdog feed.
+- Shared `AM13E_APP_SYSTICK_HZ` in `clock_backend.h`;
+  made the original Rel17 `tick` storage/declaration
+  **AM13E-only volatile** because it is written by SysTick
+  ISR and read by the arming foreground loop; legacy MCU
+  definitions are untouched.
+- Added `mcu/AM13E/tests/test_arming_window_host.c`
+  for timer boundaries, neutral restart, 32-bit wrap and
+  stop/inactive behavior. **The test is committed but not
+  reported as executed.**
+- Actual hardware `am13e_app_motor_arming_watchdog_refresh`
+  stays **undefined** until the real watchdog mechanism
+  is ported and validated.
+
+The target should now contain **12 ARM Objects**. If all
+compile, the previously open four arming-window symbols
+should become cross-object resolved. Exact symbol count
+must come from a fresh WSL inventory; 12/12 PASS is not
+yet asserted.
+
+### FW1 MCU porting priority after this slice
+
+1. **Power-stage fail-safe and MCPWM0**: six PWM outputs
+   PA8/PA11, PA9/PA30, PA10/PA31, with safe gate
+   enable PB13 and fault PB15. Implement actual
+   6-step, duty/frequency, commutation and trip semantics;
+   active polarities and dead time must be qualified by
+   HW Detailed Design before switching power.
+2. **BEMF**: three COMPH zero-cross paths
+   CMPSS0 PA17/COM PA4, CMPSS1 PA3/COM PA2,
+   CMPSS3 PA16/COM PA18; implement event timing/
+   filtering and commutation interrupt dispatch.
+3. **Command interface**: PB14 GPIO46 through the
+   required external 3.3/5V tolerant bidirectional front
+   end; PWM RX, DShot RX, BiDShot TX and transition
+   rules, retaining Rel17 protocol semantics.
+4. **ADC, telemetry, config/persistence, watchdog,
+   audio and service APIs**: VBUS PA28, NTC PA6;
+   other analog details deferred to HW Detailed Design.
+5. Complete ESCape32-based **real APP ELF/Map**, then
+   hardware-safe bring-up. TI SDK remains the
+   equivalent of libopencm3, and Boot is only a reference.
+
+### Next WSL verification
+
+```bash
+cd ~/github/ESCape32
+git switch am13e-port-v2
+git pull --ff-only
+set -o pipefail
+
+cmake --build build-am13e --target AM13E -j"$(nproc)" \
+  2>&1 | tee build-am13e/e1d-arming-build.log
+
+mapfile -d '' am13e_objs < <(
+  find build-am13e/CMakeFiles/AM13E.dir \
+    -type f -name '*.obj' -print0
+)
+printf 'AM13E object count: %d\n' "${#am13e_objs[@]}"
+python3 mcu/AM13E/tools/check_object_symbols.py \
+  "${am13e_objs[@]}" \
+  | tee build-am13e/e1d-arming-symbols.log
+
+cc -std=c11 -Wall -Wextra -Werror -DAM13E \
+  -Imcu/AM13E mcu/AM13E/arming_window.c \
+  mcu/AM13E/tests/test_arming_window_host.c \
+  -o build-am13e/test_arming_window_host
+./build-am13e/test_arming_window_host
+```
+
+**Acceptance boundaries:** actual ARM Object compile + native
+host timer-unit test only, NOT MCU timed execution, safe
+MCPWM startup, hardware watchdog, full Rel17 Link, or
+motor-control physical validation.
+
 ## ESCape32 architecture-alignment rebuild PASS (2026-10-09)
 
 User WSL `architecture-alignment.log` records successful
