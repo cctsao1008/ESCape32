@@ -700,6 +700,9 @@ void main(void) {
 #endif /* !AM13E initial TIM1 / BEMF / Hall setup */
 #if defined(AM13E)
     am13e_app_motor_runtime_tick_init();
+    /* Boot hands off with PRIMASK set. The board backend must first
+     * prove safe bridge outputs, vectors and interrupt priorities. */
+    am13e_app_motor_runtime_enable_interrupts();
 #else
 	nvic_set_priority(NVIC_PENDSV_IRQ, 0x80);
 	STK_RVR = CLK_KHZ / 16 - 1; // 16kHz
