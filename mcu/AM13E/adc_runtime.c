@@ -19,19 +19,19 @@
 #include <stddef.h>
 
 #define E62_ADC                     ADC0
-#define E62_ADC_RESULTS             ADC0RESULT
-#define E62_ADC_NTC_PINCM           IOMUX_PINCM_PA6
-#define E62_ADC_VBUS_PINCM          IOMUX_PINCM_PA28
-#define E62_ADC_NTC_SOC             DL_ADC_SOC_NUMBER0
-#define E62_ADC_VBUS_SOC            DL_ADC_SOC_NUMBER1
-#define E62_ADC_SEQUENCE           DL_ADC_SEQ_NUMBER1
-#define E62_ADC_IRQ                DL_ADC_INT_NUMBER1
-#define E62_ADC_ACQ_WINDOW_CYCLES   UINT32_C(640)
+#define AM13E_ADC_RESULTS             ADC0RESULT
+#define AM13E_ADC_NTC_PINCM           IOMUX_PINCM_PA6
+#define AM13E_ADC_VBUS_PINCM          IOMUX_PINCM_PA28
+#define AM13E_ADC_NTC_SOC             DL_ADC_SOC_NUMBER0
+#define AM13E_ADC_VBUS_SOC            DL_ADC_SOC_NUMBER1
+#define AM13E_ADC_SEQUENCE           DL_ADC_SEQ_NUMBER1
+#define AM13E_ADC_IRQ                DL_ADC_INT_NUMBER1
+#define AM13E_ADC_ACQ_WINDOW_CYCLES   UINT32_C(640)
 
 _Static_assert(IOMUX_PINCM_PA6 == 6 && IOMUX_PINCM_PA28 == 28,
-               "E62 ADC inputs changed unexpectedly");
-_Static_assert(E62_ADC_ACQ_WINDOW_CYCLES >= DL_SAMPLEWINDOW_MIN &&
-               E62_ADC_ACQ_WINDOW_CYCLES <= DL_SAMPLEWINDOW_MAX,
+               "AM13E ADC inputs changed unexpectedly");
+_Static_assert(AM13E_ADC_ACQ_WINDOW_CYCLES >= DL_SAMPLEWINDOW_MIN &&
+               AM13E_ADC_ACQ_WINDOW_CYCLES <= DL_SAMPLEWINDOW_MAX,
                "ADC acquisition window exceeds SDK limits");
 
 /* Volatile because the hardware ISR produces both samples and PendSV
@@ -55,8 +55,8 @@ void am13e_app_adc_init(void)
     /* ADC0 is exclusively reserved for FW1 PA6/PA28 slow monitoring.
      * Preserve GPIO1/PB14, GPIO1/PB15 and power-stage pin ownership.
      */
-    DL_GPIO_initPeripheralAnalogFunction(E62_ADC_NTC_PINCM);
-    DL_GPIO_initPeripheralAnalogFunction(E62_ADC_VBUS_PINCM);
+    DL_GPIO_initPeripheralAnalogFunction(AM13E_ADC_NTC_PINCM);
+    DL_GPIO_initPeripheralAnalogFunction(AM13E_ADC_VBUS_PINCM);
 
     DL_ADC_reset(E62_ADC);
     DL_ADC_enablePower(E62_ADC);
@@ -67,25 +67,25 @@ void am13e_app_adc_init(void)
      * MCLK / 8 = 25MHz ADC clock; this is NOT a VREF/calibration choice.
      */
     config.coreConfig.clkPrescale = DL_ADC_CLOCK_DIVIDE_8_0;
-    config.socConfig[E62_ADC_NTC_SOC].channel = DL_ADC_CH_ADCIN17;
-    config.socConfig[E62_ADC_VBUS_SOC].channel = DL_ADC_CH_ADCIN11;
-    config.seqConfig.endSocNumber = E62_ADC_VBUS_SOC;
-    config.seqConfig.seqNConfig[E62_ADC_SEQUENCE].enableSequencer = true;
-    config.seqConfig.seqNConfig[E62_ADC_SEQUENCE].sampleWindow =
-        E62_ADC_ACQ_WINDOW_CYCLES;
-    config.seqConfig.seqNConfig[E62_ADC_SEQUENCE].trigger =
+    config.socConfig[AM13E_ADC_NTC_SOC].channel = DL_ADC_CH_ADCIN17;
+    config.socConfig[AM13E_ADC_VBUS_SOC].channel = DL_ADC_CH_ADCIN11;
+    config.seqConfig.endSocNumber = AM13E_ADC_VBUS_SOC;
+    config.seqConfig.seqNConfig[AM13E_ADC_SEQUENCE].enableSequencer = true;
+    config.seqConfig.seqNConfig[AM13E_ADC_SEQUENCE].sampleWindow =
+        AM13E_ADC_ACQ_WINDOW_CYCLES;
+    config.seqConfig.seqNConfig[AM13E_ADC_SEQUENCE].trigger =
         DL_ADC_TRIGGER_SOFTWARE;
-    config.seqConfig.seqNConfig[E62_ADC_SEQUENCE].socStartNumber =
-        E62_ADC_NTC_SOC;
+    config.seqConfig.seqNConfig[AM13E_ADC_SEQUENCE].socStartNumber =
+        AM13E_ADC_NTC_SOC;
     config.intConfig.pulseMode = DL_ADC_PULSE_END_OF_CONV;
-    config.intConfig.intNConfig[E62_ADC_IRQ].enableInterrupt = true;
-    config.intConfig.intNConfig[E62_ADC_IRQ].trigger = E62_ADC_VBUS_SOC;
+    config.intConfig.intNConfig[AM13E_ADC_IRQ].enableInterrupt = true;
+    config.intConfig.intNConfig[AM13E_ADC_IRQ].trigger = AM13E_ADC_VBUS_SOC;
     DL_ADC_init(E62_ADC, &config);
 
     /* TI DL_ADC_powerUp() requires >=500us analog stabilization. */
     DL_Common_delayCycles(AM13E_APP_MCLK_HZ / UINT32_C(2000));
 
-    DL_ADC_clearInterruptStatus(E62_ADC, E62_ADC_IRQ);
+    DL_ADC_clearInterruptStatus(E62_ADC, AM13E_ADC_IRQ);
     adc_initialized = 1U;
     NVIC_SetPriority(ADC0_INT1_INT_IRQn, 1U);
     NVIC_EnableIRQ(ADC0_INT1_INT_IRQn);
@@ -101,15 +101,15 @@ void adctrig(void)
         return;
     }
     adc_inflight = 1U;
-    DL_ADC_forceSequencer(E62_ADC, E62_ADC_SEQUENCE);
+    DL_ADC_forceSequencer(E62_ADC, AM13E_ADC_SEQUENCE);
 }
 
 /* TI startup_gcc_arm.c actual ADC0/INT1 vector. */
 void ADC0_INT1_IRQHandler(void)
 {
     if (!adc_initialized || !adc_inflight ||
-        !DL_ADC_getInterruptStatus(E62_ADC, E62_ADC_IRQ) ||
-        !DL_ADC_getInterruptResultReadyStatus(E62_ADC, E62_ADC_IRQ)) {
+        !DL_ADC_getInterruptStatus(E62_ADC, AM13E_ADC_IRQ) ||
+        !DL_ADC_getInterruptResultReadyStatus(E62_ADC, AM13E_ADC_IRQ)) {
         adc_fail_closed();
     }
 
@@ -118,12 +118,12 @@ void ADC0_INT1_IRQHandler(void)
      */
     ++adc_sample_seq;
     adc_latest.ntc_main_adc0_in17 =
-        DL_ADC_readResult(E62_ADC_RESULTS, E62_ADC_NTC_SOC);
+        DL_ADC_readResult(AM13E_ADC_RESULTS, AM13E_ADC_NTC_SOC);
     adc_latest.vbus_adc0_in11 =
-        DL_ADC_readResult(E62_ADC_RESULTS, E62_ADC_VBUS_SOC);
+        DL_ADC_readResult(AM13E_ADC_RESULTS, AM13E_ADC_VBUS_SOC);
     ++adc_latest.sample_count;
     ++adc_sample_seq;
-    DL_ADC_clearInterruptStatus(E62_ADC, E62_ADC_IRQ);
+    DL_ADC_clearInterruptStatus(E62_ADC, AM13E_ADC_IRQ);
     adc_inflight = 0U;
 }
 
