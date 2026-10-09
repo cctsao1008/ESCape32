@@ -191,6 +191,11 @@ static void queue_protocol(size_t image_bytes, const uint8_t *image) {
     const uint8_t erased[8] = {
         0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
     };
+    /* Malformed command complement must be discarded without ACK.
+     * It contains no payload, so the next valid frame is unambiguous.
+     */
+    const uint8_t wrong_complement[2] = {CMD_PROBE, CMD_PROBE};
+    input_bytes(wrong_complement, sizeof wrong_complement);
     input_val(CMD_PROBE);
     expected_val(RES_OK);
 
