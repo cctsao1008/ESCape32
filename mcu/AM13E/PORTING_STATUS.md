@@ -3,6 +3,65 @@
 This is an **application** work log, not a board-validation report.
 Boot service remains independently versioned and is not changed here.
 
+## E1-C temporary linker probe PASS, runtime archive symbols PASS — compiler consistency recheck (2026-10-09)
+
+User-provided `e1c-linker-probe.log` reports **SYNTHETIC LINKER /
+TI STARTUP / VECTOR PROBE PASS** with actual link-time vector content:
+
+- APP vectors at `0x00006800`, Flash cfg source at `0x00004000`;
+  mutable `.cfg` inside SRAM_S.
+- Nonempty initialized `.data` LMA in application Flash and VMA
+  in SRAM_S; `.TI.ramfunc` LMA in application Flash, execution VMA
+  in SRAM_C; payload within transport limit.
+- Strong `HardFault_Handler`, `PendSV_Handler`, `SysTick_Handler`
+  and correct actual vector slots `[0,1,3,14,15]`.
+- Test deleted its temporary fixture, ELF, MAP and vector BIN.
+  **No complete Rel17 Application ELF was linked.**
+
+`e1c-libc-symbols.log` reports **13/13 required symbols** in
+both checked `libc.a` and `libc_nano.a`, including `itoa`,
+`strlcpy`, `strsep`, `stpcpy`. However, this specific log
+identifies a GCC **10.3.1** multilib archive under
+`/usr/lib/gcc/arm-none-eabi/10.3.1`, while the preceding
+Application compilation command used TI-installed GCC **15.2**
+under `$HOME/ti/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi/bin`.
+This is a **toolchain consistency issue**: symbol availability for the
+Application's own GCC15/Newlib must be confirmed, and the existing
+synthetic linker probe did not record its compiler version.
+
+**Audit tooling corrected:** `toolchain_match.py` now derives
+`arm-none-eabi-gcc`, sibling `nm` and `objcopy` from the
+Application `build-am13e/CMakeCache.txt`. It prints the actual
+compiler and version and rejects conflicting overrides.
+`probe_app_linker.py` and `check_c_runtime.py` both use that
+fail-closed toolchain resolver.
+
+The previous fixture and libc findings remain valid for the toolchains
+they actually exercised. They are **not yet upgraded to a matching
+Application Toolchain PASS**. No backend was fabricated, and no
+runnable firmware artifact was generated.
+
+### Re-run with exactly the CMake toolchain
+
+```bash
+cd ~/github/ESCape32
+git switch am13e-port-v2
+git pull --ff-only
+set -o pipefail
+
+python3 mcu/AM13E/tools/probe_app_linker.py \
+  --sdk-root "$HOME/ti/am13e230x_sdk_26_01_00_03" \
+  2>&1 | tee build-am13e/e1c-linker-matched-toolchain.log
+
+python3 mcu/AM13E/tools/check_c_runtime.py \
+  2>&1 | tee build-am13e/e1c-libc-matched-toolchain.log
+```
+
+**Gate:** both logs must begin with `[TOOLCHAIN] CMake compiler:`
+pointing to the same real GCC used by `build-am13e`; confirm output
+rather than assuming every Archive/fixture uses GCC15.
+Even matching-toolchain probe PASS does not imply runtime hardware PASS.
+
 ## E1-C runtime barrier WSL PASS + linker/libc probes (2026-10-09)
 
 Newest user WSL build: `[1/1] Building ... src/main.c.obj` PASS,
