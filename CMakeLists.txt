@@ -71,6 +71,7 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/irq_vectors.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/reset_cause.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/system_runtime.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/arming_window.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_xtal25_pll200.c"
             # Genuine TI DriverLib objects: delayCycles (common) and
             # Flash read wait-state RAMFUNC (FRI); no replacement stubs.
