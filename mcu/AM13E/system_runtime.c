@@ -17,8 +17,8 @@
  * This is NOT a full motor-ready clock tree; later board hardware
  * may need its own PLL/MCPWM clock policy and a measured tick rate.
  */
+#include "common.h"   /* Rel17 init(void) declaration / TI CMSIS */
 #include "motor_backend.h"
-#include <soc.h>
 #include <dl_sysctl.h>
 #include <dl_systick.h>
 
