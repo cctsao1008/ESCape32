@@ -3,6 +3,31 @@
 This is an **application** work log, not a board-validation report.
 Boot service remains independently versioned and is not changed here.
 
+## E1-D 250ms Arming Window — WSL Host Test PASS (2026-10-09)
+
+User ran the **committed** `mcu/AM13E/arming_window.c` and
+`mcu/AM13E/tests/test_arming_window_host.c` with host C11,
+`-Wall -Wextra -Werror -DAM13E`, and reported:
+
+```text
+PASS: ESCape32 AM13E 250ms arming window boundary/restart/wrap
+```
+
+The test covers 4000-tick / 250ms expiry at the 16kHz timebase,
+neutral restart, uint32 SysTick rollover, and stop/inactive state.
+The preceding user `e1d-arming-build.log` had already shown
+8/8 incremental ARM object compilation including
+`arming_window.c.obj`. This is a **real Rel17 runtime backend**
+now backed by both compile evidence and native-host functional
+checks. It is **not** on-target SysTick or watchdog testing.
+
+**Next primary porting effort:** MCPWM0 six-output power-stage
+backend and hardware trip/fault control, with actual HW Baseline
+v1.6 pin allocation and TI DriverLib. Do not invent gate-driver
+polarity, dead time or on-target validation. The 256KiB Boot
+transport limit remains accepted and out of the current critical
+path.
+
 ## E1-D ARM incremental compile PASS — arming source integrated (2026-10-09)
 
 User-provided `e1d-arming-build.log` confirms a successful
