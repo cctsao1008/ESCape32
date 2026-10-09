@@ -16,7 +16,6 @@
 #include <dl_sysctl.h>
 #include <dl_systick.h>
 
-#define AM13E_APP_SYSTICK_HZ UINT32_C(16000)
 #define AM13E_APP_SYSTICK_MAX_CYCLES UINT32_C(0x01000000)
 
 static uint32_t app_mclk_hz;
