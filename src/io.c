@@ -379,7 +379,7 @@ static int dshotcrc(int x, int inv) {
  */
 static char cmd, cnt, rep;
 
-static void dshot_apply_packet(int x) {
+static inline __attribute__((always_inline)) void dshot_apply_packet(int x) {
 	int tlm = x & 0x10;
 	x >>= 5;
 	if (!x || x > 47) {
