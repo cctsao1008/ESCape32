@@ -1,8 +1,6 @@
 # AM13E Application Clock Requirement — LaunchPad 25 MHz XTAL
 
-Status: **25 MHz external crystal reference selected**. Application
-XTAL/PLL clock backend is declaration-only; no board startup, motor
-operation or complete Application ELF has been validated.
+Status: **25 MHz XTAL / 200 MHz MCLK clock policy accepted and source backend implemented**. No ARM GCC build of this backend or hardware clock qualification has yet been received; no complete Application ELF.
 
 ## Primary evidence — TI LP-AM13E230
 
@@ -28,63 +26,74 @@ this file is no longer relevant to the selected 25 MHz design.
 This agreement does NOT waive electrical/load/startup validation
 for the specific MCU/package, crystal and PCB.
 
-## Selected / undetermined parameters
+## Selected Clock Plan — 25 MHz XTAL / SYSPLL / MCLK 200 MHz
 
-| Parameter | State |
-| --- | --- |
-| External oscillator element | **25,000,000 Hz XTAL crystal (Y1 reference)** |
-| XTAL connection | **X1 (PC16) / X2 (PC17)** |
-| External digital HFCLK_IN | **Not selected** |
-| Boot handoff clock | Existing **SYSOSC 32 MHz** precondition; Boot unchanged |
-| Application MCLK | **OPEN: no nominal CPU rate specified** |
-| SYSPLL | **OPEN: multiplier/divider and power/Flash rules unselected** |
-| Motor PWM / MCPWM clock | **OPEN: hardware/board-specific** |
-| Rel17 SysTick | **16 kHz**, derived from verified actual MCLK |
-| Safe IRQ unmask | Separate board safety barrier, NOT XTAL backend |
+The user selected **200 MHz MCLK**, with a 25 MHz Y1 reference.
+For the AM13E23019 200MHz-grade device and TI SDK 26.01.00:
 
-A **25 MHz crystal frequency is not the Cortex-M33 MCLK by itself**.
-Before configuring SYSPLL, determine the requested MCLK and valid
-reference-to-PLL output ratios using TI device/SDK constraints.
-Do not infer a 25 MHz CPU clock or invent a 160/180/200 MHz target.
+| Quantity | Selection | Grounding |
+| --- | --- | --- |
+| External quartz crystal | 25 MHz, LaunchPad Y1 | SLVUDH9 §2.4 |
+| SYSPLL reference | HFCLK from XTAL | AM13E TRM §3.4.2.3 |
+| PDIV | ÷2, register 0x1 | 25/2 = 12.5MHz feedback input |
+| inputFreq lookup | 8..16MHz (factory LUT) | DL_SYSCTL_SYSPLL_INPUT_FREQ_8_16_MHZ |
+| QDIV | effective ×32, register **31 (0x1F)** | TRM effective multiplier = QDIV + 1 |
+| VCO | 400 MHz | 12.5×32 |
+| RDIVCLK0 | ÷2, register 0 | SYSPLLCLK0=200MHz |
+| RDIVCLK1 | disabled | No peripheral requirement established |
+| MCLK | **200 MHz**, nominal configuration | HW measurement pending |
+| MCLK2 | 100MHz (÷2) | PD1 max |
+| MCLK4 / ULPCLK | 50MHz (÷4) | PD0 max |
+| Flash RWAIT | **3** before switching to 200MHz | SPRSPC3A Table 6-1 |
+| SysTick | 16kHz, 12,500 clock cycles | Rel17 16kHz tick |
 
-## SDK responsibilities, not yet implemented
+The configured 200MHz value is checked using source/lock/readback
+registers; **the physical frequency has not been measured**.
+TI DriverLib `DL_FRI_setReadWaitStates(3)` is a RAMFUNC, so its
+object and startup SRAM-copy contract must be included in eventual
+real Application linking, before `init()` executes. No dummy
+Flash wait-state function is permitted.
 
-1. Board-confirm the physical crystal, required load capacitors and
-   X1/X2 pad configuration. Never copy the LaunchPad's component
-   routing into an unverified custom PCB.
-2. Configure XTAL IOMUX and its drive/startup according to TI SDK;
-   `DL_SYSCTL_setHFCLKSourceXTAL(startupTime, monitorEnable)`
-   is the XTAL startup interface. Select a bounded startup/fault
-   policy based on real component data.
-3. Verify the HFCLKGOOD status **before** switching MCLK.
-4. If SYSPLL is selected, set an explicitly approved configuration
-   using the 25 MHz reference within TI operating limits.
-5. Switch to the intended HSCLK/MCLK and return the **verified CPU
-   MCLK frequency** in Hz; fail closed on any mismatch.
-6. Preserve disabled motor outputs and Boot PRIMASK throughout
-   the clock transition. The board-only safe IRQ barrier enables
-   interrupts after full system qualification.
+## Source implementation and remaining qualification
 
-The current `mcu/AM13E/clock_backend.h` deliberately declares only:
+`mcu/AM13E/clock_xtal25_pll200.c` implements the accepted clock
+sequence for the LaunchPad-reference Y1 on X1/X2. Unlike TI's
+high-level helper functions with unbounded internal busy-waits,
+this implementation uses SDK register definitions and finite
+poll budgets at XTAL, SYSPLL, and MCLK transition stages. Poll
+budgets are NOT calibrated elapsed-time guarantees.
 
-```c
-#define AM13E_APP_XTAL_HZ UINT32_C(25000000)
-uint32_t am13e_app_clock_configure_xtal25(void);
-```
+- XTAL startup monitor nominally set to 156×64µs = 9.984ms.
+  The TRM gives 5–10ms as typical, but this **must be qualified**
+  with the final crystal, capacitors, temperature and board.
+- Configure XTAL double-ended mode, reject external digital
+  HFCLK_IN selection, wait for HFCLKGOOD.
+- Program factory SYSPLL LUT for fLOOPIN=12.5MHz and confirm
+  SYSPLLGOOD before switching CPU MCLK to SYSPLLCLK0.
+- Raise Flash RWAIT to 3, set MCLK2÷2 and MCLK4÷4 **before**
+  the 200MHz switch.
+- Preserve Boot PRIMASK=1. If a prerequisite fails, return 0 and
+  stop in the existing fail-closed Application init path.
+- No MCPWM, ADC, comparator, gate-driver, LED pinmux or IRQ
+  safety activation takes place in this clock module.
 
-`mcu/AM13E/system_runtime.c` calls this **undefined** backend
-after verifying Boot's inherited SYSOSC precondition. It checks
-the required HSCLK source and HFCLKGOOD condition and calculates
-the 16 kHz SysTick reload from the returned verified MCLK. It does
-not program XTAL pinmux, SYSPLL, or motor clocks.
+**P0 hardware gaps:** oscillator layout/actual X1-X2 pin allocation,
+oscillator startup and lock measurement, PLL clock precision/FCC,
+temperature/voltage corners and real Clock Domain timing. The
+status checks validate the configured source, not independent
+silicon clock accuracy.
 
-A *real* backend must implement the declaration. Do NOT replace it
-with a dummy 25 MHz constant or an unverified clock switch merely to
-achieve ELF Linking. At this integration phase an unresolved external
-clock backend is expected and intentional.
+Current CMake target is still object-only, not a runnable ELF.
+Code requires WSL ARM GCC compile verification. The board-safe
+`am13e_app_motor_runtime_enable_interrupts()` remains
+an unresolved and mandatory platform Link barrier.
 
-## Remaining clock decision
+## Firmware vs physical hardware qualification
 
-**Cortex-M33 target MCLK** needs to be chosen separately from XTAL.
-Once chosen, validate SYSPLL limits, voltage/Flash timing, clocks
-used by MCPWM/ADC/BEMF, and interrupt timing against TI collateral.
+The TI LaunchPad reference is sufficient to define a baseline for
+clock-source *code*, not proof that an unbuilt custom board has Y1
+routed, correctly loaded or starts within 10ms. Do not assume
+future customer hardware repeats the LaunchPad BOM and layout.
+Do not issue a motor-enable recommendation based on Clock Source
+compile alone. WSL compilation, map/link checks, FCC measurement,
+and on-board oscilloscope/clock validation remain separate gates.
