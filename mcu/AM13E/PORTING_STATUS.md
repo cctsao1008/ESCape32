@@ -3,6 +3,67 @@
 This is an **application** work log, not a board-validation report.
 Boot service remains independently versioned and is not changed here.
 
+## E1-C matching-toolchain verification CLOSED (2026-10-09)
+
+Latest user WSL logs use the **same toolchain as the Application
+CMake build**:
+
+`/home/build/ti/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi/bin/arm-none-eabi-gcc`
+
+- `arm-none-eabi-gcc` version **15.2.1** (CMakeCache-matched).
+- `arm-none-eabi-nm` and `arm-none-eabi-objcopy` from the same
+  Toolchain directory.
+- Temporary **synthetic** TI startup/Linker/Exception Vector Probe
+  **PASS**: `0x6000` image, `0x6800` vector table, `0x4000`
+  persistent config source, nonempty `.data` LMA/VMA, nonempty
+  `.TI.ramfunc` Flash load/SRAM execution, SRAM `.cfg`, three
+  strong Exception Handlers, and actual vector slots `0,1,3,14,15`.
+- GCC **15.2.1** ARM v8-M main + FP hard ABI `libc.a` and
+  `libc_nano.a`: **13/13 required exported symbols found**
+  including `itoa`, `strlcpy`, `strsep`, `stpcpy`.
+  This is archive introspection, NOT a final link.
+- The earlier GCC10-vs-GCC15 uncertainty is **resolved** for
+  the linker fixture and libc archive inspection.
+- **Still not verified:** real Rel17 Application ELF/Flash image,
+  hardware peripherals, PRIMASK behavior on silicon, Boot jump,
+  config ECC/writeback and actual motor output.
+
+### First genuine board-independent DriverLib slice (pending WSL build)
+
+New `mcu/AM13E/reset_cause.c` reads actual
+`DL_SYSCTL_getResetCause()` and translates
+`DL_SYSCTL_RESET_CAUSE_BOOTWWDT0` into the Rel17 logical
+watchdog/reset-arm flags. This is real TI SYSCTL access, **not**
+a stub. The file was added to the AM13E Application CMake target;
+five Rel17 Sources and Boot source selection are unchanged.
+
+It does **not** configure the watchdog or define fault-reset policy
+for non-WWDT causes. That policy needs safety review before motor
+operation. Its ARM object is **not yet compiled on WSL**.
+
+Before this commit the inventory contained **63 undefined symbols**
+(39 AM13E backends, 7 board services, 13 libc, 4 linker).
+After a successful object build, the reset-cause definition is expected
+to resolve one backend symbol (nominally 62 remain). The exact
+post-build number requires a fresh combined `nm` audit, especially
+if DriverLib adds new dependencies.
+
+```bash
+cd ~/github/ESCape32
+git switch am13e-port-v2
+git pull --ff-only
+set -o pipefail
+cmake --build build-am13e --target AM13E -j"$(nproc)" \
+  2>&1 | tee build-am13e/e1c-resetcause-build.log
+python3 mcu/AM13E/tools/check_object_symbols.py \
+  build-am13e/CMakeFiles/AM13E.dir/src/*.obj \
+  build-am13e/CMakeFiles/AM13E.dir/mcu/AM13E/*.obj \
+  | tee build-am13e/e1c-resetcause-symbols.log
+```
+
+**Gate:** 7/7 objects PASS (five Rel17 plus Exception Adapter plus
+Reset-cause DriverLib Adapter), **not** ELF/Hardware PASS.
+
 ## E1-C temporary linker probe PASS, runtime archive symbols PASS — compiler consistency recheck (2026-10-09)
 
 User-provided `e1c-linker-probe.log` reports **SYNTHETIC LINKER /
