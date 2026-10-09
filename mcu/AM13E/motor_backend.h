@@ -48,6 +48,13 @@ void am13e_app_motor_commutation_enable(int enable);
 void am13e_app_motor_fault_shutdown(void);
 void am13e_app_motor_fault_reset(void);
 void am13e_app_motor_runtime_tick_init(void);
+/*
+ * Boot enters Application with PRIMASK=1. Backend must validate VTOR,
+ * safe motor-output gating, real IRQ vectors/priorities and completed
+ * peripheral initialization before unmasking IRQs. It must fail closed
+ * if preconditions are not met; this may not be a no-op.
+ */
+void am13e_app_motor_runtime_enable_interrupts(void);
 /* Logical reset flags. Backend must map its device reset cause, and
  * distinguish Rel17's reset-induced arming from music suppression.
  * WATCHDOG covers any watchdog reset; FORCE_ARM indicates a reset
