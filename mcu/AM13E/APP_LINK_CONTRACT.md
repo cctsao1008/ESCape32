@@ -4,6 +4,26 @@ Status: **design / integration requirements only**. No production
 Application ELF/BIN, hardware validation or vector-table inspection
 has been reported.
 
+## E1-C reference linker source (NOT ENABLED)
+
+`mcu/AM13E/linker_app_reference.ld` is a separate, application-specific
+**non-production linker reference**, based on the existing Boot image
+contract and TI Startup's actual data/BSS/ramfunc symbols. It is
+**not wired** to `add_target(AM13E AM13E)` yet, because real GPIO,
+MCPWM, COMP/BEMF, input, telemetry, Flash persistence and fault-handling
+backends remain undefined. Do not create fake drivers merely to force
+this image to link.
+
+The reference linker places the mutable `.cfg` object in SRAM with
+`NOLOAD` and exports `_cfg` as the separate persistent Flash source;
+Rel17's own `main()` copies the config into SRAM, retaining the
+existing control flow. This still needs proof of default recovery,
+length/alignment, ECC and safe persistence on actual Flash hardware.
+
+**Linker script syntax, final section packing and executable memory
+layout have NOT been validated by an ARM linker yet.** This reference
+is deliberately not represented as a runnable image.
+
 ## 1. Existing image contract to preserve
 
 The current Boot reference defines:
