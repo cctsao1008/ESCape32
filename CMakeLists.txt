@@ -80,6 +80,7 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/system_runtime.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/arming_window.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_xtal25_pll200.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_safety.c"
             # Genuine TI DriverLib objects: delayCycles (common) and
             # Flash read wait-state RAMFUNC (FRI); no replacement stubs.
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_common.c"
@@ -87,7 +88,8 @@ function(add_target_ti_am13e name)
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_adc.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_ecap.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_timer.c"
-            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_dma.c")
+            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_dma.c"
+            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_mcpwm.c")
         set(am13e_source_dir "${PROJECT_SOURCE_DIR}/src")
     endif()
     if(name MATCHES "^BOOT")
