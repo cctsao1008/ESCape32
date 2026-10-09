@@ -1,66 +1,70 @@
 /*
- * ESCape32 Rel17 AM13E — baseline clock and SysTick runtime.
+ * ESCape32 Rel17 AM13E — external 8 MHz XTAL clock integration.
  *
- * This deliberately preserves the boot service's reset-default
- * SYSOSC 32 MHz MCLK as a FIRST integration baseline. It does not
- * configure SYSPLL, external XTAL, motor gates or board pinmux.
+ * XTAL=8 MHz is a BOARD REQUIREMENT, not the CPU clock rate.
+ * Board-approved MCLK (XTAL direct or XTAL->SYSPLL) is still OPEN.
  *
- * Required: 16kHz SysTick -> Rel17 SysTick_Handler -> PendSV.
- * At 32MHz CPU clock, one tick is 2000 MCLK cycles. The backend
- * validates the actual TI SYSCTL clock state and halts closed if
- * the inherited clock does not satisfy this contract.
- *
- * Neither function unmasks PRIMASK. The separate board-validated
- * am13e_app_motor_runtime_enable_interrupts() must do so only
- * after safe outputs, fault protections and vectors are confirmed.
- *
- * This is NOT a full motor-ready clock tree; later board hardware
- * may need its own PLL/MCPWM clock policy and a measured tick rate.
+ * This file implements the fail-closed clock/timebase handshake and
+ * SysTick after a real clock backend has configured hardware. It
+ * does not fabricate PLL settings, XTAL pinmux or oscillator timing.
+ * Final ELF cannot link without am13e_app_clock_configure_xtal8().
  */
-#include "common.h"   /* Rel17 init(void) declaration / TI CMSIS */
+#include "common.h" /* init() declaration and TI CMSIS */
 #include "motor_backend.h"
+#include "clock_backend.h"
 #include <dl_sysctl.h>
 #include <dl_systick.h>
 
-#define AM13E_APP_BASE_MCLK_HZ  UINT32_C(32000000)
-#define AM13E_APP_SYSTICK_HZ    UINT32_C(16000)
-#define AM13E_APP_SYSTICK_CYCLES (AM13E_APP_BASE_MCLK_HZ / AM13E_APP_SYSTICK_HZ)
+#define AM13E_APP_SYSTICK_HZ UINT32_C(16000)
+#define AM13E_APP_SYSTICK_MAX_CYCLES UINT32_C(0x01000000)
 
-_Static_assert(AM13E_APP_BASE_MCLK_HZ % AM13E_APP_SYSTICK_HZ == 0,
-               "16 kHz SysTick must divide the 32 MHz baseline exactly");
-_Static_assert(AM13E_APP_SYSTICK_CYCLES >= 2U &&
-               AM13E_APP_SYSTICK_CYCLES <= 0x01000000U,
-               "SysTick reload outside Cortex-M33 24-bit range");
+static uint32_t app_mclk_hz;
 
-/* Application init() is a required board-independent clock contract.
- * Boot verifies the same SYSOSC source/frequency before its handoff.
- * Refuse unexpected MCLK policies rather than silently mis-time Rel17.
+/* Application init() runs with Boot PRIMASK still set and inherited
+ * SYSOSC 32 MHz (temporary handoff clock; not Application policy).
+ * The requested 8 MHz XTAL must be qualified and brought up by a
+ * real backend, which selects and verifies the final MCLK.
  */
 void init(void)
 {
-    if (DL_SYSCTL_getMCLKSource() != DL_SYSCTL_MCLK_SOURCE_SYSOSC) {
-        for (;;) { __WFI(); }
+    if (DL_SYSCTL_getMCLKSource() != DL_SYSCTL_MCLK_SOURCE_SYSOSC ||
+        (DL_SYSCTL_getClockStatus() & SYSCTL_CLKSTATUS_SYSOSCFREQ_MASK) !=
+        SYSCTL_CLKSTATUS_SYSOSCFREQ_SYSOSC32M) {
+        for (;;) { __NOP(); }
     }
-    if ((DL_SYSCTL_getClockStatus() & SYSCTL_CLKSTATUS_SYSOSCFREQ_MASK) !=
-         SYSCTL_CLKSTATUS_SYSOSCFREQ_SYSOSC32M) {
-        for (;;) { __WFI(); }
+
+    const uint32_t hz = am13e_app_clock_configure_xtal8();
+
+    /* No synthetic MCLK defaults: reject invalid/unquantized rates
+     * before committing to Rel17's 16 kHz SysTick scheduler.
+     */
+    const uint32_t cycles = hz / AM13E_APP_SYSTICK_HZ;
+    if (hz == 0U ||
+        hz % AM13E_APP_SYSTICK_HZ != 0U ||
+        cycles < 2U ||
+        cycles > AM13E_APP_SYSTICK_MAX_CYCLES ||
+        DL_SYSCTL_getMCLKSource() != DL_SYSCTL_MCLK_SOURCE_HSCLK ||
+        (DL_SYSCTL_getClockStatus() & SYSCTL_CLKSTATUS_HFCLKGOOD_MASK) !=
+        DL_SYSCTL_CLK_STATUS_HFCLK_GOOD) {
+        for (;;) { __NOP(); }
     }
+    app_mclk_hz = hz;
 }
 
-/* Called AFTER initgpio/initio and safe motor initialization.
- * SysTick is armed here but PRIMASK is not cleared.
+/* The board must have called init() to establish and verify MCLK.
+ * This function does not reprogram XTAL or change MCLK a second
+ * time. Program 16 kHz SysTick using the verified CPU MCLK value.
  *
- * TI SDK DL_SYSTICK_init() disables the inherited Boot SysTick
- * before changing LOAD/VAL, then enableInterrupt/enable arm it.
- * CMSIS SetPriority accepts logical priority 0..15, not a
- * pre-shifted raw priority byte. Rel17's PendSV 0x80 value
- * maps to logical midpoint 8 for __NVIC_PRIO_BITS==4.
+ * The TI SDK handles SysTick register configuration; PRIMASK remains
+ * set until the separate, board-qualified safe-enable barrier runs.
  */
 void am13e_app_motor_runtime_tick_init(void)
 {
-    init();
+    if (app_mclk_hz == 0U) {
+        for (;;) { __NOP(); }
+    }
 
-    DL_SYSTICK_init(AM13E_APP_SYSTICK_CYCLES);
+    DL_SYSTICK_init(app_mclk_hz / AM13E_APP_SYSTICK_HZ);
     NVIC_SetPriority(PendSV_IRQn, (1U << (__NVIC_PRIO_BITS - 1U)));
     NVIC_SetPriority(SysTick_IRQn, 0U);
     DL_SYSTICK_enableInterrupt();
