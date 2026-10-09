@@ -6,8 +6,9 @@
  *
  * This file implements the fail-closed clock/timebase handshake and
  * SysTick after a real clock backend has configured hardware. It
- * does not fabricate PLL settings, XTAL pinmux or oscillator timing.
- * Final ELF cannot link without am13e_app_clock_configure_xtal25().
+ * does not fabricate XTAL pinmux or oscillator electrical parameters.
+ * The real clock implementation resides in clock_xtal25_pll200.c;
+ * the final Application ELF remains blocked by other board backends.
  */
 #include "common.h" /* init() declaration and TI CMSIS */
 #include "motor_backend.h"
