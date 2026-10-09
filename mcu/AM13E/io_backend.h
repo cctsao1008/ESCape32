@@ -34,6 +34,13 @@
 #endif
 
 #include <stdint.h>
+#include "bidir_codec.h"
+
+/* Original Rel17 telemetry selection + GCR/NRZI levels. Physical
+ * TX scheduler must call after a CRC-valid inverted DShot command.
+ */
+void am13e_app_io_bidir_telemetry_levels(
+    uint8_t levels[AM13E_BIDIR_DMA_LEVELS]);
 
 int am13e_app_io_dshot_packet(uint16_t frame, int bidirectional_invert);
 void am13e_app_io_servo_pulse(unsigned int pulse_us);

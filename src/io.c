@@ -19,6 +19,7 @@
 
 #if defined(AM13E)
 #include "io_backend.h"
+#include "bidir_codec.h"
 #else
 #ifdef AT32F4
 #define USART2_TDR USART2_DR
@@ -510,6 +511,23 @@ static inline __attribute__((always_inline)) void dshot_apply_packet(int x) {
  * Transport must resynchronize on a zero result and handle hardware timing.
  */
 #if defined(AM13E)
+/* Retain the Rel17 eRPM/extended-telemetry selection, inverted CRC and
+ * repeat counter. This creates a complete 23-symbol BiDShot TX waveform
+ * for the physical PB14 timer/DMA turnaround backend.
+ */
+void am13e_app_io_bidir_telemetry_levels(uint8_t levels[AM13E_BIDIR_DMA_LEVELS])
+{
+    if (!dshotval) {
+        int value = ertm ? min(ertm, 65408) : 65408;
+        int exponent = 0;
+        while (value > 511) { value >>= 1; ++exponent; }
+        dshotval = value | (exponent << 9);
+    }
+    const int frame = (dshotval << 4) | dshotcrc(dshotval, 1);
+    am13e_bidir_encode_frame((uint16_t)frame, levels);
+    if (!rep || !--rep) dshotval = 0;
+}
+
 int am13e_app_io_dshot_packet(uint16_t frame, int bidirectional_invert) {
     int x = frame;
     if (dshotcrc(x, !!bidirectional_invert)) return 0;

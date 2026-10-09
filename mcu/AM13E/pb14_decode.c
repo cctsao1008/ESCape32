@@ -128,14 +128,24 @@ void am13e_pb14_decoder_pulse(AM13E_PB14_Decoder *d, uint32_t start,
     d->last_start = start;
     d->last_end = end;
     d->pending_width = width;
+    /* The 16th falling edge finishes a valid DShot frame. Do not wait
+     * for 16kHz SysTick: its 62.5us period misses the original Rel17
+     * ~30us BiDShot turnaround budget. Last bit uses previous period.
+     * CRC validation remains in the original src/io.c callback.
+     */
+    if (d->decoded_bits == 15U && d->last_bit_period != 0U) {
+        finish_frame(d, dshot);
+        d->active = 0U;
+    }
 }
 
 void am13e_pb14_decoder_idle(AM13E_PB14_Decoder *d, uint32_t now,
                              AM13E_PB14_DshotCallback dshot)
 {
     if (d == NULL || !d->active || !d->last_bit_period) return;
-    /* End-of-frame software timeout. This RX-only stage cannot meet
-     * the BiDShot TX turnaround timing and MUST NOT drive the line.
+    /* Gap timeout remains a recovery path for truncated frames; a
+     * normal 16-pulse DShot command finishes at its final captured edge.
+     * Physical bidirectional output scheduling is a separate driver.
      */
     if ((uint32_t)(now - d->last_end) > d->last_bit_period * 4U) {
         finish_frame(d, dshot);

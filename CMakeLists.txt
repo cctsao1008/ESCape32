@@ -74,6 +74,7 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/adc_runtime.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/pb14_capture.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/pb14_decode.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_codec.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/system_runtime.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/arming_window.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_xtal25_pll200.c"

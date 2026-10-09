@@ -32,6 +32,10 @@ static void feed_frame(AM13E_PB14_Decoder *d,uint16_t frame,uint32_t start,
         am13e_pb14_decoder_pulse(d,start,start+width,on_pwm,on_dshot);
         start += period;
     }
+    /* A complete DShot frame must already have reached Rel17 before
+     * this gap: the BiDShot reply cannot await a 62.5us SysTick.
+     */
+    assert(d->decoded_bits == 0U && d->active == 0U);
     am13e_pb14_decoder_idle(d,start+period*8U,on_dshot);
 }
 int main(void)
