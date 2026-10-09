@@ -38,7 +38,7 @@ cd ~/github/ESCape32
 git switch am13e-port-v2
 git pull --ff-only
 set -o pipefail
-cmake --build build-am13e --target AM13E -j"$(nproc) \
+cmake --build build-am13e --target AM13E -j"$(nproc)" \
   2>&1 | tee build-am13e/e1c-runtime-barrier.log
 python3 mcu/AM13E/tools/check_object_symbols.py \
   build-am13e/CMakeFiles/AM13E.dir/src/*.obj \
