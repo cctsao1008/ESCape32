@@ -769,7 +769,9 @@ void main(void) {
 	PID cpid = {.Kp = 80, .Ki = 0, .Kd = 600}; // Overcurrent protection
 #endif
 	for (int curduty = 0, running = 0, braking = 2, boost = 0, choke = 0, n = 0;;) {
+#if !defined(AM13E)
 		int ccr, arr = CLK_KHZ / cfg.freq_min;
+#endif
 		int input = rearm ? 0 : throt;
 		int range = cfg.sine_range * 20;
 		int delta = range ? 10 : 0;
@@ -782,7 +784,7 @@ void main(void) {
 				if (!running) laststep();
 			}
 			if (sync < 6 || erpm < 800 || lock == 2) { // Drag brake
-#ifdef PARK_PIN
+#if defined(PARK_PIN) && !defined(AM13E)
 				if (cfg.prot_park && running && park()) { // Parking
 					sine = (1000 << MOTOR_TIME_SHIFT) / cfg.prot_park;
 					ertm = 100000000;
@@ -797,7 +799,7 @@ void main(void) {
 			boost = 0; // Coasting
 			goto calcduty;
 		}
-#ifdef PARK_PIN
+#if defined(PARK_PIN) && !defined(AM13E)
 		park1 = 0;
 		park2 = 0;
 		park3 = -1;
@@ -831,9 +833,14 @@ void main(void) {
 				int a = step - 1;
 				int b = a / 60;
 				int c = b * 60;
-				IFTIM_OCR = sine * (reverse ? (void)(++b == 6 && (b = 0)), a - c + 1 : c - a + 60); // Commutation delay
+                int delay_ticks = sine * (reverse ? (void)(++b == 6 && (b = 0)), a - c + 1 : c - a + 60); // Commutation delay
+#if defined(AM13E)
+                am13e_app_motor_bemf_sine_exit_us(delay_ticks);
+#else
+				IFTIM_OCR = delay_ticks;
 				TIM_ARR(IFTIM) = (1 << (MOTOR_TIME_SHIFT + 16)) - 1;
 				TIM_EGR(IFTIM) = TIM_EGR_UG;
+#endif
 				step = b + 1;
 			}
 			sine = 0;
@@ -851,7 +858,9 @@ void main(void) {
 		if (brushed && step != reverse + 1) step = 0; // Change brushed direction
 		if ((newduty += boost - choke) < 0) newduty = 0;
 		if (ertm) { // Variable PWM frequency
+#if !defined(AM13E)
 			arr = scale(ertm, 1000, 2000, CLK_KHZ / cfg.freq_max, arr); // 30..60 kERPM
+#endif
 			erpm = 60000000 / ertm;
 		}
 		int maxduty = min(scale(erpm, 0, cfg.duty_ramp * 1000, cfg.duty_spup * 20, 2000), 2000 - cutback * 25); // 75% cutback at 15C above prot_temp
@@ -862,6 +871,13 @@ void main(void) {
 		if (++n == 8) n = 0;
 		if (curduty > newduty ? sync < 6 || (curduty -= b) < newduty : (curduty += b) > newduty) curduty = newduty; // Duty cycle slew rate limiting
 	setduty:
+#if defined(AM13E)
+        /* Backend maps Rel17 logical duty and frequency policy onto MCPWM.
+         * This interface has no assumed physical frequency/dead-time.
+         */
+        am13e_app_motor_pwm_apply(curduty, cfg.freq_min, cfg.freq_max,
+                                   ertm, cfg.damp, lock, brushed);
+#else
 #ifdef FULL_DUTY // Allow 100% duty cycle
 		ccr = scale(curduty, 0, 2000, lock || (running && cfg.damp) ? DEAD_TIME : 0, arr--);
 #else
@@ -873,9 +889,13 @@ void main(void) {
 		TIM1_CCR2 = ccr;
 		TIM1_CCR3 = ccr;
 		TIM1_CR1 = TIM_CR1_CEN | TIM_CR1_ARPE;
+#endif
 	skipduty:
 		if (running && !step) { // Start motor
 			if (brushed) {
+#if defined(AM13E)
+                am13e_app_motor_brushed_write(reverse, cfg.damp);
+#else
 				int m1 = TIM_CCMR1_OC1PE | TIM_CCMR1_OC2PE;
 				int m2 = TIM_CCMR2_OC3PE;
 #ifdef PWM_ENABLE
@@ -908,6 +928,7 @@ void main(void) {
 				TIM1_CCMR2 = m2;
 				TIM1_CCER = er;
 				TIM1_EGR = TIM_EGR_UG | TIM_EGR_COMG;
+#endif
 				step = reverse + 1;
 				ertm = 600; // 100K ERPM (freq_min/duty_spup/duty_ramp have no effect)
 				goto tick;
@@ -917,6 +938,11 @@ void main(void) {
 			ival = 10000 << MOTOR_TIME_SHIFT;
 			ertm = 100000000;
 			nextstep();
+#if defined(AM13E)
+            am13e_app_motor_commutation_commit();
+            am13e_app_motor_commutation_enable(1);
+            am13e_app_motor_bemf_sine_exit_us(0xffff);
+#else
 			TIM1_EGR = TIM_EGR_UG | TIM_EGR_COMG;
 #ifdef SW_BLANKING
 			TIM1_DIER |= TIM_DIER_COMIE | TIM_DIER_UIE | TIM_DIER_CC4IE;
@@ -925,11 +951,16 @@ void main(void) {
 #endif
 			TIM_ARR(IFTIM) = IFTIM_OCR = (1 << (MOTOR_TIME_SHIFT + 16)) - 1;
 			TIM_EGR(IFTIM) = TIM_EGR_UG;
+#endif
 			__enable_irq();
 			initpid(&bpid, 10000 << MOTOR_TIME_SHIFT);
 			boost = 0;
 		} else if (!running && step) { // Stop motor
 			__disable_irq();
+#if defined(AM13E)
+            am13e_app_motor_commutation_enable(0);
+            am13e_app_motor_bemf_stop();
+#else
 #ifdef SW_BLANKING
 			TIM1_DIER &= ~(TIM_DIER_COMIE | TIM_DIER_UIE | TIM_DIER_CC4IE);
 #else
@@ -938,6 +969,7 @@ void main(void) {
 			TIM_DIER(IFTIM) = 0;
 			TIM_ARR(IFTIM) = 0;
 			TIM_EGR(IFTIM) = TIM_EGR_UG;
+#endif
 			laststep();
 			sync = 0;
 			fast = 0;
@@ -946,7 +978,11 @@ void main(void) {
 			__enable_irq();
 		}
 	tick:
+#if defined(AM13E)
+        SCB->SCR = SCB_SCR_SLEEPONEXIT_Msk;
+#else
 		SCB_SCR = SCB_SCR_SLEEPONEXIT; // Suspend main loop
+#endif
 		__WFI();
 		if (tick & 0xf) continue; // 16kHz -> 1kHz
 #ifndef ANALOG
