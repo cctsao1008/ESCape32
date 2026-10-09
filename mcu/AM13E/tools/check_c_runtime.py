@@ -11,6 +11,9 @@ import re
 import subprocess
 import sys
 
+AM13E_MULTILIB = ("-march=armv8.1-m.main", "-mthumb",
+                  "-mfpu=fpv5-sp-d16", "-mfloat-abi=hard")
+
 NEEDED = ("abs", "atoi", "itoa", "memcmp", "memcpy", "memmove", "memset",
           "stpcpy", "strcasecmp", "strlcpy", "strlen", "strsep", "strtol")
 
@@ -44,7 +47,8 @@ def main():
 
     found = {}
     for name in ("libc_nano.a", "libc.a", "libgcc.a"):
-        raw = run([a.gcc, "-print-file-name=" + name]).strip()
+        raw = run([a.gcc, *AM13E_MULTILIB,
+                   "-print-file-name=" + name]).strip()
         path = pathlib.Path(raw)
         if not path.is_file():
             print("[NOT FOUND]", name, "=>", raw)
