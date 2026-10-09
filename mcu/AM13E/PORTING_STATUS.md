@@ -3,6 +3,75 @@
 This is an **application** work log, not a board-validation report.
 Boot service remains independently versioned and is not changed here.
 
+## E1-C 25MHz XTAL -> 200MHz MCLK implementation (2026-10-09)
+
+**Decision confirmed:** LP-AM13E230 LaunchPad Y1 crystal
+25MHz via X1/X2, SYSPLL CPU MCLK **200MHz** for Rel17.
+
+The source implementation is now **committed but has NOT yet
+been compiled with ARM GCC or validated on hardware**.
+
+- `mcu/AM13E/clock_backend.h`: nominal 25MHz XTAL, 400MHz
+  VCO, 200MHz MCLK interface constants and return contract.
+- `mcu/AM13E/clock_xtal25_pll200.c`: actual TI SYSCTL/FRI
+  register control. PDIV=/2, QDIV register=31 (effective ×32),
+  SYSPLLCLK0 RDIV=/2, source=HFCLK; selects the factory
+  feedback-input 8..16MHz tuning bin for fLOOPIN=12.5MHz.
+- Increases Flash `FRDCNTL.RWAIT` to **3 before the MCLK
+  transition**, via the real TI `DL_FRI_setReadWaitStates(3)`
+  RAMFUNC DriverLib function; verifies readback.
+- Configures MCLK2=/2 (100MHz) and MCLK4=/4 (50MHz ULPCLK)
+  before 200MHz switch.
+- Starts Y1/XTAL in crystal mode with nominal 9.984ms startup
+  monitor, bounded polling for HFCLKGOOD and SYSPLLGOOD,
+  then selects HSCLK and validates clock mux status.
+  The finite polling limits are NOT calibrated millisecond
+  timeouts. Crystal BOM/temperature/startup remain unverified.
+- `mcu/AM13E/system_runtime.c` requires the 200MHz PLL
+  status/nominal return before enabling the derived 16kHz
+  SysTick (12,500 cycles). PRIMASK is **not** unmasked.
+- Added clock backend to AM13E Object CMake target without
+  enabling production ELF Linking or changing the five
+  Rel17 source/Boot/Legacy configurations.
+
+**TI DriverLib caveat:** `DL_FRI_setReadWaitStates` is a RAMFUNC
+from `dl_fri.c`; the real Application Link must include and
+initialize `.TI.ramfunc` prior to `init()`. Do not add an
+empty replacement or link without startup section validation.
+The current object inventory will also expose it as an external
+symbol until the genuine DriverLib source is linked.
+
+**Hardware P0:** 25MHz Y1 X1/X2 connection and load capacitance,
+actual startup duration (nominal 156×64µs here), PLL frequency
+measurement, voltage/temp corners, Flash execution timing,
+Boot IRQ mask, pin ownership, and fault-safe motor outputs
+are not verified. No user PCB or running AM13E Application
+is available for physical testing.
+
+### Next WSL ARM GCC gate
+
+```bash
+cd ~/github/ESCape32
+git switch am13e-port-v2
+git pull --ff-only
+set -o pipefail
+
+cmake --build build-am13e --target AM13E -j"$(nproc)" \
+  2>&1 | tee build-am13e/e1c-pll200-build.log
+
+python3 mcu/AM13E/tools/check_object_symbols.py \
+  build-am13e/CMakeFiles/AM13E.dir/src/*.obj \
+  build-am13e/CMakeFiles/AM13E.dir/mcu/AM13E/*.obj \
+  | tee build-am13e/e1c-pll200-symbols.log
+```
+
+**Expected source count: nine objects** (5 Rel17 + 4 TI
+adapters: vector, reset-cause, system runtime, PLL200).
+The exact undefined-symbol total must come from WSL;
+`DL_FRI_setReadWaitStates` may remain open pending TI
+DriverLib linkage. An Object Compile PASS does not
+establish the 200MHz clock on silicon.
+
 ## E1-C clock correction — LaunchPad 25 MHz XTAL reference (2026-10-09)
 
 **Current clock requirement overrides the earlier 8 MHz proposal below.**
