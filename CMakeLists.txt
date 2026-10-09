@@ -32,9 +32,17 @@ function(add_target_ti_am13e name)
     if(NOT EXISTS "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_mcpwm.h")
         message(FATAL_ERROR "TI AM13E SDK not found; set AM13E_SDK_ROOT")
     endif()
-    set(AM13E_SYSCFG_DIR
-        "${AM13E_SDK_ROOT}/examples/empty/am13e230x_lp/m33_nortos/cmake_syscfg_generated"
-        CACHE PATH "AM13E SysConfig generated headers (temporary)")
+    # ESCape32 owns the AM13E build and product configuration.
+    # TI SDK provides MCU headers / DriverLib / CMSIS, analogous to
+    # libopencm3 on the existing STM32 targets. Do NOT inherit a TI
+    # example board's generated SysConfig as a default.
+    set(AM13E_PROJECT_SYSCFG_DIR "" CACHE PATH
+        "Optional product-owned AM13E generated configuration headers")
+    if(AM13E_PROJECT_SYSCFG_DIR AND
+       NOT IS_DIRECTORY "${AM13E_PROJECT_SYSCFG_DIR}")
+        message(FATAL_ERROR
+            "AM13E_PROJECT_SYSCFG_DIR is not an existing directory")
+    endif()
     # This target compiles the original rel17 sources. No board clock,
     # dead time, comparator routing or output-enable values are fabricated.
     if(name MATCHES "^BOOT")
@@ -130,8 +138,11 @@ function(add_target_ti_am13e name)
         target_include_directories(${am13e_binary} PRIVATE
             "${PROJECT_SOURCE_DIR}/mcu/AM13E")
     endif()
+    if(AM13E_PROJECT_SYSCFG_DIR)
+        target_include_directories(${am13e_binary} PRIVATE
+            "${AM13E_PROJECT_SYSCFG_DIR}")
+    endif()
     target_include_directories(${am13e_binary} SYSTEM PRIVATE
-        "${AM13E_SYSCFG_DIR}"
         "${AM13E_SDK_ROOT}/ti_sdk_config/am13e230x/default/device_support/include"
         "${AM13E_SDK_ROOT}/source/device/am13e230x/include"
         "${AM13E_SDK_ROOT}/source/device/am13e230x/include/hw"
