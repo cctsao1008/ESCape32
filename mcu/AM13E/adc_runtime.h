@@ -17,7 +17,9 @@ typedef struct {
 
 /* Rel17's original main/housekeeping owns scheduling. */
 void am13e_app_adc_init(void);
-void adctrig(void);
+/* The Rel17 adctrig() declaration belongs to src/common.h. */
+/* Strong TI CMSIS ADC0 interrupt handler (also declared for -Wmissing-prototypes). */
+void ADC0_INT1_IRQHandler(void);
 
 /* Debug/monitoring access. Returns 0 until first complete 2-channel scan.
  * Reads are coherent against ADC0 INT1 updates via the snapshot sequence.
