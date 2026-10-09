@@ -360,3 +360,41 @@ if(AM13E_BUILD_CLOCK_DIAGNOSTIC)
         OUTPUT_NAME "AM13E_CLOCK"
         SUFFIX ".elf")
 endif()
+
+# Strict FULL FW1 Rel17 link gate (not expected to pass until hardware
+# ports are genuinely implemented). Link all original ESCape32 AM13E
+# objects instead of generating an SDK sample firmware or fake HAL.
+#
+# The current linker is a non-production Boot-format reference.
+# This gate must not be flashed or counted as product FW1 acceptance.
+option(AM13E_ENABLE_FW1_LINK_GATE
+    "Expose strict full-Rel17 AM13E FW1 link target for real backend progress"
+    ON)
+if(AM13E_ENABLE_FW1_LINK_GATE)
+    add_executable(AM13E_FW1.elf EXCLUDE_FROM_ALL
+        "${AM13E_SDK_ROOT}/source/device/am13e230x/src/startup_gcc_arm.c"
+        $<TARGET_OBJECTS:AM13E>)
+    target_include_directories(AM13E_FW1.elf SYSTEM PRIVATE
+        "$<TARGET_PROPERTY:AM13E,INCLUDE_DIRECTORIES>")
+    target_compile_definitions(AM13E_FW1.elf PRIVATE
+        AM13E TARGET_NAME="AM13E"
+        __DEVICE_SHORT__="am13e230x" __DEVICE_LONG__="AM13E230x"
+        __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
+    target_compile_options(AM13E_FW1.elf PRIVATE
+        -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
+        -mfloat-abi=hard -fno-branch-count-reg)
+    target_link_options(AM13E_FW1.elf PRIVATE
+        -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
+        -mfloat-abi=hard -fno-branch-count-reg
+        -T"${PROJECT_SOURCE_DIR}/mcu/AM13E/linker_app_reference.ld"
+        -Wl,--no-undefined
+        -Wl,--require-defined=Reset_Handler
+        -Wl,--require-defined=main
+        -Wl,--require-defined=SysTick_Handler
+        -Wl,--require-defined=PendSV_Handler
+        -Wl,--require-defined=HardFault_Handler
+        -Wl,-Map,"${CMAKE_CURRENT_BINARY_DIR}/AM13E_FW1.map"
+        -specs=nosys.specs)
+    set_target_properties(AM13E_FW1.elf PROPERTIES
+        OUTPUT_NAME "AM13E_FW1" SUFFIX ".elf")
+endif()
