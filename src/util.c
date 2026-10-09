@@ -17,6 +17,12 @@
 
 #include "common.h"
 
+#if defined(AM13E)
+#include "util_backend.h"
+#endif
+
+/* STM32/AT32/GD32-specific GPIO and Flash register definitions. */
+#if !defined(AM13E)
 #ifndef HALL_MAP
 #elif HALL_MAP == 0xAFB35
 #define HALL1_PORT A
@@ -120,9 +126,12 @@
 #ifndef FLASH_CR_STRT
 #define FLASH_CR_STRT FLASH_CR_START
 #endif
+#endif /* !AM13E: legacy GPIO/Flash registers */
 
 static char busy;
 
+/* AM13E board GPIO, LED, and HSI functions must come from its backend. */
+#if !defined(AM13E)
 void initgpio(void) {
 #if defined HALL_MAP && !defined USE_XOR
 #ifdef HALL1_PORT
@@ -314,6 +323,7 @@ void hsictl(int x) {
 	int tv = (cr & 0xf8) >> 3; // 5 bits
 	RCC_CR = (cr & ~0xf8) | clamp(tv + x, 0, 0x1f) << 3;
 }
+#endif /* AM13E */
 
 uint8_t crc8(const char *buf, int len) {
 	static const char tbl[] = {
@@ -531,6 +541,14 @@ void checkcfg(void) {
 
 int savecfg(void) {
 	if (ertm || busy) return 0;
+#if defined(AM13E)
+    /* TI Flash partition, alignment, ECC, and RAM execution: backend.
+     * Do not program addresses before linker/board qualification.
+     */
+    unsigned int bytes = (unsigned int)((uintptr_t)_cfg_end - (uintptr_t)_cfg_start);
+    if (!am13e_app_cfg_commit(_cfg, _cfg_start, bytes)) return 0;
+    return !memcmp(_cfg, _cfg_start, bytes);
+#else
 	__disable_irq();
 	FLASH_KEYR = FLASH_KEYR_KEY1;
 	FLASH_KEYR = FLASH_KEYR_KEY2;
@@ -568,6 +586,7 @@ int savecfg(void) {
 	if (FLASH_SR & (FLASH_SR_PROGERR | FLASH_SR_WRPERR)) return 0;
 #endif
 	return !memcmp(_cfg, _cfg_start, _cfg_end - _cfg_start);
+#endif /* AM13E */
 }
 
 int resetcfg(void) {
@@ -581,6 +600,10 @@ int resetcfg(void) {
 }
 
 void resetcom(void) {
+#if defined(AM13E)
+    /* Gate states and emergency-safe defaults are not assumed here. */
+    am13e_app_commutation_reset();
+#else
 #ifdef PWM_ENABLE
 	TIM1_CCMR1 = TIM_CCMR1_OC1M_FORCE_HIGH | TIM_CCMR1_OC2M_FORCE_HIGH;
 	TIM1_CCMR2 = TIM_CCMR2_OC3M_FORCE_HIGH;
@@ -595,9 +618,13 @@ void resetcom(void) {
 #endif
 	TIM1_CCER = er;
 	TIM1_EGR = TIM_EGR_UG | TIM_EGR_COMG;
+#endif /* AM13E */
 }
 
 static void delayf(void) {
+#if defined(AM13E)
+    am13e_app_audio_music_tick();
+#else
 	TIM6_EGR = TIM_EGR_UG; // Reset arming timeout
 	if (!(TIM1_SR & TIM_SR_UIF)) return;
 	TIM1_SR = ~TIM_SR_UIF;
@@ -605,6 +632,7 @@ static void delayf(void) {
 	int b = TIM1_CCR3;
 	TIM1_CCR1 = b;
 	TIM1_CCR3 = a;
+#endif /* AM13E */
 }
 
 int playmusic(const char *str, int vol) {
