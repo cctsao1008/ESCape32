@@ -115,6 +115,11 @@ function(add_target_ti_am13e name)
     target_include_directories(${am13e_binary} PRIVATE "${am13e_source_dir}")
     if(name MATCHES "^BOOT")
         target_include_directories(${am13e_binary} PRIVATE "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E")
+    else()
+        # Rel17 Application gets its own platform config.h. Never reuse
+        # boot/mcu/AM13E/config.h (which is for the PB14 boot service).
+        target_include_directories(${am13e_binary} PRIVATE
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E")
     endif()
     target_include_directories(${am13e_binary} SYSTEM PRIVATE
         "${AM13E_SYSCFG_DIR}"
