@@ -2,7 +2,7 @@
  * ESCape32 Rel17 AM13E — external 25 MHz XTAL clock integration.
  *
  * XTAL=25 MHz is a BOARD REQUIREMENT, not the CPU clock rate.
- * Board-approved MCLK (XTAL direct or XTAL->SYSPLL) is still OPEN.
+ * The agreed MCLK is 200MHz from SYSPLLCLK0 (400MHz VCO /2).
  *
  * This file implements the fail-closed clock/timebase handshake and
  * SysTick after a real clock backend has configured hardware. It
@@ -35,17 +35,21 @@ void init(void)
 
     const uint32_t hz = am13e_app_clock_configure_xtal25();
 
-    /* No synthetic MCLK defaults: reject invalid/unquantized rates
-     * before committing to Rel17's 16 kHz SysTick scheduler.
+    /* Verify the agreed 200MHz PLL policy, not just any HSCLK.
+     * Physical frequency measurement remains a separate hardware gate.
      */
     const uint32_t cycles = hz / AM13E_APP_SYSTICK_HZ;
-    if (hz == 0U ||
+    if (hz != AM13E_APP_MCLK_HZ ||
         hz % AM13E_APP_SYSTICK_HZ != 0U ||
         cycles < 2U ||
         cycles > AM13E_APP_SYSTICK_MAX_CYCLES ||
         DL_SYSCTL_getMCLKSource() != DL_SYSCTL_MCLK_SOURCE_HSCLK ||
         (DL_SYSCTL_getClockStatus() & SYSCTL_CLKSTATUS_HFCLKGOOD_MASK) !=
-        DL_SYSCTL_CLK_STATUS_HFCLK_GOOD) {
+        DL_SYSCTL_CLK_STATUS_HFCLK_GOOD ||
+        (DL_SYSCTL_getClockStatus() & SYSCTL_CLKSTATUS_SYSPLLGOOD_MASK) !=
+        DL_SYSCTL_CLK_STATUS_SYSPLL_GOOD ||
+        (DL_SYSCTL_getClockStatus() & SYSCTL_CLKSTATUS_HSCLKGOOD_MASK) !=
+        DL_SYSCTL_CLK_STATUS_HSCLK_GOOD) {
         for (;;) { __NOP(); }
     }
     app_mclk_hz = hz;
