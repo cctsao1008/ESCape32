@@ -1,12 +1,13 @@
 #include "motor_phase_plan.h"
 #include <stddef.h>
 
-/* EXACT lower three bits of Rel17 src/main.c seq[]={0x175,0xd9,
- * 0x1ab,0x72,0x1de,0xac}. The 3-bit COMP code is (x >> 6)
- * and is not the floating phase's one-hot mask.
+/* EXACT Rel17 src/main.c seq[]={0x175,0xd9,0x1ab,0x72,0x1de,
+ * 0xac}, m=x>>3, positive=x&m, negative=~x&m. The source passes
+ * these FULL 6-bit masks, not just (p&7)/(n&7), into sixstep_write().
+ * COMP code is m>>3 and is NOT the floating phase one-hot bit.
  */
-static const uint8_t positive[6] = {4U, 1U, 1U, 2U, 2U, 4U};
-static const uint8_t negative[6] = {2U, 2U, 4U, 4U, 1U, 1U};
+static const uint8_t positive[6] = {36U, 25U, 33U, 2U, 26U, 4U};
+static const uint8_t negative[6] = {10U, 2U, 20U, 12U, 33U, 17U};
 static const uint8_t comp_code[6] = {5U, 3U, 6U, 1U, 7U, 2U};
 
 int am13e_motor_plan_sixstep(int positive_mask, int negative_mask,
@@ -14,7 +15,7 @@ int am13e_motor_plan_sixstep(int positive_mask, int negative_mask,
                             AM13E_SixstepPlan *out)
 {
     if (out == NULL || positive_mask < 0 || negative_mask < 0 ||
-        (positive_mask | negative_mask) > 7 ||
+        (positive_mask | negative_mask) > 63 ||
         (positive_mask & negative_mask) != 0 ||
         comparator_code < 0 || comparator_code > 7) {
         return 0;

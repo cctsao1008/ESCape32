@@ -2,8 +2,8 @@
 #include <assert.h>
 #include <stdio.h>
 /* Explicit Rel17 hardware roles, not generated from the function itself. */
-static const int p[6]={4,1,1,2,2,4};
-static const int n[6]={2,2,4,4,1,1};
+static const int p[6]={36,25,33,2,26,4};
+static const int n[6]={10,2,20,12,33,17};
 static const int comp[6]={5,3,6,1,7,2};
 int main(void)
 {
@@ -30,8 +30,10 @@ int main(void)
         for(int bit=0;bit<3;++bit)
             assert(o.phase[bit]==AM13E_PHASE_FLOATING);
     }
+    assert(!am13e_motor_plan_sixstep(36,10,3,0,0,&o)); /* wrong code */
+    assert(!am13e_motor_plan_sixstep(4,2,5,0,0,&o)); /* truncated masks */
     assert(!am13e_motor_plan_sixstep(1,1,3,0,0,&o));
-    assert(!am13e_motor_plan_sixstep(1,2,5,0,0,&o)); /* wrong code */
+    assert(!am13e_motor_plan_sixstep(1,2,5,0,0,&o)); /* corrupted */
     assert(!am13e_motor_plan_sixstep(8,1,5,0,0,&o));
     assert(!am13e_motor_plan_sixstep(-1,1,5,0,0,&o));
     assert(!am13e_motor_plan_sixstep(4,2,5,0,0,0));

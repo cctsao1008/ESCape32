@@ -14,8 +14,9 @@ typedef struct {
     uint8_t damp;            /* Preserve complementary/active-freewheel choice */
     uint8_t reverse;
 } AM13E_SixstepPlan;
-/* Returns 1 for valid Rel17 pair/selection, 0 for invalid/corrupt state.
- * p=n=0 is Rel17 zero-throttle coasting. It never drives a phase.
+/* Takes UNMODIFIED Rel17 p/n masks (including their upper encoded bits).
+ * Returns 1 for a valid original Rel17 pair/selection, else 0.
+ * p=n=0 is Rel17 zero-throttle coasting; no phase drive.
  */
 int am13e_motor_plan_sixstep(int positive_mask, int negative_mask,
                             int comparator_code, int damp, int reverse,
