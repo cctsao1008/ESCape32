@@ -6,6 +6,7 @@
 #include "bidir_timing.h"
 #include "io_backend.h"
 #include "clock_backend.h"
+#include "pb14_capture.h"
 #include <soc.h>
 #include <dl_timer.h>
 #include <dl_dma.h>
@@ -19,7 +20,8 @@ extern void hard_fault_handler(void);
 #define TX_CH 2U
 #define TX_PIN DL_GPIO_PIN(14U)
 #define TX_CLK (AM13E_APP_MCLK_HZ/2U)
-#define TX_DMA_FLAGS (DL_DMA_INTERRUPT_CHANNEL2 | DL_DMA_INTERRUPT_ADDR_ERROR)
+#define TX_DMA_FLAGS (DL_DMA_INTERRUPT_CHANNEL2 | DL_DMA_INTERRUPT_ADDR_ERROR | \
+                      DL_DMA_INTERRUPT_DATA_ERROR)
 _Static_assert(DL_DMA_TRIGGER_SOURCE_TIMG4_0_GEN_EVENT1==34U,"TIMG4 DMA trigger mismatch");
 _Static_assert(AM13E_BIDIR_DMA_TRANSFERS==23U,"Telemetry symbol count mismatch");
 
@@ -138,7 +140,8 @@ void DMA0_IRQHandler(void)
 {
     const uint32_t status=DL_DMA_getEnabledInterruptStatus(TX_DMA,TX_DMA_FLAGS);
     DL_DMA_clearInterruptStatus(TX_DMA,status);
-    if((status&DL_DMA_INTERRUPT_ADDR_ERROR) || state!=TX_STREAM ||
+    if((status&(DL_DMA_INTERRUPT_ADDR_ERROR | DL_DMA_INTERRUPT_DATA_ERROR)) ||
+       state!=TX_STREAM ||
        !(status&DL_DMA_INTERRUPT_CHANNEL2)) fail_closed();
     DL_Timer_disableEvent(TX_TIMER,DL_TIMER_GEN_EVENT1,DL_TIMER_EVENT_ZERO_EVENT);
     DL_Timer_stopCounter(TX_TIMER);
@@ -147,6 +150,11 @@ void DMA0_IRQHandler(void)
     state=TX_IDLE;
     ++tx_completed;
     am13e_pb14_resume_rx();
+}
+void am13e_pb14_bidir_tx_status(uint32_t *completed, uint32_t *rejected)
+{
+    if (completed != NULL) *completed = tx_completed;
+    if (rejected != NULL) *rejected = tx_rejected;
 }
 void am13e_pb14_bidir_tx_systick(void)
 {

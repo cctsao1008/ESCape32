@@ -1,13 +1,13 @@
 /*
  * ESCape32 Rel17 AM13E Application input/DSHOT platform contract.
  *
- * E1-N: PB14 GPIO46/INPUTXBAR1/ECAP0 is an RX-only bring-up
- * backend. DShot/PWM timing and CRC still require hardware qualification.
- * BiDShot TX/turnaround is NOT implemented; do not drive PB14 yet.
+ * PB14 GPIO46/INPUTXBAR1/ECAP0 captures DShot/PWM RX; TIMG4/DMA0
+ * drives the NRZI telemetry reply on GPIO46, then restores ECAP0 RX.
+ * Timing and external-line electrical validation remain outstanding.
  *
  * initio() now owns PB14 input and ECAP0 edge timestamps. The
- * bidirectional TX waveform, GPIO direction switching, input watchdog,
- * service/CLI transport and silicon timing validation are still pending.
+ * bidirectional TX waveform and direction changes have implementations;
+ * input watchdog, service/CLI transport and silicon validation are pending.
  * No STM32 TIMx register aliases are used.
  *
  * Upon receipt of a complete 16-bit DSHOT frame (including 4-bit CRC),

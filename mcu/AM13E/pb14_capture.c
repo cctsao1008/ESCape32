@@ -5,8 +5,8 @@
  * Receive: GPIO46 -> INPUTXBAR1 -> ECAP0 (32bit timestamps).
  * eCAP captures two complete pulses per four-event group (CEVT4 IRQ).
  * Rel17 policy stays in src/io.c via original servo/DShot callbacks.
- * BiDShot reply waveform, DMA TX and RX->TX turnaround are NOT enabled;
- * no GPIO output is configured here. TX must meet TI Review/timing gate.
+ * BiDShot RX->TIMG4/DMA TX->RX is integrated; waveform timing and
+ * external bidirectional electrical interface remain hardware test gates.
  *
  * ECAP counter frequency is measured against Rel17's 16 kHz SysTick
  * instead of assuming eCAP's clock divider. A valid 1ms measurement
@@ -165,7 +165,7 @@ void ECAP0_IRQHandler(void)
      * advanced, at least one new edge may have overwritten old data.
      * Check before AND after copying CAP1..CAP4. This detects some,
      * but not all, overruns (a whole 4-edge wrap is indistinguishable).
-     * SDK ECAP0 -> DMA trigger availability is NOT established.
+     * ECAP0 DMA routing is documented; RX still uses an IRQ.
      */
     const DL_ECAP_EVENT phase_before =
         DL_ECAP_getModuloCounterStatus(PB14_ECAP);
@@ -200,7 +200,7 @@ void ECAP0_IRQHandler(void)
     capture_pairs += 2U;
     const uint32_t good_before = decoder.good_dshot;
     /* Both pulses pass through the same Rel17 PWM/DShot callbacks.
-     * No motor output, fake watchdog or BiDShot TX path is introduced.
+     * No motor output or fake watchdog is introduced.
      */
     am13e_pb14_decoder_pulse(&decoder, start1, end1,
                              am13e_app_io_servo_pulse,
@@ -276,6 +276,7 @@ void am13e_app_pb14_status(AM13E_PB14_Status *out)
     out->invalid_capture_groups = invalid_capture_groups;
     out->good_pwm = decoder.good_pwm;
     out->good_dshot_rx = decoder.good_dshot;
+    am13e_pb14_bidir_tx_status(&out->tx_dma_completed, &out->tx_rejected);
     out->rejected = decoder.rejected;
     out->unexpected_gpio1_irqs = unexpected_gpio1_irqs;
     out->capture_ticks_per_us = calib_ticks_per_us;
