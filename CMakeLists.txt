@@ -347,11 +347,11 @@ if(AM13E_BUILD_CLOCK_DIAGNOSTIC)
     target_link_options(AM13E_CLOCK.elf PRIVATE
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
         -mfloat-abi=hard -fno-branch-count-reg
-        -T"${am13e_clock_diag_linker}"
+        "-T${am13e_clock_diag_linker}"
         -Wl,--no-undefined
         -Wl,--require-defined=Reset_Handler
         -Wl,--require-defined=main
-        -Wl,-Map,"${CMAKE_CURRENT_BINARY_DIR}/AM13E_CLOCK.map"
+        "-Wl,-Map,${CMAKE_CURRENT_BINARY_DIR}/AM13E_CLOCK.map"
         -specs=nosys.specs)
     # The linker file is the existing historical Boot-format reference
     # and is not a product FW1 linker. This executable has no DShot,
@@ -386,14 +386,14 @@ if(AM13E_ENABLE_FW1_LINK_GATE)
     target_link_options(AM13E_FW1.elf PRIVATE
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
         -mfloat-abi=hard -fno-branch-count-reg
-        -T"${PROJECT_SOURCE_DIR}/mcu/AM13E/linker_app_reference.ld"
+        "-T${PROJECT_SOURCE_DIR}/mcu/AM13E/linker_app_reference.ld"
         -Wl,--no-undefined
         -Wl,--require-defined=Reset_Handler
         -Wl,--require-defined=main
         -Wl,--require-defined=SysTick_Handler
         -Wl,--require-defined=PendSV_Handler
         -Wl,--require-defined=HardFault_Handler
-        -Wl,-Map,"${CMAKE_CURRENT_BINARY_DIR}/AM13E_FW1.map"
+        "-Wl,-Map,${CMAKE_CURRENT_BINARY_DIR}/AM13E_FW1.map"
         -specs=nosys.specs)
     set_target_properties(AM13E_FW1.elf PROPERTIES
         OUTPUT_NAME "AM13E_FW1" SUFFIX ".elf")
