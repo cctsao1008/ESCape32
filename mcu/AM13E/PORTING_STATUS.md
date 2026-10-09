@@ -3,6 +3,60 @@
 This is an **application** work log, not a board-validation report.
 Boot service remains independently versioned and is not changed here.
 
+## E1-C clock correction — LaunchPad 25 MHz XTAL reference (2026-10-09)
+
+**Current clock requirement overrides the earlier 8 MHz proposal below.**
+
+Based on the TI **LP-AM13E230 LaunchPad User's Guide SLVUDH9**
+§2.4 "Clock" (page 13), the selected reference is **25 MHz
+crystal oscillator Y1**, across **X1 (PC16)/X2 (PC17)**.
+The separate **J14 HFCLK_IN 4–48 MHz digital clock** input is NOT
+selected. The historical 8 MHz XTAL contract and its
+Datasheet/TRM range dispute are now **superseded**; both reviewed
+document ranges include 25 MHz.
+
+Changes on `am13e-port-v2`:
+
+- `mcu/AM13E/clock_backend.h`: `AM13E_APP_XTAL_HZ =
+  UINT32_C(25000000)` and
+  `am13e_app_clock_configure_xtal25()` (declaration only).
+- `mcu/AM13E/system_runtime.c`: calls the new 25 MHz
+  XTAL clock backend; still derives **16 kHz SysTick** from the
+  actual, backend-verified MCLK and fails closed on a source/status
+  mismatch. No clock PLL or board IOMUX implementation was added.
+- `mcu/AM13E/CLOCK_CONTRACT.md`: grounded in the LaunchPad
+  Y1 + X1/X2 and HFCLK_IN distinction, with target CPU MCLK,
+  SYSPLL and timing decisions still explicitly pending.
+- Boot 32 MHz SYSOSC handoff check and safety PRIMASK gating are
+  unchanged, as are the five Rel17 sources and all legacy targets.
+
+**No WSL ARM rebuild has been received after the 25 MHz
+contract change.** The last user `e1c-systick-symbols.log`
+(8 objects, 43 resolved, 60 undefined) belongs to the
+earlier 32 MHz SYSOSC integration *before* the external XTAL
+contract changed. Do not present it as current 25 MHz compile
+evidence. After a clean rebuild the new XTAL backend should
+remain an intentional Link blocker until its real
+implementation exists.
+
+```bash
+cd ~/github/ESCape32
+git switch am13e-port-v2
+git pull --ff-only
+set -o pipefail
+cmake --build build-am13e --target AM13E -j"$(nproc)" \
+  2>&1 | tee build-am13e/e1c-xtal25-compile.log
+python3 mcu/AM13E/tools/check_object_symbols.py \
+  build-am13e/CMakeFiles/AM13E.dir/src/*.obj \
+  build-am13e/CMakeFiles/AM13E.dir/mcu/AM13E/*.obj \
+  | tee build-am13e/e1c-xtal25-symbols.log
+```
+
+Acceptance at this stage: source/object integration only;
+no target board clock, Application ELF, MCU pinmux, crystal
+startup, safe motor output or ISR scheduling has been
+verified on hardware.
+
 ## E1-C 8-object integration and updated 8 MHz XTAL requirement (2026-10-09)
 
 User-supplied `e1c-systick-symbols.log` reports 8 objects,
