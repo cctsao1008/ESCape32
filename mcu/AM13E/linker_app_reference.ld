@@ -1,11 +1,19 @@
 /*
- * AM13E / ESCape32 Rel17 Application LINKER REFERENCE — NOT FLASHABLE.
+ * HISTORICAL Boot-v2-format LINKER SMOKE REFERENCE — NOT PRODUCTION.
  *
  * First establish linker and TI Startup section contracts, then implement
  * real board peripherals/fault handling and validate on hardware.
  * Do NOT wire this file into a production image without qualification.
  *
- * This is based on the currently agreed Boot reference layout. The
+ * ATTENTION: This file preserves the earlier Boot smoke image contract,
+ * NOT the authoritative SW Architecture Baseline v1.6. That baseline
+ * requires FW1 and FW2 independent 4KiB parameter areas, one 488KiB
+ * Application region (0x6000..0x7FFFF), and an agreed APP_BASE/startup
+ * entry contract. Boot v2's 256KiB cap, combined 8KiB config region,
+ * and offset vector 0x6800 are explicit unresolved integration gaps.
+ * DO NOT include this linker script in the production ESCape32 target.
+ *
+ * This is based on the earlier Boot implementation. The
  * legacy CMD_WRITE packed-image transport currently caps the firmware
  * image to 256 KiB (0x6000..0x45FFF), NOT all physical main Flash.
  *
