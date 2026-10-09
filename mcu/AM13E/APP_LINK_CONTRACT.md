@@ -39,8 +39,10 @@ The FW1/FW2 parameter sectors are independently owned and
 bank swap, rollback slot or runtime firmware selector is selected.
 
 The Baseline requires a fixed application-base vector/startup
-contract and executable firmware updates spanning the allocated
-Application region. Exact application marker, image header and CRC
+contract; the allocated 488 KiB Flash region does **not** by
+itself mandate transporting a 488 KiB image. FW1/FW2 are expected
+to fit the **existing 256 KiB transport limit**, which stays in
+place for now. Exact application marker, image header and CRC
 are **Detailed Design**, not already frozen by an existing smoke test.
 
 ## 3. Current Boot implementation is NOT aligned yet — P0
@@ -49,14 +51,15 @@ A prior Boot v2 proof-of-concept used:
 
 - Signature at `0x6000`, 32-byte image header at `0x6100`,
   and **actual vector table at `0x6800`**.
-- A **256 KiB** packed-image/write-transport upper limit.
+- A **256 KiB** packed-image/write-transport upper limit;
+  **ACCEPTED for current FW1/FW2**, with final image-size verification.
 - A common **8 KiB** `0x4000..0x5FFF` config storage assumption
   instead of FW1/FW2's independent 4 KiB regions.
 
 The existing `mcu/AM13E/linker_app_reference.ld` and
 `probe_app_linker.py` only exercise this older Boot arrangement.
 Their synthetic pass **does not validate** the v1.6 Flash layout,
-full 488 KiB image capacity, independent FW configuration
+independent FW configuration
 retention, or compatibility with the required fixed
 application-entry contract.
 
@@ -101,9 +104,9 @@ reference is NOT authorized as the production image format.**
 
 1. Keep `add_target(AM13E AM13E)` and rebuild all original
    Rel17 Application objects after the CMake source update.
-2. Reconcile 488 KiB Application transport, 4+4 KiB firmware
-   parameter regions, and the exact APP_BASE / vector / marker
-   semantics across **ESCape32 Application + Boot reference**.
+2. Keep **256 KiB transport** and verify FW1/FW2 binary sizes.
+   Reconcile 4+4 KiB firmware parameters and the exact APP_BASE /
+   vector / marker semantics across ESCape32 + Boot reference.
 3. Validate a production linker **against that agreed contract**,
    not by simply increasing the legacy linker region length.
 4. Implement board-specific hardware backends using the **HW
