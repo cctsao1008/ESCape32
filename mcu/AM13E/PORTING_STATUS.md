@@ -19,6 +19,40 @@ Evidence: first WSL ARM GCC build log after commits
   power-stage pin mapping or peripheral implementation.
 - No ARM rebuild has yet been reported after the `src/defs.h` adjustment.
 
+## E1-B WSL util gate and DSHOT/input isolation (2026-10-09)
+
+WSL log `e1b-util.log`: `src/util.c.obj` PASS without warnings;
+`src/io.c.obj` and `src/main.c.obj` FAIL on legacy STM32 registers.
+Combined with the prior `prog.c.obj` and `telem.c.obj` reports,
+**3/5** Rel17 objects have been verified. This status predates the
+new input isolation below.
+
+Latest `src/io.c` changes isolate STM32/AT32/GD32 capture timers,
+DMA, watchdog, physical UART and CLI ISR. The shared Rel17 DSHOT
+CRC, throttle and command-processing state machine remains compiled
+for AM13E, and the legacy ISR calls the **same** command processor.
+The shared function is always-inlined to avoid adding an explicit
+function-call hop to the legacy time-sensitive DMA ISR.
+
+`mcu/AM13E/io_backend.h` defines input callbacks for completed,
+physically qualified 16-bit DSHOT packets, validated servo PWM pulse
+widths, and complete CLI lines. A real backend MUST implement
+`initio()` plus `am13e_app_io_watchdog_feed()`. Neither exists yet.
+Unqualified capture frames must not be passed to the shared parser.
+No dummy hardware behavior, clocks, UART pinmux or timers were added.
+
+**Limitations**: AM13E does not yet have a physically implemented
+bidirectional DSHOT turnaround/telemetry sender, timer capture/DMA
+driver, receiver recovery, serial input decoder transport, aux brake
+PWM, or watchdog/fault behavior. Legacy UART/SBUS/CRSF/EXBUS/HoTT
+implementations remain in the guarded legacy branch. No AM13E board
+functionality is asserted by Object Compile.
+
+A static conditional-path scan shows no STM32 TIMER/DMA/USART/WWDG
+references active in `src/io.c` for `AM13E`; this is **not** an ARM
+GCC compile result. Stage E1-B remains **3/5 verified**, until WSL
+confirms `src/io.c.obj` compiles.
+
 ## E1-B WSL telemetry gate and utility isolation (2026-10-09)
 
 Second WSL log `e1b-telemetry.log` shows `telem.c.obj` **PASS**
