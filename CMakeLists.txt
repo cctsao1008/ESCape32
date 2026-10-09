@@ -312,3 +312,49 @@ add_target(VWING1 STM32G071 DEAD_TIME=35 COMP_MAP=123 SENS_MAP=0xA5A4 VOLT_MUL=1
 
 # TI AM13E23019 generic application target.
 add_target(AM13E AM13E)
+
+# First real AM13E *diagnostic* ELF: startup + clock only, built from
+# the ESCape32 root CMake. This intentionally does not pull in the
+# incomplete Rel17 motor-control entry or invent link-only HAL stubs.
+# Keep AM13E (all Rel17 sources) as the main FW1 OBJECT target.
+option(AM13E_BUILD_CLOCK_DIAGNOSTIC
+    "Expose separately named AM13E clock/startup integration ELF"
+    ON)
+if(AM13E_BUILD_CLOCK_DIAGNOSTIC)
+    set(am13e_clock_diag_linker
+        "${PROJECT_SOURCE_DIR}/mcu/AM13E/linker_app_reference.ld")
+    add_executable(AM13E_CLOCK.elf
+        "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_diagnostic_entry.c"
+        "${PROJECT_SOURCE_DIR}/mcu/AM13E/system_runtime.c"
+        "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_xtal25_pll200.c"
+        "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_common.c"
+        "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_fri.c"
+        "${AM13E_SDK_ROOT}/source/device/am13e230x/src/startup_gcc_arm.c")
+
+    # Inherit the SAME TI MCU include/ABI environment as the real
+    # ESCape32 AM13E target; do not adopt an SDK example build.
+    target_include_directories(AM13E_CLOCK.elf SYSTEM PRIVATE
+        "$<TARGET_PROPERTY:AM13E,INCLUDE_DIRECTORIES>")
+    target_compile_definitions(AM13E_CLOCK.elf PRIVATE
+        AM13E TARGET_NAME="AM13E_CLOCK"
+        __DEVICE_SHORT__="am13e230x" __DEVICE_LONG__="AM13E230x"
+        __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
+    target_compile_options(AM13E_CLOCK.elf PRIVATE
+        -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
+        -mfloat-abi=hard -fno-branch-count-reg)
+    target_link_options(AM13E_CLOCK.elf PRIVATE
+        -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
+        -mfloat-abi=hard -fno-branch-count-reg
+        -T"${am13e_clock_diag_linker}"
+        -Wl,--no-undefined
+        -Wl,--require-defined=Reset_Handler
+        -Wl,--require-defined=main
+        -Wl,-Map,"${CMAKE_CURRENT_BINARY_DIR}/AM13E_CLOCK.map"
+        -specs=nosys.specs)
+    # The linker file is the existing historical Boot-format reference
+    # and is not a product FW1 linker. This executable has no DShot,
+    # safety-qualified outputs or other motor-control functionality.
+    set_target_properties(AM13E_CLOCK.elf PROPERTIES
+        OUTPUT_NAME "AM13E_CLOCK"
+        SUFFIX ".elf")
+endif()
