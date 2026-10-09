@@ -23,7 +23,7 @@ static uint32_t app_mclk_hz;
 
 /* Application init() runs with Boot PRIMASK still set and inherited
  * SYSOSC 32 MHz (temporary handoff clock; not Application policy).
- * The LaunchPad-reference 25 MHz XTAL must be qualified and brought up by a
+ * The product's 25 MHz HFXT on PC16_X1/PC17_X2 must be brought up by a
  * real backend, which selects and verifies the final MCLK.
  */
 void init(void)
