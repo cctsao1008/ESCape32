@@ -127,7 +127,11 @@ extern const Cfg cfgdata;
 extern Cfg cfg;
 extern int throt, brake, ertm, erpm, temp1, temp2, volt, curr, csum, dshotval, beepval;
 extern char analog, telreq, telmode, telphid, flipdir, beacon, dshotext, rearm, auxup;
+#if defined(AM13E)
+extern volatile uint32_t tick; /* Updated by SysTick interrupt. */
+#else
 extern uint32_t tick;
+#endif
 
 void init(void);
 void initio(void);
