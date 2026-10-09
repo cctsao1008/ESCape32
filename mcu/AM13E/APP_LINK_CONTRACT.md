@@ -20,29 +20,34 @@ Rel17's own `main()` copies the config into SRAM, retaining the
 existing control flow. This still needs proof of default recovery,
 length/alignment, ECC and safe persistence on actual Flash hardware.
 
-**A temporary synthetic fixture passed a GNU ARM linker,
-startup-section and actual exception-vector-slot check.**
-The log did not record which GCC driver version was selected,
-so the probe is being repeated with the exact Application
-CMake compiler to establish toolchain consistency.
-The full Rel17 source objects, backend implementations, Flash/ECC,
-real-time behavior and board hardware have NOT been linked or validated.
-This reference is deliberately not represented as a runnable image.
+**A temporary synthetic fixture passed GNU ARM linking,
+startup-section placement and actual exception-vector-slot checks
+using the SAME GCC 15.2.1 toolchain as the Application's CMake build.**
+The synthetic linker test validated genuine `.data` / `.TI.ramfunc`
+load images and strong CMSIS exception handlers.
+All 13 Rel17 C Runtime candidates are exported by the same GCC 15.2.1
+toolchain's `libc.a` and `libc_nano.a` archives, but archive
+availability is not application executable linking.
+The full Rel17 source objects, real board backend implementations,
+Flash/ECC, real-time behavior and hardware have NOT been linked
+or validated. This remains a **non-production reference**.
 
-## Toolchain provenance gate (2026-10-09)
+## Toolchain provenance gate (2026-10-09) — PASS
 
-The first `e1c-linker-probe.log` showed vector and section-placement
-**fixture PASS**. The first `e1c-libc-symbols.log` found all 13 symbols,
-but reported the system GCC **10.3.1** Newlib archives. Previous
-Rel17 Application GCC commands used the independently installed
-GCC **15.2** compiler.
+The re-run `e1c-linker-matched-toolchain.log` explicitly identifies
+the CMake-selected **ARM GCC 15.2.1**, with matching `nm` and
+`objcopy`. The synthetic Linker / TI Startup / Vector Probe
+completed PASS with vectors at `0x6800` and correct actual
+Reset/HardFault/PendSV/SysTick slot entries.
 
-The two audit tools now use `toolchain_match.py` to select the
-compiler in `build-am13e/CMakeCache.txt`, plus sibling `nm` and
-`objcopy`; results must print `[TOOLCHAIN]` details. A matching
-toolchain re-run is required before treating library availability and
-linker-fixture qualification as belonging to the same Application
-toolchain. See `PORTING_STATUS.md` for exact commands.
+The re-run `e1c-libc-matched-toolchain.log` uses the same GCC15.2.1
+hard-float multilib and finds **13/13** required Rel17 C Runtime
+symbol definitions in both `libc.a` and `libc_nano.a`.
+
+Remaining P0 issues: actual Application ELF, hardware-safe interrupt
+activation, real gate-driver outputs/clock and BEMF/ADC routing,
+persisted `.cfg` semantics and Boot-to-Application execution.
+The linker layout remains non-production until these are addressed.
 
 ## 1. Existing image contract to preserve
 
