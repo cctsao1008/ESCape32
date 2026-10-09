@@ -19,6 +19,14 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
+#if defined(AM13E)
+/* Application platform boundary. Use the TI SDK Cortex-M33 device header;
+ * never introduce STM32-compatible register aliases for this target.
+ * The application's config.h is mcu/AM13E/config.h, not the Boot config.
+ */
+#include <soc.h>
+#else
 #include <libopencmsis/core_cm3.h>
 #include <libopencm3/stm32/syscfg.h>
 #include <libopencm3/stm32/rcc.h>
@@ -34,6 +42,7 @@
 #include <libopencm3/stm32/flash.h>
 #include <libopencm3/stm32/iwdg.h>
 #include <libopencm3/stm32/wwdg.h>
+#endif
 #include "config.h"
 #include "defs.h"
 
