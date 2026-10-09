@@ -19,6 +19,30 @@ Evidence: first WSL ARM GCC build log after commits
   power-stage pin mapping or peripheral implementation.
 - No ARM rebuild has yet been reported after the `src/defs.h` adjustment.
 
+## E1-B first slice: telemetry transport isolation (2026-10-09)
+
+Changes are committed, **WSL ARM object build not yet verified**.
+
+- `src/telem.c` retains the shared Rel17 iBUS, S.Port, MSB, HoTT,
+  KISS and CRSF encoders/decoders. The full legacy USART/DMA branches
+  are retained behind `#if !defined(AM13E)`.
+- New `mcu/AM13E/telem_backend.h` is a **declarations-only** transport
+  contract (UART mode initialization, asynchronous TX, byte TX, RX pause,
+  RX-frame and TX-complete callbacks). There is no driver implementation.
+- The AM13E parser callbacks keep access to the existing `iobuf`.
+  The backend must preserve half-duplex direction/turnaround,
+  receive-mode rearming, asynchronous buffer lifetime and delayed HoTT
+  transmission. These are not hardware-qualified.
+- Static conditional-path scan: **no USART1/DMA1/STM32 register references
+  active in `telem.c` with `AM13E` defined**; all six protocol paths
+  remain included. This is a structural check, NOT ARM GCC PASS.
+- Since `am13e_telem_hw_*` functions lack implementation intentionally,
+  a future production executable must not link successfully until a real
+  backend is supplied.
+
+**Immediate gate:** rebuild AM13E objects in WSL; `telem.c.obj`
+is expected to compile, but this has not been proven yet.
+
 ## First actual object-compile result (before defs.h adjustment)
 
 | Rel17 source | ARM GCC object status | First real blocking dependency |
