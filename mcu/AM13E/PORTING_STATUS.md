@@ -3,6 +3,46 @@
 This is an **application** work log, not a board-validation report.
 Boot service remains independently versioned and is not changed here.
 
+## E1-C entry — symbols, TI vectors and handoff (2026-10-09)
+
+User `nm -u` output confirms five Rel17 sources refer to four
+distinct *classes* of externs: other Rel17 definitions; linker
+metadata (`_cfg`, `_cfg_start`, `_cfg_end`, `_eod`);
+toolchain C Runtime / compatibility (`itoa` and `strlcpy`
+in particular need verification); and real board/backends
+(`init`, `initgpio`, `initled`, `ledctl`, `compctl`,
+`adctrig`, and `am13e_*`). This is not a linker error log
+or evidence that the C Runtime satisfies every function.
+
+TI `startup_gcc_arm.c` uses strong/weak CMSIS names
+`SysTick_Handler`, `PendSV_Handler`, `HardFault_Handler`
+and declares `extern int main(void)`. Rel17 has lowercase
+`sys_tick_handler`, `pend_sv_handler`, `hard_fault_handler`.
+Added **strong non-stub interrupt dispatchers** in
+`mcu/AM13E/irq_vectors.c`, their prototypes in
+`irq_vectors.h`, and the platform-specific adapter object
+in the AM13E Application CMake target. For AM13E only, main
+now has the TI startup-compatible `int main(void)` signature;
+legacy targets retain the original signature.
+
+The current Boot jumps to the app with PRIMASK interrupts
+disabled. The SDK Startup does not re-enable them; the real
+board-specific initialization needs to enable interrupts **after**
+safe power-stage and vector/priority setup. This remains P0,
+NOT fixed by the adapter alone.
+
+Also created `mcu/AM13E/APP_LINK_CONTRACT.md` with the Boot-compatible
+image and mutable config load requirements, and
+`mcu/AM13E/tools/check_object_symbols.py` to distinguish
+cross-object definitions from truly open symbols.
+
+**No ARM rebuild or final ELF has been reported after this
+E1-C integration work.** Previous E1-B five-object PASS is
+preserved as the last actual compiler evidence. E1-C still
+requires WSL compilation of the new vector bridge, final
+startup/vector inspection, production linker, real drivers,
+and hardware-safe handoff.
+
 ## Current gate status — E1-B complete (2026-10-09)
 
 **Validated via user WSL ARM GCC build logs:** all FIVE Rel17
