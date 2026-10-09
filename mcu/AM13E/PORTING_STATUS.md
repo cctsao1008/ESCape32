@@ -19,6 +19,36 @@ Evidence: first WSL ARM GCC build log after commits
   power-stage pin mapping or peripheral implementation.
 - No ARM rebuild has yet been reported after the `src/defs.h` adjustment.
 
+## E1-B WSL telemetry gate and utility isolation (2026-10-09)
+
+Second WSL log `e1b-telemetry.log` shows `telem.c.obj` **PASS**
+(no diagnostic on its compilation), alongside prior `prog.c.obj` PASS.
+`util.c`, `io.c`, `main.c` remain FAIL. Verified object total: **2/5**.
+
+To address the `util.c` diagnostics, Stage E1-B isolates:
+
+- Legacy GPIO/Hall/LED/HSI implementations and board mapping
+  within `#if !defined(AM13E)`. Board GPIO entry points must
+  be supplied by the actual AM13E backend, not empty weak functions.
+- Flash storage `savecfg()`: its busy/ERTM gating remains common;
+  AM13E delegates erase/program/verification to the **undefined**
+  `am13e_app_cfg_commit()` backend. `resetcfg()` and
+  `checkcfg()` are kept shared.
+- `resetcom()`: requires an actual power-stage-safe implementation.
+- Music and AU PCM: keep Rel17 score parsing, audio decode and
+  blocking timing contract, but isolate TIM1/TIM6 programming
+  via **declarations only** in `mcu/AM13E/util_backend.h`.
+- CRC8/CRC16, Scale, Smooth and PID routines remain shared.
+- A static preprocessing-path check found no legacy STM32
+  RCC/Flash/TIM register accesses in the AM13E `util.c` branch;
+  it did not run the ARM compiler.
+
+**The updated `util.c.obj` has not yet been compiled on WSL.**
+Do not claim 3/5 PASS until its ARM GCC output is received.
+No config Flash page layout, dead time, clock or safe motor
+output has been fabricated. Executable linking must remain
+blocked until real peripherals are implemented.
+
 ## E1-B first slice: telemetry transport isolation (2026-10-09)
 
 Changes are committed, **WSL ARM object build not yet verified**.
