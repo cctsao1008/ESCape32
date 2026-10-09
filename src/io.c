@@ -17,6 +17,9 @@
 
 #include "common.h"
 
+#if defined(AM13E)
+#include "io_backend.h"
+#else
 #ifdef AT32F4
 #define USART2_TDR USART2_DR
 #define USART2_RDR USART2_DR
@@ -25,7 +28,9 @@
 #define USART_ISR_FE USART_SR_FE
 #define USART_ISR_NF USART_SR_NE
 #endif
+#endif /* !AM13E: STM32 / AT32 USART register names */
 
+#if !defined(AM13E)
 static void entryirq(void);
 static void calibirq(void);
 static void servoirq(void);
@@ -44,7 +49,9 @@ static int (*iofunc)(int len);
 static void (*ioirq)(void);
 static char dshotinv, iobuf[1024] __attribute__((aligned(2)));
 static uint16_t dshotarr1, dshotarr2;
+#endif /* !AM13E: legacy timer and capture state */
 
+/* Rel17 input PWM throttle conversion is shared. */
 static void setthrot(int x) {
 	if (x < 0) return;
 	throt = cfg.throt_mode ?
@@ -61,7 +68,7 @@ static void setbrake(int x) {
 }
 #endif
 
-#ifdef IO_AUX
+#if defined(IO_AUX) && !defined(AM13E)
 void iotim2_isr(void) {
 #if IOTIM2 == TIM16 || IOTIM2 == TIM17
 	static uint16_t t1;
@@ -80,6 +87,10 @@ void iotim2_isr(void) {
 }
 #endif
 
+#if !defined(AM13E)
+/* All physical STM32 timer/DMA/IRQ state transitions remain unchanged.
+ * AM13E initio() is supplied by its platform backend, not a no-op.
+ */
 void initio(void) {
 	ioirq = entryirq;
 	TIM_BDTR(IOTIM) = TIM_BDTR_MOE;
@@ -353,6 +364,9 @@ static void dshotresync(void) {
 	TIM_DIER(IOTIM) = TIM_DIER_UIE;
 }
 
+#endif /* !AM13E: legacy capture, calibration and DSHOT timer control */
+
+/* DSHOT CRC and command semantics are platform-independent. */
 static int dshotcrc(int x, int inv) {
 	int a = x;
 	for (int b = x; b >>= 4; a ^= b);
@@ -360,68 +374,12 @@ static int dshotcrc(int x, int inv) {
 	return a & 0xf;
 }
 
-void iotim_dma_isr(void) { // DSHOT
-	static const char gcr[] = {0x19, 0x1b, 0x12, 0x13, 0x1d, 0x15, 0x16, 0x17, 0x1a, 0x09, 0x0a, 0x0b, 0x1e, 0x0d, 0x0e, 0x0f};
-	static char cmd, cnt, rep;
-	DMA1_IFCR = DMA_IFCR_CTCIF(IOTIM_DMA);
-	if (TIM_DIER(IOTIM) & TIM_DIER_UIE) return; // Bad sync
-	if (DMA1_CCR(IOTIM_DMA) & DMA_CCR_DIR) {
-		dshotreset();
-		if (!dshotval) {
-			int a = ertm ? min(ertm, 65408) : 65408;
-			int b = 0;
-			while (a > 511) a >>= 1, ++b;
-			dshotval = a | b << 9;
-		}
-		int a = dshotval << 4 | dshotcrc(dshotval, 1);
-		int b = 0;
-		for (int i = 0, j = 0; i < 16; i += 4, j += 5) b |= gcr[a >> i & 0xf] << j;
-		uint16_t *buf = (uint16_t *)(iobuf + 64);
-		buf[0] = -1;
-		for (int p = -1, i = 19; i >= 0; --i) {
-			if (b >> i & 1) p = ~p;
-			buf[20 - i] = p;
-		}
-		buf[21] = 0;
-		buf[22] = 0;
-		if (!rep || !--rep) dshotval = 0;
-		return;
-	}
-	if (dshotinv) { // Bidirectional DSHOT
-		TIM_CCER(IOTIM) = 0;
-		TIM_SMCR(IOTIM) = 0;
-		TIM_CCMR1(IOTIM) = 0; // Disable OC before enabling PWM to force OC1REF update (RM: OC1M, note #2)
-		TIM_CCMR1(IOTIM) = TIM_CCMR1_OC1PE | TIM_CCMR1_OC1M_PWM2;
-		TIM_CR2(IOTIM) = TIM_CR2_CCDS; // CC1 DMA request on UEV using the same DMA channel
-		DMA1_CCR(IOTIM_DMA) = 0;
-		DMA1_CMAR(IOTIM_DMA) = (uint32_t)(iobuf + 64);
-		DMA1_CNDTR(IOTIM_DMA) = 23;
-		DMA1_CCR(IOTIM_DMA) = DMA_CCR_EN | DMA_CCR_TCIE | DMA_CCR_DIR | DMA_CCR_MINC | DMA_CCR_PSIZE_16BIT | DMA_CCR_MSIZE_16BIT;
-		TIM_CCR1(IOTIM) = 0; // Preload high level
-		__disable_irq();
-		TIM_ARR(IOTIM) = max(CLK_CNT(33333) - TIM_CNT(IOTIM) - 1, 19); // 30us output delay
-		TIM_EGR(IOTIM) = TIM_EGR_UG; // Update registers and trigger DMA to preload the first bit
-		TIM_EGR(IOTIM); // Ensure UEV has happened
-		TIM_ARR(IOTIM) = dshotarr2; // Preload bit time
-		TIM_CCER(IOTIM) = TIM_CCER_CC1E; // Enable output
-		__enable_irq();
-	}
-	int x = 0;
-	int y = dshotarr1 + 1; // Two bit time
-	int z = y >> 2; // Half-bit time
-	uint16_t *buf = (uint16_t *)iobuf;
-	for (int i = 0; i < 32; i += 2) {
-		if (i && buf[i] >= y) { // Invalid pulse timing
-			dshotresync();
-			return;
-		}
-		x = x << 1 | (buf[i + 1] >= z);
-	}
-	if (dshotcrc(x, dshotinv)) { // Invalid checksum
-		dshotresync();
-		return;
-	}
-	IWDG_KR = IWDG_KR_RESET;
+/* Rel17 DSHOT command, throttle and settings state machine.
+ * Called after physical framing and CRC acceptance on either MCU family.
+ */
+static char cmd, cnt, rep;
+
+static void dshot_apply_packet(int x) {
 	int tlm = x & 0x10;
 	x >>= 5;
 	if (!x || x > 47) {
@@ -546,6 +504,90 @@ void iotim_dma_isr(void) { // DSHOT
 			beepval = resetcfg();
 			break;
 	}
+}
+
+/* Portable callback for a physically verified complete DSHOT frame.
+ * Transport must resynchronize on a zero result and handle hardware timing.
+ */
+#if defined(AM13E)
+int am13e_app_io_dshot_packet(uint16_t frame, int bidirectional_invert) {
+    int x = frame;
+    if (dshotcrc(x, !!bidirectional_invert)) return 0;
+    am13e_app_io_watchdog_feed();
+    dshot_apply_packet(x);
+    return 1;
+}
+
+/* A valid capture, in microseconds, from the AM13E input backend. */
+void am13e_app_io_servo_pulse(unsigned int pulse_us) {
+    if (pulse_us >= 800 && pulse_us <= 2200) {
+        am13e_app_io_watchdog_feed();
+        setthrot((int)pulse_us);
+    }
+}
+#else
+void iotim_dma_isr(void) { // DSHOT
+	static const char gcr[] = {0x19, 0x1b, 0x12, 0x13, 0x1d, 0x15, 0x16, 0x17, 0x1a, 0x09, 0x0a, 0x0b, 0x1e, 0x0d, 0x0e, 0x0f};
+	DMA1_IFCR = DMA_IFCR_CTCIF(IOTIM_DMA);
+	if (TIM_DIER(IOTIM) & TIM_DIER_UIE) return; // Bad sync
+	if (DMA1_CCR(IOTIM_DMA) & DMA_CCR_DIR) {
+		dshotreset();
+		if (!dshotval) {
+			int a = ertm ? min(ertm, 65408) : 65408;
+			int b = 0;
+			while (a > 511) a >>= 1, ++b;
+			dshotval = a | b << 9;
+		}
+		int a = dshotval << 4 | dshotcrc(dshotval, 1);
+		int b = 0;
+		for (int i = 0, j = 0; i < 16; i += 4, j += 5) b |= gcr[a >> i & 0xf] << j;
+		uint16_t *buf = (uint16_t *)(iobuf + 64);
+		buf[0] = -1;
+		for (int p = -1, i = 19; i >= 0; --i) {
+			if (b >> i & 1) p = ~p;
+			buf[20 - i] = p;
+		}
+		buf[21] = 0;
+		buf[22] = 0;
+		if (!rep || !--rep) dshotval = 0;
+		return;
+	}
+	if (dshotinv) { // Bidirectional DSHOT
+		TIM_CCER(IOTIM) = 0;
+		TIM_SMCR(IOTIM) = 0;
+		TIM_CCMR1(IOTIM) = 0; // Disable OC before enabling PWM to force OC1REF update (RM: OC1M, note #2)
+		TIM_CCMR1(IOTIM) = TIM_CCMR1_OC1PE | TIM_CCMR1_OC1M_PWM2;
+		TIM_CR2(IOTIM) = TIM_CR2_CCDS; // CC1 DMA request on UEV using the same DMA channel
+		DMA1_CCR(IOTIM_DMA) = 0;
+		DMA1_CMAR(IOTIM_DMA) = (uint32_t)(iobuf + 64);
+		DMA1_CNDTR(IOTIM_DMA) = 23;
+		DMA1_CCR(IOTIM_DMA) = DMA_CCR_EN | DMA_CCR_TCIE | DMA_CCR_DIR | DMA_CCR_MINC | DMA_CCR_PSIZE_16BIT | DMA_CCR_MSIZE_16BIT;
+		TIM_CCR1(IOTIM) = 0; // Preload high level
+		__disable_irq();
+		TIM_ARR(IOTIM) = max(CLK_CNT(33333) - TIM_CNT(IOTIM) - 1, 19); // 30us output delay
+		TIM_EGR(IOTIM) = TIM_EGR_UG; // Update registers and trigger DMA to preload the first bit
+		TIM_EGR(IOTIM); // Ensure UEV has happened
+		TIM_ARR(IOTIM) = dshotarr2; // Preload bit time
+		TIM_CCER(IOTIM) = TIM_CCER_CC1E; // Enable output
+		__enable_irq();
+	}
+	int x = 0;
+	int y = dshotarr1 + 1; // Two bit time
+	int z = y >> 2; // Half-bit time
+	uint16_t *buf = (uint16_t *)iobuf;
+	for (int i = 0; i < 32; i += 2) {
+		if (i && buf[i] >= y) { // Invalid pulse timing
+			dshotresync();
+			return;
+		}
+		x = x << 1 | (buf[i + 1] >= z);
+	}
+	if (dshotcrc(x, dshotinv)) { // Invalid checksum
+		dshotresync();
+		return;
+	}
+	IWDG_KR = IWDG_KR_RESET;
+	dshot_apply_packet(x);
 }
 
 void iotim_isr(void) {
@@ -1033,5 +1075,16 @@ static void cliirq(void) {
 			TIM3_DIER = TIM_DIER_CC1IE;
 			break;
 	}
+}
+#endif
+
+#endif /* !AM13E: legacy DMA, UART, software CLI and capture ISRs */
+
+/* The AM13E CLI physical transport handles framing and RX/TX itself;
+ * preserve the original shared command parser (src/prog.c).
+ */
+#if defined(AM13E)
+int am13e_app_io_cli_line(char *line) {
+    return execcmd(line);
 }
 #endif
