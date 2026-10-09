@@ -19,6 +19,7 @@
 
 #if defined(AM13E)
 #include "motor_backend.h"
+#include "irq_vectors.h"
 /* Logical microsecond commutation timebase, not a TI register mapping. */
 #define MOTOR_TIME_SHIFT 0
 #else
