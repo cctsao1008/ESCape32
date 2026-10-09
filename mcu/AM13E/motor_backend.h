@@ -24,6 +24,7 @@ void am13e_app_motor_init(void);
 void am13e_app_motor_sine_schedule_us(int period_us);
 void am13e_app_motor_sine_write(int a, int b, int c, int power, int start);
 void am13e_app_motor_sine_finish(void);
+void am13e_app_motor_commutation_commit(void);
 void am13e_app_motor_sixstep_write(int positive_mask, int negative_mask,
                                    int floating_phase, int damp, int reverse);
 void am13e_app_motor_bemf_interval_select(int ertm_us);
@@ -39,7 +40,14 @@ void am13e_app_motor_commutation_enable(int enable);
 void am13e_app_motor_fault_shutdown(void);
 void am13e_app_motor_fault_reset(void);
 void am13e_app_motor_runtime_tick_init(void);
-int am13e_app_motor_last_reset_was_watchdog(void);
+/* Logical reset flags. Backend must map its device reset cause, and
+ * distinguish Rel17's reset-induced arming from music suppression.
+ * WATCHDOG covers any watchdog reset; FORCE_ARM indicates a reset
+ * requiring re-arming (legacy WWDG behavior).
+ */
+#define AM13E_APP_RESET_WATCHDOG 0x01
+#define AM13E_APP_RESET_FORCE_ARM 0x02
+int am13e_app_motor_reset_flags(void);
 void am13e_app_motor_arming_window_start(void);
 int am13e_app_motor_arming_window_expired(void);
 void am13e_app_motor_arming_window_restart(void);
