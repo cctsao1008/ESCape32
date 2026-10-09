@@ -3,6 +3,62 @@
 This is an **application** work log, not a board-validation report.
 Boot service remains independently versioned and is not changed here.
 
+## E1-C DriverLib compile 11/11 PASS, real RAMFUNC link probe pending (2026-10-09)
+
+User uploaded `e1c-driverlib-build.log`,
+`e1c-driverlib-symbols.log`, and `compile_commands(1).json`.
+
+- **11/11 AM13E ARM Objects PASS**, latest incremental Ninja build
+  compiled `dl_common.c`, `dl_fri.c`, `system_runtime.c`
+  and `clock_xtal25_pll200.c` without diagnostics.
+- `compile_commands` contains 11 entries targeting AM13E among
+  365 total; all 11 use the same ARM GNU 15.2 toolchain, target
+  `-march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
+  -mfloat-abi=hard` and the actual TI SDK include directories.
+- Cross-object symbol inventory: **46 resolved, 60 undefined**.
+  `DL_Common_delayCycles` and
+  `DL_FRI_setReadWaitStates` are now **RESOLVED** by their real
+  TI DriverLib Objects. Undefined groups are: **37**
+  platform backends, **6** board services, **13** C runtime
+  candidates, **4** linker/startup symbols.
+- TI SDK `dl_fri.c` marks `DL_FRI_setReadWaitStates`
+  `RAMFUNC`, and `startup_gcc_arm.c` copies
+  `__ramfunct_load__` → `__ramfunct_start__..end__`
+  **before** calling `main()`.
+  This source inspection is not yet an actual RAMFUNC link
+  placement verification.
+- **After these logs**, enhanced
+  `mcu/AM13E/tools/probe_app_linker.py` to compile/link
+  the REAL SDK `dl_fri.c` in the existing temporary
+  **NON-FLASHABLE synthetic** Startup/Linker/Vector fixture.
+  The probe checks the linked
+  `DL_FRI_setReadWaitStates` address is inside RAM_C
+  `.TI.ramfunc` with a distinct Application Flash LMA.
+  This tool change has **not** been executed in WSL.
+
+### Next WSL test — real TI Flash RAMFUNC in temporary fixture
+
+```bash
+cd ~/github/ESCape32
+git switch am13e-port-v2
+git pull --ff-only
+set -o pipefail
+
+python3 mcu/AM13E/tools/probe_app_linker.py \
+  --sdk-root "$HOME/ti/am13e230x_sdk_26_01_00_03" \
+  2>&1 | tee build-am13e/e1c-real-fri-ramfunc-link-probe.log
+```
+
+The probe auto-selects the exact ARM GCC in
+`build-am13e/CMakeCache.txt` and removes the synthetic
+ELF/Map upon exit.
+
+**Not PASS yet:** full Rel17 Application ELF, Flash read
+wait-state function placement in a REAL Application Map,
+Boot Handoff on silicon, XTAL25/SYSPLL200 physical startup,
+IRQ-mask safety, MCPWM and power-stage operation. The
+Object Build alone is not a Flashable Firmware gate.
+
 ## E1-C PLL200: 9/9 ARM GCC PASS; TI DriverLib sources pending recheck (2026-10-09)
 
 User-provided WSL logs confirm **9/9 AM13E Object Compile PASS**
