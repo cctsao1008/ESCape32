@@ -1,89 +1,90 @@
-# AM13E Application Clock Requirement — External 8 MHz Crystal
+# AM13E Application Clock Requirement — LaunchPad 25 MHz XTAL
 
-Status: **input requirement recorded; actual XTAL clock backend NOT
-implemented; no flashable Rel17 Application image.**
+Status: **25 MHz external crystal reference selected**. Application
+XTAL/PLL clock backend is declaration-only; no board startup, motor
+operation or complete Application ELF has been validated.
 
-## User-selected clock reference
+## Primary evidence — TI LP-AM13E230
 
-- **External XTAL: 8,000,000 Hz**.
-- Crystal / resonator connected between **X1 and X2**, not a
-  TTL/CMOS clock injected into single-ended `HFCLK_IN`.
-- This defines the oscillator **reference**, not the final
-  Cortex-M33 CPU `MCLK`.
-- CPU `MCLK` rate, PLL multiplication/division, flash wait
-  configuration, HSCLK/peripheral clock divisors, and motor PWM
-  timer clock are **not specified**. Do NOT invent any of them.
-- Keep existing Boot startup on internal 32 MHz SYSOSC; Boot is
-  independent. The Application must switch away only after
-  XTAL startup is actually qualified.
-- SysTick target remains **16 kHz**. Reload cycles are derived
-  from the backend-reported *actual configured MCLK* Hz.
+TI **AM13E230x LaunchPad™ Development Kit User's Guide**, SLVUDH9,
+March 2026, **section 2.4 "Clock", page 13**, Figure 2-6:
 
-## Documentation discrepancy — must resolve before oscillator programming
+- The LaunchPad default external reference is a **25 MHz crystal
+  oscillator Y1**, across MCU **X1 (PC16)** and **X2 (PC17)**.
+- Separate external clock option: **HFCLK_IN**, a **4–48 MHz digital
+  clock** applied via header **J14**.
+- The documented HFCLK_IN option requires removing **R1 and R18**
+  (isolate Y1), populating **R19** and driving **J14**.
+- **Our design uses the 25 MHz Y1 XTAL architecture**, not a
+  single-ended 25 MHz digital clock injected through J14.
+- This is a LaunchPad *reference architecture*, NOT confirmation of
+  actual customer-board pin routing, crystal BOM, capacitors or layout.
 
-Both supplied TI documents show Revision dates in August 2026:
+The 25 MHz reference is within both previously reviewed crystal
+ranges: AM13E23019 Datasheet Rev A feature specification **4–25 MHz**
+and AM13E230x TRM Rev B XTAL discussion **10–25 MHz**. The 8 MHz
+frequency-range discrepancy described in the previous revision of
+this file is no longer relevant to the selected 25 MHz design.
+This agreement does NOT waive electrical/load/startup validation
+for the specific MCU/package, crystal and PCB.
 
-1. AM13E23019 **Datasheet Rev A, SPRSPC3A**, feature overview
-   says *external 4–25 MHz crystal oscillator*; section 6.8.2.2
-   gives XTAL electrical operating range *4–48 MHz*. Both
-   include **8 MHz**.
-2. AM13E230x **TRM Rev B, SPRUJF2B**, §3.4.2.4 and its
-   clock block diagrams explicitly state *10–25 MHz XTAL*,
-   which **does not include 8 MHz**.
+## Selected / undetermined parameters
 
-Do not conflate this with the separate digital clock input
-`HFCLK_IN` (4–48 MHz), which is **not** an 8 MHz quartz crystal.
+| Parameter | State |
+| --- | --- |
+| External oscillator element | **25,000,000 Hz XTAL crystal (Y1 reference)** |
+| XTAL connection | **X1 (PC16) / X2 (PC17)** |
+| External digital HFCLK_IN | **Not selected** |
+| Boot handoff clock | Existing **SYSOSC 32 MHz** precondition; Boot unchanged |
+| Application MCLK | **OPEN: no nominal CPU rate specified** |
+| SYSPLL | **OPEN: multiplier/divider and power/Flash rules unselected** |
+| Motor PWM / MCPWM clock | **OPEN: hardware/board-specific** |
+| Rel17 SysTick | **16 kHz**, derived from verified actual MCLK |
+| Safe IRQ unmask | Separate board safety barrier, NOT XTAL backend |
 
-The electrical operating-range contradiction requires TI confirmation
-for the exact **AM13E23019 device/silicon revision** and actual
-crystal drive/load/startup characteristics. Datasheet electrical
-specs are more specific, but the conflicting TRM is not ignored.
-Until resolved, do not claim the crystal circuit is hardware qualified.
+A **25 MHz crystal frequency is not the Cortex-M33 MCLK by itself**.
+Before configuring SYSPLL, determine the requested MCLK and valid
+reference-to-PLL output ratios using TI device/SDK constraints.
+Do not infer a 25 MHz CPU clock or invent a 160/180/200 MHz target.
 
-## SDK primitives inspected
+## SDK responsibilities, not yet implemented
 
-- `DL_SYSCTL_setHFCLKSourceXTAL(startupTime, monitorEnable)`:
-  powers up the XTAL and optionally waits for `HFCLKGOOD`.
-  The SDK documents required XTAL **pad/IOMUX** configuration
-  independently, and `startupTime` has 64 µs resolution.
-- `DL_SYSCTL_configSYSPLL()`: accepts
-  `DL_SYSCTL_SYSPLL_REF_HFCLK` and reference-frequency range.
-- `DL_SYSCTL_switchMCLKfromSYSOSCtoHSCLK(...)`: switches MCLK
-  only after the HSCLK source has been enabled and stabilized.
-- Actual system frequency and motor timing must be confirmed
-  with appropriate device measurements (e.g. FCC), not by
-  a hard-coded assumed MHz value.
+1. Board-confirm the physical crystal, required load capacitors and
+   X1/X2 pad configuration. Never copy the LaunchPad's component
+   routing into an unverified custom PCB.
+2. Configure XTAL IOMUX and its drive/startup according to TI SDK;
+   `DL_SYSCTL_setHFCLKSourceXTAL(startupTime, monitorEnable)`
+   is the XTAL startup interface. Select a bounded startup/fault
+   policy based on real component data.
+3. Verify the HFCLKGOOD status **before** switching MCLK.
+4. If SYSPLL is selected, set an explicitly approved configuration
+   using the 25 MHz reference within TI operating limits.
+5. Switch to the intended HSCLK/MCLK and return the **verified CPU
+   MCLK frequency** in Hz; fail closed on any mismatch.
+6. Preserve disabled motor outputs and Boot PRIMASK throughout
+   the clock transition. The board-only safe IRQ barrier enables
+   interrupts after full system qualification.
 
-## Current source boundary
-
-`mcu/AM13E/clock_backend.h` declares, but does NOT define:
+The current `mcu/AM13E/clock_backend.h` deliberately declares only:
 
 ```c
-uint32_t am13e_app_clock_configure_xtal8(void);
+#define AM13E_APP_XTAL_HZ UINT32_C(25000000)
+uint32_t am13e_app_clock_configure_xtal25(void);
 ```
 
-The board implementation must configure X1/X2, start/monitor XTAL,
-select an explicitly approved direct or PLL MCLK and return its
-verified Hz; return zero or halt safely if any condition fails.
-No weak/no-op implementation is allowed.
+`mcu/AM13E/system_runtime.c` calls this **undefined** backend
+after verifying Boot's inherited SYSOSC precondition. It checks
+the required HSCLK source and HFCLKGOOD condition and calculates
+the 16 kHz SysTick reload from the returned verified MCLK. It does
+not program XTAL pinmux, SYSPLL, or motor clocks.
 
-`mcu/AM13E/system_runtime.c` checks Boot's inherited internal
-SYSOSC only as a **handoff precondition**; it then calls the
-board clock backend and requires HSCLK to be selected, with
-`HFCLKGOOD` present. The 16 kHz SysTick period is derived
-from the backend-reported MCLK, never from 32 MHz nor blindly
-from the 8 MHz XTAL frequency.
+A *real* backend must implement the declaration. Do NOT replace it
+with a dummy 25 MHz constant or an unverified clock switch merely to
+achieve ELF Linking. At this integration phase an unresolved external
+clock backend is expected and intentional.
 
-**Until the real backend exists, the open symbol
-`am13e_app_clock_configure_xtal8` intentionally blocks ELF linking.**
-The Application is not yet motor-ready.
+## Remaining clock decision
 
-### Open question
-
-**What is the required Cortex-M33 MCLK target frequency?**
-Examples of architecturally distinct policies include:
-- XTAL directly to MCLK = 8 MHz (not motor-performance qualified)
-- 8 MHz XTAL as SYSPLL reference, with a separately approved
-  high-frequency MCLK for Rel17 motor control
-
-No PLL parameters will be selected from guesses.
+**Cortex-M33 target MCLK** needs to be chosen separately from XTAL.
+Once chosen, validate SYSPLL limits, voltage/Flash timing, clocks
+used by MCPWM/ADC/BEMF, and interrupt timing against TI collateral.
