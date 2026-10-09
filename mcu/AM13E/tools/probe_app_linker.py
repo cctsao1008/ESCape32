@@ -7,8 +7,10 @@ It compiles the ACTUAL TI SDK dl_fri.c and asserts that
 DL_FRI_setReadWaitStates lives in the linked SRAM .TI.ramfunc
 region. It deliberately DOES NOT use src/*.c or supply ESC hardware
 backends.
-It never writes a firmware image to the repository and deletes the
-temporary ELF after its static checks. Fixture PASS != application PASS.
+It exercises only the older Boot-v2 smoke layout (256KiB transport,
+0x6800 vectors, combined config); it does NOT certify product SW
+Architecture Baseline v1.6 (488KiB App, independent FW parameters).
+It never writes firmware to the repository. Fixture PASS != product PASS.
 """
 import argparse
 import pathlib
@@ -197,6 +199,9 @@ def main():
         print("\nRESULT: SYNTHETIC LINKER / REAL TI FRI RAMFUNC / VECTOR PROBE PASS")
         print("LIMIT: actual Rel17 Application not linked; config persistence,")
         print("flash ECC, PRIMASK unmask, hardware IRQ and motors UNTESTED.")
+        print("IMPORTANT: legacy Boot-v2 smoke format ONLY; product v1.6")
+        print("         488KiB image, FW-specific params and APP_BASE contract")
+        print("         are not validated by this test.")
         print("NOTE: temporary fixture ELF, MAP and vector BIN are deleted.")
 
 
