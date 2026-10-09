@@ -96,7 +96,13 @@ uint32_t tick;
 #endif
 
 static int oldstep, step, sine, ival, cutback;
-static char prep, sync, fast, lock, led, ready, reverse;
+static char prep, sync, fast, lock, ready, reverse;
+/* Keep the original LED status state only when a target can use it.
+ * The generic AM13E target specifies neither LED_MAP nor LED_STAT.
+ */
+#if !defined(AM13E) || LED_CNT > 0 || defined(LED_STAT)
+static char led;
+#endif
 static uint32_t tickv;
 static volatile char tickf;
 #ifndef HALL_MAP
