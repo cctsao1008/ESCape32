@@ -11,6 +11,7 @@
  */
 #include "motor_backend.h"
 #include "motor_event_timer.h"
+#include "motor_safety.h"
 #include <soc.h>
 #include <dl_mcpwm.h>
 #include <dl_gpio.h>
@@ -35,6 +36,8 @@ _Static_assert(DL_MCPWM_COUNTER_MODE_STOP_FREEZE == 2U,
 
 static volatile uint32_t safety_initialized;
 static volatile uint32_t fault_latched;
+static volatile uint32_t last_trip_irq_flags;
+static volatile uint32_t last_trip_zone_flags;
 
 /* MCU pad ownership: never change PB13 power enable or PB15 nFAULT.
  * Hi-Z is only an MCU-side staging state; gate-driver input bias and
@@ -167,6 +170,20 @@ void am13e_app_motor_fault_shutdown(void)
     disconnect_pwm_pads();
 }
 
+/* Strong AM13E230x MCPWM0 startup vector. Only the actual hardware
+ * Trip/overcurrent routing can enforce bounded-latency shutdown without
+ * waiting for this CPU interrupt. Unexpected MCPWM interrupts also fault.
+ */
+void MCPWM0_IRQHandler(void)
+{
+    last_trip_irq_flags = DL_MCPWM_getInterruptSource(MCPWM0);
+    last_trip_zone_flags = DL_MCPWM_getTripZoneFlagStatus(MCPWM0);
+    DL_MCPWM_clearInterrupt(MCPWM0, (uint16_t)last_trip_irq_flags);
+    DL_MCPWM_clearGlobalInterrupt(MCPWM0);
+    am13e_app_motor_fault_shutdown();
+    am13e_app_motor_fault_reset();
+}
+
 void am13e_app_motor_fault_reset(void)
 {
     /* No auto-reset until board-specific gate-off polarity and hardware
@@ -177,6 +194,12 @@ void am13e_app_motor_fault_reset(void)
     __disable_irq();
     fault_latched = 1U;
     for (;;) { __NOP(); }
+}
+
+void am13e_app_motor_trip_snapshot(uint32_t *irq, uint32_t *tz)
+{
+    if (irq != NULL) *irq = last_trip_irq_flags;
+    if (tz != NULL) *tz = last_trip_zone_flags;
 }
 
 /* Diagnostics accessible through a debugger; never read as proof that
