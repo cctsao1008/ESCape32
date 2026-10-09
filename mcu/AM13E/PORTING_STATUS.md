@@ -3,6 +3,33 @@
 This is an **application** work log, not a board-validation report.
 Boot service remains independently versioned and is not changed here.
 
+## E1-D ARM incremental compile PASS — arming source integrated (2026-10-09)
+
+User-provided `e1d-arming-build.log` confirms a successful
+CMake regeneration followed by **8/8 incremental object compilations**,
+with no compiler warning/error. The newly added
+`mcu/AM13E/arming_window.c.obj` compiled; `system_runtime.c`,
+`clock_xtal25_pll200.c`, and the recompiled Rel17
+`src/io.c`, `src/telem.c`, `src/util.c`,
+`src/main.c`, and `src/prog.c` also compiled.
+Together with previously compiled objects, the target has
+12 intended translation units, but this log does **not** contain
+a full 12/12 clean-build or a new symbol inventory.
+A separate native-host test of the *same arming-window timing
+algorithm* passed boundary, restart, wraparound and inactive
+cases in a temporary local harness; the committed repository
+host test has **not** been shown running under user WSL.
+
+**Main next task: real ESCape32 MCPWM0 motor-control backend**
+with HW Baseline v1.6 pin/peripheral mapping. Preserve original
+Rel17 six-step, startup, duty/frequency, damping, BEMF and fault
+semantics; do not install no-op or unconditional enable functions.
+TI `dl_mcpwm`, `dl_cmpss_lite`, `dl_ecap` and `dl_gpio`
+are device support *only*, not Application architecture.
+Power-stage output polarity and dead time still require
+board-specific qualification before applying gate drive.
+Existing 256 KiB firmware transfer limit remains accepted.
+
 ## E1-D FW1 full ESCape32 port — 256 KiB accepted; real arming runtime added
 
 **Current E62 decision:** keep the existing **256 KiB**
