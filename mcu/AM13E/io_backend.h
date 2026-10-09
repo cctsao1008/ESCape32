@@ -1,13 +1,14 @@
 /*
  * ESCape32 Rel17 AM13E Application input/DSHOT platform contract.
  *
- * Stage E1-B: platform functions are declarations only; no peripheral
- * implementation is supplied, and Object Compile is NOT Link PASS.
+ * E1-N: PB14 GPIO46/INPUTXBAR1/ECAP0 is an RX-only bring-up
+ * backend. DShot/PWM timing and CRC still require hardware qualification.
+ * BiDShot TX/turnaround is NOT implemented; do not drive PB14 yet.
  *
- * The physical input backend MUST implement initio() declared in
- * src/common.h. It must configure board-confirmed timer/capture/DMA,
- * input voltage/timing, watchdog, and, where applicable, serial/UART
- * and bidirectional DSHOT turnaround. No STM32 TIMx aliases permitted.
+ * initio() now owns PB14 input and ECAP0 edge timestamps. The
+ * bidirectional TX waveform, GPIO direction switching, input watchdog,
+ * service/CLI transport and silicon timing validation are still pending.
+ * No STM32 TIMx register aliases are used.
  *
  * Upon receipt of a complete 16-bit DSHOT frame (including 4-bit CRC),
  * call am13e_app_io_dshot_packet(). A return of 1 indicates a valid

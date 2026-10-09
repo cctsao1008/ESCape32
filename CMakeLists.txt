@@ -72,6 +72,8 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/reset_cause.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/gpio_runtime.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/adc_runtime.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/pb14_capture.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/pb14_decode.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/system_runtime.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/arming_window.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_xtal25_pll200.c"
@@ -79,7 +81,8 @@ function(add_target_ti_am13e name)
             # Flash read wait-state RAMFUNC (FRI); no replacement stubs.
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_common.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_fri.c"
-            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_adc.c")
+            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_adc.c"
+            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_ecap.c")
         set(am13e_source_dir "${PROJECT_SOURCE_DIR}/src")
     endif()
     if(name MATCHES "^BOOT")

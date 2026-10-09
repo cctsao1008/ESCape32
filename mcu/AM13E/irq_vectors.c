@@ -7,6 +7,7 @@
 #include "irq_vectors.h"
 #include "gpio_runtime.h"
 #include "io_backend.h"
+#include "pb14_capture.h"
 #include <dl_gpio.h>
 
 void SysTick_Handler(void)
@@ -25,6 +26,8 @@ void SysTick_Handler(void)
         for (;;) {} /* Fail closed if the fatal handler unexpectedly returns. */
     }
     sys_tick_handler();
+    /* PB14 ECAP reference calibration / RX-only frame-gap processing. */
+    am13e_app_pb14_systick();
 }
 
 void PendSV_Handler(void)

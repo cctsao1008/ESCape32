@@ -1,0 +1,32 @@
+/* ESCape32 Rel17 AM13E PB14 capture decoder (no TI register ownership).
+ * Input timestamps come from successive hardware ECAP0 capture events.
+ * DShot output generation is intentionally NOT part of this RX decoder.
+ */
+#pragma once
+#include <stdint.h>
+
+typedef struct {
+    uint32_t last_start;
+    uint32_t last_end;
+    uint32_t pending_width;
+    uint32_t last_bit_period;
+    uint32_t tick_hz;
+    uint32_t good_pwm;
+    uint32_t good_dshot;
+    uint32_t rejected;
+    uint16_t bits;
+    uint8_t decoded_bits;
+    uint8_t active;
+    uint8_t inverted;
+} AM13E_PB14_Decoder;
+
+/* Protocol dispatch owns the original ESCape32 policy, not this decoder. */
+typedef void (*AM13E_PB14_PwmCallback)(unsigned int pulse_us);
+typedef int (*AM13E_PB14_DshotCallback)(uint16_t frame, int inverted);
+
+void am13e_pb14_decoder_reset(AM13E_PB14_Decoder *d, uint32_t tick_hz, int inverted);
+void am13e_pb14_decoder_pulse(AM13E_PB14_Decoder *d, uint32_t start,
+                              uint32_t end, AM13E_PB14_PwmCallback pwm,
+                              AM13E_PB14_DshotCallback dshot);
+void am13e_pb14_decoder_idle(AM13E_PB14_Decoder *d, uint32_t now,
+                             AM13E_PB14_DshotCallback dshot);
