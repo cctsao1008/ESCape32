@@ -1,8 +1,9 @@
 /*
  * ESCape32 Rel17 AM13E23019 clock configuration contract.
  *
- * Board reference: TI LP-AM13E230 LaunchPad Y1, 25MHz quartz crystal
- * connected across X1 (PC16) / X2 (PC17), not HFCLK_IN.
+ * Product HW Architecture Baseline v1.6 reserves PC16_X1 and PC17_X2
+ * for an external HFXT crystal, not HFCLK_IN. The 25MHz crystal
+ * frequency is an accepted detailed clock decision beyond v1.6.
  *
  * Agreed CPU clock: XTAL 25MHz -> SYSPLL VCO 400MHz -> MCLK 200MHz.
  * See CLOCK_CONTRACT.md for the exact TI SDK field encoding and
