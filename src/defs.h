@@ -17,6 +17,11 @@
 
 #pragma once
 
+/* STM32/AT32/GD32 TIMx dead-time encoding and register comparator mapping.
+ * AM13E needs independent MCPWM and phase-sense contracts; leaving
+ * DEAD_TIME/COMP_MAP unset is intentional, not a zero-valued board design.
+ */
+#if !defined(AM13E)
 #if DEAD_TIME < 128
 #define TIM_DTG DEAD_TIME
 #elif DEAD_TIME < 256
@@ -52,6 +57,7 @@
 #define COMP_IN2 1
 #define COMP_IN3 3
 #endif
+#endif /* !AM13E: legacy TIMx dead-time and phase mapping */
 
 #ifndef SENS_MAP
 #define SENS_MAP 0
