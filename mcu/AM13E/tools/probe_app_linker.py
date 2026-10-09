@@ -3,7 +3,10 @@
 
 Builds a TEMPORARY, SYNTHETIC object and links it with the *actual*
 TI startup and real irq_vectors.c, exercising linker sections.
-It deliberately DOES NOT use src/*.c or supply ESC hardware backends.
+It compiles the ACTUAL TI SDK dl_fri.c and asserts that
+DL_FRI_setReadWaitStates lives in the linked SRAM .TI.ramfunc
+region. It deliberately DOES NOT use src/*.c or supply ESC hardware
+backends.
 It never writes a firmware image to the repository and deletes the
 temporary ELF after its static checks. Fixture PASS != application PASS.
 """
@@ -24,6 +27,8 @@ GCC_FLAGS = [
 ]
 CONFIG_FIXTURE = r"""
 #include <stdint.h>
+/* Link the real TI Flash wait-state RAMFUNC; this fixture is never run. */
+extern void DL_FRI_setReadWaitStates(uint32_t states);
 volatile uint32_t probe_initialized = 0x13240057u;
 volatile uint32_t probe_zero;
 __attribute__((used, section(".cfg")))
@@ -35,6 +40,7 @@ void pend_sv_handler(void) { probe_zero += 2; }
 void hard_fault_handler(void) { probe_zero += 3; for (;;) {} }
 int main(void) {
     probe_ramfunc();
+    DL_FRI_setReadWaitStates(3U); /* Synthetic static-link exercise only. */
     return (int)(probe_zero + probe_configuration[0]);
 }
 """
@@ -88,7 +94,9 @@ def main():
                / "startup_gcc_arm.c")
     adapter = repo / "mcu/AM13E/irq_vectors.c"
     linker = repo / "mcu/AM13E/linker_app_reference.ld"
-    for file in (startup, adapter, linker):
+    real_fri = (args.sdk_root / "source/driverlib/am13e230x"
+                / "dl_fri.c")
+    for file in (startup, adapter, linker, real_fri):
         require(file.is_file(), "Found " + str(file))
 
     with tempfile.TemporaryDirectory(prefix="am13e-link-probe-") as td:
@@ -96,10 +104,34 @@ def main():
         fixture = tmp / "synthetic_linker_fixture.c"
         fixture.write_text(CONFIG_FIXTURE, encoding="utf-8")
         objs = []
-        for file in (fixture, startup, adapter):
+        for file in (fixture, startup, adapter, real_fri):
             obj = tmp / (file.stem + ".o")
-            run([gcc, *GCC_FLAGS, "-DAM13E", "-c",
-                 str(file), "-o", str(obj)])
+            cmd = [gcc, *GCC_FLAGS, "-DAM13E", "-c",
+                   str(file), "-o", str(obj)]
+            if file == real_fri:
+                # Match the real AM13E object compilation's SDK include
+                # directories and device selectors; never use host headers.
+                cmd.extend([
+                    '-D__DEVICE_SHORT__="am13e230x"',
+                    '-D__DEVICE_LONG__="AM13E230x"',
+                    '-D__CPU_SHORT__="m33"',
+                    '-D__CGT_SHORT__="gcc_arm"',
+                ])
+                sdk_headers = [
+                    "ti_sdk_config/am13e230x/default/device_support/include",
+                    "source/device/am13e230x/include",
+                    "source/device/am13e230x/include/hw",
+                    "source/driverlib/am13e230x",
+                    "source/arch/include",
+                    "source/arch/m33/include",
+                    "source/cmsis/Core/Include",
+                    "source/compiler/m33_gcc_arm",
+                ]
+                for rel in sdk_headers:
+                    directory = args.sdk_root / rel
+                    require(directory.is_dir(), "Found SDK include " + rel)
+                    cmd.extend(["-I", str(directory)])
+            run(cmd)
             objs.append(obj)
         elf = tmp / "NON_FLASHABLE_LINKER_FIXTURE.elf"
         run([gcc, *GCC_FLAGS, "-nostdlib",
@@ -130,6 +162,11 @@ def main():
                 ".TI.ramfunc executes from SRAM_C")
         require(0x6800 <= rl < 0x46000,
                 ".TI.ramfunc has App Flash load image")
+        fri = addr("DL_FRI_setReadWaitStates")
+        require(rs <= fri < re_,
+                "REAL TI DL_FRI_setReadWaitStates executes from SRAM_C")
+        require(rl != rs,
+                "REAL TI RAMFUNC uses separate Flash LMA and SRAM VMA")
         require(addr("_eod") <= 0x46000,
                 "Image content stays within transport limit")
         for handler in ("HardFault_Handler", "PendSV_Handler", "SysTick_Handler"):
@@ -157,7 +194,7 @@ def main():
                     "Vector[{}] points to {} (0x{:08x})".format(
                         index, name, expected))
 
-        print("\nRESULT: SYNTHETIC LINKER / TI STARTUP / VECTOR PROBE PASS")
+        print("\nRESULT: SYNTHETIC LINKER / REAL TI FRI RAMFUNC / VECTOR PROBE PASS")
         print("LIMIT: actual Rel17 Application not linked; config persistence,")
         print("flash ECC, PRIMASK unmask, hardware IRQ and motors UNTESTED.")
         print("NOTE: temporary fixture ELF, MAP and vector BIN are deleted.")
