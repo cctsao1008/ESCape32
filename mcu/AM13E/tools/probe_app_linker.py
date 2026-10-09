@@ -15,6 +15,8 @@ import subprocess
 import sys
 import tempfile
 
+from toolchain_match import matched_tools
+
 GCC_FLAGS = [
     "-march=armv8.1-m.main", "-mthumb",
     "-mfpu=fpv5-sp-d16", "-mfloat-abi=hard",
@@ -71,11 +73,17 @@ def main():
                     help="local TI AM13E SDK root, NOT the assistant's zip")
     ap.add_argument("--repo", type=pathlib.Path,
                     default=pathlib.Path(__file__).resolve().parents[3])
-    ap.add_argument("--gcc", default="arm-none-eabi-gcc")
-    ap.add_argument("--nm", default="arm-none-eabi-nm")
-    ap.add_argument("--objcopy", default="arm-none-eabi-objcopy")
+    ap.add_argument("--build-dir", type=pathlib.Path, default=None,
+                    help="CMake build directory; default repo/build-am13e")
+    ap.add_argument("--gcc", default=None,
+                    help="Optional compiler override, MUST match CMakeCache")
+    ap.add_argument("--nm", default=None)
+    ap.add_argument("--objcopy", default=None)
     args = ap.parse_args()
     repo = args.repo.resolve()
+    build_dir = args.build_dir or repo / "build-am13e"
+    gcc, nm, objcopy = matched_tools(build_dir, args.gcc, args.nm,
+                                     args.objcopy)
     startup = (args.sdk_root / "source/device/am13e230x/src"
                / "startup_gcc_arm.c")
     adapter = repo / "mcu/AM13E/irq_vectors.c"
@@ -90,15 +98,15 @@ def main():
         objs = []
         for file in (fixture, startup, adapter):
             obj = tmp / (file.stem + ".o")
-            run([args.gcc, *GCC_FLAGS, "-DAM13E", "-c",
+            run([gcc, *GCC_FLAGS, "-DAM13E", "-c",
                  str(file), "-o", str(obj)])
             objs.append(obj)
         elf = tmp / "NON_FLASHABLE_LINKER_FIXTURE.elf"
-        run([args.gcc, *GCC_FLAGS, "-nostdlib",
+        run([gcc, *GCC_FLAGS, "-nostdlib",
              "-Wl,--no-undefined", "-Wl,--gc-sections",
              "-Wl,-Map," + str(tmp / "fixture.map"),
              "-T" + str(linker), *map(str, objs), "-o", str(elf)])
-        syms = symbol_table(args.nm, elf)
+        syms = symbol_table(nm, elf)
         def addr(name):
             require(name in syms, "ELF defines " + name)
             return syms[name][0]
@@ -131,7 +139,7 @@ def main():
                 "TI startup reset handler is in Application Flash")
 
         vectors_bin = tmp / "vectors.bin"
-        run([args.objcopy, "-O", "binary", "--only-section=.intvecs",
+        run([objcopy, "-O", "binary", "--only-section=.intvecs",
              str(elf), str(vectors_bin)])
         data = vectors_bin.read_bytes()
         require(len(data) >= 64, "M33 exception vector data present")
