@@ -3,6 +3,57 @@
 This is an **application** work log, not a board-validation report.
 Boot service remains independently versioned and is not changed here.
 
+## E1-C REAL TI FRI RAMFUNC Linker Probe PASS (2026-10-09)
+
+User WSL `e1c-real-fri-ramfunc-link-probe.log` confirms
+**SYNTHETIC LINKER / REAL TI FRI RAMFUNC / VECTOR PROBE PASS**
+on Application-matched ARM GNU GCC **15.2.1**.
+
+The temporary non-flashable ELF used the REAL TI
+`source/driverlib/am13e230x/dl_fri.c` plus the TI
+`startup_gcc_arm.c` and `mcu/AM13E/irq_vectors.c`, linked
+under `linker_app_reference.ld`.
+
+Verified link facts:
+
+- Application vector table at **0x6800** and stack MSP
+  **0x20018000**.
+- `_cfg` Flash storage source **0x4000**, mutable `.cfg`
+  in SRAM_S.
+- Initialized `.data`: SRAM VMA and Application Flash LMA.
+- Nonempty `.TI.ramfunc`: SRAM_C VMA and App Flash LMA.
+- Actual `DL_FRI_setReadWaitStates` linked address lies
+  inside the SRAM_C `.TI.ramfunc` section; its section
+  has a separate Flash load address.
+- Real TI Startup Reset_Handler and strong
+  HardFault/PendSV/SysTick vector entries were linked and
+  verified via .intvecs contents.
+- Existing packed-image transport bounds checked.
+- Temporary fixture ELF, MAP and vectors BIN deleted by tool.
+
+**Linker-fixture Gate CLOSED.** The exact ARM GCC build
+and previously recorded **11/11 Object PASS**, **46**
+cross-object resolved and **60** still undefined remain the
+last Application integration evidence.
+
+Explicit exclusions: fixture is NOT complete Rel17
+Application ELF. Actual Rel17 image `.TI.ramfunc` placement,
+hardware oscillator and 200MHz SYSPLL lock, silicon frequency,
+Flash erase/write/ECC, Boot jump, PRIMASK safe unmask,
+physical PWM/BEMF/ADC pin mapping, safe drive/commutation
+and legacy regression have NOT been demonstrated.
+Do not produce dummy backends or a flashable App ELF
+merely to remove the 60 undefined symbols.
+
+**Next engineering milestone:** review and implement
+board-independent AM13E runtime contracts only where TI
+DriverLib semantics can be demonstrated. Maintain the
+hardware-board configuration boundary and link blocker
+for unqualified power-stage, peripheral and safety hooks.
+For final application ELF, link true TI Startup/DriverLib,
+verify MAP/ELF with application code, and perform legacy
+target regression independently.
+
 ## E1-C DriverLib compile 11/11 PASS, real RAMFUNC link probe pending (2026-10-09)
 
 User uploaded `e1c-driverlib-build.log`,
