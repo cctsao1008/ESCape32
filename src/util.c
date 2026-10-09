@@ -636,7 +636,9 @@ static void delayf(void) {
 }
 
 int playmusic(const char *str, int vol) {
+#if !defined(AM13E)
 	static const uint16_t arr[] = {15287, 14429, 13619, 12856, 12133, 11452, 10810, 10203, 9630, 9090, 8579, 8097, 7643};
+#endif
 	char *end;
 	int tmp = strtol(str, &end, 10); // Tempo
 	if (str == end) tmp = 2000; // 120 BPM by default
@@ -648,6 +650,9 @@ int playmusic(const char *str, int vol) {
 	if (!vol || ertm || busy) return 0;
 	busy = 1;
 	resetcom();
+#if defined(AM13E)
+    am13e_app_audio_music_begin();
+#else
 #ifdef PWM_ENABLE
 	TIM1_CCMR1 = TIM_CCMR1_OC1PE | TIM_CCMR1_OC1M_PWM1 | TIM_CCMR1_OC2M_FORCE_LOW;
 	TIM1_CCMR2 = TIM_CCMR2_OC3PE | TIM_CCMR2_OC3M_PWM1;
@@ -662,12 +667,17 @@ int playmusic(const char *str, int vol) {
 #endif
 	TIM1_CCER = er;
 	TIM1_PSC = CLK_MHZ / 8 - 1; // 125ns resolution
+#endif
 	for (int a, b, c = 0; (a = *str++);) {
 		if (a >= 'a' && a <= 'g') a -= 'c', b = 0; // Low note
 		else if (a >= 'A' && a <= 'G') a -= 'C', b = 1; // High note
 		else if (a == '_') { // Pause
+#if defined(AM13E)
+            am13e_app_audio_music_pause();
+#else
 			TIM1_CCR1 = 0;
 			TIM1_CCR3 = 0;
+#endif
 			goto update;
 		} else {
 			if (a == '+' && !c++) continue; // Octave up
@@ -677,11 +687,18 @@ int playmusic(const char *str, int vol) {
 		a = (a + 7) % 7 << 1;
 		if (a > 4) --a;
 		if (*str == '#') ++a, ++str;
+#if defined(AM13E)
+        /* Pass the Rel17 score semantics; backend computes true timing. */
+        am13e_app_audio_music_note(a, b + c, vol);
+#else
 		TIM1_ARR = arr[a] >> (b + c); // Frequency
 		TIM1_CCR1 = (DEAD_TIME + CLK_MHZ / 8 - 1) * 8 / CLK_MHZ + vol; // Volume
 		TIM1_CCR3 = 0;
+#endif
 	update:
+#if !defined(AM13E)
 		TIM1_EGR = TIM_EGR_UG | TIM_EGR_COMG;
+#endif
 		a = strtol(str, &end, 10); // Duration
 		if (str == end) a = 1;
 		else {
@@ -690,8 +707,12 @@ int playmusic(const char *str, int vol) {
 		}
 		delay(tmp * a, delayf);
 	}
+#if defined(AM13E)
+    am13e_app_audio_end();
+#else
 	TIM1_PSC = 0;
 	TIM1_ARR = CLK_KHZ / 24 - 1;
+#endif
 	resetcom();
 	busy = 0;
 	return !str[-1];
@@ -702,6 +723,9 @@ void playsound(const char *buf, int vol) { // AU file format, 8-bit linear PCM, 
 	if (hdr[0] != 0x646e732e || hdr[3] != 0x2000000 || hdr[5] != 0x1000000 || !vol || ertm || busy) return;
 	busy = 1;
 	resetcom();
+#if defined(AM13E)
+    am13e_app_audio_pcm_begin(__builtin_bswap32(hdr[4]), vol);
+#else
 #ifdef PWM_ENABLE
 	TIM1_CCMR1 = TIM_CCMR1_OC1PE | TIM_CCMR1_OC1M_PWM1 | TIM_CCMR1_OC2M_FORCE_LOW;
 	TIM1_CCMR2 = TIM_CCMR2_OC3PE | TIM_CCMR2_OC3M_PWM1;
@@ -723,8 +747,13 @@ void playsound(const char *buf, int vol) { // AU file format, 8-bit linear PCM, 
 	TIM6_ARR = CLK_CNT(__builtin_bswap32(hdr[4])) - 1;
 	TIM6_EGR = TIM_EGR_UG;
 	TIM6_CR1 = TIM_CR1_CEN;
+#endif /* AM13E */
 	buf += __builtin_bswap32(hdr[1]);
 	for (int len = __builtin_bswap32(hdr[2]);;) {
+#if defined(AM13E)
+        if (len-- <= 0) break;
+        am13e_app_audio_pcm_sample((int8_t)*buf++);
+#else
 		if (!(TIM6_SR & TIM_SR_UIF)) continue;
 		TIM6_SR = ~TIM_SR_UIF;
 		if (len-- <= 0) break;
@@ -733,8 +762,13 @@ void playsound(const char *buf, int vol) { // AU file format, 8-bit linear PCM, 
 		TIM1_CCR1 = DEAD_TIME + ((x + 128) * vol * CLK_MHZ >> 13);
 		TIM1_CCR3 = DEAD_TIME + ((127 - x) * vol * CLK_MHZ >> 13);
 		TIM1_CR1 = TIM_CR1_CEN | TIM_CR1_ARPE;
+#endif /* AM13E */
 	}
+#if defined(AM13E)
+    am13e_app_audio_end();
+#else
 	TIM6_CR1 = 0;
+#endif
 	resetcom();
 	busy = 0;
 }
