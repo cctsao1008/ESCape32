@@ -11,6 +11,8 @@ import re
 import subprocess
 import sys
 
+from toolchain_match import matched_tools
+
 AM13E_MULTILIB = ("-march=armv8.1-m.main", "-mthumb",
                   "-mfpu=fpv5-sp-d16", "-mfloat-abi=hard")
 
@@ -39,21 +41,27 @@ def definitions(nm, archive):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--gcc", default="arm-none-eabi-gcc")
-    p.add_argument("--nm", default="arm-none-eabi-nm")
+    p.add_argument("--build-dir", type=pathlib.Path, default=None,
+                   help="CMake build directory; default repo/build-am13e")
+    p.add_argument("--gcc", default=None,
+                   help="Optional compiler override, MUST match CMakeCache")
+    p.add_argument("--nm", default=None)
     p.add_argument("--nano", action="store_true",
                    help="Prefer libc_nano.a for main summary")
     a = p.parse_args()
+    repo = pathlib.Path(__file__).resolve().parents[3]
+    gcc, nm, _ = matched_tools(a.build_dir or repo / "build-am13e",
+                               a.gcc, a.nm, False)
 
     found = {}
     for name in ("libc_nano.a", "libc.a", "libgcc.a"):
-        raw = run([a.gcc, *AM13E_MULTILIB,
+        raw = run([gcc, *AM13E_MULTILIB,
                    "-print-file-name=" + name]).strip()
         path = pathlib.Path(raw)
         if not path.is_file():
             print("[NOT FOUND]", name, "=>", raw)
             continue
-        defs = definitions(a.nm, path)
+        defs = definitions(nm, path)
         found[name] = defs
         print("[LIBRARY]", name, "=>", path,
               "({} exported definitions)".format(len(defs)))
