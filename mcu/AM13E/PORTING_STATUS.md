@@ -19,6 +19,63 @@ Evidence: first WSL ARM GCC build log after commits
   power-stage pin mapping or peripheral implementation.
 - No ARM rebuild has yet been reported after the `src/defs.h` adjustment.
 
+## E1-B WSL input gate and motor-control source boundary (2026-10-09)
+
+User WSL log `e1b-io.log`: `src/io.c.obj` PASS; `src/main.c.obj`
+FAIL due to STM32 Timer, BEMF capture, clock, SysTick, WWDG and
+RCC dependencies. With preceding builds, verified **4/5** objects
+(`prog.c`, `telem.c`, `util.c`, `io.c`). No firmware link yet.
+
+After that log, `src/main.c` was modified to isolate its remaining
+STM32 peripheral accesses. The **latest main.c has not yet been
+compiled in WSL**; do not call the Application 5/5 PASS until
+the new ARM build log confirms it.
+
+What is preserved as shared Rel17 control logic:
+
+- 360-step sinusoidal startup sequencing and phase progression
+- Six-step phase masks, comparator state, ZTC and direction
+- Commutation interval smoothing, sync, ERPM and BEMF timing
+- Throttle/Brake, slew-rate, duty ramp, lock and startup transitions
+- ADC scaling, protection, PID, telemetry triggers and main loop
+- 250ms uninterrupted-neutral arming behavior (hardware timer API)
+- Boot/update implementation remains independent
+
+New declaration-only `mcu/AM13E/motor_backend.h` defines:
+- logical microsecond timebase for AM13E motor-control events
+  (hardware timer prescaler and IRQ latency NOT determined);
+- PWM / MCPWM duty, sinusoids, commutation, blanking and safe stop;
+- BEMF/COMP capture callbacks into preserved Rel17 logic;
+- SysTick 16kHz and reset-cause mapping;
+- 250ms arming window and fault reset.
+
+No board driver is implemented. Real PWM dead time, pin assignments,
+output polarity, comparator input routing, DSHOT physical backend,
+watchdog/reset cause, vector table, startup and Flash-safe config
+persistence are all pending. No fabricated TI-register aliases were
+added to eliminate compiler errors. The ARM compiler and legacy
+regression build are still required after these edits.
+
+**Static structural check only:** for `AM13E`, the updated
+`src/main.c` conditional path contains no STM32 RCC/TIM/IFTIM/
+STK/WWDG register symbols; AM13E motor API call names are declared
+in `motor_backend.h`. This is NOT a compile result.
+
+Next command:
+
+```bash
+cd ~/github/ESCape32
+git switch am13e-port-v2
+git pull --ff-only
+set -o pipefail
+cmake --build build-am13e --target AM13E -j"$(nproc)" -- -k 0 \
+  2>&1 | tee build-am13e/e1b-main.log
+```
+
+Acceptance for E1-B: FIVE complete Rel17 source Translation Units
+compile under ARM GCC. Link completion, performance parity and
+motor functionality remain **separate gates**.
+
 ## E1-B WSL util gate and DSHOT/input isolation (2026-10-09)
 
 WSL log `e1b-util.log`: `src/util.c.obj` PASS without warnings;
