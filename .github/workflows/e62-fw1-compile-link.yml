@@ -31,6 +31,35 @@ jobs:
           test -f /tmp/e62-ti-sdk/source/driverlib/am13e230x/dl_flash.h
           arm-none-eabi-gcc --version | head -1
 
+      - name: Run Flash, BEMF and motor host regressions
+        id: host
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p e62-ci-logs
+          set -e
+          {
+            flags="-std=c11 -O2 -Wall -Wextra -Werror -Wpedantic -Imcu/AM13E"
+            run_test () {
+              name="$1"
+              shift
+              cc $flags "$@" -o "/tmp/e62_$name"
+              "/tmp/e62_$name"
+              echo "PASS: $name"
+            }
+            run_test flash_plan mcu/AM13E/cfg_flash_plan.c mcu/AM13E/tests/cfg_flash_plan_host_test.c
+            run_test flash_writer mcu/AM13E/cfg_flash_plan.c mcu/AM13E/cfg_flash_writer.c mcu/AM13E/tests/cfg_flash_writer_host_test.c
+            run_test bemf_clock mcu/AM13E/tests/motor_bemf_clock_host_test.c
+            run_test motor_aq mcu/AM13E/motor_phase_plan.c mcu/AM13E/motor_aq_plan.c mcu/AM13E/tests/motor_aq_plan_host_test.c
+            run_test motor_brake mcu/AM13E/motor_phase_plan.c mcu/AM13E/motor_aq_plan.c mcu/AM13E/tests/motor_brake_aq_host_test.c
+            run_test motor_lock mcu/AM13E/motor_phase_plan.c mcu/AM13E/motor_aq_plan.c mcu/AM13E/tests/motor_lock_aq_host_test.c
+            run_test sine_carrier mcu/AM13E/motor_sine_table.c mcu/AM13E/tests/test_sine_carrier_host.c
+            cc $flags -DAM13E mcu/AM13E/tests/test_bemf_timeout_host.c -o /tmp/e62_bemf_timeout
+            /tmp/e62_bemf_timeout
+            echo "PASS: bemf_timeout"
+          } >e62-ci-logs/host-tests.log 2>&1
+          cat e62-ci-logs/host-tests.log
+
       - name: Compile all original Rel17 FW1 objects and attempt strict full link
         id: build
         shell: bash
@@ -69,6 +98,32 @@ jobs:
           echo "configure_rc=$config_rc" >> "$GITHUB_OUTPUT"
           echo "compile_rc=$compile_rc" >> "$GITHUB_OUTPUT"
           echo "link_rc=$link_rc" >> "$GITHUB_OUTPUT"
+
+      - name: Summarize actual undefined symbols
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import collections, json, pathlib, re
+          log=pathlib.Path("e62-ci-logs/link.log")
+          content=log.read_text(errors="replace") if log.exists() else ""
+          pattern=r"undefined reference to [\x60']([^\x60']+)[\x60']"
+          names=re.findall(pattern,content)
+          counts=collections.Counter(names)
+          audio={n:k for n,k in counts.items() if n.startswith("am13e_app_audio_")}
+          other={n:k for n,k in counts.items() if not n.startswith("am13e_app_audio_")}
+          report={
+            "undefined_unique":len(counts),
+            "undefined_references":len(names),
+            "audio_unique":len(audio),
+            "non_audio_unique":len(other),
+            "audio":dict(sorted(audio.items())),
+            "non_audio":dict(sorted(other.items()))
+          }
+          pathlib.Path("e62-ci-logs/undefined-symbols.json").write_text(
+            json.dumps(report,indent=2)+"\n")
+          print(json.dumps(report,indent=2))
+          PY
 
       - name: Upload raw logs and linker map
         if: always()
