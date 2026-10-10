@@ -93,3 +93,7 @@ This document is a porting boundary, not a hardware qualification.
 - The board-neutral object compile gate is `AM13E_MCU_ADC_PAIR_BACKEND`.
   Existing calibrated/uncalibrated Rel17 firmware behavior is unchanged;
   pin/channel physical validation still requires a reviewed board.
+
+## Host-gated MCU Fault Trip route policy
+
+The new `fault_trip_route_plan.c` has no SDK or board dependency. The actual TI backend calls this policy before register writes and enforces SDK encoding static assertions. `fault_trip_route_plan_host_test.c` exercises 128 route pairs with mismatch/bounds rejection in CI. This is *not* proof of physical fault shutdown, electrical levels or latency.

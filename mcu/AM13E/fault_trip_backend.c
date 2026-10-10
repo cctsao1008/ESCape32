@@ -1,29 +1,28 @@
 #include "fault_trip_backend.h"
+#include "fault_trip_route_plan.h"
 #include <soc.h>
 #include <stddef.h>
+
+_Static_assert(DL_XBAR_PWM_INPUTXBAR1 == 0x14U &&
+               DL_XBAR_PWM_INPUTXBAR12 == 0x1FU &&
+               DL_XBAR_PWM_INPUTXBAR13 == 0x100U &&
+               DL_XBAR_PWM_INPUTXBAR16 == 0x103U &&
+               DL_MCPWM_TZ_SIGNAL_OST1 == 0x10000U &&
+               DL_MCPWM_TZ_FLAG_OST_TZ1 == 0x10000U,
+               "AM13E TI SDK route encodings changed");
 
 int am13e_mcu_fault_trip_route_valid(const AM13E_FaultTripRoute *route)
 {
     if (route == NULL ||
         (route->mcpwm != MCPWM0 && route->mcpwm != MCPWM1 &&
          route->mcpwm != MCPWM2 && route->mcpwm != MCPWM3 &&
-         route->mcpwm != MCPWM4) ||
-        route->gpio_index >= 107U ||
-        route->input_xbar > DL_XBAR_INPUT16 ||
-        route->pwm_trip > DL_XBAR_TRIP8) {
+         route->mcpwm != MCPWM4)) {
         return 0;
     }
-    /* INPUTXBAR1..12: PWMXBAR group 0; 13..16: group 1. The
-     * physical input and source must be the same explicit route.
-     */
-    const uint32_t input = (uint32_t)route->input_xbar;
-    const uint32_t expected_source =
-        input < 12U ? (uint32_t)DL_XBAR_PWM_INPUTXBAR1 + input :
-                      (uint32_t)DL_XBAR_PWM_INPUTXBAR13 + input - 12U;
-    const uint32_t trip = (uint32_t)route->pwm_trip;
-    return (uint32_t)route->pwm_source == expected_source &&
-           route->ost_signal == (DL_MCPWM_TZ_SIGNAL_OST1 << trip) &&
-           route->ost_flag == (DL_MCPWM_TZ_FLAG_OST_TZ1 << trip);
+    return am13e_fault_trip_route_fields_valid(
+        route->gpio_index, (unsigned)route->input_xbar,
+        (unsigned)route->pwm_trip, (unsigned)route->pwm_source,
+        route->ost_signal, route->ost_flag);
 }
 
 static void trip_fail_closed(void)

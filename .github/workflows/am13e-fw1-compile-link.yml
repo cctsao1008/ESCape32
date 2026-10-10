@@ -57,6 +57,7 @@ jobs:
             run_test motor_brake mcu/AM13E/motor_phase_plan.c mcu/AM13E/motor_aq_plan.c mcu/AM13E/tests/motor_brake_aq_host_test.c
             run_test motor_lock mcu/AM13E/motor_phase_plan.c mcu/AM13E/motor_aq_plan.c mcu/AM13E/tests/motor_lock_aq_host_test.c
             run_test motor_audio mcu/AM13E/motor_audio_plan.c mcu/AM13E/tests/motor_audio_plan_host_test.c
+            run_test fault_trip_route mcu/AM13E/fault_trip_route_plan.c mcu/AM13E/tests/fault_trip_route_plan_host_test.c
             run_test sine_carrier mcu/AM13E/motor_sine_table.c mcu/AM13E/tests/test_sine_carrier_host.c
             cc $flags -DAM13E mcu/AM13E/tests/test_bemf_timeout_host.c -o /tmp/am13e_bemf_timeout
             /tmp/am13e_bemf_timeout
