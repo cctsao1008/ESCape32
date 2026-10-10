@@ -15,6 +15,46 @@
 #include "analog_sampling_backend.h"
 #include "analog_reference.h"
 #include "board_configuration.h"
+#ifdef ANALOG_CHAN
+#include "board_reference_io.h"
+/* Analog input is an independently selected ADC0 channel, NOT the
+ * Reference NTC/voltage channels, and not a fabricated GPIO route.
+ * Board profile must provide the actual pin/mux/channel/VREF.
+ */
+#if !defined(AM13E_BOARD_SENSORS_CONFIGURED) || \
+    !defined(AM13E_BOARD_ANALOG_INPUT_PINCM) || \
+    !defined(AM13E_BOARD_ANALOG_INPUT_CHANNEL) || \
+    !defined(AM13E_BOARD_ANALOG_INPUT_FULLSCALE) || \
+    !defined(AM13E_BOARD_ANALOG_INPUT_VREF_MV)
+#error "Analog input_mode=1 requires board-supplied ADC pin/channel/fullscale/VREF and calibrated sensor build"
+#endif
+_Static_assert(AM13E_BOARD_ANALOG_INPUT_PINCM>0U &&
+               AM13E_BOARD_ANALOG_INPUT_PINCM<107U &&
+               AM13E_BOARD_ANALOG_INPUT_PINCM!=IOMUX_PINCM_PA6 &&
+               AM13E_BOARD_ANALOG_INPUT_PINCM!=IOMUX_PINCM_PA28 &&
+               AM13E_BOARD_ANALOG_INPUT_PINCM!=IOMUX_PINCM_PB13 &&
+               AM13E_BOARD_ANALOG_INPUT_PINCM!=IOMUX_PINCM_PB14 &&
+               AM13E_BOARD_ANALOG_INPUT_PINCM!=IOMUX_PINCM_PB15 &&
+               AM13E_BOARD_ANALOG_INPUT_PINCM!=AM13E_IO_PWM_UH_PINCM &&
+               AM13E_BOARD_ANALOG_INPUT_PINCM!=AM13E_IO_PWM_UL_PINCM &&
+               AM13E_BOARD_ANALOG_INPUT_PINCM!=AM13E_IO_PWM_VH_PINCM &&
+               AM13E_BOARD_ANALOG_INPUT_PINCM!=AM13E_IO_PWM_VL_PINCM &&
+               AM13E_BOARD_ANALOG_INPUT_PINCM!=AM13E_IO_PWM_WH_PINCM &&
+               AM13E_BOARD_ANALOG_INPUT_PINCM!=AM13E_IO_PWM_WL_PINCM &&
+               AM13E_BOARD_ANALOG_INPUT_PINCM!=AM13E_BEMF_CMP0_HP_PINCM &&
+               AM13E_BOARD_ANALOG_INPUT_PINCM!=AM13E_BEMF_CMP0_HN_PINCM &&
+               AM13E_BOARD_ANALOG_INPUT_PINCM!=AM13E_BEMF_CMP1_HP_PINCM &&
+               AM13E_BOARD_ANALOG_INPUT_PINCM!=AM13E_BEMF_CMP1_HN_PINCM &&
+               AM13E_BOARD_ANALOG_INPUT_PINCM!=AM13E_BEMF_CMP3_HP_PINCM &&
+               AM13E_BOARD_ANALOG_INPUT_PINCM!=AM13E_BEMF_CMP3_HN_PINCM,
+               "Analog receiver conflicts with selected Reference IO");
+_Static_assert(AM13E_BOARD_ANALOG_INPUT_CHANNEL<=31U &&
+               AM13E_BOARD_ANALOG_INPUT_FULLSCALE>=1U &&
+               AM13E_BOARD_ANALOG_INPUT_FULLSCALE<=UINT16_MAX &&
+               AM13E_BOARD_ANALOG_INPUT_VREF_MV>=1U &&
+               AM13E_BOARD_ANALOG_INPUT_VREF_MV<=5000U,
+               "Analog receiver ADC channel, resolution or VREF invalid");
+#endif
 /* Rel17 owns the public adctrig() declaration; include its canonical API. */
 #include "common.h"
 #include <soc.h>
@@ -54,6 +94,12 @@ void am13e_app_adc_init(void)
         .interrupt = AM13E_ADC_IRQ,
         .clock_prescale = DL_ADC_CLOCK_DIVIDE_8_0,
         .acquisition_cycles = AM13E_ADC_ACQ_WINDOW_CYCLES
+#ifdef ANALOG_CHAN
+        , .analog_enabled = 1U,
+        .analog_pincm = AM13E_BOARD_ANALOG_INPUT_PINCM,
+        .analog_channel = (DL_ADC_CHANNEL)AM13E_BOARD_ANALOG_INPUT_CHANNEL,
+        .analog_soc = DL_ADC_SOC_NUMBER2
+#endif
     };
 
     /* ADC0 is reserved for this reference PA6/PA28 slow monitoring.
@@ -134,6 +180,13 @@ void ADC0_INT1_IRQHandler(void)
         DL_ADC_readResult(AM13E_ADC_RESULTS, AM13E_ADC_NTC_SOC);
     adc_latest.vbus_adc0_in11 =
         DL_ADC_readResult(AM13E_ADC_RESULTS, AM13E_ADC_VBUS_SOC);
+#ifdef ANALOG_CHAN
+    /* ADC0 sequencer completion now occurs after SOC2, so the
+     * receiver sample belongs to this same coherent acquisition.
+     */
+    const uint16_t analog_raw =
+        DL_ADC_readResult(AM13E_ADC_RESULTS, DL_ADC_SOC_NUMBER2);
+#endif
     ++adc_latest.sample_count;
     ++adc_sample_seq;
 #ifdef AM13E_BOARD_SENSORS_CONFIGURED
@@ -147,8 +200,20 @@ void ADC0_INT1_IRQHandler(void)
     if(!am13e_adc_scale_pair(&adc_board_cal,
            adc_latest.ntc_main_adc0_in17,adc_latest.vbus_adc0_in11,
            &scaled)) adc_fail_closed();
+    int analog_mv=0;
+#ifdef ANALOG_CHAN
+    uint16_t sample_mv=0U;
+    if(!am13e_adc_receiver_millivolts(
+            analog_raw,AM13E_BOARD_ANALOG_INPUT_FULLSCALE,
+            AM13E_BOARD_ANALOG_INPUT_VREF_MV,&sample_mv))
+        adc_fail_closed();
+    analog_mv=(int)sample_mv;
+#endif
+    /* Do NOT reproduce Rel17 analog smoothing/throttle policy here.
+     * src/main.c::adcdata() retains its original exact scaling path.
+     */
     adcdata(board_ntc_qc(scaled.ntc_normalized_mv),0,
-            (int)scaled.vbus_centivolts,0,0);
+            (int)scaled.vbus_centivolts,0,analog_mv);
 #endif
     DL_ADC_clearInterruptStatus(AM13E_ADC, AM13E_ADC_IRQ);
     adc_inflight = 0U;

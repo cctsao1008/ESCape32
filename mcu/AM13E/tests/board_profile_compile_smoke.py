@@ -77,6 +77,25 @@ syntax_check(observed["fault_input.c"],
              False,"Aux IO reservations must use distinct pins")
 print("PASS: overlapping and reserved pin mappings rejected")
 
+# Conditional Analog Receiver: positive compile is ONLY a synthetic
+# source fixture. No pin/channel here is approved for a physical PCB.
+receiver_flags=[
+    "-DANALOG_CHAN=1",
+    "-DAM13E_BOARD_ANALOG_INPUT_PINCM=50",
+    "-DAM13E_BOARD_ANALOG_INPUT_CHANNEL=7",
+    "-DAM13E_BOARD_ANALOG_INPUT_FULLSCALE=4095",
+    "-DAM13E_BOARD_ANALOG_INPUT_VREF_MV=3300"
+]
+syntax_check(observed["analog_runtime.c"],receiver_flags)
+syntax_check(observed["analog_runtime.c"],["-DANALOG_CHAN=1"],
+             False,"Analog input_mode=1 requires board-supplied")
+syntax_check(observed["analog_runtime.c"],
+             [f for f in receiver_flags
+              if not f.startswith("-DAM13E_BOARD_ANALOG_INPUT_PINCM")] +
+             ["-DAM13E_BOARD_ANALOG_INPUT_PINCM=46"],
+             False,"Analog receiver conflicts")
+print("PASS: conditional Analog input_mode=1 ADC0 SOC2 build and board pin guards")
+
 # Static non-operation checks: actual default firmware must not install
 # a PB15 or OC trip, drive PB13 active, or enable nFAULT interrupts.
 source_root=pathlib.Path(__file__).resolve().parents[3]

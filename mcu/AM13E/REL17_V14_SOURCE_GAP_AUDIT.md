@@ -26,7 +26,7 @@ The v1.4 documents are design rules, not completed implementation proof.
 | DShot300/600/1200 and command CRC | **Host-tested decoder** and Rel17 `src/io.c` packet handler | 1200's ~1.67µs ECAP0 two-bit IRQ budget may not be feasible without DMA |
 | BiDShot and extended telemetry | **Host-tested** prepared reply before CRC, next frame prepared at TX DMA completion | Electrical bidirectional turnaround, scope waveforms |
 | Motor Sine/Brushed/Brake/Music/PCM | **Host-tested internal MCPWM0 ownership** | Power pads physically disconnected |
-| Analog input mode | **Conditional native adapter missing** | VBUS/NTC ADC monitoring is not analog receiver `input_mode=1` |
+| Analog input mode | **Conditional ADC0 SOC2 native adapter now implemented**; Board profile must define physical Pinmux/Channel/VREF/fullscale, delivered through original Rel17 `adcdata(...,a)` | Reference has no assigned third ADC; only Host conversion + conditional ARM syntax coverage, hardware pending |
 | Serial/iBUS/SBUS/SBUS2/CRSF/EXBUS/HoTT input | **Conditional native adapter missing** | Legacy `src/io.c` transport excluded under AM13E; pins/UART not assigned |
 | KISS/iBUS/S.Port/CRSF/MSB/HoTT telemetry | **Conditional native transport missing** | Legacy `src/telem.c` formatters retained; Reference UART unconnected, not a waiver |
 | Hall/hybrid commutation | **Conditional native Hall adapter missing** | Original `HALL_MAP` branches retained in non-AM13E source |

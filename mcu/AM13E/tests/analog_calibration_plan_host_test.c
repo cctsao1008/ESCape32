@@ -20,5 +20,23 @@ int main(void)
         assert(am13e_adc_scale_pair(&fixture,(uint16_t)code,1000U,&out));
         assert(out.ntc_normalized_mv<=3300U);
     }
+    /* Board-provided analog receiver VREF must feed the *existing*
+     * Rel17 adcdata(...,a) in millivolts; it is not NTC/VBUS.
+     */
+    uint16_t mv=0U;
+    assert(!am13e_adc_receiver_millivolts(0U,0U,3300U,&mv));
+    assert(!am13e_adc_receiver_millivolts(0U,4095U,0U,&mv));
+    assert(!am13e_adc_receiver_millivolts(4096U,4095U,3300U,&mv));
+    assert(!am13e_adc_receiver_millivolts(1U,4095U,5001U,&mv));
+    assert(!am13e_adc_receiver_millivolts(1U,4095U,3300U,NULL));
+    assert(am13e_adc_receiver_millivolts(0U,4095U,3300U,&mv) && mv==0U);
+    assert(am13e_adc_receiver_millivolts(4095U,4095U,3300U,&mv) && mv==3300U);
+    unsigned previous=0U;
+    for(uint32_t adc=0;adc<=4095U;++adc) {
+        assert(am13e_adc_receiver_millivolts((uint16_t)adc,4095U,3300U,&mv));
+        assert((unsigned)mv>=previous && mv<=3300U);
+        previous=mv;
+    }
+    puts("PASS: Analog receiver ADC0 SOC2 millivolt conversion (4096 codes)");
     puts("PASS: 4096 synthetic ADC values, 3.3V NTC norm + divider");
 }

@@ -22,6 +22,14 @@ typedef struct {
     DL_ADC_INT_NUMBER interrupt;
     DL_ADC_CLK_PRESCALE clock_prescale;
     uint32_t acquisition_cycles;
+    /* Optional board-selected third sample for original Rel17
+     * input_mode=1; the selected Reference's NTC/VBUS route is unchanged.
+     * All values are explicit, never inferred from the ADC number.
+     */
+    uint32_t analog_enabled;
+    uint32_t analog_pincm;
+    DL_ADC_CHANNEL analog_channel;
+    DL_ADC_SOC_NUMBER analog_soc;
 } AM13E_AdcPairRoute;
 
 /* Validate a two-channel consecutive-SOC plan before writing registers.

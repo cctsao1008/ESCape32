@@ -36,3 +36,13 @@ int am13e_adc_scale_pair(const AM13E_AdcCalibration *calibration,
     out->vbus_centivolts=(uint16_t)centivolts;
     return 1;
 }
+
+int am13e_adc_receiver_millivolts(uint16_t raw,uint32_t fullscale,
+                                   uint32_t vref_mv,uint16_t *out)
+{
+    if(!out || !fullscale || fullscale>UINT16_MAX ||
+       !vref_mv || vref_mv>5000U || (uint32_t)raw>fullscale)
+        return 0;
+    *out=(uint16_t)(((uint64_t)raw*vref_mv+fullscale/2U)/fullscale);
+    return 1;
+}
