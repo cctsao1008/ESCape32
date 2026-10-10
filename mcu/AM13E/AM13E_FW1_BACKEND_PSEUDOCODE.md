@@ -15,6 +15,13 @@
 - **Do not implement** `am13e_app_cfg_commit` as an ACK-only wrapper. Before any real erase/program, verify RAM execution of the entire FlashCTL call path (including interrupt/exception safety), FW1/FW2 partition boundaries, active-bank handling, ECC tail staging, read-back and power-loss recovery. The historical `linker_app_reference.ld` is not a production image map; retain `--no-undefined` until an actual Flash backend exists.
 - **Outstanding** (measured E1-AN): 14 Motor/Commutation/BEMF, 7 Audio, 1 Configuration Flash. The E1-AO planner is not itself a resolved backend symbol.
 
+## E1-AQ — Safe MCU-side commutation reset and Flash plan hardening
+
+- **Last measured E1-AP:** Incremental ARM GNU object compile PASS, `cfg_flash_writer.c` 0 warning; FW1 strict link **FAIL, 22 symbols / 32 references** (unchanged from E1-AO). New host fixture execution not included in the WSL logs; do not assert Host PASS from these uploads.
+- `motor_safety.c` now provides a real `am13e_app_commutation_reset()` hardware operation for Rel17 `resetcom()`: under preserved PRIMASK, require inactive-preflight and no latched fault, freeze MCPWM0, force six AQ low states, disconnect six MCU PWM pads, read-back and fail closed on discrepancies. PB13 level is **never driven**. This resolves one previously undefined symbol **only if ARM GNU and strict link confirm it**; its five link references are from audio/reset paths.
+- `cfg_flash_writer.c` now rejects forged `padded_program_bytes` unless it equals `(byte_count + 15) & ~15`. This avoids a malformed 1-byte settings request erasing the second FW1 sector. Regression tests assert invalid plans trigger **zero** erase/program callbacks.
+- `AM13E_FW1.elf` is still a strict-link target based on a **historical smoke-only linker script**, not a production boot/update-verified firmware. Audio timing and physical MCPWM/OC Trip remain required.
+
 ## E1-AP — Real Flash transaction sequence, *without* unsafe erase enable
 
 - **E1-AO measured:** ARM GNU incremental object compile PASS, 0 warnings in `cfg_flash_plan.c`; FW1 strict link still FAIL with **22 unique Undefined Symbols / 32 references**. A single-object incremental build does not re-evaluate TI `dl_timer.c` warnings.

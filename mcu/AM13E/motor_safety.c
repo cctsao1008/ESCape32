@@ -157,6 +157,32 @@ void am13e_app_motor_init(void)
     safety_initialized = 1U; /* Inactive-preflight only, NOT motor ready. */
 }
 
+/* Rel17 util.c::resetcom(): restore *physical MCU-side inactive bridge*
+ * around score/PCM playback. Never clear hardware Trip Zone or fault
+ * latch, never assume PB13 gate enable polarity, and never substitute
+ * a Software AQ command for the independent overcurrent hardware trip.
+ *
+ * Real output writes plus read-back, not a dummy link-only callback.
+ * Other audio functions remain missing until their actual hardware
+ * timing/output ownership is implemented.
+ */
+void am13e_app_commutation_reset(void)
+{
+    const uint32_t irqmask = __get_PRIMASK();
+    __disable_irq();
+    if (!safety_initialized || fault_latched) {
+        am13e_app_motor_fault_shutdown();
+        am13e_app_motor_fault_reset();
+    }
+    force_pwm_inactive();
+    disconnect_pwm_pads();
+    if (!pwm_registers_inactive() || !pwm_pads_disconnected()) {
+        am13e_app_motor_fault_shutdown();
+        am13e_app_motor_fault_reset();
+    }
+    __set_PRIMASK(irqmask);
+}
+
 void am13e_app_motor_fault_shutdown(void)
 {
     /* This is a real software shutdown fallback; MCPWM HW Trip Zone

@@ -82,6 +82,19 @@ int main(void)
     prepare(&m);
     AM13E_CfgFlashPlan bad=plan;bad.destination=0x5000U;
     assert(!am13e_cfg_flash_execute(&bad,data,&ops));
+    /* An oversized forged plan must NOT erase more sectors than the
+     * original settings payload requires, even if its sector count and
+     * ECC alignment look internally consistent.
+     */
+    bad=plan;bad.byte_count=1U;bad.padded_program_bytes=4096U;
+    bad.sector_count=2U;
+    prepare(&m);
+    assert(!am13e_cfg_flash_execute(&bad,data,&ops));
+    assert(m.erase_count==0U && m.program_count==0U);
+    bad=plan;bad.padded_program_bytes=4096U;bad.sector_count=2U;
+    prepare(&m);
+    assert(!am13e_cfg_flash_execute(&bad,data,&ops));
+    assert(m.erase_count==0U && m.program_count==0U);
     bad=plan;bad.sector_count=1U;
     assert(!am13e_cfg_flash_execute(&bad,data,&ops));
     bad=plan;bad.padded_program_bytes=4097U;

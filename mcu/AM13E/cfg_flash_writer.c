@@ -16,6 +16,11 @@ int am13e_cfg_flash_execute(const AM13E_CfgFlashPlan *plan,
         plan->padded_program_bytes<plan->byte_count ||
         plan->padded_program_bytes>4096U ||
         (plan->padded_program_bytes & 15U)!=0U ||
+        /* Never permit caller-controlled over-erasure. Exactly
+         * ceil(byte_count/16)*16 bytes are programmed, no more.
+         */
+        plan->padded_program_bytes !=
+          ((plan->byte_count+ECC_SIZE-1U) & ~(ECC_SIZE-1U)) ||
         plan->sector_count==0U || plan->sector_count>2U ||
         plan->sector_count !=
           (plan->padded_program_bytes+FLASH_SECTOR_SIZE-1U)/FLASH_SECTOR_SIZE)
