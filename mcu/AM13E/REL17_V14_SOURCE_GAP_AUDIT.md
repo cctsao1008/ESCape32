@@ -46,6 +46,13 @@ nor their compile guards may be deleted merely to make this table shorter.
 | 5 | `CMD_SETWRP` | **Returns RES_ERROR** | **MISSING mandatory reversible static WRP** |
 | 6 | `CMD_WINDOW` | AM13E-specific, Host-tested up to 488KiB | Additive, not original |
 
+**CMD_UPDATE review:** The source-level preflight is recorded in
+[CMD_UPDATE_SOURCE_GAP_REVIEW.md](CMD_UPDATE_SOURCE_GAP_REVIEW.md).
+The current AM13E parser deliberately rejects before receiving a
+Boot update image or erasing Bank0; this behavior is covered by native
+Boot protocol regression for command resynchronization. The review
+does **not** implement the required command.
+
 **The six original Boot commands are NOT all complete.** In particular
 command-ID recognition is not functional preservation. Self-update
 requires bounded 16KiB SRAM image staging, SRAM-executing Bank0

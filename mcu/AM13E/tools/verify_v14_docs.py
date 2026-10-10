@@ -56,6 +56,16 @@ def main():
     require("Boot v1.6 image ABI" not in board and
             "existing v1.6 image integrity" not in board,
             "Board guide still claims superseded Image ABI is current")
+    update_review=contains(
+        "mcu/AM13E/CMD_UPDATE_SOURCE_GAP_REVIEW.md",
+        "SOURCE-LEVEL REVIEW", "CMD_UPDATE=4", "16 KiB",
+        "Bank0", "SRAM", "RES_ERROR", "ROM BSL",
+        "NONMAIN", "POWER-FAIL", "NOT IMPLEMENTED",
+        "Rel17 v1.4", "Cfg.id=0x32EA",
+    )
+    require("hardware" in update_review.lower() and
+            "recovery" in update_review.lower(),
+            "Boot update review must retain hardware/recovery blockers")
     audit = contains("mcu/AM13E/REL17_V14_SOURCE_GAP_AUDIT.md",
                      "CMD_UPDATE", "CMD_SETWRP", "RES_ERROR",
                      "Conditional native adapter missing",

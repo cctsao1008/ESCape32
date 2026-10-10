@@ -253,8 +253,16 @@ static void queue_protocol(size_t image_bytes,const uint8_t *image){
                            image_bytes:sizeof first32;
     memcpy(first32,image,available);
     queue_read(0U,32U,first32);
-    input_val(CMD_UPDATE);expected_val(RES_ERROR); /* Known v1.4 gap */
+    /* Source-gap guard: CMD_UPDATE rejects before consuming an update
+     * payload, so the next command remains framed and Boot stays intact.
+     * Reject all three upstream WRP modes and an invalid selector.
+     */
+    input_val(CMD_UPDATE);expected_val(RES_ERROR);
+    input_val(CMD_PROBE);expected_val(RES_OK);
     input_val(CMD_SETWRP);input_val(0x33U);expected_val(RES_ERROR);
+    input_val(CMD_SETWRP);input_val(0x44U);expected_val(RES_ERROR);
+    input_val(CMD_SETWRP);input_val(0x55U);expected_val(RES_ERROR);
+    input_val(CMD_SETWRP);input_val(0x77U);expected_val(RES_ERROR);
     input_val(CMD_PROBE);expected_val(RES_OK);
 }
 int main(int argc, char **argv) {
@@ -324,6 +332,7 @@ int main(int argc, char **argv) {
         CHECK(*((uint8_t *)(uintptr_t)(MAP_ADDRESS+0x5000U+i))==0x44U);
     puts("PASS original Cfg.id + M33 vector enables launch, no image CRC");
     puts("PASS Boot/Config/Reserved preserved, linked-sized flat image");
+    puts("PASS CMD_UPDATE rejects before erase; CMD_SETWRP modes reject safely");
     free(image);
     puts("PASS Stage D1 common ESCape32 Boot Protocol integration");
     return 0;

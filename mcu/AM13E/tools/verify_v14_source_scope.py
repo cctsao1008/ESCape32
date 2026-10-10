@@ -53,9 +53,15 @@ def main():
               "Rel17 original command ID changed: "+name)
     update=boot.split("case CMD_UPDATE:")[1].split("case CMD_SETWRP:")[0]
     protection=boot.split("case CMD_SETWRP:")[1].split("default:")[0]
-    check("sendval(RES_ERROR);" in update and
+    # Keep the selected AM13E self-update path fail-closed until the
+    # Boot Bank0 SRAM-execution/recovery conditions are qualified.
+    am13e_update=update.split("#if defined(AM13E)",1)[1].split("#else",1)[0]
+    check("sendval(RES_ERROR);" in am13e_update and
+          "recvdata(" not in am13e_update and
+          "boot_am13e_flash_write(" not in am13e_update and
+          "DL_Flash_" not in am13e_update and
           "sendval(RES_ERROR);" in protection,
-          "Boot self-update/WRP state changed; update the v1.4 conformance audit")
+          "Unreviewed Boot self-update or protection behavior enabled")
 
     partition=src("mcu/AM13E/flash_partition.h")
     ld=src("mcu/AM13E/linker_app_rel17.ld")
@@ -117,6 +123,8 @@ def main():
         "original_boot_host_tested":[0,1,2,3],
         "am13e_address_extension_host_tested":6,
         "original_boot_missing":["CMD_UPDATE","CMD_SETWRP"],
+        "boot_self_update_preflight":"SOURCE_GAP_REVIEWED_BANK0_ERASE_DISABLED",
+        "boot_update_recovery":"ROM_BSL_SWD_NONMAIN_DEPENDENT_NOT_VERIFIED",
         "conditional_adapters_pending":[
             "input_mode_analog","input_mode_serial",
             "UART_telemetry","Hall_hybrid","LED_BEC_PARK_ERPM",

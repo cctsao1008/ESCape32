@@ -26,7 +26,7 @@
 #define CMD_UPDATE 4
 #define CMD_SETWRP 5
 #if defined(AM13E)
-#define CMD_WINDOW 6 /* v1.6: 2 windows of 256 logical 1KiB blocks */
+#define CMD_WINDOW 6 /* Rel17 v1.4: 2 windows of 256 logical 1KiB blocks */
 #include "../../mcu/AM13E/flash_partition.h"
 #endif
 
@@ -134,11 +134,14 @@ void main(void) {
 #endif
             case CMD_UPDATE: { // Update bootloader
 #if defined(AM13E)
-				/* Self-update must execute from a verified RAM-resident writer.
-				 * The STM32 _rom/_ram_end buffering contract is not portable.
-				 * Platform code must validate the whole image before touching boot Flash.
+				/* Fail closed: no Bank0 Boot erase/program is authorized.
+				 * Before enabling, qualify a bounded SRAM-staged Boot image,
+				 * the complete SRAM-executing commit/verify/reset path, and
+				 * an actual ROM BSL/SWD recovery route. The upstream STM32
+				 * _rom/_ram_end staging contract is not portable.
+				 * This is independent of the retired APP v1.6 image ABI.
+				 * See mcu/AM13E/CMD_UPDATE_SOURCE_GAP_REVIEW.md.
 				 */
-				/* Self-update is not enabled until RAM execution is qualified. */
 				sendval(RES_ERROR);
 				break;
 #else

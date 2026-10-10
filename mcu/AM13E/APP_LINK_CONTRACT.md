@@ -73,7 +73,9 @@ and no Signature-last finalization sequence.
 `CMD_UPDATE` (Boot self-update) and `CMD_SETWRP` (persistent
 reversible write-protection modes) currently **return RES_ERROR**.
 They remain **mandatory original functionality gaps**, not
-accepted implementations.
+accepted implementations. The Boot self-update safety prerequisites
+and unchanged fail-closed behavior are tracked in
+[CMD_UPDATE_SOURCE_GAP_REVIEW.md](CMD_UPDATE_SOURCE_GAP_REVIEW.md).
 
 ## Failures and qualification boundary
 
