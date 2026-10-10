@@ -92,4 +92,18 @@ if(AM13E_HOST_PACKED_IMAGE)
     endif()
     add_test(NAME am13e_boot_protocol
         COMMAND am13e_boot_protocol_test "${AM13E_HOST_PACKED_IMAGE}")
+
+    # Actual dispatcher + Flash writer + metadata commit across logical
+    # block255->256, not merely a host-only address arithmetic test.
+    set(AM13E_WINDOW1_IMAGE "${CMAKE_CURRENT_BINARY_DIR}/am13e-window1-packed.bin")
+    add_test(NAME am13e_window1_image_fixture
+        COMMAND "${Python3_EXECUTABLE}"
+            "${REPO_ROOT}/boot/tests/am13e_window1_image_fixture.py"
+            "${AM13E_HOST_PACKED_IMAGE}" "${AM13E_WINDOW1_IMAGE}")
+    set_tests_properties(am13e_window1_image_fixture PROPERTIES
+        FIXTURES_SETUP am13e_window1_fixture)
+    add_test(NAME am13e_boot_protocol_window1
+        COMMAND am13e_boot_protocol_test "${AM13E_WINDOW1_IMAGE}")
+    set_tests_properties(am13e_boot_protocol_window1 PROPERTIES
+        FIXTURES_REQUIRED am13e_window1_fixture)
 endif()

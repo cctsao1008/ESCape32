@@ -247,18 +247,31 @@ static void queue_protocol(size_t image_bytes, const uint8_t *image) {
     queue_write(2U, image + 2048U, 32U, true, -1);
     queue_read(2U, sizeof erased_16, erased_16);
 
-    /* Full 1024-byte transport frames explicitly test count=0xff. */
+    /* Full 1024-byte frames test signed-char count=0xff AND
+     * cross the 256KiB window boundary without changing packet shape.
+     */
+    unsigned current_window=0U;
     for (size_t offset = 2048U; offset < image_bytes; offset += BLOCK_BYTES) {
+        const unsigned effective=(unsigned)(offset/BLOCK_BYTES);
+        if((effective>>8U)!=current_window) {
+            current_window=effective>>8U;
+            CHECK(current_window<=1U);
+            queue_window(current_window,RES_OK);
+        }
         unsigned count = (unsigned)((image_bytes - offset > BLOCK_BYTES)
                                ? BLOCK_BYTES : image_bytes - offset);
-        queue_write((unsigned)(offset / BLOCK_BYTES), image + offset,
+        queue_write(effective&255U, image + offset,
                     count, false, RES_OK);
         /* Retry the last successfully programmed data block. */
         if (offset == 2048U)
-            queue_write((unsigned)(offset / BLOCK_BYTES), image + offset,
+            queue_write(effective&255U, image + offset,
                         count, false, RES_OK);
     }
 
+    /* The metadata restore is always in window0 even when code/data
+     * extended into the second 256KiB window.
+     */
+    if(current_window)queue_window(0U,RES_OK);
     /* Block 0 now contains the REAL M33 vectors at APP+0; these must
      * already match the linked image. The signature is in block 1,
      * which remains all-FF until the LAST ECC16 commit.
