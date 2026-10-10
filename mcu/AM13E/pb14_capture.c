@@ -15,6 +15,7 @@
 #include "pb14_capture.h"
 #include "pb14_decode.h"
 #include "io_backend.h"
+#include "input_watchdog.h"
 #include "pb14_bidir_tx.h"
 #include <soc.h>
 #include <dl_gpio.h>
@@ -139,6 +140,7 @@ void initio(void)
     am13e_pb14_decoder_reset(&decoder, 0U, inverted_rx);
     calib_counter = 0U;
     calib_start = DL_ECAP_getTimeStampCounter(PB14_ECAP);
+    am13e_app_io_watchdog_prepare();
     am13e_pb14_bidir_tx_init();
     initialized = 1U;
     /* Equal to 16 kHz SysTick priority (0): neither exception may

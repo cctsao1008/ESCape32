@@ -7,7 +7,8 @@
  *
  * initio() now owns PB14 input and ECAP0 edge timestamps. The
  * bidirectional TX waveform and direction changes have implementations;
- * input watchdog, service/CLI transport and silicon validation are pending.
+ * the WWDT0 valid-frame feed backend is implemented; service/CLI transport
+ * and silicon watchdog/timing validation are pending.
  * No STM32 TIMx register aliases are used.
  *
  * Upon receipt of a complete 16-bit DSHOT frame (including 4-bit CRC),
@@ -22,8 +23,9 @@
  * transport, call am13e_app_io_cli_line(); caller owns the buffer and
  * must ensure the line is NUL terminated and properly bounded.
  *
- * am13e_app_io_watchdog_feed() is a real hardware watchdog callback;
- * absent a real backend, final ELF must not link. No dummy feeding.
+ * am13e_app_io_watchdog_feed() starts/restarts real WWDT0 only when
+ * original Rel17 callbacks accept a physical PWM/DSHOT frame. Do not
+ * refresh from SysTick or pass CRC-invalid frames.
  * am13e_app_io_servo_pulse() is passed a *validated* 800..2200us width;
  * caller must qualify timing/faults and feed watchdog as required.
  * Other physical PWM/Oneshot/serial input event surfaces are pending.
