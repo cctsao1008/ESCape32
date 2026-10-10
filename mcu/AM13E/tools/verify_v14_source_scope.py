@@ -114,7 +114,7 @@ def main():
           "Flat packer must use actual linked size, without embedded CRC")
     check("am13e_power_stage_attach(" not in
           src("mcu/AM13E/motor_power_stage.c"),
-          "Five user-deferred IO-only features silently enabled")
+          "Unqualified Reference power-stage attach unexpectedly enabled")
 
     result={
         "design_revision":"1.4",
@@ -128,12 +128,13 @@ def main():
         "conditional_adapters_pending":[
             "input_mode_analog","input_mode_serial",
             "UART_telemetry","Hall_hybrid","LED_BEC_PARK_ERPM",
-            "current_limit_board_io_only"],
+            "current_limit_board_adapter_unqualified"],
         "boot_abi":"RESOLVED_REL17_V14_CFG_ID_AND_APP_VECTOR",
         "app_image":"FLAT_ELF_DERIVED_VARIABLE_SIZE_MAX_488KIB",
         "torn_update_risk":"Valid Cfg plus vectors may boot incomplete later code",
-        "io_only":["Gate Enable","nFAULT","Independent OC",
+        "reference_unqualified_io":["Gate Enable","nFAULT","Independent OC",
                    "Serial Telemetry TX","Current Limiting"],
+        "source_feature_policy":"REL17_CONDITIONAL_FEATURES_MUST_BE_PRESERVED",
         "physical_validation":"PENDING"
     }
     LOG.mkdir(exist_ok=True,parents=True)

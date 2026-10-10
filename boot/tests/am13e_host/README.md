@@ -104,7 +104,9 @@ static vector layout and source/document audit **do not prove**
 AM13E hardware Boot/Flash behavior, CRCP register equivalence,
 physical PB14 timing, live WiFi-Link updater compatibility,
 Flash ECC and same-bank execution, brown-out recovery, or motor
-operation. The five IO-only exclusions (PB13 Gate Enable, PB15
-nFAULT, independent OC, Serial TX, current limiting) remain inactive.
+operation. The current Reference build does not activate unqualified physical
+Gate/OC/nFAULT/UART/current functions. They are **implementation
+and board-qualification gaps**, not permanent Rel17 feature exclusions
+under the supplied Integration Design Rev1.4.
 
 Never report this suite as **Hardware Validation PASS**.

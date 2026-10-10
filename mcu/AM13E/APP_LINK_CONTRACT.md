@@ -90,4 +90,7 @@ is **not silently migratable** to this flat binary contract.
 Evidence is limited to ARM ELF/linker/objcopy and host-test models;
 Flash same-bank behavior, power-fail recovery, transport electrical
 timing and real motor operation still need silicon testing.
-The separately agreed five IO-only features remain inactive.
+The Reference image still has physically disconnected or unqualified
+Gate/OC/nFAULT/UART/current routes. That is an **observed unqualified
+implementation state**, not a Rev1.4 exemption from upstream conditional
+feature preservation. See [V14_DESIGN_AUTHORITY.md](V14_DESIGN_AUTHORITY.md).

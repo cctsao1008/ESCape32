@@ -1,4 +1,5 @@
-> **SUPERSEDED HISTORICAL LEDGER — not the current Boot/Image specification.**
+> **SUPERSEDED HISTORICAL LEDGER — not Rev1.4 design authority.**
+> Original current design/source priority: [V14_DESIGN_AUTHORITY.md](V14_DESIGN_AUTHORITY.md).
 > The entries below preserve prior chronological observations, including
 > obsolete v1.6 APP header/CRC/signature-last experiments and older
 > object/link failures. Do **not** interpret their present-tense wording

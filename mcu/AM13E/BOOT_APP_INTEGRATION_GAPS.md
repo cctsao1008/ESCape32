@@ -17,7 +17,7 @@ APP signature/header/CRC and Signature-last requirements are
 | Extended addressing | `CMD_WINDOW=6`; Host tests blocks 256–487 | Real WiFi-Link updater extension unverified |
 | Boot self-update `CMD_UPDATE` | **Not implemented; RES_ERROR** | Must be implemented/qualified |
 | Persistent `CMD_SETWRP` | **Not implemented; RES_ERROR** | TI NONMAIN and reversible WRP qualification |
-| Gate/Trip/UART/current | User-approved **five IO-only exclusions** | No physical motor enable |
+| Gate/Trip/UART/current | Reference hardware paths remain disconnected/unqualified | Conditional upstream functionality is NOT waived; no physical motor enable |
 
 **Update risk:** Partial APP writes can leave the original Cfg ID
 and plausible vectors intact. Rel17's prescribed validity gate will

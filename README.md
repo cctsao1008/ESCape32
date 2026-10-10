@@ -78,3 +78,19 @@ Building on GitHub
 + Fork the repository.
 + Go to _Actions_.
 + Run the _Build ESCape32_ workflow.
+
+
+AM13E23019 integration design authority
+----------------------------------------
+
+The AM13E port on `am13e-port-v2` follows the supplied
+**ESCape32 Rel17 Integration Design Rev1.4**, its Integration Mapping
+and Interface Contracts, with original ESCape32 Rel17 source as
+the exclusive feature/behavior authority. Consult
+[mcu/AM13E/V14_DESIGN_AUTHORITY.md](mcu/AM13E/V14_DESIGN_AUTHORITY.md)
+for the provenance hashes and the binding design/source precedence.
+
+AM13E implementation and Native Host/ARM CI are partial software
+evidence; they are **not** complete Rel17 feature parity nor hardware
+qualification. Missing conditional MCU backends and original Boot
+`CMD_UPDATE`/`CMD_SETWRP` must be implemented, not excluded.

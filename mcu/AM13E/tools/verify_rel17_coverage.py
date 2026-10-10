@@ -4,7 +4,7 @@
 A PASS proves each declared ported software module is in the real ARM
 application build and that its declared host regression ran successfully.
 It CANNOT prove silicon waveforms, power-stage operation or WWDT reset.
-The five user-deferred features must remain IO-only.
+Five Reference I/O states are recorded as unqualified, not permanently excluded Rel17 features.
 """
 import argparse
 import json
@@ -24,7 +24,7 @@ def main():
     root=Path(__file__).resolve().parents[3]
     data=json.loads((root/"mcu/AM13E/REL17_FUNCTIONAL_COVERAGE.json").read_text())
     require(data["schema_version"]==1,"Unsupported feature audit schema")
-    groups=("ported_software","io_only")
+    groups=("ported_software","reference_io_state")
     all_entries=[(scope,e) for scope in groups for e in data[scope]]
     ids=[e["id"] for _,e in all_entries]
     require(len(ids)==len(set(ids)) and len(ids)>=15,
@@ -117,8 +117,11 @@ def main():
                  "mcu/AM13E/fault_trip_backend.c",
                  "mcu/AM13E/telem_uc2_preflight.c"):
         require(item not in app,"Excluded physical protection/UART linked "+item)
+    # Current Reference hardware is deliberately unqualified. This is
+    # an evidence gate, not a permanent exception to source-defined
+    # conditional features under Integration Design Rev1.4.
     require("AM13E_BOARD_POWER_STAGE_PROFILE=1" not in cmake,
-            "IO-only build silently enables hardware power stage")
+            "Unqualified Reference physical power-stage path enabled")
     require("am13e_power_stage_attach(" not in motor and
             "am13e_power_stage_attach(" not in stage and
             "DL_XBAR_selectPWMXBARSource(" not in stage,
@@ -126,12 +129,12 @@ def main():
     require("DL_GPIO_enableInterrupt(" not in fault and
             "DL_GPIO_disableInterrupt(" in fault and
             "am13e_app_nfault_asserted(" not in vectors,
-            "PB15 fault interrupt/runtime behavior is NOT IO-only")
+            "Reference PB15 trip/interrupt unexpectedly activated")
     require("DL_GPIO_initDigitalOutput(IOMUX_PINCM_PB13)" in stage,
-            "PB13 inactive-only output mode not initialized")
+            "Reference PB13 inactive GPIO initialization lost")
     for pin in ("OC_GPIO","SERIAL_TX","CURRENT_SENSE"):
         require(re.search(r"#define AM13E_BOARD_"+pin+r"_PINCM 0\b",cfg),
-                "Unassigned optional aux pin became a fabricated pin: "+pin)
+                "Reference optional pin acquired an unreviewed assignment: "+pin)
     require("DL_GPIO_initPeripheralAnalogFunction(AM13E_BOARD_CURRENT_SENSE_PINCM)" in fault,
             "Current Sense optional pin initialization lost")
 
@@ -143,7 +146,8 @@ def main():
         "boot_rel17_image_contract":"PASS",
         "feature_records":report,
         "ported_software_count":len(data["ported_software"]),
-        "io_only_count":len(data["io_only"]),
+        "reference_io_state_count":len(data["reference_io_state"]),
+        "conditional_upstream_pending":data["conditional_upstream_pending"],
         "distinct_native_regressions":len(all_tests),
         "hardware_pending":data["hardware_pending"],
         "outside_fw1":data["outside_fw1"],
@@ -166,7 +170,7 @@ def main():
     (args.logs/"rel17-functional-coverage.md").write_text(
         "\n".join(lines)+"\n")
     print(f"PASS: {len(data['ported_software'])} ported-software features, "+
-          f"{len(data['io_only'])} IO-only, "+
+          f"{len(data['reference_io_state'])} current unqualified Reference IO states, "+
           f"{len(all_tests)} distinct native cases, FW1/Boot Rel17 v1.4 link")
     print("SCOPE: physical hardware timing, ADC, gate and motor spin NOT verified")
     return 0

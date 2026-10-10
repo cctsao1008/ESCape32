@@ -6,7 +6,7 @@
     "Source presence + ARM FW1 compile/link + native algorithm regression is not a physical motor/ESC acceptance test",
     "Capture four-event register overwrite before ECAP0 ISR starts is not detectable without DMA/on-target timing evidence",
     "Thirty-microsecond BiDShot software scheduling does not establish physical turnaround/contending-driver behavior",
-    "Six MCPWM motor pads are isolated and PB13 Gate Enable remains inactive in the five-feature IO-only scope"
+    "The current Reference board keeps six MCPWM pads isolated and PB13 inactive; this is a hardware-qualification state, not a Rel17 feature exclusion"
   ],
   "ported_software": [
     {
@@ -187,7 +187,19 @@
       ]
     }
   ],
-  "io_only": [
+  "outside_fw1": [
+    "DroneCAN and independent TI FOC are not part of upstream ESCape32 Rel17 six-step firmware; no new feature is imposed by this MCU port"
+  ],
+  "hardware_pending": [
+    "PB14 external 3.3V/5V bidirectional interface and physical DShot150/300/600 capture loss rate",
+    "ECAP0 worst-case IRQ latency, complete four-event capture overwrite, and optional DMA capture implementation",
+    "PB14 BiDShot 30us oscilloscope turnaround, DMA event-timer period and TX->RX recovery",
+    "CMPSS/ECAP1 comparator analog levels, edge filter and hardware zero-cross interrupt jitter",
+    "Six MCPWM0 output pad electrical waveforms, dead-band non-overlap and real gate-driver polarity (outputs currently isolated)",
+    "VBUS/NTC divider and model calibration plus WWDT LFCLK reset behavior",
+    "Flash erase/program and update endurance under actual supply interruption"
+  ],
+  "reference_io_state": [
     {
       "id": "gate_enable",
       "label": "PB13 Gate Driver Enable output initialized inactive",
@@ -201,7 +213,7 @@
     },
     {
       "id": "driver_nfault",
-      "label": "PB15 nFAULT GPIO input, no ISR/OST1",
+      "label": "PB15 nFAULT GPIO input, IRQ/OST1 currently unconnected",
       "sources": [
         "mcu/AM13E/fault_input.c"
       ],
@@ -211,7 +223,7 @@
     },
     {
       "id": "independent_oc",
-      "label": "Optional OC GPIO input, no OST2/overcurrent service",
+      "label": "Optional OC GPIO input, OST2 currently unconnected",
       "sources": [
         "mcu/AM13E/fault_input.c"
       ],
@@ -222,7 +234,7 @@
     },
     {
       "id": "serial_telemetry_tx",
-      "label": "Optional Serial TX GPIO input/Hi-Z, no UART protocol",
+      "label": "Optional Serial TX GPIO input/Hi-Z, UART protocol adapter pending",
       "sources": [
         "mcu/AM13E/fault_input.c"
       ],
@@ -233,7 +245,7 @@
     },
     {
       "id": "current_limiting",
-      "label": "Optional current analog pad config, no SOC/current-limit",
+      "label": "Optional current analog pad config, current-limit backend pending",
       "sources": [
         "mcu/AM13E/fault_input.c"
       ],
@@ -243,18 +255,12 @@
       ]
     }
   ],
-  "outside_fw1": [
-    "Standalone UART telemetry transport protocols are retained only for legacy ESCape32 MCU targets",
-    "Independent OC, PB15 nFAULT hardware Trip, physical PB13 enabling and hardware current limiting are deliberately IO-only",
-    "DroneCAN and dedicated FOC firmware are not part of the Rel17 FW1 PB14-only build"
-  ],
-  "hardware_pending": [
-    "PB14 external 3.3V/5V bidirectional interface and physical DShot150/300/600 capture loss rate",
-    "ECAP0 worst-case IRQ latency, complete four-event capture overwrite, and optional DMA capture implementation",
-    "PB14 BiDShot 30us oscilloscope turnaround, DMA event-timer period and TX->RX recovery",
-    "CMPSS/ECAP1 comparator analog levels, edge filter and hardware zero-cross interrupt jitter",
-    "Six MCPWM0 output pad electrical waveforms, dead-band non-overlap and real gate-driver polarity (outputs currently isolated)",
-    "VBUS/NTC divider and model calibration plus WWDT LFCLK reset behavior",
-    "Flash erase/program and update endurance under actual supply interruption"
+  "conditional_upstream_pending": [
+    "Analog input_mode receiver adaptation",
+    "Serial input_mode and UART-based iBUS/SBUS/SBUS2/CRSF/EXBUS/HoTT",
+    "Conditional KISS/iBUS/S.Port/CRSF/MSB/HoTT telemetry transports",
+    "Hall/hybrid and conditional BEC/LED/ERPM/PARK I/O adaptation",
+    "Board-specific qualified overcurrent/current-sense support where source-enabled",
+    "Boot self-update CMD_UPDATE and reversible persistent CMD_SETWRP"
   ]
 }

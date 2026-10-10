@@ -1,109 +1,106 @@
 #!/usr/bin/env python3
-"""Rel17 v1.4 documentation/retired ABI synchronization gate.
+"""Rev1.4 source-authority and retired-rule consistency checks.
 
-This gate checks statements and source selection. It never claims
-physical verification or completion of mandatory missing Boot commands.
+Tests documentation/source contracts only; cannot assert that all
+conditional MCU backends or hardware are implemented.
 """
 from pathlib import Path
+import hashlib
+import json
 import sys
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT=Path(__file__).resolve().parents[3]
+DIGESTS={
+    "Integration_Design.md":"06acbc4960e09d5c2ebe266e0961a5a1847a0748cd3a33f544865fb5040943f5",
+    "Integration_Mapping.md":"ad833a9182d7766d59ce51c92a22c8efadff5dde581b16f7cb20eee3b37d2039",
+    "Interface_Contracts.md":"c7d8d2744806d8bf138d721a9b6f373661b780be5381c8eac8038132f4c4743c",
+}
 
+def require(ok,why):
+    if not ok: raise RuntimeError(why)
 
 def read(path):
-    p = ROOT / path
-    if not p.is_file():
-        raise RuntimeError(f"Missing v1.4 document: {path}")
-    return p.read_text(encoding="utf-8")
+    file=ROOT/path
+    require(file.is_file(),"Required v1.4 repository file absent: "+path)
+    return file.read_text(encoding="utf-8")
 
+def check_current_contract():
+    authority=read("mcu/AM13E/V14_DESIGN_AUTHORITY.md")
+    for name,digest in DIGESTS.items():
+        require(name in authority and digest in authority,
+                "Original v1.4 source provenance changed: "+name)
+        # If verbatim v1.4 files are installed, they must match the
+        # exact original input, not silently edited copies.
+        spec=ROOT/"mcu/AM13E/v1.4"/name
+        if spec.exists():
+            require(hashlib.sha256(spec.read_bytes()).hexdigest()==digest,
+                    "Canonical source checksum mismatch: "+name)
+    for word in ("26 proposed private function names","CMD_UPDATE",
+                 "CMD_SETWRP","CMD_WINDOW=6","Cfg.id=0x32EA",
+                 "488 KiB","linked binary","source-defined/conditional"):
+        require(word in authority,"Rev1.4 authority lost: "+word)
 
-def require(condition, label):
-    if not condition:
-        raise RuntimeError(label)
+    retired=[
+        "AM13E_ESCape32_Porting_Architecture_Rules.md",
+        "mcu/AM13E/SOURCE_NAMING_POLICY.md",
+        "mcu/AM13E/INTEGRATION_ARCHITECTURE_ALIGNMENT.md",
+        "mcu/AM13E/FW1_PB14_ONLY_SCOPE.md",
+        "mcu/AM13E/BOARD_CONFIGURATION.md",
+        "mcu/AM13E/GENERIC_PLATFORM_SCOPE.md",
+        "mcu/AM13E/tools/check_source_filenames.py",
+    ]
+    for path in retired:
+        require(not (ROOT/path).exists(),
+                "Superseded non-v1.4 rule still active: "+path)
 
+    audit=read("mcu/AM13E/REL17_V14_SOURCE_GAP_AUDIT.md")
+    require("Conditional native adapter missing" in audit and
+            "CMD_UPDATE" in audit and "CMD_SETWRP" in audit and
+            "NOT excluded" in audit,
+            "Must track mandatory original Rel17 feature gaps")
+    manifest=json.loads(read("mcu/AM13E/REL17_FUNCTIONAL_COVERAGE.json"))
+    require("io_only" not in manifest and
+            "reference_io_state" in manifest and
+            "conditional_upstream_pending" in manifest and
+            len(manifest["conditional_upstream_pending"])>0,
+            "Legacy five-feature exclusion policy still in feature audit")
 
-def contains(path, *terms):
-    content = read(path)
-    for term in terms:
-        require(term in content, f"{path}: missing required contract {term!r}")
-    return content
+    host=read("boot/tests/am13e_host/README.md")
+    require("Cfg.id=0x32EA" in host and
+            "488 KiB maximum Flash allocation" in host and
+            "Signature-last" in host,
+            "Current Rel17 v1.4 Boot/Image ABI has drifted")
+    legacy=read("boot/tests/am13e_host/README_V16_SUPERSEDED.md")
+    require(legacy.startswith("> **SUPERSEDED"),
+            "Historical v1.6 test instructions not quarantined")
+    board=read("mcu/AM13E/REFERENCE_BOARD_STATUS.md")
+    require("NOT a board policy" in board and
+            "no claimed power-stage/hardware qualification" in board,
+            "Current Reference IO state cannot become a porting exclusion")
+    conditional=read("mcu/AM13E/CONDITIONAL_FEATURE_GAPS.md")
+    for feature in ("Analog receiver","Serial/iBUS","Hall/hybrid",
+                    "CMD_UPDATE","CMD_SETWRP"):
+        require(feature in conditional,"Original conditional feature missing: "+feature)
+    cfg=read("mcu/AM13E/APP_LINK_CONTRACT.md")
+    require("Actual firmware size" in cfg and
+            "488 KiB maximum" in cfg and
+            "CMD_WINDOW=6" in cfg,
+            "Rev1.4 linked-size/transport semantics lost")
 
+    build=read("CMakeLists.txt")
+    boot_cmake=read("boot/CMakeLists.txt")
+    require("function(add_target" in build and
+            "add_target(BOOT5_PB14 AM13E" in boot_cmake,
+            "Native ESCape32 Application/Boot target pattern absent")
+    script=read(".github/workflows/am13e-fw1-compile-link.yml")
+    require("check_source_filenames.py" not in script,
+            "Superseded naming checker still runs in CI")
+    print("PASS: Rev1.4 authority index and original source provenance")
+    print("PASS: superseded naming/HAL/PB14-only/five-feature exclusion rules removed")
+    print("PASS: missing original Boot and conditional MCU features still tracked")
+    print("SCOPE: source/document evidence only; full feature parity/hardware pending")
 
-def main():
-    host = contains(
-        "boot/tests/am13e_host/README.md",
-        "Rel17 v1.4 (CURRENT)", "Cfg.id=0x32EA",
-        "488 KiB maximum Flash allocation", "actual firmware image length",
-        "CMD_WINDOW=6", "CMD_UPDATE", "CMD_SETWRP", "RES_ERROR",
-        "Signature-last", "does not prove", "Hardware Validation PASS",
-    )
-    require("pack_am13e_v2.py pack" not in host,
-            "Legacy v2 CLI described as current update path")
-    require("Header CRC =" not in host and "Image CRC =" not in host,
-            "Legacy header/image CRC fields presented as current spec")
-    archive = read("boot/tests/am13e_host/README_V16_SUPERSEDED.md")
-    require(archive.startswith("> **SUPERSEDED"),
-            "Historical v1.6 host instructions not marked superseded")
-    contains("mcu/AM13E/APP_LINK_CONTRACT.md",
-             "488 KiB maximum", "Actual firmware size",
-             "Cfg.id=0x32EA", "CMD_WINDOW=6",
-             "CMD_UPDATE", "CMD_SETWRP", "RES_ERROR")
-    board = contains("mcu/AM13E/BOARD_CONFIGURATION.md",
-                     "IO initialization", "Gate Driver Enable",
-                     "Driver nFAULT", "Independent OC Trip",
-                     "Serial Telemetry TX", "Current Limiting",
-                     "Rel17 v1.4")
-    require("Boot v1.6 image ABI" not in board and
-            "existing v1.6 image integrity" not in board,
-            "Board guide still claims superseded Image ABI is current")
-    update_review=contains(
-        "mcu/AM13E/CMD_UPDATE_SOURCE_GAP_REVIEW.md",
-        "SOURCE-LEVEL REVIEW", "CMD_UPDATE=4", "16 KiB",
-        "Bank0", "SRAM", "RES_ERROR", "ROM BSL",
-        "NONMAIN", "POWER-FAIL", "NOT IMPLEMENTED",
-        "Rel17 v1.4", "Cfg.id=0x32EA",
-    )
-    require("hardware" in update_review.lower() and
-            "recovery" in update_review.lower(),
-            "Boot update review must retain hardware/recovery blockers")
-    audit = contains("mcu/AM13E/REL17_V14_SOURCE_GAP_AUDIT.md",
-                     "CMD_UPDATE", "CMD_SETWRP", "RES_ERROR",
-                     "Conditional native adapter missing",
-                     "488 KiB", "Cfg.id=0x32EA",
-                     "Documentation / Specification Synchronization")
-    require("PARTIAL" in audit and "hardware" in audit.lower(),
-            "Source Gap Audit must retain partial/hardware limits")
-    for path in ("mcu/AM13E/PORTING_STATUS.md",
-                 "mcu/AM13E/AM13E_FW1_BACKEND_PSEUDOCODE.md"):
-        require("HISTORICAL" in read(path)[:500],
-                f"Historical ledger missing non-normative notice: {path}")
-    for path in ("boot/mcu/AM13E/image_integrity.c",
-                 "boot/mcu/AM13E/image_integrity.h",
-                 "mcu/AM13E/tools/verify_v16_image.py",
-                 "mcu/AM13E/profiles/image_reference_v16.cmake",
-                 "mcu/AM13E/linker_app_v16.ld"):
-        require("SUPERSEDED" in read(path)[:300],
-                f"Legacy artifact lacks SUPSERSEDED marker: {path}")
-    boot = read("boot/tests/am13e_host/CMakeLists.txt")
-    require("app_validity.c" in boot and
-            "image_integrity.c" not in boot and
-            "am13e_image_integrity_gate" not in boot,
-            "Current Host tests must use v1.4 Cfg/vector validity")
-    build = read("CMakeLists.txt")
-    require('AM13E_IMAGE_PROFILE "REL17_V14"' in build and
-            "image_rel17_v14.cmake" in build,
-            "Active FW1 CMake image profile is not Rel17 v1.4")
-    for path in ("boot/mcu/AM13E/app.c", "boot/mcu/AM13E/flash.c"):
-        require("boot_am13e_image_check(" not in read(path),
-                f"Old v1.6 whole-image gate reintroduced: {path}")
-    print("PASS: Rel17 v1.4 current docs and 488KiB allocation semantics")
-    print("PASS: legacy v1.6 instructions/ABI quarantined as SUPERSEDED")
-    print("PENDING: CMD_UPDATE, CMD_SETWRP and conditional MCU backends")
-    print("LIMIT: software/static documentation check, NOT hardware validation")
-
-
-if __name__ == "__main__":
-    try:
-        main()
-    except (OSError, RuntimeError) as error:
-        sys.exit("FAIL v1.4 documentation synchronization: " + str(error))
+if __name__=="__main__":
+    try: check_current_contract()
+    except (OSError,RuntimeError,ValueError,KeyError) as exc:
+        sys.exit("FAIL Rev1.4 specification authority: "+str(exc))

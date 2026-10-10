@@ -1,7 +1,9 @@
 # ESCape32 Rel17 → AM13E23019: v1.4 Source Conformance Audit
 
-**Design authority:** attached `Integration_Design.md`,
-`Integration_Mapping.md`, `Interface_Contracts.md`, Revision **1.4**;
+**Design authority:** uploaded original `Integration_Design.md`,
+`Integration_Mapping.md`, `Interface_Contracts.md`, Revision **1.4**.
+See [V14_DESIGN_AUTHORITY.md](V14_DESIGN_AUTHORITY.md) for original
+source SHA-256 hashes and authority precedence;
 original ESCape32 rel17 Commit
 `1d718c143380c3eb7e6581478990e1496632e5b8`.
 **Code branch:** `am13e-port-v2`.
@@ -23,10 +25,10 @@ The v1.4 documents are design rules, not completed implementation proof.
 | Motor Sine/Brushed/Brake/Music/PCM | **Host-tested internal MCPWM0 ownership** | Power pads physically disconnected |
 | Analog input mode | **Conditional native adapter missing** | VBUS/NTC ADC monitoring is not analog receiver `input_mode=1` |
 | Serial/iBUS/SBUS/SBUS2/CRSF/EXBUS/HoTT input | **Conditional native adapter missing** | Legacy `src/io.c` transport excluded under AM13E; pins/UART not assigned |
-| KISS/iBUS/S.Port/CRSF/MSB/HoTT telemetry | **Conditional native transport missing** | Legacy `src/telem.c` formatters retained, Serial TX IO-only |
+| KISS/iBUS/S.Port/CRSF/MSB/HoTT telemetry | **Conditional native transport missing** | Legacy `src/telem.c` formatters retained; Reference UART unconnected, not a waiver |
 | Hall/hybrid commutation | **Conditional native Hall adapter missing** | Original `HALL_MAP` branches retained in non-AM13E source |
 | BEC/LED/ERPM/PARK/Beacon | **Conditional board adapter missing** | Original guarded source remains; no fabricated pinout |
-| Current sensing/limiting | **IO-only by project decision** | No source-level deletion or invented ADC current |
+| Current sensing/limiting | **Reference backend not physically qualified** | Preserve original `SENS_MAP`-conditional behavior; actual current channel/pin and protection remain target/board gaps |
 | `savecfg/resetcfg` persistence | **Host-tested FW1 config writer** | Flash wear/power interruption still untested |
 
 `PWM_ENABLE` controls *motor output*, not servo input.
@@ -96,18 +98,36 @@ No power-loss-safe update claim is made without a separately qualified
 end-to-end update/recovery procedure. Existing v1.6 packaged updates
 have no implicit migration or compatibility guarantee.
 
-## Explicit five-feature IO-only scope
+## Rev1.4 scope correction: conditional features are NOT excluded
 
-PB13 Gate Enable inactive; PB15 nFAULT input without fault IRQ/OST;
-Independent OC input-only; Serial TX Hi-Z input-only; Current Limit
-analog-pin configuration only. No board Gate Enable/Trip/UART/current
-limiting is silently activated. This later project-specific scope
-remains in effect pending an explicit contrary instruction.
+The earlier PB14-only / five permanent IO-only feature exclusions were
+project-specific restrictions, not upstream Rel17 Rev1.4 design rules;
+they are **withdrawn as architectural authority** by the latest
+direction to follow Integration Design Rev1.4 exclusively.
+
+The current Reference build still holds PB13 Gate Enable inactive,
+leaves motor pads isolated and does not connect nFAULT, independent OC,
+serial telemetry TX or current-limiting hardware. These are **current
+implementation and board-safety facts**, NOT completed or permanently
+excluded Rel17 capabilities. Unproven electrical polarity, pin routing
+and protection behavior must never be enabled by documentation-only
+synchronization. Original conditional functionality remains a porting
+obligation for a properly selected/qualified AM13E board/feature profile.
+
+The v1.4 Interface Contracts list **26 proposed private function names**
+(`A01..A16`, `C01..C05`, `B01..B05`; `B06` reuses `A13`).
+They describe semantic seams, **not a compulsory new wrapper HAL**.
+Reuse the original `init()`, `initio()`, `compctl()`, `adctrig()`,
+`adcdata()`, `write()`, `update()`, `setwrp()` first.
+Do not mechanically rename tested MCU backend functions merely to
+match a design-only proposal; track equivalent behavior and remaining
+interface gaps against source.
 
 ## Evidence classification
 
-Previous CI `verify_rel17_coverage.py` establishes only the 13
-selected FW1 software groups, 5 IO-only exclusions, ARM strict link
+Current CI `verify_rel17_coverage.py` establishes 13
+selected FW1 software groups and five **observed Reference I/O states**
+(no permanent feature exclusions), ARM strict link
 and Host regression coverage. The separate v1.4 contract audit does
 not convert conditional original features into implemented native
 adapters. Native peripheral timing, TI NONMAIN reversible programming,
@@ -134,7 +154,7 @@ build or Host CTest. Legacy-named linker/packer compatibility sources
 must be judged by their current code, not their filenames.
 
 The CI `verify_v14_docs.py` gate guards current host instructions,
-partition/linked-size terminology, five IO-only boundaries, retired
+partition/linked-size terminology, source-defined conditional features, retired
 image-ABI quarantine and continuing mandatory `CMD_UPDATE` /
 `CMD_SETWRP` plus conditional-backend gaps. Its PASS proves
 documentation/source-reference consistency **only**, not implementation

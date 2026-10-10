@@ -55,10 +55,7 @@ jobs:
           fi
           grep -q 'Unsupported AM13E_IMAGE_PROFILE' \
             am13e-ci-logs/image-profile-negative.log
-          echo 'PASS: known reference accepted, unknown image rejected'
-
-      - name: Enforce AM13E function-oriented C/H filenames
-        run: python3 mcu/AM13E/tools/check_source_filenames.py
+          echo 'PASS: Rel17 v1.4 image profile accepted, unknown profile rejected'
 
       - name: Run Flash, BEMF and motor host regressions
         id: host
@@ -248,7 +245,7 @@ jobs:
           python3 mcu/AM13E/tools/verify_rel17_image.py --build am13e-ci-build \
             2>&1 | tee am13e-ci-logs/fw1-rel17-static-audit.log
 
-      - name: Compile auxiliary IO-only profile and reject pin conflicts
+      - name: Compile current Reference board IO configuration and reject pin conflicts
         id: board_profile
         shell: bash
         run: |
@@ -264,7 +261,7 @@ jobs:
           python3 mcu/AM13E/tools/verify_rel17_coverage.py \
             --build am13e-ci-build --logs am13e-ci-logs
 
-      - name: Enforce v1.4 documentation and retired Image ABI boundaries
+      - name: Enforce original Rel17 and supplied v1.4 design authority
         id: v14_docs
         shell: bash
         run: |
@@ -329,7 +326,7 @@ jobs:
           echo "Configure: ${{ steps.build.outputs.configure_rc }}"
           echo "FW1 objects: ${{ steps.build.outputs.compile_rc }}"
           echo "Strict link: ${{ steps.build.outputs.link_rc }}"
-          echo "Auxiliary IO-only compile: ${{ steps.board_profile.outcome }}"
+          echo "Reference board IO compile (physical not qualified): ${{ steps.board_profile.outcome }}"
           echo "Rel17 functional coverage evidence: ${{ steps.coverage.outcome }}"
           echo "Rev1.4 scope audit (open blockers tracked): ${{ steps.v14_scope.outcome }}"
           echo "Rev1.4 documentation/legacy-ABI audit: ${{ steps.v14_docs.outcome }}"

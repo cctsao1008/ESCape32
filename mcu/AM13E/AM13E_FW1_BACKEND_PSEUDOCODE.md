@@ -1,4 +1,5 @@
 > **HISTORICAL IMPLEMENTATION LEDGER / PSEUDOCODE — NON-NORMATIVE.**
+> Current original Rev1.4/source authority: [V14_DESIGN_AUTHORITY.md](V14_DESIGN_AUTHORITY.md).
 > Earlier per-step missing-symbol counts, v1.6 software/image ideas and
 > draft backend prescriptions below are archived and may conflict with
 > the completed ARM strict-link / Rel17 v1.4 CI state. Current design
