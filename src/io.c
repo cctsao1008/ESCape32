@@ -22,6 +22,7 @@
 #include "bidir_codec.h"
 #include "command_reply.h" /* DShot save waits for pending BiDShot reply */
 #include "ibus_receiver.h" /* Native frame inspection uses original iBUS semantics */
+#include "sbus_receiver.h" /* Packed 11-bit SBUS channel extraction */
 #else
 #ifdef AT32F4
 #define USART2_TDR USART2_DR
@@ -570,6 +571,24 @@ int am13e_app_io_ibus_frame(const uint8_t *frame,unsigned length)
           (unsigned)(uint8_t)cfg.input_ch1,
           (unsigned)(uint8_t)cfg.input_ch2,
           &throttle_us,&brake_us))
+        return 0;
+    am13e_app_io_watchdog_feed();
+    setthrot(throttle_us);
+    setbrake(brake_us);
+    return 1;
+}
+/* Original Rel17 SBUS input_mode=4 channel values; USART framing,
+ * inversion, 8E2 settings and SBUS2 time-slot reply are UART-owned.
+ * Frame-level acceptance mirrors upstream sbusfunc() (len/header).
+ */
+int am13e_app_io_sbus_frame(const uint8_t *frame,unsigned length)
+{
+    int throttle_us=-1,brake_us=-1;
+    if(cfg.input_mode!=4 ||
+       !am13e_sbus_decode_channels(frame,length,
+           (unsigned)(uint8_t)cfg.input_ch1,
+           (unsigned)(uint8_t)cfg.input_ch2,
+           &throttle_us,&brake_us))
         return 0;
     am13e_app_io_watchdog_feed();
     setthrot(throttle_us);

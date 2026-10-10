@@ -9,7 +9,7 @@ approved exclusion. See [V14_DESIGN_AUTHORITY.md](V14_DESIGN_AUTHORITY.md).
 | Servo PWM, Oneshot125, DShot300/600/1200 | Host-tested PB14 reference adapters; on-silicon timing not qualified |
 | BiDShot/extended telemetry | Host-tested GCR/NRZI and reply sequence; physical turnaround and board direction drive untested |
 | Analog receiver `input_mode=1` | ADC0 third-SOC sample and raw-to-mV conversion now reach original Rel17 `adcdata(...,a)` under explicit `ANALOG_CHAN` Board Profile; Native Host conversion and ARM conditional syntax gates added. **Reference has NO assigned receiver pin/channel, so no physical analog receiver is enabled or qualified.** |
-| Serial/iBUS/SBUS/SBUS2/CRSF/EXBUS/HoTT receiver | iBUS input_mode=3: frame checksum/channel decoder now Host-tested and connected to original Rel17 setthrot()/setbrake(); **physical UART RX/parity/DMA/pinmux unassigned**. Other serial modes remain pending |
+| Serial/iBUS/SBUS/SBUS2/CRSF/EXBUS/HoTT receiver | iBUS input_mode=3: frame checksum/channel decoder now Host-tested and connected to original Rel17 setthrot()/setbrake(); **physical UART RX/parity/DMA/pinmux unassigned**. SBUS: original 25B / 16x11bit receive and throttle/brake conversion now Host-tested under input_mode=4, but 8E2/inversion and SBUS2 slot TX pending. Remaining formats also pending |
 | KISS/iBUS/S.Port/CRSF/MSB/HoTT telemetry | Original formatters retained; AM13E selected serial TX provider pending |
 | Sine/Brushed/Hall/hybrid modes | Internal motor software tested in part; conditional Hall/board adapter pending |
 | BEC/LED/ERPM/PARK/beacon | Existing original guards retained; selected board GPIO implementations pending |

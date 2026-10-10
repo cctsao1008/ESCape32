@@ -18,6 +18,7 @@
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/command_capture.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/command_decode.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/ibus_receiver.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/sbus_receiver.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_codec.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_timing.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/command_reply.c"

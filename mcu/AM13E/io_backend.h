@@ -50,6 +50,11 @@ void am13e_app_io_servo_pulse(unsigned int pulse_us);
  * owns clock/pinmux, parity, frame acquisition and resynchronization.
  */
 int am13e_app_io_ibus_frame(const uint8_t *frame,unsigned length);
+/* Complete 25-byte SBUS frame from board UART RX. Returns 1 if the
+ * source-defined header/length checks pass in input_mode=4.
+ * SBUS2 telemetry request/slot scheduling is a separate MCU gap.
+ */
+int am13e_app_io_sbus_frame(const uint8_t *frame,unsigned length);
 int am13e_app_io_cli_line(char *line);
 
 /* Must be implemented by the AM13E board backend. */
