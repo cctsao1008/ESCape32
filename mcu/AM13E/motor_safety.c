@@ -24,6 +24,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* Unmodified Rel17 360-sample waveform, linked from motor_sine_table.c. */
+extern const uint16_t sinedata[];
+
 /* Baseline v1.6: U=PA8/PA11, V=PA9/PA30, W=PA10/PA31. */
 #define PWM_PADS (DL_GPIO_PIN(8U) | DL_GPIO_PIN(11U) | \
                   DL_GPIO_PIN(9U) | DL_GPIO_PIN(30U) | \
@@ -45,6 +48,9 @@ static volatile uint32_t fault_latched;
 static volatile uint32_t motor_timebase_running; /* MCPWM0 internal counter ONLY */
 static volatile uint32_t motor_timebase_starts;
 static volatile uint32_t motor_timebase_stops;
+static volatile uint32_t sine_entry_pending;
+static volatile uint32_t sine_mode_active;
+static volatile uint32_t sine_write_count;
 static volatile uint32_t last_trip_irq_flags;
 static volatile uint32_t last_trip_zone_flags;
 
@@ -133,6 +139,8 @@ void am13e_app_motor_init(void)
     safety_initialized = 0U;
     fault_latched = 0U;
     motor_timebase_running = 0U;
+    sine_entry_pending = 0U;
+    sine_mode_active = 0U;
     disconnect_pwm_pads();
     DL_MCPWM_disableTBCLK();
 
@@ -432,6 +440,8 @@ void am13e_app_motor_sixstep_write(int positive_mask,int negative_mask,
     for(unsigned i=0U;i<6U;++i)
         if(readback[i] != (uint32_t)aq.action[i])runtime_fault();
     runtime_phase_pending=1U;
+    sine_entry_pending=0U;
+    sine_mode_active=0U;
     ++runtime_aq_updates;
     __set_PRIMASK(primask);
 }
@@ -555,9 +565,108 @@ void am13e_app_motor_brushed_write(int reverse,int damp)
     for(unsigned i=0U;i<6U;++i)
         if(readback[i] != (uint32_t)action[i])runtime_fault();
     runtime_phase_pending=1U;
+    sine_entry_pending=0U;
+    sine_mode_active=0U;
     ++runtime_aq_updates;
     __set_PRIMASK(primask);
     am13e_app_motor_commutation_commit();
+}
+
+/* Rel17 main.c::nextstep() sine path: index a/b/c already includes
+ * direction and +/-120 degree offsets.  The original waveform comes
+ * directly from STM32G431/preset.c and uses (sinedata[idx]*power)>>7,
+ * on a fixed ~24 kHz carrier, independent of six-step frequency ramp.
+ *
+ * Unlike the STM32 timer there is no qualified DEAD_TIME count yet.
+ * Compare here is the exact ORIGINAL modulation component, excluding
+ * the unverified board-specific offset. Both legs carry the intended
+ * inverse logical AQ but are held software-FORCED LOW and isolated by
+ * GPIO input pinmux. No complementary gates can reach the power stage
+ * until external polarity, MCPWM deadband, and OC hardware Trip qualify.
+ */
+void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
+{
+    if (!safety_initialized || fault_latched ||
+        (unsigned)a>=360U || (unsigned)b>=360U || (unsigned)c>=360U ||
+        power<0 || power>120 || (start!=0 && start!=1) ||
+        (start && (sine_mode_active || sine_entry_pending)) ||
+        (!start && !sine_mode_active))
+        runtime_fault();
+    enum { SINE_CARRIER_HZ = 24000 };
+    const uint32_t ticks = (AM13E_APP_MCLK_HZ/2U)/SINE_CARRIER_HZ;
+    if (ticks<=2U || ticks>UINT16_MAX) runtime_fault();
+    const uint16_t period=(uint16_t)(ticks-1U);
+    const int idx[3]={a,b,c};
+    uint16_t wave[3];
+    for(unsigned i=0U;i<3U;++i) {
+        const uint32_t compare=((uint32_t)sinedata[idx[i]]*
+                                (uint32_t)power)>>7U;
+        if (compare>=ticks) runtime_fault();
+        wave[i]=(uint16_t)compare;
+    }
+    const uint16_t aq_a=(uint16_t)(
+        DL_MCPWM_AQ_OUTPUT_HIGH_ZERO|DL_MCPWM_AQ_OUTPUT_LOW_UP_CMPA);
+    const uint16_t aq_b=(uint16_t)(
+        DL_MCPWM_AQ_OUTPUT_LOW_ZERO|DL_MCPWM_AQ_OUTPUT_HIGH_UP_CMPB);
+    const uint32_t irqmask=__get_PRIMASK();
+    __disable_irq();
+    if (!pwm_pads_disconnected()) runtime_fault();
+    const int frozen=(MCPWM0->TBCTL&MCPWM_TBCTL_CTRMODE_MASK)==
+                       (uint32_t)DL_MCPWM_COUNTER_MODE_STOP_FREEZE;
+    if (frozen && !pwm_registers_inactive()) runtime_fault();
+    DL_MCPWM_setPeriodLoadMode(MCPWM0,DL_MCPWM_PERIOD_SHADOW_LOAD_ENABLE);
+    DL_MCPWM_setTimeBasePeriodShadow(MCPWM0,period);
+    for(unsigned i=0U;i<6U;++i) {
+        const uint16_t compare=wave[i/2U];
+        const uint16_t action=(i&1U)?aq_b:aq_a;
+        DL_MCPWM_setCounterCompareShadowLoadMode(
+            MCPWM0,runtime_compare_modules[i],DL_MCPWM_COMP_LOAD_ON_CNTR_ZERO);
+        DL_MCPWM_setCounterCompareShadowValue(
+            MCPWM0,runtime_compare_modules[i],compare);
+        DL_MCPWM_setActionQualifierShadowLoadMode(
+            MCPWM0,runtime_aq_modules[i],DL_MCPWM_AQ_LOAD_ON_CNTR_ZERO);
+        DL_MCPWM_setActionQualifierActionCompleteShadow(
+            MCPWM0,runtime_aq_outputs[i],action);
+        if (DL_MCPWM_getCounterCompareShadowValue(
+                MCPWM0,runtime_compare_modules[i])!=compare)
+            runtime_fault();
+        runtime_aq_last[i]=action;
+        if (frozen) {
+            DL_MCPWM_setCounterCompareActiveValue(
+                MCPWM0,runtime_compare_modules[i],compare);
+            DL_MCPWM_setActionQualifierActionCompleteActive(
+                MCPWM0,runtime_aq_outputs[i],action);
+            if (DL_MCPWM_getCounterCompareActiveValue(
+                    MCPWM0,runtime_compare_modules[i])!=compare)
+                runtime_fault();
+        }
+    }
+    if (frozen) DL_MCPWM_setTimeBasePeriodActive(MCPWM0,period);
+    if (DL_MCPWM_getTimeBasePeriodShadow(MCPWM0)!=period ||
+        (frozen && DL_MCPWM_getTimeBasePeriodActive(MCPWM0)!=period))
+        runtime_fault();
+    ++sine_write_count;
+    if (start) sine_entry_pending=1U;
+    __set_PRIMASK(irqmask);
+}
+
+/* Rel17 nextstep() calls sine_finish() ONLY ON FIRST SINE SAMPLE:
+ * after programming the original three CCRs, STM32 initializes PWM
+ * mode, output topology and comparator-off state.  It is NOT the
+ * sine->sixstep exit callback. Keep TIMG12's freshly scheduled next
+ * sine step intact; on AM13E, stop() or subsequent sixstep_write()
+ * terminates the waveform. Power-stage output remains isolated.
+ */
+void am13e_app_motor_sine_finish(void)
+{
+    const uint32_t irqmask=__get_PRIMASK();
+    __disable_irq();
+    if (!safety_initialized || fault_latched ||
+        !sine_entry_pending || sine_mode_active ||
+        !pwm_pads_disconnected()) runtime_fault();
+    sine_entry_pending=0U;
+    sine_mode_active=1U;
+    __set_PRIMASK(irqmask);
 }
 
 /* Rel17 laststep(), start boundary: AQ shadow-to-active transfers are
@@ -600,6 +709,8 @@ void am13e_app_motor_commutation_enable(int enable)
     if (!safety_initialized || fault_latched ||
         (enable != 0 && enable != 1)) runtime_fault();
     if (enable == 0) {
+        sine_entry_pending=0U;
+        sine_mode_active=0U;
         am13e_app_motor_timing_cancel(); /* Abort sine/commutation IRQ. */
         force_pwm_inactive();       /* Stops shared TBCLK and freezes MCPWM0. */
         disconnect_pwm_pads();
@@ -650,6 +761,8 @@ void am13e_app_motor_sixstep_idle(void)
     force_pwm_inactive();
     disconnect_pwm_pads();
     motor_timebase_running=0U;
+    sine_entry_pending=0U;
+    sine_mode_active=0U;
     for(unsigned i=0U;i<6U;++i) {
         DL_MCPWM_setActionQualifierActionCompleteShadow(
             MCPWM0,runtime_aq_outputs[i],0U);
@@ -684,6 +797,8 @@ void am13e_app_commutation_reset(void)
     force_pwm_inactive();
     disconnect_pwm_pads();
     motor_timebase_running=0U;
+    sine_entry_pending=0U;
+    sine_mode_active=0U;
     if (!pwm_registers_inactive() || !pwm_pads_disconnected()) {
         am13e_app_motor_fault_shutdown();
         am13e_app_motor_fault_reset();
@@ -700,6 +815,8 @@ void am13e_app_motor_fault_shutdown(void)
      */
     __disable_irq();
     fault_latched = 1U;
+    sine_entry_pending=0U;
+    sine_mode_active=0U;
     am13e_app_motor_timing_cancel();
     force_pwm_inactive();
     disconnect_pwm_pads();
