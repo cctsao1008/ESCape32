@@ -27,7 +27,7 @@ prove electrical behavior or full feature parity.
 | A07 | `motor_bemf.c::compctl`, `am13e_app_motor_bemf_interval_select` | MAPPED; comparator wiring pending |
 | A08 | `motor_event_timer.c::am13e_app_motor_bemf_commutation_delay_us` | MAPPED; IRQ/timer epoch unqualified |
 | A09 | `motor_bemf.c::am13e_app_motor_bemf_abort`, `motor_event_timer.c::am13e_app_motor_timing_cancel` | MAPPED; event race needs silicon |
-| A10 | `system_runtime.c::am13e_app_motor_runtime_tick_init` | MAPPED; SysTick silicon timing pending |
+| A10 | `mcu/AM13E/config.c::am13e_app_motor_runtime_tick_init` | MAPPED; SysTick silicon timing pending |
 | A11 | `input_watchdog.c::am13e_app_io_watchdog_prepare` | MAPPED; WWDT behavior pending |
 | A12 | `input_watchdog.c::am13e_app_io_watchdog_feed` | MAPPED; WWDT behavior pending |
 | A13 | `reset_cause.c::am13e_app_motor_reset_flags` | MAPPED; only source-defined reset classes |

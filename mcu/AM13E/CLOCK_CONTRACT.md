@@ -33,15 +33,15 @@ accepted detailed implementation choices**:
 | Flash read wait states | 3 before MCLK switch |
 | Rel17 SysTick | 16 kHz, 12,500 MCLK cycles |
 
-These choices are an implementation policy, **not an amendment
-to the HW Architecture Baseline v1.6** and not evidence of
-oscillator or PLL operation on a physical board.
+These are Reference implementation selections, **not mandatory
+Rev1.4 design requirements** and not evidence of oscillator or PLL
+operation on a physical board.
 
 ## ESCape32-first source ownership
 
 - `src/main.c` and the other original ESCape32 Rel17 sources
   own FW1 control and application behavior.
-- `mcu/AM13E/system_runtime.c`,
+- `mcu/AM13E/config.c`,
   `mcu/AM13E/clock_source_reference.c` and
   `mcu/AM13E/clock_backend.h` own **AM13E MCU adaptation**.
 - TI SDK/CMSIS/DriverLib supply low-level peripheral access
