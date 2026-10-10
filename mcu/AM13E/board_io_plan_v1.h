@@ -13,6 +13,8 @@
 #endif
 #ifndef AM13E_E62_IO_PLAN_V1
 #error "Provisional E62 IO Plan must be explicitly selected by the build"
+#elif AM13E_E62_IO_PLAN_V1 != 1
+#error "E62 IO Plan selection must equal 1; 0 is not an enabled plan"
 #endif
 #include <soc.h>
 #include <dl_sysctl.h>
