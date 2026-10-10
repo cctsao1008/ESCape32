@@ -256,6 +256,14 @@ jobs:
           python3 mcu/AM13E/tests/board_profile_compile_smoke.py am13e-ci-build \
             2>&1 | tee am13e-ci-logs/board-profile-compile.log
 
+      - name: Audit actual Rel17 functional software coverage
+        id: coverage
+        shell: bash
+        run: |
+          set -e
+          python3 mcu/AM13E/tools/verify_rel17_coverage.py \
+            --build am13e-ci-build --logs am13e-ci-logs
+
       - name: Summarize actual undefined symbols
         if: always()
         shell: bash
@@ -308,6 +316,7 @@ jobs:
           echo "FW1 objects: ${{ steps.build.outputs.compile_rc }}"
           echo "Strict link: ${{ steps.build.outputs.link_rc }}"
           echo "Auxiliary IO-only compile: ${{ steps.board_profile.outcome }}"
+          echo "Rel17 functional coverage evidence: ${{ steps.coverage.outcome }}"
           echo "Motor/ADC/Flash/BEMF host regression: ${{ steps.host.outcome }}"
           echo "v1.6 Boot/Link/Pack Host Tests: ${{ steps.boot.outcome }}"
           echo "Actual Rel17 FW1 v1.6 ELF/Pack/Flash transaction: ${{ steps.v16.outcome }}"
@@ -318,6 +327,7 @@ jobs:
           test "${{ steps.build.outputs.compile_rc }}" = 0 &&
           test "${{ steps.build.outputs.link_rc }}" = 0 &&
           test "${{ steps.board_profile.outcome }}" = success &&
+          test "${{ steps.coverage.outcome }}" = success &&
           test "${{ steps.boot.outcome }}" = success &&
           test "${{ steps.v16.outcome }}" = success &&
           test "${{ steps.boot_elf.outcome }}" = success &&

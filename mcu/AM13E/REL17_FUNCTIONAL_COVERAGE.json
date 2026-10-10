@@ -1,0 +1,260 @@
+{
+  "schema_version": 1,
+  "baseline": "ESCape32 Rel17 PHOTONDRIVE1 control algorithms -> TI AM13E23019 FW1 Reference",
+  "branch": "am13e-port-v2",
+  "evidence_limits": [
+    "Source presence + ARM FW1 compile/link + native algorithm regression is not a physical motor/ESC acceptance test",
+    "Capture four-event register overwrite before ECAP0 ISR starts is not detectable without DMA/on-target timing evidence",
+    "Thirty-microsecond BiDShot software scheduling does not establish physical turnaround/contending-driver behavior",
+    "Six MCPWM motor pads are isolated and PB13 Gate Enable remains inactive in the five-feature IO-only scope"
+  ],
+  "ported_software": [
+    {
+      "id": "rel17_core",
+      "label": "Original Rel17 main/io/util/telem/prog",
+      "sources": [
+        "src/main.c",
+        "src/io.c",
+        "src/util.c",
+        "src/telem.c",
+        "src/prog.c"
+      ],
+      "host_tests": [
+        "arming_window",
+        "telem_modes"
+      ]
+    },
+    {
+      "id": "dshot_rx_capture",
+      "label": "PB14 ECAP0 PWM/DShot150/300/600 RX, capture-race rejection",
+      "sources": [
+        "mcu/AM13E/command_capture.c",
+        "mcu/AM13E/command_decode.c",
+        "mcu/AM13E/command_input_route_backend.c"
+      ],
+      "host_tests": [
+        "command_decode",
+        "command_bidir_roundtrip"
+      ]
+    },
+    {
+      "id": "bidir_reply",
+      "label": "PB14 GCR/NRZI BiDShot reply, 30us final-edge turnaround",
+      "sources": [
+        "mcu/AM13E/command_reply.c",
+        "mcu/AM13E/bidir_codec.c",
+        "mcu/AM13E/bidir_timing.c"
+      ],
+      "host_tests": [
+        "bidir_codec",
+        "bidir_timing",
+        "command_bidir_roundtrip"
+      ]
+    },
+    {
+      "id": "motor_sixstep",
+      "label": "Six-step CW/CCW and complementary AQ image",
+      "sources": [
+        "mcu/AM13E/motor_phase_plan.c",
+        "mcu/AM13E/motor_aq_plan.c",
+        "mcu/AM13E/motor_safety.c"
+      ],
+      "host_tests": [
+        "motor_phase",
+        "motor_aq",
+        "motor_ownership"
+      ]
+    },
+    {
+      "id": "pwm_duty_ramp",
+      "label": "Rel17 variable frequency, duty, compare shadow and timing",
+      "sources": [
+        "mcu/AM13E/motor_pwm_shadow_plan.c",
+        "mcu/AM13E/motor_duty_plan.c",
+        "mcu/AM13E/motor_frequency_plan.c",
+        "mcu/AM13E/motor_timer_math.c"
+      ],
+      "host_tests": [
+        "motor_duty",
+        "motor_frequency",
+        "motor_pwm_shadow",
+        "motor_timer_math"
+      ]
+    },
+    {
+      "id": "motor_sine",
+      "label": "Original 360-entry sine table and runtime modulation",
+      "sources": [
+        "mcu/AM13E/motor_sine_table.c",
+        "mcu/AM13E/motor_safety.c"
+      ],
+      "host_tests": [
+        "sine_carrier",
+        "motor_ownership"
+      ]
+    },
+    {
+      "id": "motor_braking",
+      "label": "Drag and Lock brake AQ with motor/audio ownership",
+      "sources": [
+        "mcu/AM13E/motor_safety.c",
+        "mcu/AM13E/motor_aq_plan.c"
+      ],
+      "host_tests": [
+        "motor_brake",
+        "motor_lock",
+        "motor_ownership"
+      ]
+    },
+    {
+      "id": "motor_bemf",
+      "label": "CMPSS ECAP1 BEMF edge/timeout -> Rel17 policy -> TIMG12",
+      "sources": [
+        "mcu/AM13E/motor_bemf.c",
+        "mcu/AM13E/motor_bemf_event_plan.c",
+        "mcu/AM13E/motor_event_timer.c"
+      ],
+      "host_tests": [
+        "bemf_clock",
+        "bemf_timeout",
+        "bemf_commutation",
+        "motor_timer_math"
+      ]
+    },
+    {
+      "id": "motor_music_pcm",
+      "label": "Exclusive MCPWM0 Music/PCM and TIMG12 PCM clock",
+      "sources": [
+        "mcu/AM13E/motor_audio.c",
+        "mcu/AM13E/motor_audio_plan.c",
+        "mcu/AM13E/motor_ownership_plan.c",
+        "mcu/AM13E/motor_safety.c"
+      ],
+      "host_tests": [
+        "motor_audio",
+        "motor_ownership"
+      ]
+    },
+    {
+      "id": "vbus_ntc_adc",
+      "label": "PA6 NTC and PA28 VBUS real ADC model",
+      "sources": [
+        "mcu/AM13E/analog_sampling_backend.c",
+        "mcu/AM13E/analog_runtime.c",
+        "mcu/AM13E/analog_calibration_plan.c"
+      ],
+      "host_tests": [
+        "adc_scaling",
+        "board_configuration"
+      ]
+    },
+    {
+      "id": "config_flash",
+      "label": "FW1 Rel17 settings persistence and ECC writer",
+      "sources": [
+        "mcu/AM13E/cfg_flash_runtime.c",
+        "mcu/AM13E/cfg_flash_plan.c",
+        "mcu/AM13E/cfg_flash_writer.c"
+      ],
+      "host_tests": [
+        "flash_plan",
+        "flash_writer"
+      ]
+    },
+    {
+      "id": "runtime_clock_arming",
+      "label": "SysTick, verified reference clock and arming window",
+      "sources": [
+        "mcu/AM13E/system_runtime.c",
+        "mcu/AM13E/board_clock_reference.c",
+        "mcu/AM13E/arming_window.c"
+      ],
+      "host_tests": [
+        "arming_window",
+        "bemf_clock"
+      ]
+    },
+    {
+      "id": "watchdog_policy",
+      "label": "PB14-valid-command WWDT0 feed; physical reset still unverified",
+      "sources": [
+        "mcu/AM13E/input_watchdog.c",
+        "mcu/AM13E/command_capture.c"
+      ],
+      "host_tests": [
+        "command_decode",
+        "command_bidir_roundtrip"
+      ]
+    }
+  ],
+  "io_only": [
+    {
+      "id": "gate_enable",
+      "label": "PB13 Gate Driver Enable output initialized inactive",
+      "sources": [
+        "mcu/AM13E/motor_power_stage.c"
+      ],
+      "host_tests": [
+        "board_configuration",
+        "board_configuration_motor"
+      ]
+    },
+    {
+      "id": "driver_nfault",
+      "label": "PB15 nFAULT GPIO input, no ISR/OST1",
+      "sources": [
+        "mcu/AM13E/fault_input.c"
+      ],
+      "host_tests": [
+        "board_configuration"
+      ]
+    },
+    {
+      "id": "independent_oc",
+      "label": "Optional OC GPIO input, no OST2/overcurrent service",
+      "sources": [
+        "mcu/AM13E/fault_input.c"
+      ],
+      "host_tests": [
+        "board_configuration",
+        "board_configuration_override"
+      ]
+    },
+    {
+      "id": "serial_telemetry_tx",
+      "label": "Optional Serial TX GPIO input/Hi-Z, no UART protocol",
+      "sources": [
+        "mcu/AM13E/fault_input.c"
+      ],
+      "host_tests": [
+        "board_configuration",
+        "board_configuration_override"
+      ]
+    },
+    {
+      "id": "current_limiting",
+      "label": "Optional current analog pad config, no SOC/current-limit",
+      "sources": [
+        "mcu/AM13E/fault_input.c"
+      ],
+      "host_tests": [
+        "adc_scaling",
+        "board_configuration_override"
+      ]
+    }
+  ],
+  "outside_fw1": [
+    "Standalone UART telemetry transport protocols are retained only for legacy ESCape32 MCU targets",
+    "Independent OC, PB15 nFAULT hardware Trip, physical PB13 enabling and hardware current limiting are deliberately IO-only",
+    "DroneCAN and dedicated FOC firmware are not part of the Rel17 FW1 PB14-only build"
+  ],
+  "hardware_pending": [
+    "PB14 external 3.3V/5V bidirectional interface and physical DShot150/300/600 capture loss rate",
+    "ECAP0 worst-case IRQ latency, complete four-event capture overwrite, and optional DMA capture implementation",
+    "PB14 BiDShot 30us oscilloscope turnaround, DMA event-timer period and TX->RX recovery",
+    "CMPSS/ECAP1 comparator analog levels, edge filter and hardware zero-cross interrupt jitter",
+    "Six MCPWM0 output pad electrical waveforms, dead-band non-overlap and real gate-driver polarity (outputs currently isolated)",
+    "VBUS/NTC divider and model calibration plus WWDT LFCLK reset behavior",
+    "Flash erase/program and update endurance under actual supply interruption"
+  ]
+}

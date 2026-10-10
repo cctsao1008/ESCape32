@@ -36,3 +36,20 @@ cmake --build build-am13e --target AM13E_FW1.elf -j"$(nproc)"
 ```
 
 **Never treat a missing UART undefined reference as a substitute for testing PB14**. DShot150/300/600 CRC RX, Extended DShot replies, BiDShot 30µs turnaround, 3.3V/5V contention-safe interface and RX recovery remain physical acceptance gates.
+
+## ECAP0 acknowledgement-epoch receive integrity
+
+The FW1 ECAP0 IRQ requires all CEVT1..4 flags, then ACKs the old
+capture epoch **before** copying CAP1..4; a second event-flag snapshot
+and modulo slot check rejects any racing capture while copying.
+Discarded groups reset partial DShot state and are not forwarded
+to Rel17 or WWDT. The previous pure-capture timing check and
+DShot150/300/600 + BiDShot end-to-end host tests remain enabled.
+
+**Limit:** Hardware overwrites of entire four-edge groups before the
+ISR first reads ECFLG cannot be ruled out by firmware flag checks.
+DShot600 input frequency may exceed the realistic MCU ISR throughput
+when paired with commutation/BEMF activity; a measured ISR worst-case
+execution-time budget or a verified DMA capture architecture remains
+an **on-target** acceptance requirement. This is reported separately
+from the now-passing software coverage audit.

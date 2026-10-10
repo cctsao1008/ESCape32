@@ -21,11 +21,11 @@
 | Six-step / CW-CCW / drag/lock braking AQ | `motor_phase_plan.c`, `motor_aq_plan.c`, `motor_safety.c` | Host phase, motor AQ, brake, lock + Reference strict link | Generic pad routing; on-board switching validation |
 | Duty clamp, PWM frequency/ramp, shadow and timer arithmetic | `motor_duty_plan.c`, `motor_frequency_plan.c`, `motor_pwm_shadow_plan.c`, `motor_shadow_plan.c`, `motor_timer_math.c` | Dedicated host tests plus ARM portable objects | Confirm actual PWM/timebase waveform before gates |
 | Sine startup and modulation carrier | `motor_sine_table.c`, `motor_safety.c` | Sine host test + Reference link | Board comparator / commutation timing verification |
-| **Motor Music & PCM Audio** | `motor_audio.c` delegates exclusively to `motor_safety.c`'s **same MOTOR MCPWM0**, guarded by `audio_owner`; TIMG12 loaned for PCM cadence | Music/PCM arithmetic host test + linked source | Verify physical MCPWM output/audio behavior only when safe; **NO GPIO buzzer** |
-| DShot RX / PWM servo / command scheduling | Generic `command_input_route_backend.c`, Reference `command_input_reference.h` / `command_capture.c`, `src/io.c` | Generic ARM GPIO/XBAR object, capture/CRC/abort host and strict link | Separate reference ECAP IRQ/BiDShot routing, verify capture latency and physical input |
-| BiDShot TX / GCR-NRZI | `bidir_codec.c`, `bidir_timing.c`, `command_reply.c` | Exhaustive 4096 payload host tests, 30us final-edge turnaround / rollover / rejection tests, full DShot150/300/600 decoder→CRC→reply-plan host regression + strict link | Generic bidirectional pad route; actual IRQ/DMA latency, turnaround waveform and external contention qualification |
+| **Motor Music & PCM Audio** | `motor_audio.c`, `motor_ownership_plan.c` and real `motor_safety.c` transitions share **the same MCPWM0** and TIMG12 PCM cadence | 48 ownership matrix transitions incl. Six-step/Sine/Brake/Music/PCM, negative overlaps, Music/PCM numerical regressions and FW1 link | Physical audio/motor pads remain isolated; **NO GPIO buzzer** |
+| DShot RX / PWM servo / command scheduling | Generic `command_input_route_backend.c`, Reference `command_input_reference.h` / `command_capture.c`, `src/io.c` | New ACK-epoch snapshot and complete four-event flag/race rejection; DShot150/300/600/CRC roundtrip native tests and strict FW1 link | Measure ECAP0 ISR execution and full-group capture overwrite on silicon; optional DMA capture unimplemented |
+| BiDShot TX / GCR-NRZI | `bidir_codec.c`, `bidir_timing.c`, `command_reply.c` | Exhaustive 4096 payload host tests, final-edge 30us / rollover / rejection tests, full DShot150/300/600 decoder→CRC→reply-plan host and strict link | IRQ/DMA latency, physical turnaround and external contention not verified |
 | Extended DShot / telemetry mode policy | `src/telem.c`, `telem_mode_plan.c` | Telemetry modes host test + FW1 link | Optional actual UART/CAN transport profiles; do not claim DroneCAN complete |
-| BEMF zero-cross / timeout | `motor_bemf.c`, ECAP clock and timeout plans | Host BEMF clock/timeout + full FW1 | Comparator input board profile, timing/noise/overrun qualification |
+| BEMF zero-cross / timeout | `motor_bemf.c`, `motor_bemf_event_plan.c`, original `src/main.c`, `motor_event_timer.c` | Shared ECAP1 edge/timeout and original policy planner compiled into runtime; 6-step × 2 direction × 2 damp, early/reject/timeouts and TIMG12 native integration test; strict FW1 link | Analog comparator latency/noise and actual commutation jitter not verified |
 | Driver nFAULT GPIO (IO-only) | `fault_input.c` initializes PB15 input; `motor_fault_route.c` is **not** linked in FW1 | PB15 inactive interrupt compile and IO-only contract; generic trip backend ARM object/route host tests retained | GPIO ISR and OST1 Trip intentionally NOT IMPLEMENTED |
 | PWM/Dead-band plus Gate IO-only | `motor_safety.c` compiles MCPWM/RED/FED algorithms; `motor_power_stage.c` initializes PB13 INACTIVE and never attaches | Full FW1 strict link and IO-only source/compile regression | No physical gate enable, six output pins remain isolated; independent OC/OST2 not implemented |
 | ADC raw monitoring / default model | `analog_sampling_backend.c`; Reference pin/channels in `analog_reference.h` and ISR in `analog_runtime.c` | G431-derived numeric model feeds Rel17 adcdata; scaling native host + full FW1 link | Actual VREF, divider, NTC, current-sense hardware require board work |
@@ -51,3 +51,35 @@
 ## Boot/Image profile audit result
 
 A separated CMake `REFERENCE_V16` image selector now binds the existing APP linker and packing tools, with reject-by-default behavior for unimplemented image profiles. This is a **build contract only**, not a second image ABI, and it does not remove the Reference Board wiring from the present full FW1. The current image magic, CRC, signature and metadata remain untouched. Source work for a true independent board/image variant is still open.
+
+## Automated E2 coverage evidence gate (CI)
+
+`REL17_FUNCTIONAL_COVERAGE.json` is a machine-readable manifest for
+**ported-software**, **five explicit IO-only**, and **outside-FW1**
+features. `tools/verify_rel17_coverage.py` runs after REAL ARM object
+compile/strict FW1 link and Boot v1.6 host transaction; it requires:
+
+1. Every declared live feature source actually compiled in the
+   `CMakeFiles/AM13E.dir/` application object list.
+2. Each mapped Native Regression reported an actual `PASS` in
+   `host-tests.log` (not merely present in a filename).
+3. ECAP0 ACK-epoch snapshot, 30us BiDShot planner, ECAP1
+   candidate classification/Rel17 advance and Motor/Audio ownership
+   are **called from real linked Runtime paths**.
+4. PB13 remains inactive-output-only, PB15 interrupt and OST1/OST2
+   remain unlinked, no Current Limit/Serial TX activation or invented
+   optional IO pin is introduced.
+5. Reference FW1 and Boot v1.6 ELFs, packed-image output, strict
+   link and both Boot host test results are present and PASS.
+
+CI uploads generated `am13e-ci-logs/rel17-functional-coverage.json`
+and `rel17-functional-coverage.md` with precise feature-to-source-to-test
+traceability. They are software evidence, not MCU on-target
+instrumentation. They deliberately list pending physical validations
+including DShot600 capture overwrite/latency, BiDShot 30us waveform,
+CMPSS BEMF/noise, PWM pad/gate physical outputs (disconnected by design),
+sensor calibration, WWDT reset timing and Flash power-failure behavior.
+
+**Completion wording:** Tasks 1–4 are source/Host/ARM CI delivery gates.
+Do not interpret them as electrical qualification or as implementation of
+the user-excluded IO-only features.
