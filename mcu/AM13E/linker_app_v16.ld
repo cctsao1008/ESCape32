@@ -3,7 +3,7 @@
  * DETAILS: APP_BASE=0x6000 vectors, marker=APP+0x400, CRC header=APP+0x500.
  *
  * This is a fully linked FW1 firmware candidate, NOT hardware-qualified.
- * Fixed 16KiB Boot, separate FW1/FW2 4KiB parameter regions, physical
+ * Fixed 16KiB Boot, 4KiB ESCape32 config, 4KiB Reserved, physical
  * 488KiB shared APP allocation. AM13E Boot CMD_WINDOW=6 covers
  * all 488 logical 1KiB blocks; older WiFi-Link clients need an explicit
  * window-aware update to transfer >256KiB images.
@@ -12,7 +12,7 @@
  *
  * CODE/RODATA starts at 0x6800, outside the first 2KiB sector containing
  * the vector table and the two reserved metadata windows. The boot image
- * is application-agnostic; FW1 and FW2 use the same Image Contract.
+ * application image ABI remains at 0x6000 (retained v1.6 project profile).
  */
 ENTRY(Reset_Handler)
 
@@ -20,7 +20,7 @@ MEMORY
 {
     FLASH_BOOT (rx)  : ORIGIN = 0x00000000, LENGTH = 0x00004000
     FLASH_CFG1 (rx) : ORIGIN = 0x00004000, LENGTH = 0x00001000
-    FLASH_CFG2 (rx) : ORIGIN = 0x00005000, LENGTH = 0x00001000
+    FLASH_RESERVED (rx) : ORIGIN = 0x00005000, LENGTH = 0x00001000
     FLASH_META (rx) : ORIGIN = 0x00006000, LENGTH = 0x00000800
     FLASH_APP  (rx) : ORIGIN = 0x00006800, LENGTH = 0x00079800
     RAM_S      (rwx) : ORIGIN = 0x20000000, LENGTH = 0x00018000
@@ -34,7 +34,7 @@ __app_flash_start__     = ORIGIN(FLASH_META);
 __app_vector_start__    = ORIGIN(FLASH_META);
 
 _boot = ORIGIN(FLASH_BOOT);
-_cfg  = ORIGIN(FLASH_CFG1);  /* FW1 source ONLY; never FW2 config. */
+_cfg  = ORIGIN(FLASH_CFG1);  /* Only ESCape32 Cfg; Reserved untouched. */
 _rom  = ORIGIN(FLASH_APP);
 _ram  = ORIGIN(RAM_S);
 __StackTop = ORIGIN(RAM_S) + LENGTH(RAM_S);
@@ -154,8 +154,9 @@ ASSERT(SIZEOF(.intvecs) >= 64, "App must contain a real M33 vector table")
 ASSERT(_cfg == 0x00004000, "FW1 parameter source must be 0x4000")
 ASSERT(_cfg_end - _cfg_start <= LENGTH(FLASH_CFG1),
        "FW1 serialized config exceeds its OWN 4KiB region")
-ASSERT(ORIGIN(FLASH_CFG2) == 0x5000 && LENGTH(FLASH_CFG2)==0x1000,
-       "Independent FW2 config region must be preserved")
+ASSERT(ORIGIN(FLASH_RESERVED) == 0x5000 &&
+       LENGTH(FLASH_RESERVED)==0x1000,
+       "The 4KiB Reserved interval must not be allocated")
 ASSERT(ORIGIN(FLASH_APP) + LENGTH(FLASH_APP) == 0x00080000,
        "Physical application allocation must end at 512KiB Flash")
 ASSERT(__app_flash_payload_end__ <= 0x00080000,

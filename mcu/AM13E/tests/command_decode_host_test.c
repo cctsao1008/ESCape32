@@ -133,9 +133,9 @@ int main(void)
         4000U, 4100U, 4099U, 4200U, 200000000U));
     assert(!am13e_pb14_capture_group_valid(
         4000U, 4100U, 4200U, 4250U, 0U));
-    /* Architecture Rev1.1: PWM/DShot are mutually exclusive receiver
-     * modes until the input line is quiescent (>50ms in this
-     * reference capture-gap policy). Partial frames never switch mode.
+    /* v1.4 upstream source: entryirq chooses a mode once, and
+     * servoirq/dshotirq remain the decoder until an explicit reset.
+     * 50ms silence is NOT permission to reselect input mode.
      */
     AM13E_PB14_Decoder mix;
     am13e_pb14_decoder_reset(&mix,200000000U,0);
@@ -146,16 +146,21 @@ int main(void)
     feed_frame(&mix,valid,6000000U,333U,0);
     assert(seen_dshot==prior_dshot && mix.rx_mode==AM13E_PB14_RX_PWM);
     am13e_pb14_decoder_idle(&mix,20000000U,on_dshot);
-    assert(mix.rx_mode==AM13E_PB14_RX_UNDECIDED);
+    assert(mix.rx_mode==AM13E_PB14_RX_PWM);
     feed_frame(&mix,valid,25000000U,333U,0);
+    assert(seen_dshot==prior_dshot && mix.rx_mode==AM13E_PB14_RX_PWM);
+    /* Only the actual decoder/reset path can begin discovery again. */
+    am13e_pb14_decoder_reset(&mix,200000000U,0);
+    feed_frame(&mix,valid,30000000U,333U,0);
     assert(seen_dshot==prior_dshot+1U &&
            mix.rx_mode==AM13E_PB14_RX_DSHOT);
     const unsigned prior_pwm=seen_pwm;
-    am13e_pb14_decoder_pulse(&mix,26000000U,26200000U,on_pwm,on_dshot);
-    am13e_pb14_decoder_pulse(&mix,30000000U,30200000U,on_pwm,on_dshot);
+    am13e_pb14_decoder_pulse(&mix,32000000U,32200000U,on_pwm,on_dshot);
+    am13e_pb14_decoder_pulse(&mix,36000000U,36200000U,on_pwm,on_dshot);
     assert(seen_pwm==prior_pwm && mix.rx_mode==AM13E_PB14_RX_DSHOT);
     am13e_pb14_decoder_idle(&mix,50000000U,on_dshot);
-    assert(mix.rx_mode==AM13E_PB14_RX_UNDECIDED);
+    assert(mix.rx_mode==AM13E_PB14_RX_DSHOT);
+    am13e_pb14_decoder_reset(&mix,200000000U,0);
     am13e_pb14_decoder_pulse(&mix,60000000U,60200000U,on_pwm,on_dshot);
     am13e_pb14_decoder_pulse(&mix,64000000U,64200000U,on_pwm,on_dshot);
     assert(seen_pwm==prior_pwm+1U && mix.rx_mode==AM13E_PB14_RX_PWM);

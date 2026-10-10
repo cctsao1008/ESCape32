@@ -77,14 +77,11 @@ buffered capture path.
 ## RX mode ownership (Architecture Rev1.1)
 
 `command_decode.c` now locks the single PB14 logical receiver to
-PWM or DShot **after its first accepted complete input**. Valid
-packets of the other protocol are rejected without invoking the Rel17
-throttle/WWDT callback. A deliberate quiescent interval longer than
-the existing 50ms maximum capture gap clears the selected mode and
-the partial frame, allowing a new protocol selection without mixing
-incomplete DShot pulses into PWM commands.
-
-This 50ms software release threshold is an explicit integration
-**Detailed Design** value, not an asserted electrical or failsafe
-qualification. PB14 physical direction for a BiDShot reply remains
+PWM or DShot **after its first accepted complete input**. A selected
+decoder mode remains fixed until an **explicit decoder reset**,
+consistent with upstream `entryirq() -> servoirq()/dshotirq()`
+handler selection. 50ms input silence may invalidate a partial
+capture, but **does not** silently change PWM/DShot mode. Receiver
+identification timing, Oneshot125 and DShot1200 remain separate
+source-equivalence implementation gaps, not silently accepted as PASS. PB14 physical direction for a BiDShot reply remains
 owned exclusively by TIMG4/DMA0 until TX completion and RX resume.

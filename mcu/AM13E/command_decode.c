@@ -180,15 +180,14 @@ void am13e_pb14_decoder_idle(AM13E_PB14_Decoder *d, uint32_t now,
                              AM13E_PB14_DshotCallback dshot)
 {
     if (d==NULL || !d->tick_hz) return;
-    /* Explicit receiver quiescence before a protocol mode change.
-     * The existing 50ms maximum capture gap supplies the software
-     * silence boundary; it is a detailed design choice, not a
-     * physical failsafe/watchdog duration qualification. No callback
-     * is accepted while resetting partial-frame state.
+    /* Original rel17 switches from entryirq() to servoirq() or
+     * dshotirq() and does NOT automatically reenter entryirq() after
+     * 50ms of silence. Preserve that selected decoder mode.
+     * The same 50ms existing capture-gap bound only quarantines
+     * stale partial bits; a new mode requires an explicit reset.
      */
     if((d->last_start || d->last_end) &&
        (uint32_t)(now-d->last_end)>d->tick_hz/20U) {
-        d->rx_mode=AM13E_PB14_RX_UNDECIDED;
         d->active=0U;
         d->last_start=0U;
         d->last_end=0U;
