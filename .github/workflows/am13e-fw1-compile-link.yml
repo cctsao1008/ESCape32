@@ -34,6 +34,29 @@ jobs:
           test -f /tmp/am13e-ti-sdk/source/driverlib/am13e230x/dl_flash.h
           arm-none-eabi-gcc --version | head -1
 
+      - name: Reject unknown Boot/Image profile
+        shell: bash
+        run: |
+          set -e
+          mkdir -p am13e-ci-logs
+          cmake -S . -B am13e-ci-image-profile -G "Unix Makefiles" \
+            -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            -DAM13E_IMAGE_PROFILE=REFERENCE_V16 \
+            -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/linker_boot_reference.ld" \
+            >am13e-ci-logs/image-profile-positive.log 2>&1
+          grep -q 'AM13E_IMAGE_PROFILE:STRING=REFERENCE_V16' \
+            am13e-ci-image-profile/CMakeCache.txt
+          if cmake -S . -B am13e-ci-image-profile-negative -G "Unix Makefiles" \
+            -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            -DAM13E_IMAGE_PROFILE=UNVERIFIED_LAYOUT \
+            >am13e-ci-logs/image-profile-negative.log 2>&1; then
+            echo "FAIL: unsupported image profile accepted"
+            exit 1
+          fi
+          grep -q 'Unsupported AM13E_IMAGE_PROFILE' \
+            am13e-ci-logs/image-profile-negative.log
+          echo 'PASS: known reference accepted, unknown image rejected'
+
       - name: Run Flash, BEMF and motor host regressions
         id: host
         shell: bash

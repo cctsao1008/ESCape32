@@ -103,3 +103,10 @@ The new `fault_trip_route_plan.c` has no SDK or board dependency. The actual TI 
 - `command_input_route_backend.[ch]` performs real TI digital-input init and INPUTXBAR route/readback. Its descriptor requires the pin, GPIO function and XBAR route explicitly, without configuring motor outputs, pull/bias or board voltages.
 - `command_input_reference.h` owns Reference PB14/GPIO46 to ECAP0 route. `pb14_capture.c` retains the existing exact DShot/servo callbacks, ECAP capture/IRQ/clock calibration and BiDShot dispatch.
 - `AM13E_MCU_COMMAND_INPUT_ROUTE` independently ARM-compiles the generic MCU object with no Board Profile selected. Board physical pin levels, capture latency and ECAP/DMA race verification are open.
+
+## Explicit Boot/Image Profile selection
+
+- `profiles/image_reference_v16.cmake` selects only the existing 0x6000 Application linker, matching Reference Boot linker and original packer. There are **no modified header bytes, CRC rules, signature or Flash regions**.
+- `AM13E_IMAGE_PROFILE=REFERENCE_V16` remains the compatible full Reference build default; any other profile fails when `AM13E_ENABLE_FW1_V16_IMAGE=ON`.
+- The **object-only** generic backend path can request `-DAM13E_IMAGE_PROFILE=NONE -DAM13E_ENABLE_FW1_V16_IMAGE=OFF`; this does not manufacture a generic runnable firmware.
+- CI now verifies Reference selection succeeds and unknown image profiles are rejected, in addition to image integrity and Boot host tests.

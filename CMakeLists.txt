@@ -589,9 +589,26 @@ endif()
 # AM13E reference v1.6 real FW1 source linker/CRC packer, never flash from CI.
 # APP_BASE 0x6000; independent FW1/FW2 configs 0x4000/0x5000.
 # Full 488KiB application allocation; 256KiB transport kept until changed.
+# Image ABI must be selected separately from the AM13E MCU backend.
+# NONE is valid for object-only source port work with FW1 v16 disabled.
+set(AM13E_IMAGE_PROFILE "REFERENCE_V16" CACHE STRING
+    "AM13E linked image profile (REFERENCE_V16 or NONE)")
+set_property(CACHE AM13E_IMAGE_PROFILE PROPERTY STRINGS REFERENCE_V16 NONE)
 option(AM13E_ENABLE_FW1_V16_IMAGE
     "Enable AM13E reference v1.6 Rel17 application linked ELF and packed image" ON)
 if(AM13E_ENABLE_FW1_V16_IMAGE)
+    if(NOT AM13E_IMAGE_PROFILE STREQUAL "REFERENCE_V16")
+        message(FATAL_ERROR
+            "Unsupported AM13E_IMAGE_PROFILE for linked FW1; "
+            "only REFERENCE_V16 ABI exists. Disable FW1_V16_IMAGE "
+            "and select NONE for generic source-only port work.")
+    endif()
+    include("${PROJECT_SOURCE_DIR}/mcu/AM13E/profiles/image_reference_v16.cmake")
+    if(AM13E_BOOT_LINKER_SCRIPT AND NOT
+       AM13E_BOOT_LINKER_SCRIPT STREQUAL AM13E_PROFILE_BOOT_LINKER_SCRIPT)
+        message(FATAL_ERROR
+            "REFERENCE_V16 image cannot pair with an incompatible Boot linker")
+    endif()
     find_program(AM13E_V16_OBJCOPY arm-none-eabi-objcopy REQUIRED)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
     add_executable(AM13E_FW1_V16.elf EXCLUDE_FROM_ALL
@@ -609,7 +626,7 @@ if(AM13E_ENABLE_FW1_V16_IMAGE)
     target_link_options(AM13E_FW1_V16.elf PRIVATE
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
         -mfloat-abi=hard -fno-branch-count-reg
-        "-T${PROJECT_SOURCE_DIR}/mcu/AM13E/linker_app_v16.ld"
+        "-T${AM13E_PROFILE_APP_LINKER_SCRIPT}"
         -Wl,--no-undefined -Wl,--fatal-warnings -specs=nosys.specs
         -Wl,--require-defined=Reset_Handler
         -Wl,--require-defined=main
@@ -626,18 +643,18 @@ if(AM13E_ENABLE_FW1_V16_IMAGE)
         COMMAND "${AM13E_V16_OBJCOPY}" -O binary --gap-fill=0xff
             "$<TARGET_FILE:AM13E_FW1_V16.elf>" "${am13e_v16_raw}"
         DEPENDS AM13E_FW1_V16.elf
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/linker_app_v16.ld"
+            "${AM13E_PROFILE_APP_LINKER_SCRIPT}"
         VERBATIM)
     add_custom_command(OUTPUT "${am13e_v16_packed}" "${am13e_v16_manifest}"
         COMMAND "${Python3_EXECUTABLE}"
-            "${PROJECT_SOURCE_DIR}/boot/tools/pack_am13e_v2.py"
+            "${AM13E_PROFILE_PACKER_SCRIPT}"
             pack "${am13e_v16_raw}" "${am13e_v16_packed}"
             --manifest "${am13e_v16_manifest}"
         COMMAND "${Python3_EXECUTABLE}"
-            "${PROJECT_SOURCE_DIR}/boot/tools/pack_am13e_v2.py"
+            "${AM13E_PROFILE_PACKER_SCRIPT}"
             verify "${am13e_v16_packed}"
         DEPENDS "${am13e_v16_raw}"
-            "${PROJECT_SOURCE_DIR}/boot/tools/pack_am13e_v2.py"
+            "${AM13E_PROFILE_PACKER_SCRIPT}"
         VERBATIM)
     add_custom_target(AM13E_FW1_V16_IMAGE
         DEPENDS "${am13e_v16_packed}" "${am13e_v16_manifest}")

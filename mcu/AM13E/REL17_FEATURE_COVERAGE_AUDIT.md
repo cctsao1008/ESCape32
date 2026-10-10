@@ -47,3 +47,7 @@
 3. Separate Boot/Image selection from silicon backend with **distinct explicit profile**; keep existing Reference linker, `0x6000`, packer ABI, CRC and signature untouched.
 4. Expand software negative-path/integration regression for resource ownership, faults, update rejection, and profile misconfiguration. Qualify reference image and alternative profile independently.
 5. After **all firmware source/refactoring and software regression/coverage gates pass**, request board schematics, review electrical parameters and only then schedule physical tests.
+
+## Boot/Image profile audit result
+
+A separated CMake `REFERENCE_V16` image selector now binds the existing APP linker and packing tools, with reject-by-default behavior for unimplemented image profiles. This is a **build contract only**, not a second image ABI, and it does not remove the Reference Board wiring from the present full FW1. The current image magic, CRC, signature and metadata remain untouched. Source work for a true independent board/image variant is still open.
