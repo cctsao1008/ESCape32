@@ -627,14 +627,7 @@ void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
             MCPWM0,runtime_aq_modules[i],DL_MCPWM_AQ_LOAD_ON_CNTR_ZERO);
         DL_MCPWM_setActionQualifierActionCompleteShadow(
             MCPWM0,runtime_aq_outputs[i],action);
-        /* Verify real AQ Shadow writes as well as Compare writes. */
-        const uint32_t aq_shadow[6]={
-            MCPWM0->PWM1_AQCTLAS,MCPWM0->PWM1_AQCTLBS,
-            MCPWM0->PWM2_AQCTLAS,MCPWM0->PWM2_AQCTLBS,
-            MCPWM0->PWM3_AQCTLAS,MCPWM0->PWM3_AQCTLBS
-        };
-        if (aq_shadow[i]!=(uint32_t)action ||
-            DL_MCPWM_getCounterCompareShadowValue(
+        if (DL_MCPWM_getCounterCompareShadowValue(
                 MCPWM0,runtime_compare_modules[i])!=compare)
             runtime_fault();
         runtime_aq_last[i]=action;
@@ -648,6 +641,17 @@ void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
                 runtime_fault();
         }
     }
+    /* One coherent AQ Shadow snapshot, rather than six 6-register MMIO
+     * snapshots on every Rel17 high-rate sine commutation event.
+     */
+    const uint32_t aq_shadow[6]={
+        MCPWM0->PWM1_AQCTLAS,MCPWM0->PWM1_AQCTLBS,
+        MCPWM0->PWM2_AQCTLAS,MCPWM0->PWM2_AQCTLBS,
+        MCPWM0->PWM3_AQCTLAS,MCPWM0->PWM3_AQCTLBS
+    };
+    for(unsigned i=0U;i<6U;++i)
+        if (aq_shadow[i]!=(uint32_t)((i&1U)?aq_b:aq_a))
+            runtime_fault();
     if (frozen) DL_MCPWM_setTimeBasePeriodActive(MCPWM0,period);
     if (DL_MCPWM_getTimeBasePeriodShadow(MCPWM0)!=period ||
         (frozen && DL_MCPWM_getTimeBasePeriodActive(MCPWM0)!=period))
