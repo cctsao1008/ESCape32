@@ -1,5 +1,5 @@
 /*
- * E62 AM13E23019 FW1 Application Linker — SW Architecture v1.6.
+ * AM13E reference AM13E23019 FW1 Application Linker — SW Architecture v1.6.
  * DETAILS: APP_BASE=0x6000 vectors, marker=APP+0x400, CRC header=APP+0x500.
  *
  * This is a fully linked FW1 firmware candidate, NOT hardware-qualified.

@@ -157,7 +157,7 @@ static int pwm_registers_inactive(void)
 
 /* Motor Dead-band is a real MCPWM DBCTL/DBRED/DBFED runtime setting.
  * No board values are inferred from STM32 DEAD_TIME or an EVM example.
- * E62 product integration must explicitly verify the actual gate polarity,
+ * AM13E reference product integration must explicitly verify the actual gate polarity,
  * input routing, output swaps and both edge delays before opting in.
  */
 #ifdef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
@@ -173,7 +173,7 @@ static int pwm_registers_inactive(void)
     !defined(AM13E_MOTOR_DB_SWAP_A) || \
     !defined(AM13E_MOTOR_DB_SWAP_B) || \
     !defined(AM13E_MOTOR_DB_COMPARE_OFFSET_TICKS)
-#error "E62 verified dead-band requires all physical polarity/input/delay fields"
+#error "AM13E reference verified dead-band requires all physical polarity/input/delay fields"
 #endif
 _Static_assert(AM13E_MOTOR_DB_RED_TICKS > 0 &&
                AM13E_MOTOR_DB_RED_TICKS < 0x4000 &&

@@ -1,4 +1,4 @@
-/* E62 ESCape32 Rel17 AM13E FW1 interrupt release barrier.
+/* AM13E reference ESCape32 Rel17 AM13E FW1 interrupt release barrier.
  * Release PRIMASK for real PB14 DShot, 16 kHz SysTick, BEMF and motor
  * commutation IRQs, never release bridge gate drive here.
  *

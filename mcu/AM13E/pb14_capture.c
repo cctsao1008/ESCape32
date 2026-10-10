@@ -1,5 +1,5 @@
-/* ESCape32 Rel17 FW1 PB14 command input -- E62 HW Baseline v1.6.
- * PB14/GPIO46 is NOT a 5V tolerant MCU pin. E62 requires an external
+/* ESCape32 Rel17 FW1 PB14 command input -- AM13E reference HW Baseline v1.6.
+ * PB14/GPIO46 is NOT a 5V tolerant MCU pin. AM13E reference requires an external
  * bidirectional, level-compatible and contention-safe interface.
  *
  * Receive: GPIO46 -> INPUTXBAR1 -> ECAP0 (32bit timestamps).
@@ -61,7 +61,7 @@ _Static_assert((unsigned)DL_DMA_TRIGGER_SOURCE_ECAP2DMA == 40U,
                                   DL_ECAP_ISR_SOURCE_CEVT4 | \
                                   DL_ECAP_ISR_SOURCE_CTROVF)
 
-_Static_assert(IOMUX_PINCM_PB14 == 46, "E62 PB14/GPIO46 changed");
+_Static_assert(IOMUX_PINCM_PB14 == 46, "AM13E reference PB14/GPIO46 changed");
 
 static AM13E_PB14_Decoder decoder;
 static volatile uint32_t initialized;

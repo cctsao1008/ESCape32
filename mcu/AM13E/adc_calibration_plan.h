@@ -1,4 +1,4 @@
-/* E62 Rel17 ADC physical-unit normalization — pure C, host testable.
+/* AM13E reference Rel17 ADC physical-unit normalization — pure C, host testable.
  * No board resistor, ADC reference, or thermistor curve is inferred here.
  * Voltage output = 0.01V/count (centivolts) for Rel17 adcdata().
  * Thermistor output = voltage in mV normalized to a 3.3V NTC supply,

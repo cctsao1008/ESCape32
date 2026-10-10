@@ -1,18 +1,18 @@
 /*
- * E62/AM13E host-testable image integrity contract.
+ * AM13E reference/AM13E host-testable image integrity contract.
  *
  * v1.6 application contract: Cortex-M33 vectors at APP_BASE=0x6000.
  * Preserve the old 32-byte header/CRC algorithm and 1 KiB transport,
  * but move signature to APP+0x400 and header to APP+0x500, outside the
  * vector table and still within the first 2 KiB erase sector.
  * The legacy APP+0 signature/APP+0x800 vector format is INVALID.
- * Image marker/metadata offsets are explicit E62 detailed-design choices. 
+ * Image marker/metadata offsets are explicit AM13E reference detailed-design choices. 
  */
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
 
-/* Architectural addresses are fixed for E62 v2. Host memory may be
+/* Architectural addresses are fixed for AM13E reference v2. Host memory may be
  * mapped elsewhere, but the M33 Reset Handler remains a physical address.
  */
 #define AM13E_IMAGE_APP_BASE            UINT32_C(0x00006000)

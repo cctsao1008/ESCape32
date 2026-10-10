@@ -1,5 +1,5 @@
 /*
- * E62 32-byte image metadata and whole-image CRC validator.
+ * AM13E reference 32-byte image metadata and whole-image CRC validator.
  * Portable C: no TI DriverLib or target-specific headers.
  */
 #include "image_integrity.h"

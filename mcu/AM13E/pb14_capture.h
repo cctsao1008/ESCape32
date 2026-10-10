@@ -1,4 +1,4 @@
-/* E62 FW1 PB14 command input: GPIO46 -> INPUTXBAR1 -> ECAP0.
+/* AM13E reference FW1 PB14 command input: GPIO46 -> INPUTXBAR1 -> ECAP0.
  * Bidirectional reply is implemented by the separate TIMG4/DMA backend.
  */
 #pragma once

@@ -327,7 +327,7 @@ static int image_integrity_negative_gate(void) {
 
 
 /*
- * Stage C3: feed the ACTUAL ARM-linked, Python-packed .e62v2.bin into
+ * Stage C3: feed the ACTUAL ARM-linked, Python-packed .am13e-smoke.bin into
  * production flash.c's original 1 KiB / signature-last write transaction.
  * No test-side metadata rewriting: the image bytes must match exactly.
  * The Linux mmap address differs from the physical M33 Reset_Handler;

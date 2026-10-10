@@ -1,5 +1,5 @@
 /*
- * E62 AM13E23019 — real Rel17 savecfg() Flash persistence backend.
+ * AM13E reference AM13E23019 — real Rel17 savecfg() Flash persistence backend.
  *
  * SW Architecture Baseline v1.6:
  *   FW1 config 0x00004000..0x00004fff (two 2KiB erase sectors)

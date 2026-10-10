@@ -1,6 +1,6 @@
 /*
 ** AM13E application validation and reset handoff.
-** E62 v1.6: Cortex-M33 vector/entry at APP_BASE=0x6000.
+** AM13E reference v1.6: Cortex-M33 vector/entry at APP_BASE=0x6000.
 ** Signature APP+0x400 and image header APP+0x500, both outside vectors.
 ** Application linker layout must match before hardware use.
 */

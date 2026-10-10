@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assert ARM ELF -> objcopy BIN -> E62 v2 packed image address contracts.
+"""Assert ARM ELF -> objcopy BIN -> AM13E reference v2 packed image address contracts.
 
 This verifies only a deliberately minimal Cortex-M33 linker smoke ELF,
 not ESCape32 rel17 firmware or real AM13E hardware execution.
@@ -79,12 +79,12 @@ def main() -> int:
     header = image[0x500:0x520]
     check(zlib.crc32(header[:28]) ==
           struct.unpack_from("<I", header, 28)[0],
-          "packed E62 header CRC matches Python-independent CRC computation")
+          "packed AM13E reference header CRC matches Python-independent CRC computation")
     check(zlib.crc32(image[:0x500] + image[0x520:]) ==
           struct.unpack_from("<I", header, 16)[0],
           "packed image CRC covers signed prefix and linker-generated payload")
 
-    print("PASS E62 v2 linked ARM ELF/BIN/packer contract smoke")
+    print("PASS AM13E reference v2 linked ARM ELF/BIN/packer contract smoke")
     return 0
 
 
@@ -92,5 +92,5 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except (AssertionError, OSError, subprocess.CalledProcessError) as exc:
-        print(f"FAIL E62 v2 ARM link smoke: {exc}", file=sys.stderr)
+        print(f"FAIL AM13E reference v2 ARM link smoke: {exc}", file=sys.stderr)
         raise SystemExit(1)
