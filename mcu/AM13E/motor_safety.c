@@ -13,6 +13,7 @@
 #include "motor_event_timer.h"
 #include "motor_bemf.h"
 #include "motor_power_stage.h" /* PB13 GPIO inactive-only initializer */
+#include "motor_ownership_plan.h" /* Active MPCWM0 Motor/Music/PCM owner */
 #include "motor_safety.h"
 #include "motor_shadow_plan.h"
 #include "motor_aq_plan.h"
@@ -37,6 +38,7 @@ static volatile uint32_t fault_latched;
 static volatile uint32_t motor_timebase_running; /* MCPWM0 internal counter ONLY */
 /* 0=Drive/idle, 1=Rel17 Music, 2=Rel17 AU/PCM. Audio never muxes pads. */
 static volatile uint32_t audio_owner;
+static volatile AM13E_MotorOwner motor_owner_mode;
 static volatile uint32_t audio_period_valid;
 
 uint32_t am13e_app_motor_audio_mode(void)
@@ -250,6 +252,7 @@ void am13e_app_motor_init(void)
     fault_latched = 0U;
     motor_timebase_running = 0U;
     audio_owner = 0U;
+    motor_owner_mode=AM13E_OWNER_IDLE;
     audio_period_valid = 0U;
     sine_entry_pending = 0U;
     sine_mode_active = 0U;
@@ -518,6 +521,13 @@ static void runtime_fault(void)
     am13e_app_motor_fault_shutdown();
     am13e_app_motor_fault_reset();
 }
+static void owner_move(AM13E_OwnerEvent action)
+{
+    AM13E_MotorOwner next=AM13E_OWNER_IDLE;
+    if(!am13e_motor_owner_next((AM13E_MotorOwner)motor_owner_mode,
+                               action,&next)) runtime_fault();
+    motor_owner_mode=next;
+}
 
 /* Called by Rel17 nextstep(). Full six-bit p/n masks and comparator
  * code are validated against the original six commutation tuples.
@@ -546,6 +556,7 @@ void am13e_app_motor_sixstep_write(int positive_mask,int negative_mask,
 
     const uint32_t primask=__get_PRIMASK();
     __disable_irq();
+    owner_move(AM13E_OWNER_EVENT_SIXSTEP);
     for(unsigned i=0U;i<6U;++i) {
         DL_MCPWM_setActionQualifierShadowLoadMode(
             MCPWM0,runtime_aq_modules[i],DL_MCPWM_AQ_LOAD_ON_CNTR_ZERO);
@@ -689,6 +700,7 @@ void am13e_app_motor_brushed_write(int reverse,int damp)
     };
     const uint32_t primask=__get_PRIMASK();
     __disable_irq();
+    owner_move(AM13E_OWNER_EVENT_SIXSTEP);
     for(unsigned i=0U;i<6U;++i) {
         DL_MCPWM_setActionQualifierShadowLoadMode(
             MCPWM0,runtime_aq_modules[i],DL_MCPWM_AQ_LOAD_ON_CNTR_ZERO);
@@ -771,6 +783,7 @@ void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
         DL_MCPWM_AQ_OUTPUT_LOW_ZERO|DL_MCPWM_AQ_OUTPUT_HIGH_UP_CMPB);
     const uint32_t irqmask=__get_PRIMASK();
     __disable_irq();
+    owner_move(AM13E_OWNER_EVENT_SINE);
     if (!pwm_io_for_runtime()) runtime_fault();
     const int frozen=(MCPWM0->TBCTL&MCPWM_TBCTL_CTRMODE_MASK)==
                        (uint32_t)DL_MCPWM_COUNTER_MODE_STOP_FREEZE;
@@ -887,6 +900,8 @@ void am13e_app_motor_commutation_enable(int enable)
     __disable_irq();
     if (!safety_initialized || fault_latched ||
         (enable != 0 && enable != 1)) runtime_fault();
+    owner_move(enable?AM13E_OWNER_EVENT_MOTOR_START:
+                      AM13E_OWNER_EVENT_MOTOR_STOP);
     if (enable == 0) {
         sine_entry_pending=0U;
         sine_mode_active=0U;
@@ -980,6 +995,8 @@ void am13e_app_motor_audio_begin(int mode)
         !pwm_pads_disconnected() ||
         (SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
         runtime_fault();
+    owner_move(mode==1?AM13E_OWNER_EVENT_MUSIC_START:
+                       AM13E_OWNER_EVENT_PCM_START);
     am13e_app_motor_timing_cancel();
     am13e_app_motor_bemf_abort();
     sine_mode_active=0U;
@@ -1061,6 +1078,10 @@ void am13e_app_motor_audio_end(void)
     __disable_irq();
     if (!audio_owner || !safety_initialized || fault_latched)
         runtime_fault();
+    if ((audio_owner==1 && motor_owner_mode!=AM13E_OWNER_MUSIC) ||
+        (audio_owner==2 && motor_owner_mode!=AM13E_OWNER_PCM))
+        runtime_fault();
+    owner_move(AM13E_OWNER_EVENT_AUDIO_END);
     force_pwm_inactive();
     disconnect_pwm_pads();
     motor_timebase_running=0U;
@@ -1104,6 +1125,7 @@ void am13e_app_motor_drag_brake_write(void)
     am13e_app_motor_sixstep_idle(); /* stop TIMG/MCPWM and isolate pads */
     const uint32_t primask=__get_PRIMASK();
     __disable_irq();
+    owner_move(AM13E_OWNER_EVENT_BRAKE);
     if (!pwm_registers_inactive() || !pwm_pads_disconnected())
         runtime_fault();
     for (unsigned i=0U;i<6U;++i) {
@@ -1150,6 +1172,7 @@ void am13e_app_motor_lock_brake_stage(int lock,int phase_step)
     if (!am13e_motor_aq_plan_validate(&aq)) runtime_fault();
     drag_brake_aq_staged=0U;
     lock_brake_aq_staged=(active!=0U); /* ZTC coast never starts hold. */
+    owner_move(AM13E_OWNER_EVENT_BRAKE);
 }
 
 /* Original Rel17 setduty stage: control MCPWM0 internal counter for
@@ -1209,6 +1232,7 @@ void am13e_app_motor_sixstep_idle(void)
     force_pwm_inactive();
     disconnect_pwm_pads();
     motor_timebase_running=0U;
+    owner_move(AM13E_OWNER_EVENT_MOTOR_STOP);
     sine_entry_pending=0U;
     sine_mode_active=0U;
     for(unsigned i=0U;i<6U;++i) {
@@ -1249,6 +1273,7 @@ void am13e_app_commutation_reset(void)
     force_pwm_inactive();
     disconnect_pwm_pads();
     motor_timebase_running=0U;
+    owner_move(AM13E_OWNER_EVENT_MOTOR_STOP);
     sine_entry_pending=0U;
     sine_mode_active=0U;
     drag_brake_aq_staged=0U;
@@ -1270,6 +1295,7 @@ void am13e_app_motor_fault_shutdown(void)
     __disable_irq();
     fault_latched = 1U;
     audio_owner=0U;
+    motor_owner_mode=AM13E_OWNER_IDLE; /* Fault dominates all owners. */
     audio_period_valid=0U;
     sine_entry_pending=0U;
     sine_mode_active=0U;

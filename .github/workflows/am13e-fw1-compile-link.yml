@@ -84,6 +84,7 @@ jobs:
             run_test motor_brake mcu/AM13E/motor_phase_plan.c mcu/AM13E/motor_aq_plan.c mcu/AM13E/tests/motor_brake_aq_host_test.c
             run_test motor_lock mcu/AM13E/motor_phase_plan.c mcu/AM13E/motor_aq_plan.c mcu/AM13E/tests/motor_lock_aq_host_test.c
             run_test motor_audio mcu/AM13E/motor_audio_plan.c mcu/AM13E/tests/motor_audio_plan_host_test.c
+            run_test motor_ownership mcu/AM13E/motor_ownership_plan.c mcu/AM13E/motor_phase_plan.c mcu/AM13E/motor_aq_plan.c mcu/AM13E/motor_audio_plan.c mcu/AM13E/tests/motor_ownership_integration_host_test.c
             run_test fault_trip_route mcu/AM13E/fault_trip_route_plan.c mcu/AM13E/tests/fault_trip_route_plan_host_test.c
             run_test motor_pad_route mcu/AM13E/motor_output_route_plan.c mcu/AM13E/tests/motor_output_route_plan_host_test.c
             run_test board_configuration -DAM13E mcu/AM13E/tests/board_configuration_host_test.c

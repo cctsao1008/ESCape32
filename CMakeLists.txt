@@ -117,6 +117,7 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_power_stage.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_audio.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_audio_plan.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_ownership_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/fault_trip_route_plan.c"
             # fault_trip_backend.c / motor_fault_route.c are NOT part
             # of the IO-only FW1. Keep their independent MCU object and
