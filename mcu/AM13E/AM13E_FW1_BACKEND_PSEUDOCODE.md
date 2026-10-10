@@ -4,7 +4,7 @@
 
 
 **Status:** Design / TODO; intentionally **NOT compiled**; no MCU callback stubs or fake return values.
-**Source of missing-symbol evidence:** E1-AK `e1ak-fw1-link.log` (27 distinct unresolved symbols / 38 references); E1-AK ARM GNU Object Compile PASS 0 warning. E1-AL corrects HDSEL/timeout hardware planning and requires revalidation.
+**Source of missing-symbol evidence:** E1-AO `e1ao-fw1-link.log` (22 distinct unresolved symbols / 32 references); incremental ARM GNU Object Compile PASS with zero warning for `cfg_flash_plan.c`. E1-AP adds the testable Flash write engine but has not yet passed its own ARM/Host rebuild.
 **Reference boundaries:** Original ESCape32 Rel17 `src/main.c`, `src/io.c`, `src/telem.c`, `src/util.c`, `src/prog.c`; AM13E target-specific contracts in `mcu/AM13E/*.h`; AM13E230x TI TRM/SDK; project SW/HW architecture baseline v1.6.
 
 ## E1-AN evidence and E1-AO configuration Flash preparation (2026-10-10)
