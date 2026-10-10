@@ -1,12 +1,12 @@
 # AM13E Rel17 FW1 — Missing Backend Implementation Pseudocode
 
 **Status:** Design / TODO; intentionally **NOT compiled**; no MCU callback stubs or fake return values.
-**Source of missing-symbol evidence:** E1-Z `e1z-fw1-link.log` (32 distinct unresolved symbols / 44 references). E1-Z ARM GNU Object Compile passed with zero warnings after repairing the E1-Y DMA macro regression.
+**Source of missing-symbol evidence:** E1-AG `e1ag-fw1-link.log` (28 distinct unresolved symbols / 40 references; reduced from E1-Z's 32/44). E1-AG ARM GNU Object Compile passed with zero warnings. E1-AH adds a pure-C PWM frequency plan awaiting the next WSL run.
 **Reference boundaries:** Original ESCape32 Rel17 `src/main.c`, `src/io.c`, `src/telem.c`, `src/util.c`, `src/prog.c`; AM13E target-specific contracts in `mcu/AM13E/*.h`; AM13E230x TI TRM/SDK; project SW/HW architecture baseline v1.6.
 
 ## Current implementation ledger — after E1-AB through E1-AE
 
-**Source integration status, not an ELF/HW success claim.** The 32/44 number below is the **last measured E1-Z linker baseline**, prior to the new motor files. Do not overwrite it with an estimated count until an ARM GNU rebuild and strict FW1 link have been captured.
+**Build evidence:** E1-Z had 32 symbols / 44 call sites. E1-AG ARM GNU compilation passed (0 warnings); E1-AG strict FW1 link shows **28 symbols / 40 call sites**. These are measured linker results, not functional hardware tests. E1-AH PWM helper has not yet been ARM-built.
 
 | Backend function / hardware resource | Current source state | Verification remaining |
 |---|---|---|
@@ -18,12 +18,13 @@
 | `am13e_app_motor_bemf_commutation_delay_us` | **SOURCE IMPLEMENTED** using the same TIMG12 one-shot; previously not visible in the 32-symbol link baseline | IRQ dispatch from physical BEMF zero-cross, timing proof |
 | Rel17 six-step `p/n/cc` decoding | **SOURCE IMPLEMENTED** as pure-C `motor_phase_plan.{c,h}` with the **unmasked** six original `p/n` values. `cc` is comparator code, not a float-phase mask | Host Test, later real MCPWM action-qualifier adaptation and scope |
 | Motor microsecond conversion | Pure-C `motor_timer_math.{c,h}` with overflow checks | Host Test and peripheral clock measurement |
+| Rel17 PWM frequency interpolation | E1-AH pure-C `motor_frequency_plan.{c,h}`: exact 1000–2000us **period** interpolation; `ertm_us=0` uses minimum frequency. No duty/dead-time/output programming | Host Test, ARM GNU, motor scope; final MCPWM driver remains unresolved |
 
 **Still intentionally unresolved:** `am13e_app_motor_runtime_enable_interrupts` and `am13e_app_motor_commutation_enable` cannot legitimately release the inverter before the PB13 enable polarity, real hardware over-current source → PWMXBAR → MCPWM Trip Zone path, inactive fault action, timer/dead-time policy and relevant board protection checks are verified. This is a real firmware safety dependency, not removal of any Rel17 feature. `sine_write`, `sixstep_write`, `pwm_apply`, comparator/BEMF configuration, the watchdog, UART, audio and config-flash driver also remain unimplemented.
 
 **Required build gates:** `cmake --build build-am13e --target AM13E -j"$(nproc)"`, and separately `cmake --build build-am13e --target AM13E_FW1.elf -j"$(nproc)"`. The latter must continue to use `-Wl,--no-undefined`. The known `linker_app_reference.ld` is a historical Boot-v2 linker smoke contract, **not** a qualified production image linker map. All motor outputs must remain inactive until production HW/Flash/vector contracts are reconciled.
 
-**Host tests added:** `tests/motor_phase_plan_host_test.c`, `tests/motor_timer_math_host_test.c`. They do not test MCU GPIO/MCPWM/TIMG12 silicon behavior.
+**Host tests added:** `tests/motor_phase_plan_host_test.c`, `tests/motor_timer_math_host_test.c`, and E1-AH `tests/motor_frequency_plan_host_test.c`. Their results are pending WSL execution; none tests MCU GPIO/MCPWM/TIMG12 silicon behavior.
 
 ## Contract and integration rules
 
@@ -266,7 +267,7 @@ Existing contract: `mcu/AM13E/util_backend.h`.
 
 **Evidence labels**: [REL17] = call site grounded in current FW1 linker/source; [SDK DECLARED] = name confirmed in the uploaded `am13e2x_sdk-main.zip` under `source/driverlib/am13e230x/`; [PORTING PROPOSED] = engineering plan, not implemented; [HW VALIDATION] = a required silicon/board demonstration.
 
-**E1-Z state (2026-10-10):** ARM GNU object compile PASS, zero warnings. FW1 strict link still FAIL, **32 unique symbols / 44 references**. The E1-Y DMA interrupt macro issue is repaired; these backends remain genuinely unresolved.
+**Build state (2026-10-10):** E1-AG ARM GNU object compile PASS, zero warnings. FW1 strict link still FAIL, **28 unique symbols / 40 references**. E1-AH adds the PWM period helper after this measured build checkpoint.
 
 ### Common porting method and TI SDK mapping
 
