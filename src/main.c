@@ -541,7 +541,10 @@ void adcdata(int t, int u, int v, int c, int a) {
      * NOT perform the legacy shunt-zero calibration on invented data.
      */
     ready=1;
-    c=0;
+    /* E62 has no current ADC in IO Plan v1.0. Do not fabricate a
+     * shunt offset or zero-current measurement just to update status.
+     */
+    (void)c;
     (void)z;
 #else
 	if ((c -= z) >= 0) ready = 1;

@@ -39,6 +39,9 @@
 #ifndef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
 #error "Qualified power stage requires hardware RED/FED and polarity"
 #endif
+#ifndef AM13E_E62_SENSORS_CALIBRATED
+#error "Physical output requires calibrated VBUS/NTC, not raw ADC-only firmware"
+#endif
 #if !defined(AM13E_E62_PB13_ACTIVE_LEVEL) || \
     !defined(AM13E_E62_GATE_PWM_INVERT_MASK) || \
     !defined(AM13E_E62_OC_GPIO_PINCM) || \

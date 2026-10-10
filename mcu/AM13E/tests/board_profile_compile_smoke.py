@@ -70,7 +70,7 @@ for obj in commands:
             continue
         stripped.append(word)
     result=subprocess.run(
-        stripped+flags+["-fsyntax-only"],
+        stripped+flags+["-Werror","-fsyntax-only"],
         cwd=obj["directory"],capture_output=True,text=True,check=False
     )
     sys.stdout.write(f"{src}: {'PASS' if result.returncode==0 else 'FAIL'}\n")
