@@ -20,7 +20,7 @@
 #if defined(AM13E)
 #include "io_backend.h"
 #include "bidir_codec.h"
-#include "pb14_bidir_tx.h" /* DShot save waits for pending BiDShot reply */
+#include "command_reply.h" /* DShot save waits for pending BiDShot reply */
 #else
 #ifdef AT32F4
 #define USART2_TDR USART2_DR

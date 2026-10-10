@@ -22,7 +22,7 @@
 #include "motor_safety.h"
 #include "motor_bemf.h"
 #include "irq_vectors.h"
-#include "adc_runtime.h"
+#include "analog_runtime.h"
 /* Logical microsecond commutation timebase, not a TI register mapping. */
 #define MOTOR_TIME_SHIFT 0
 #else
