@@ -195,12 +195,12 @@ jobs:
           set -e
           set -o pipefail
           cmake --build am13e-ci-build --target AM13E_APP_SMOKE -j 2 \
-            >am13e-ci-logs/boot-link-pack.log 2>&1
+            >am13e-ci-logs/boot-link-pack.log 2>&1 || { cat am13e-ci-logs/boot-link-pack.log; exit 1; }
           cmake -S boot/tests/am13e_host -B am13e-ci-boot-host -G "Unix Makefiles" \
             -DAM13E_HOST_SANITIZERS=OFF \
             -DAM13E_HOST_PACKED_IMAGE="$(pwd)/am13e-ci-build/AM13E_APP_SMOKE.flat-smoke.bin" \
             >am13e-ci-logs/boot-host-configure.log 2>&1
-          cmake --build am13e-ci-boot-host -j 2 >am13e-ci-logs/boot-host-build.log 2>&1
+          cmake --build am13e-ci-boot-host -j 2 >am13e-ci-logs/boot-host-build.log 2>&1 || { cat am13e-ci-logs/boot-host-build.log; exit 1; }
           ctest --test-dir am13e-ci-boot-host --output-on-failure \
             2>&1 | tee am13e-ci-logs/boot-host-test.log
 
@@ -212,7 +212,7 @@ jobs:
           set -e
           set -o pipefail
           cmake --build am13e-ci-build --target AM13E_FW1_REL17_IMAGE -j 2 \
-            >am13e-ci-logs/fw1-rel17-build.log 2>&1
+            >am13e-ci-logs/fw1-rel17-build.log 2>&1 || { cat am13e-ci-logs/fw1-rel17-build.log; exit 1; }
           arm-none-eabi-size am13e-ci-build/AM13E_FW1_REL17.elf \
             2>&1 | tee am13e-ci-logs/fw1-rel17-size.log
           arm-none-eabi-objdump -h am13e-ci-build/AM13E_FW1_REL17.elf \
@@ -222,7 +222,7 @@ jobs:
             -DAM13E_HOST_PACKED_IMAGE="$(pwd)/am13e-ci-build/AM13E_FW1_REL17.flat.bin" \
             >am13e-ci-logs/rel17-host-configure.log 2>&1
           cmake --build am13e-ci-rel17-host -j 2 \
-            >am13e-ci-logs/rel17-host-build.log 2>&1
+            >am13e-ci-logs/rel17-host-build.log 2>&1 || { cat am13e-ci-logs/rel17-host-build.log; exit 1; }
           ctest --test-dir am13e-ci-rel17-host --output-on-failure \
             2>&1 | tee am13e-ci-logs/rel17-host-test.log
 
