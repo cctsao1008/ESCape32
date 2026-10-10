@@ -291,7 +291,7 @@ void am13e_app_motor_init(void)
      * internal PWM counter or CPU interrupt can run. Independent OC is
      * still a distinct board-level requirement.
      */
-    am13e_app_motor_fault_route_init();
+    am13e_app_motor_nfault_trip_init();
     am13e_power_stage_init(); /* Board-profiled independent OC OST2 */
     configure_motor_deadband_isolated();
     if (!pwm_pads_disconnected() || !pwm_registers_inactive()) {
@@ -913,7 +913,7 @@ void am13e_app_motor_commutation_enable(int enable)
          * A PB15 nFAULT assertion is treated as a non-recoverable fault.
          */
         if (am13e_app_nfault_asserted() ||
-            !am13e_app_motor_fault_route_ready() ||
+            !am13e_app_motor_nfault_trip_ready() ||
             !pwm_io_for_runtime())
             runtime_fault();
         if (!motor_timebase_running) {
@@ -995,7 +995,7 @@ void am13e_app_motor_audio_begin(int mode)
     if (!safety_initialized || fault_latched || audio_owner ||
         motor_timebase_running || !pwm_registers_inactive() ||
         !pwm_pads_disconnected() ||
-        !am13e_app_motor_fault_route_ready() ||
+        !am13e_app_motor_nfault_trip_ready() ||
         am13e_app_nfault_asserted() ||
         (SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
         runtime_fault();

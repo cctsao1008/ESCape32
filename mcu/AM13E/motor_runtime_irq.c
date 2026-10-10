@@ -96,7 +96,7 @@ void am13e_app_motor_runtime_enable_interrupts(void)
     AM13E_PB14_Status rx={0};
     am13e_app_pb14_status(&rx);
     if (!rx.initialized || am13e_app_nfault_asserted() ||
-        !am13e_app_motor_fault_route_ready() ||
+        !am13e_app_motor_nfault_trip_ready() ||
         !am13e_app_motor_inactive_preflight_ok() ||
         (SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK) != 0U)
         irq_barrier_fault();

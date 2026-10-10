@@ -1,7 +1,7 @@
 #include "motor_output_route_plan.h"
 #include <stddef.h>
 
-int am13e_motor_output_route_plan_valid(
+int am13e_motor_pad_route_plan_valid(
     const uint32_t pins[AM13E_MOTOR_PAD_COUNT],
     const uint32_t pincm[AM13E_MOTOR_PAD_COUNT],
     uint32_t gpio_mask)

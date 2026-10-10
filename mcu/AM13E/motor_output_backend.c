@@ -6,7 +6,7 @@
 int am13e_mcu_motor_pad_route_valid(const AM13E_MotorPadRoute *route)
 {
     return route != NULL && route->gpio != NULL &&
-        am13e_motor_output_route_plan_valid(route->pin_bits, route->pincm,
+        am13e_motor_pad_route_plan_valid(route->pin_bits, route->pincm,
                                           route->gpio_mask);
 }
 

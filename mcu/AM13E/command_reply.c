@@ -52,7 +52,7 @@ static void timer_setup(uint32_t ticks,DL_TIMER_TIMER_MODE mode)
     };
     DL_Timer_initTimerMode(TX_TIMER,&cfg);
 }
-void am13e_command_reply_init(void)
+void am13e_pb14_bidir_tx_init(void)
 {
     /* Existing clock backend provides 200MHz MCLK and 100MHz MCLK2/BUSCLK. */
     if((SYSCTL->SOCLOCK.MCLKCFG&SYSCTL_MCLKCFG_MCLKDIVCFG_MASK)!=
@@ -91,8 +91,8 @@ void am13e_command_reply_init(void)
     NVIC_EnableIRQ(TIMG4_0_INT_IRQn);
     NVIC_EnableIRQ(DMA0_INT_IRQn);
 }
-int am13e_command_reply_busy(void){return state!=TX_IDLE;}
-int am13e_command_reply_start(uint32_t final_edge,uint32_t rx_bit_ticks,
+int am13e_pb14_bidir_tx_busy(void){return state!=TX_IDLE;}
+int am13e_pb14_bidir_tx_start(uint32_t final_edge,uint32_t rx_bit_ticks,
                               uint32_t capture_hz)
 {
     if(state!=TX_IDLE){++tx_rejected;return 0;}
@@ -155,12 +155,12 @@ void DMA0_IRQHandler(void)
     ++tx_completed;
     am13e_pb14_resume_rx();
 }
-void am13e_command_reply_status(uint32_t *completed, uint32_t *rejected)
+void am13e_pb14_bidir_tx_status(uint32_t *completed, uint32_t *rejected)
 {
     if (completed != NULL) *completed = tx_completed;
     if (rejected != NULL) *rejected = tx_rejected;
 }
-void am13e_command_reply_systick(void)
+void am13e_pb14_bidir_tx_systick(void)
 {
     if(state!=TX_IDLE && ++timeout_ticks>16U) fail_closed();
 }

@@ -166,7 +166,7 @@ void am13e_power_stage_init(void)
 #ifdef AM13E_BOARD_POWER_STAGE_PROFILE
     if (!driver_level_matches(0) ||
         !am13e_power_stage_oc_trip_ready() ||
-        !am13e_app_motor_fault_route_ready())
+        !am13e_app_motor_nfault_trip_ready())
         for(;;){__NOP();}
 #endif
 }
@@ -192,7 +192,7 @@ int am13e_power_stage_attached(void)
            am13e_mcu_motor_pads_gpio_oe_off(am13e_board_motor_pad_route()) &&
            pwm_function_readback() && !am13e_app_nfault_asserted() &&
            am13e_power_stage_oc_trip_ready() &&
-           am13e_app_motor_fault_route_ready();
+           am13e_app_motor_nfault_trip_ready();
 #else
     return 0;
 #endif
@@ -204,7 +204,7 @@ int am13e_power_stage_attach(void)
     if (!initialized || attached ||
         __get_PRIMASK()!=1U || !driver_level_matches(0) ||
         !am13e_power_stage_oc_trip_ready() ||
-        !am13e_app_motor_fault_route_ready() ||
+        !am13e_app_motor_nfault_trip_ready() ||
         am13e_app_nfault_asserted() ||
         (MCPWM0->TBCTL&MCPWM_TBCTL_CTRMODE_MASK)!=
              (uint32_t)DL_MCPWM_COUNTER_MODE_UP ||

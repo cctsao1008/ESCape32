@@ -24,7 +24,7 @@ typedef struct {
  * Recognizes rollover; rejects impossible pulse widths or edge ordering.
  * Returns 0 on uncalibrated clock or invalid group.
  */
-int am13e_command_capture_group_valid(uint32_t start1, uint32_t end1,
+int am13e_pb14_capture_group_valid(uint32_t start1, uint32_t end1,
                                    uint32_t start2, uint32_t end2,
                                    uint32_t tick_hz);
 
@@ -32,14 +32,14 @@ int am13e_command_capture_group_valid(uint32_t start1, uint32_t end1,
 typedef void (*AM13E_PB14_PwmCallback)(unsigned int pulse_us);
 typedef int (*AM13E_PB14_DshotCallback)(uint16_t frame, int inverted);
 
-void am13e_command_decoder_reset(AM13E_PB14_Decoder *d, uint32_t tick_hz, int inverted);
-void am13e_command_decoder_pulse(AM13E_PB14_Decoder *d, uint32_t start,
+void am13e_pb14_decoder_reset(AM13E_PB14_Decoder *d, uint32_t tick_hz, int inverted);
+void am13e_pb14_decoder_pulse(AM13E_PB14_Decoder *d, uint32_t start,
                               uint32_t end, AM13E_PB14_PwmCallback pwm,
                               AM13E_PB14_DshotCallback dshot);
 /* Drop a suspect capture group without retaining a partial DShot frame.
  * Preserve raw clock calibration and diagnostic totals.
  */
-void am13e_command_decoder_abort(AM13E_PB14_Decoder *d);
+void am13e_pb14_decoder_abort(AM13E_PB14_Decoder *d);
 
-void am13e_command_decoder_idle(AM13E_PB14_Decoder *d, uint32_t now,
+void am13e_pb14_decoder_idle(AM13E_PB14_Decoder *d, uint32_t now,
                              AM13E_PB14_DshotCallback dshot);

@@ -36,13 +36,13 @@ static const AM13E_FaultTripRoute reference_nfault_route = {
 
 static volatile uint32_t hardware_trip_installed;
 
-int am13e_app_motor_fault_route_ready(void)
+int am13e_app_motor_nfault_trip_ready(void)
 {
     return hardware_trip_installed &&
            am13e_mcu_fault_trip_ready(&reference_nfault_route);
 }
 
-void am13e_app_motor_fault_route_init(void)
+void am13e_app_motor_nfault_trip_init(void)
 {
     if (__get_PRIMASK() == 0U || hardware_trip_installed)
         am13e_app_motor_fault_reset();
@@ -51,6 +51,6 @@ void am13e_app_motor_fault_route_init(void)
      */
     am13e_mcu_fault_trip_install(&reference_nfault_route);
     hardware_trip_installed = 1U;
-    if (!am13e_app_motor_fault_route_ready())
+    if (!am13e_app_motor_nfault_trip_ready())
         am13e_app_motor_fault_reset();
 }

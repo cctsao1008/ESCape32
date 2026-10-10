@@ -122,11 +122,11 @@ void initio(void)
     DL_ECAP_clearGlobalInterrupt(PB14_ECAP);
     DL_ECAP_startCounter(PB14_ECAP);
 
-    am13e_command_decoder_reset(&decoder, 0U, inverted_rx);
+    am13e_pb14_decoder_reset(&decoder, 0U, inverted_rx);
     calib_counter = 0U;
     calib_start = DL_ECAP_getTimeStampCounter(PB14_ECAP);
     am13e_app_io_watchdog_prepare();
-    am13e_command_reply_init();
+    am13e_pb14_bidir_tx_init();
     initialized = 1U;
     /* Equal to 16 kHz SysTick priority (0): neither exception may
      * preempt the other while mutating the decoder.
@@ -171,17 +171,17 @@ void ECAP0_IRQHandler(void)
          * This does not prove an absence of full-wrap data loss.
          */
         ++capture_overruns;
-        am13e_command_decoder_abort(&decoder);
+        am13e_pb14_decoder_abort(&decoder);
         return;
     }
-    if (!am13e_command_capture_group_valid(start1, end1, start2, end2,
+    if (!am13e_pb14_capture_group_valid(start1, end1, start2, end2,
                                         decoder.tick_hz)) {
         /* Invalid ordering can also indicate an overwritten capture
          * register. Do not deliver either pulse to the throttle logic.
          * A silent period >50ms will drop one capture pair by design.
          */
         ++invalid_capture_groups;
-        am13e_command_decoder_abort(&decoder);
+        am13e_pb14_decoder_abort(&decoder);
         return;
     }
     capture_pairs += 2U;
@@ -189,15 +189,15 @@ void ECAP0_IRQHandler(void)
     /* Both pulses pass through the same Rel17 PWM/DShot callbacks.
      * No motor output or fake watchdog is introduced.
      */
-    am13e_command_decoder_pulse(&decoder, start1, end1,
+    am13e_pb14_decoder_pulse(&decoder, start1, end1,
                              am13e_app_io_servo_pulse,
                              am13e_app_io_dshot_packet);
-    am13e_command_decoder_pulse(&decoder, start2, end2,
+    am13e_pb14_decoder_pulse(&decoder, start2, end2,
                              am13e_app_io_servo_pulse,
                              am13e_app_io_dshot_packet);
     /* Reply to CRC-valid inverted DShot, anchored to the final edge. */
     if (inverted_rx && decoder.good_dshot != good_before) {
-        (void)am13e_command_reply_start(end2, start2 - start1,
+        (void)am13e_pb14_bidir_tx_start(end2, start2 - start1,
                                        decoder.tick_hz);
     }
 }
@@ -208,7 +208,7 @@ void ECAP0_IRQHandler(void)
 void am13e_app_pb14_systick(void)
 {
     if (!initialized) return;
-    am13e_command_reply_systick();
+    am13e_pb14_bidir_tx_systick();
     if (++calib_counter == 16U) {
         const uint32_t now = DL_ECAP_getTimeStampCounter(PB14_ECAP);
         const uint32_t ticks = now - calib_start;
@@ -223,7 +223,7 @@ void am13e_app_pb14_systick(void)
         decoder.tick_hz = ticks_per_us * 1000000U;
     }
     if (calib_ticks_per_us) {
-        am13e_command_decoder_idle(&decoder,
+        am13e_pb14_decoder_idle(&decoder,
                                 DL_ECAP_getTimeStampCounter(PB14_ECAP),
                                 am13e_app_io_dshot_packet);
     }
@@ -265,7 +265,7 @@ void am13e_app_pb14_status(AM13E_PB14_Status *out)
     out->good_dshot_rx = decoder.good_dshot;
     am13e_app_io_watchdog_status(&out->watchdog_armed,
                                 &out->watchdog_valid_feeds);
-    am13e_command_reply_status(&out->tx_dma_completed, &out->tx_rejected);
+    am13e_pb14_bidir_tx_status(&out->tx_dma_completed, &out->tx_rejected);
     out->rejected = decoder.rejected;
     out->unexpected_gpio1_irqs = unexpected_gpio1_irqs;
     out->capture_ticks_per_us = calib_ticks_per_us;

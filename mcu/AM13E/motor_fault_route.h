@@ -3,5 +3,5 @@
 #ifndef AM13E
 #error "AM13E reference AM13E-only hardware nFAULT Trip"
 #endif
-void am13e_app_motor_fault_route_init(void);
-int am13e_app_motor_fault_route_ready(void);
+void am13e_app_motor_nfault_trip_init(void);
+int am13e_app_motor_nfault_trip_ready(void);
