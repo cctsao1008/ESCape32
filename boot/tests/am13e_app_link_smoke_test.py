@@ -60,7 +60,7 @@ def main() -> int:
     check(raw_bytes[0x400:0x410] == b"\xff" * 16 and
           raw_bytes[0x500:0x520] == b"\xff" * 32,
           "objcopy --gap-fill=0xff preserves erased metadata")
-    check(len(raw_bytes) >= 0x810 and
+    check(len(raw_bytes) >= 0x802 and
           raw_bytes[0x600:0x800] == b"\xff" * 0x200,
           "raw BIN begins at 0x6000 and preserves metadata/vector gap")
 

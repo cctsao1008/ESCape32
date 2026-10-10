@@ -73,8 +73,8 @@ def pack(raw: bytes) -> bytes:
     _reject_old_boot_v2(raw)
     if len(raw) > MAX_LENGTH:
         raise ImageError("Image exceeds 256 KiB legacy CMD_WRITE addressing limit")
-    if len(raw) < METADATA_SECTOR + 16:
-        raise ImageError("Raw binary must have APP+0 vectors and linked code after first sector")
+    if len(raw) < METADATA_SECTOR + 2:
+        raise ImageError("Raw binary has no linked code after first metadata sector")
     if raw[HEADER_OFFSET:HEADER_OFFSET + HEADER_SIZE] not in (
         b"\xff" * HEADER_SIZE, b"\x00" * HEADER_SIZE
     ):
