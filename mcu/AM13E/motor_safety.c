@@ -11,6 +11,7 @@
  */
 #include "motor_backend.h"
 #include "motor_event_timer.h"
+#include "motor_bemf.h" /* ECAP1 comparator IRQ lifecycle */
 #include "motor_safety.h"
 #include "motor_shadow_plan.h"
 #include "motor_aq_plan.h"
@@ -725,6 +726,7 @@ void am13e_app_motor_commutation_enable(int enable)
         sine_entry_pending=0U;
         sine_mode_active=0U;
         am13e_app_motor_timing_cancel(); /* Abort sine/commutation IRQ. */
+        am13e_app_motor_bemf_abort(); /* Abort ECAP1 zero-cross IRQ. */
         force_pwm_inactive();       /* Stops shared TBCLK and freezes MCPWM0. */
         disconnect_pwm_pads();
         motor_timebase_running=0U;
@@ -771,6 +773,7 @@ void am13e_app_motor_sixstep_idle(void)
     if (!safety_initialized || fault_latched)runtime_fault();
     const uint32_t primask=__get_PRIMASK();
     __disable_irq();
+    am13e_app_motor_bemf_abort();
     force_pwm_inactive();
     disconnect_pwm_pads();
     motor_timebase_running=0U;
@@ -807,6 +810,7 @@ void am13e_app_commutation_reset(void)
         am13e_app_motor_fault_reset();
     }
     am13e_app_motor_timing_cancel();
+    am13e_app_motor_bemf_abort();
     force_pwm_inactive();
     disconnect_pwm_pads();
     motor_timebase_running=0U;
@@ -831,6 +835,7 @@ void am13e_app_motor_fault_shutdown(void)
     sine_entry_pending=0U;
     sine_mode_active=0U;
     am13e_app_motor_timing_cancel();
+    am13e_app_motor_bemf_abort();
     force_pwm_inactive();
     disconnect_pwm_pads();
     motor_timebase_running=0U;
