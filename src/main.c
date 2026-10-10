@@ -503,15 +503,16 @@ void am13e_app_motor_on_commutation_event(void) {
 /* This callback receives *validated* BEMF timing in logical microseconds.
  * The backend owns sampling, comparator selection, filtering and IRQ ack.
  */
-void am13e_app_motor_on_bemf_event(int capture_us, int timeout) {
+int am13e_app_motor_on_bemf_event(int capture_us, int timeout) {
     if (timeout) {
         bemf_timeout_reset();
-        return;
+        return 1;
     }
     int delay_us = bemf_zero_cross_delay(capture_us);
-    if (!delay_us) return;
+    if (!delay_us) return 0; /* Ignore early capture; keep ECAP1 armed. */
     am13e_app_motor_bemf_commutation_delay_us(delay_us);
     if (sync < 6) ++sync;
+    return 1;
 }
 #endif /* AM13E */
 

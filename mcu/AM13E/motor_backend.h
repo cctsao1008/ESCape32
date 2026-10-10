@@ -77,4 +77,7 @@ void am13e_app_motor_arming_window_stop(void);
 
 /* Driver dispatches hardware-validated events into shared Rel17 logic. */
 void am13e_app_motor_on_commutation_event(void);
-void am13e_app_motor_on_bemf_event(int capture_us, int timeout);
+/* 1: Rel17 accepted the edge and scheduled commutation; 0: early edge
+ * rejected, leave physical ECAP1 capture armed for the next crossing.
+ */
+int am13e_app_motor_on_bemf_event(int capture_us, int timeout);

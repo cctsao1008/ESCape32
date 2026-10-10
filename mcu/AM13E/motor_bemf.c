@@ -27,6 +27,9 @@ _Static_assert(DL_ECAP_INPUT_CMPSS0_CTRIPH == 45U &&
  * This does not waive independent overcurrent trip and gate-off checks.
  */
 #ifdef AM13E_BEMF_BOARD_ANALOG_VERIFIED
+#if AM13E_BEMF_BOARD_ANALOG_VERIFIED != 1
+#error "BEMF_BOARD_ANALOG_VERIFIED must explicitly equal 1"
+#endif
 #if !defined(AM13E_BEMF_CMP0_HP_PINCM) || !defined(AM13E_BEMF_CMP0_HN_PINCM) || \
     !defined(AM13E_BEMF_CMP1_HP_PINCM) || !defined(AM13E_BEMF_CMP1_HN_PINCM) || \
     !defined(AM13E_BEMF_CMP3_HP_PINCM) || !defined(AM13E_BEMF_CMP3_HN_PINCM) || \
@@ -38,7 +41,7 @@ _Static_assert(DL_ECAP_INPUT_CMPSS0_CTRIPH == 45U &&
 #endif
 
 static volatile uint32_t initialized,selected_code,armed;
-static volatile uint32_t captured_events,interval_us;
+static volatile uint32_t captured_events,rejected_events,interval_us;
 static void bemf_fault(void)
 {
     am13e_app_motor_fault_shutdown();
@@ -105,7 +108,7 @@ void am13e_app_motor_bemf_init(void)
     DL_ECAP_initParamsSetDefault(&config);
     config.captureModeConfig.input=DL_ECAP_INPUT_CMPSS0_CTRIPH;
     config.captureModeConfig.prescalerValue=0U;
-    config.captureModeConfig.continouousOrOneShot=DL_ECAP_ONE_SHOT_CAPTURE_MODE;
+    config.captureModeConfig.continouousOrOneShot=DL_ECAP_CONTINUOUS_CAPTURE_MODE;
     config.captureModeConfig.wrapOrStopAtEvent=DL_ECAP_EVENT_1;
     config.captureModeConfig.captureEvent1Polarity=DL_ECAP_EVENT_RISING_EDGE;
     config.captureModeConfig.resetCounter=true;
@@ -170,6 +173,7 @@ void am13e_app_motor_bemf_interval_select(int ertm_us)
     if(!initialized || ertm_us<=0)bemf_fault();
     capture_stop();
     interval_us=(uint32_t)ertm_us;
+    rejected_events=0U;
     if(selected_code) {
 #ifdef AM13E_BEMF_BOARD_ANALOG_VERIFIED
         const uint32_t prescale=ertm_us<100?0U:ertm_us<200?1U:
@@ -207,11 +211,9 @@ void ECAP1_IRQHandler(void)
     DL_ECAP_clearGlobalInterrupt(BEMF_ECAP);
     if(!initialized)bemf_fault();
     if(!armed)return;
-    armed=0U;
-    DL_ECAP_disableInterrupt(BEMF_ECAP,BEMF_FLAGS);
-    DL_ECAP_stopCounter(BEMF_ECAP);
     if(flags&DL_ECAP_ISR_SOURCE_CTROVF) {
-        am13e_app_motor_on_bemf_event(0,1);
+        capture_stop();
+        (void)am13e_app_motor_on_bemf_event(0,1);
         return;
     }
     if((flags&DL_ECAP_ISR_SOURCE_CEVT1)==0U ||
@@ -220,5 +222,12 @@ void ECAP1_IRQHandler(void)
           BEMF_CLOCK_HZ/2U)/BEMF_CLOCK_HZ;
     if(us==0U || us>INT32_MAX)bemf_fault();
     ++captured_events;
-    am13e_app_motor_on_bemf_event((int)us,0);
+    /* Rel17 rejects crossings earlier than ival/2. Keep ECAP1
+     * continuously capturing until the shared policy accepts an edge.
+     * Capture counter is NOT reset on a rejected edge.
+     */
+    if(am13e_app_motor_on_bemf_event((int)us,0))
+        capture_stop();
+    else
+        ++rejected_events;
 }
