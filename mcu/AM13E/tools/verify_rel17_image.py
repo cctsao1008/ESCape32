@@ -63,7 +63,7 @@ def check_ram_flash_branches(objdump, boot, ram_start, ram_bytes):
             continue
         if baseop=="bx" and operand.strip()=="lr":
             continue
-        target=re.search(r"(?<![0-9a-zA-Z])(?:0x)?([0-9a-fA-F]{6,8})\s+<([^>]+)>",operand)
+        target=re.search(r"(?<![0-9a-zA-Z])(?:0x)?([0-9a-fA-F]{3,8})\s+<([^>]+)>",operand)
         if target is None:
             raise AssertionError("SRAM Flash code has unverifiable branch "+
                                  function+": "+line.strip())
