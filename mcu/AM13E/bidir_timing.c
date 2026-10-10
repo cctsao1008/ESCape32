@@ -5,9 +5,9 @@ uint32_t am13e_bidir_tx_period_ticks(uint32_t rx_ticks,uint32_t rx_hz,uint32_t t
 {
     if (!rx_hz || !timer_hz || !rx_ticks) return 0U;
     const uint64_t rate=((uint64_t)rx_hz+rx_ticks/2U)/rx_ticks;
-    const uint32_t nominal[3]={150000U,300000U,600000U};
+    const uint32_t nominal[4]={150000U,300000U,600000U,1200000U};
     int recognized=0;
-    for(unsigned i=0U;i<3U;++i)
+    for(unsigned i=0U;i<4U;++i)
         if(rate*100U >= (uint64_t)nominal[i]*88U &&
            rate*100U <= (uint64_t)nominal[i]*112U) recognized=1;
     if(!recognized) return 0U;

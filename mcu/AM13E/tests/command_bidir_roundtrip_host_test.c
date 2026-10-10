@@ -58,7 +58,7 @@ static void reply_wiring_check(uint32_t final_edge,uint32_t raw_period)
      */
     const uint32_t symbol=am13e_bidir_tx_period_ticks(
         raw_period,CAPTURE_HZ,TIMER_HZ);
-    assert(symbol>=60U && symbol<=270U);
+    assert(symbol>=30U && symbol<=270U);
     const uint32_t delay=am13e_bidir_turnaround_ticks(
         final_edge,final_edge+(CAPTURE_HZ/1000000U)*5U,
         CAPTURE_HZ,TIMER_HZ);
@@ -85,9 +85,9 @@ static void reply_wiring_check(uint32_t final_edge,uint32_t raw_period)
 }
 int main(void)
 {
-    const unsigned rates[3]={150000U,300000U,600000U};
-    const uint32_t periods[3]={1333U,667U,333U};
-    for(unsigned i=0U;i<3U;++i){
+    const unsigned rates[4]={150000U,300000U,600000U,1200000U};
+    const uint32_t periods[4]={1333U,667U,333U,167U};
+    for(unsigned i=0U;i<4U;++i){
         AM13E_PB14_Decoder decoder;
         am13e_pb14_decoder_reset(&decoder,CAPTURE_HZ,1);
         assert(am13e_bidir_tx_period_ticks(periods[i],CAPTURE_HZ,TIMER_HZ)>0U);
@@ -129,6 +129,6 @@ int main(void)
     assert(d.good_dshot==0U && dshot_delivered==before_bad);
     feed(&d,frame_for(601U,1),2000000U,667U,16U);
     assert(d.good_dshot==1U && dshot_delivered==before_bad+1U);
-    puts("PASS: PB14 DShot150/300/600 -> CRC -> 30us BiDShot plan + wrap/abort");
+    puts("PASS: PB14 DShot150/300/600/1200 -> CRC -> BiDShot plan (HOST ONLY)");
     return 0;
 }

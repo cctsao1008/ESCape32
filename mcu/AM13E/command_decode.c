@@ -102,6 +102,7 @@ static void finish_frame(AM13E_PB14_Decoder *d, AM13E_PB14_DshotCallback cb)
     }
     if (d->decoded_bits == 16U &&
         d->rx_mode!=AM13E_PB14_RX_PWM &&
+        d->rx_mode!=AM13E_PB14_RX_ONESHOT &&
         cb != NULL && cb(d->bits, d->inverted)) {
         ++d->good_dshot;
         d->rx_mode=AM13E_PB14_RX_DSHOT;
@@ -129,22 +130,38 @@ void am13e_pb14_decoder_pulse(AM13E_PB14_Decoder *d, uint32_t start,
     const uint32_t us_ticks = d->tick_hz / 1000000U;
     if (us_ticks == 0U) { ++d->rejected; return; }
 
-    /* 2.5..50ms period and 800..2200us pulse: legacy servo PWM only.
-     * Validating the period necessarily delays the first pulse one frame.
+    /* Rel17 servoirq() runs at one MCU-timer tick per microsecond
+     * for Servo or 8MHz/125ns for Oneshot125. Both give setthrot()
+     * comparable 800..2200 logical pulse counts. To preserve that
+     * source-level semantic, normalize a measured Oneshot pulse from
+     * physical microseconds to Rel17's eight-count-per-us timer domain.
+     * This is NOT the 'PWM_ENABLE' motor output option.
      */
-    if (period >= 2500U * us_ticks && period <= 50000U * us_ticks &&
-        d->pending_width >= 800U * us_ticks &&
-        d->pending_width <= 2200U * us_ticks) {
+    const int servo_candidate=
+        period>=2500U*us_ticks && period<=50000U*us_ticks &&
+        d->pending_width>=800U*us_ticks &&
+        d->pending_width<=2200U*us_ticks;
+    const int oneshot_candidate=
+        period>=250U*us_ticks && period<=50000U*us_ticks &&
+        d->pending_width>=100U*us_ticks &&
+        d->pending_width<=275U*us_ticks &&
+        d->pending_width<period;
+    if(servo_candidate || oneshot_candidate) {
+        const AM13E_PB14_RxMode kind=servo_candidate?
+            AM13E_PB14_RX_PWM:AM13E_PB14_RX_ONESHOT;
         clear_frame(d);
-        const unsigned usec = (unsigned)((d->pending_width + us_ticks / 2U) / us_ticks);
-        if (d->rx_mode==AM13E_PB14_RX_DSHOT) {
-            /* A DShot-locked physical receiver may not inject PWM
-             * throttle updates or refresh the command watchdog. */
-            ++d->rejected;
+        if(d->rx_mode!=AM13E_PB14_RX_UNDECIDED &&
+           d->rx_mode!=kind) {
+            ++d->rejected; /* Once selected, upstream servoirq
+                              * and dshotirq do not auto-reselect. */
         } else {
-            if (pwm != NULL) pwm(usec);
+            const unsigned pulse_us=(unsigned)(
+                (d->pending_width+us_ticks/2U)/us_ticks);
+            const unsigned source_ticks=servo_candidate?
+                pulse_us:pulse_us*8U;
+            if(pwm!=NULL) pwm(source_ticks);
             ++d->good_pwm;
-            d->rx_mode=AM13E_PB14_RX_PWM;
+            d->rx_mode=(uint8_t)kind;
         }
     } else if (period >= us_ticks / 2U && period <= 9U * us_ticks &&
                d->pending_width < period &&

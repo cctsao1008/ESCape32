@@ -8,7 +8,8 @@
 typedef enum {
     AM13E_PB14_RX_UNDECIDED=0,
     AM13E_PB14_RX_PWM=1,
-    AM13E_PB14_RX_DSHOT=2
+    AM13E_PB14_RX_DSHOT=2,
+    AM13E_PB14_RX_ONESHOT=3
 } AM13E_PB14_RxMode;
 typedef struct {
     uint32_t last_start;
@@ -16,7 +17,7 @@ typedef struct {
     uint32_t pending_width;
     uint32_t last_bit_period;
     uint32_t tick_hz;
-    uint32_t good_pwm;
+    uint32_t good_pwm; /* Servo PWM and Oneshot125 source-equivalent ticks */
     uint32_t good_dshot;
     uint32_t rejected;
     uint16_t bits;

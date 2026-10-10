@@ -22,6 +22,7 @@ int main(void)
     assert(am13e_bidir_tx_period_ticks(667U,100000000U,100000000U)==267U);
     assert(am13e_bidir_tx_period_ticks(333U,100000000U,100000000U)==133U);
     assert(am13e_bidir_tx_period_ticks(167U,100000000U,100000000U)==67U);
+    assert(am13e_bidir_tx_period_ticks(83U,100000000U,100000000U)==33U); /* DShot1200 */
     assert(am13e_bidir_tx_period_ticks(1000U,100000000U,100000000U)==0U);
     /* ECAP final RX edge, not ISR-entry time, owns 30us deadline.
      * At 200MHz capture / 100MHz TX clock: 30us=6000 ECAP ticks;

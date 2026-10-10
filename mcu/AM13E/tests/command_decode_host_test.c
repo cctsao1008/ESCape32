@@ -46,17 +46,31 @@ int main(void)
     am13e_pb14_decoder_pulse(&d,5000000U,5220000U,on_pwm,on_dshot);
     assert(seen_pwm==1 && last_pwm==1000U && d.good_pwm==1U);
     am13e_pb14_decoder_reset(&d,200000000U,0);
+    /* Native Rel17 Oneshot125: 150us measured pulse at eCAP,
+     * 8MHz servoirq timer equivalents = 1200 logical counts.
+     */
+    const unsigned pwm_before=seen_pwm;
+    am13e_pb14_decoder_pulse(&d,200000U,230000U,on_pwm,on_dshot);
+    am13e_pb14_decoder_pulse(&d,300000U,330000U,on_pwm,on_dshot);
+    assert(seen_pwm==pwm_before+1U && last_pwm==1200U);
+    assert(d.good_pwm==1U && d.rx_mode==AM13E_PB14_RX_ONESHOT);
+    am13e_pb14_decoder_idle(&d,20000000U,on_dshot);
+    assert(d.rx_mode==AM13E_PB14_RX_ONESHOT);
+    am13e_pb14_decoder_reset(&d,200000000U,0);
     const uint16_t valid=encode(512U,0);
     feed_frame(&d,valid,100000U,333U,0); /* DShot600 @ 200MHz */
     assert(seen_dshot==1 && last_frame==valid && last_inverse==0);
+    am13e_pb14_decoder_reset(&d,200000000U,0);
+    feed_frame(&d,valid,500000U,167U,0); /* DShot1200 on pure decoder */
+    assert(seen_dshot==2 && d.good_dshot==1U);
     assert(d.good_dshot==1U);
     am13e_pb14_decoder_reset(&d,200000000U,1);
     const uint16_t inv=encode(512U,1);
     feed_frame(&d,inv,800000U,667U,1); /* inverted DShot300 RX, no TX */
-    assert(seen_dshot==2 && last_frame==inv && last_inverse==1);
+    assert(seen_dshot==3 && last_frame==inv && last_inverse==1);
     am13e_pb14_decoder_reset(&d,200000000U,0);
     feed_frame(&d,(uint16_t)(valid^1U),1400000U,1333U,0); /* bad CRC */
-    assert(seen_dshot==2 && d.good_dshot==0U && d.rejected>0U);
+    assert(seen_dshot==3 && d.good_dshot==0U && d.rejected>0U);
     /* Simulate capture phase advancing during a four-event read:
      * an aborted partial packet must not reach the Rel17 callback.
      * Subsequent complete, CRC-valid packets must still be accepted.
@@ -66,9 +80,9 @@ int main(void)
     am13e_pb14_decoder_pulse(&d,2000333U,2000483U,on_pwm,on_dshot);
     am13e_pb14_decoder_abort(&d);
     assert(d.rejected==1U && d.active==0U && d.decoded_bits==0U);
-    assert(seen_dshot==2);
+    assert(seen_dshot==3);
     feed_frame(&d,valid,3000000U,333U,0);
-    assert(seen_dshot==3 && d.good_dshot==1U);
+    assert(seen_dshot==4 && d.good_dshot==1U);
     /* CEVT4 groups are accepted only if all four capture flags
      * belonged to the pre-ACK epoch and none reappeared while copying.
      * This rejects a four-event wrap AFTER ACK even if the phase is

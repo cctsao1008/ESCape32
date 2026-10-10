@@ -85,3 +85,26 @@ capture, but **does not** silently change PWM/DShot mode. Receiver
 identification timing, Oneshot125 and DShot1200 remain separate
 source-equivalence implementation gaps, not silently accepted as PASS. PB14 physical direction for a BiDShot reply remains
 owned exclusively by TIMG4/DMA0 until TX completion and RX resume.
+
+## Rev1.4 conditional Rel17 inputs (software support)
+
+The original Rel17 `entryirq()` selects Servo or Oneshot125
+before `servoirq()`, using a 1MHz or 8MHz timer configuration.
+The AM13E ECAP decoder now supports **Oneshot125 nominal pulse
+widths 100–275us**, converting the measured duration to the
+original 8MHz `setthrot()` tick-domain before invoking
+`am13e_app_io_servo_pulse()`. Normal Servo pulses retain 1MHz
+tick semantics. Once the source-equivalent mode is selected, silent
+time does not automatically switch its protocol. Timer sampling and
+Oneshot source calibration/failsafe under actual hardware remain
+unverified.
+
+The host DShot/CRC/GCR/turnaround planners now include DShot1200
+(`~167 ECAP ticks/bit` at 200MHz). **No DShot1200 physical RX PASS
+is claimed**: ECAP0 CEVT4 interrupt batching allows only roughly
+1.67us between IRQs and still needs real worst-case timing validation
+or a qualified DMA Capture implementation.
+
+This does not turn on the upstream Serial/Analog/Hall/Hybrid conditional
+board features automatically; they remain target-capability gaps
+until their required native pins and MCU adapters are supplied.
