@@ -12,3 +12,8 @@ typedef struct {
 int am13e_motor_aq_plan_sixstep(const AM13E_SixstepPlan *phase,
                                AM13E_MotorAQShadowPlan *out);
 int am13e_motor_aq_plan_validate(const AM13E_MotorAQShadowPlan *plan);
+
+/* Original Rel17 lock=0 idle: three complementary low-side PWM images.
+ * This is a register-level stage; pads remain Hi-Z until HW qualification.
+ */
+int am13e_motor_aq_plan_drag_brake(AM13E_MotorAQShadowPlan *out);

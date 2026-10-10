@@ -44,6 +44,8 @@ void am13e_app_motor_bemf_stop(void);
 void am13e_app_motor_bemf_commutation_delay_us(int delay_us);
 void am13e_app_motor_bemf_sine_exit_us(int delay_us);
 void am13e_app_motor_sixstep_idle(void);
+/* Rel17 lock=0 Drag/Proportional Brake: 3-phase low-side PWM staging. */
+void am13e_app_motor_drag_brake_write(void);
 void am13e_app_motor_pwm_apply(int duty, int freq_min_khz, int freq_max_khz,
                                 int ertm_us, int damp, int lock, int brushed,
                                 int running);

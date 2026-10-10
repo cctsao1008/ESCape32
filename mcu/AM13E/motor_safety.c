@@ -602,12 +602,12 @@ void am13e_app_motor_pwm_apply(int duty,int freq_min_khz,int freq_max_khz,
      * qualified count is available. Reject instead of applying 0ns.
      * The proper complementary/dead-band runtime remains to be ported.
      */
-    /* Lock/active braking has additional phase and trip requirements;
-     * keep that case rejected even when DB is configured.
-     */
-    if (lock) runtime_fault();
+    if (lock<0 || lock>2) runtime_fault();
 #ifndef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
-    if (running && damp) runtime_fault();
+    /* Only board-qualified dead-band may be used for lock=1/2 or
+     * active complementary freewheel. Never silently use 0ns.
+     */
+    if (lock || (running && damp)) runtime_fault();
 #endif
     AM13E_MotorShadowPlan plan;
     if (!am13e_motor_pwm_shadow_plan(&input,&plan))runtime_fault();
@@ -918,6 +918,46 @@ void am13e_app_motor_commutation_enable(int enable)
         /* No GPIO output mux, no PB13 enable, no SW forced-LOW release. */
     }
     __set_PRIMASK(irqmask);
+}
+
+/* Rel17 laststep() with lock==0 switches all three TIM1 channels
+ * to PWM1 while the complementary N gates remain selected. Mirror
+ * that exact LOGICAL three-low-side brake AQ image with physical pads
+ * still disconnected. The compare/duty bank is driven separately by
+ * Rel17 setduty -> am13e_app_motor_pwm_apply().
+ *
+ * This prepares Drag and Proportional Braking images; it does NOT arm
+ * the bridge, assume driver polarity, or bypass overcurrent protection.
+ */
+void am13e_app_motor_drag_brake_write(void)
+{
+    if (!safety_initialized || fault_latched) runtime_fault();
+    AM13E_MotorAQShadowPlan aq;
+    if (!am13e_motor_aq_plan_drag_brake(&aq)) runtime_fault();
+    am13e_app_motor_sixstep_idle(); /* stop TIMG/MCPWM and isolate pads */
+    const uint32_t primask=__get_PRIMASK();
+    __disable_irq();
+    if (!pwm_registers_inactive() || !pwm_pads_disconnected())
+        runtime_fault();
+    for (unsigned i=0U;i<6U;++i) {
+        DL_MCPWM_setActionQualifierShadowLoadMode(
+            MCPWM0,runtime_aq_modules[i],DL_MCPWM_AQ_LOAD_ON_CNTR_ZERO);
+        DL_MCPWM_setActionQualifierActionCompleteShadow(
+            MCPWM0,runtime_aq_outputs[i],aq.action[i]);
+        DL_MCPWM_setActionQualifierActionCompleteActive(
+            MCPWM0,runtime_aq_outputs[i],aq.action[i]);
+        runtime_aq_last[i]=aq.action[i];
+    }
+    const uint32_t readback[6]={
+        MCPWM0->PWM1_AQCTLAS,MCPWM0->PWM1_AQCTLBS,
+        MCPWM0->PWM2_AQCTLAS,MCPWM0->PWM2_AQCTLBS,
+        MCPWM0->PWM3_AQCTLAS,MCPWM0->PWM3_AQCTLBS
+    };
+    for(unsigned i=0U;i<6U;++i)
+        if(readback[i]!=(uint32_t)aq.action[i]) runtime_fault();
+    runtime_phase_pending=1U;
+    ++runtime_aq_updates;
+    __set_PRIMASK(primask);
 }
 
 /* A real coast transition for Rel17 laststep(), not an empty callback.

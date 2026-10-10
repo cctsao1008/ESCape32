@@ -242,8 +242,17 @@ void am13e_app_motor_bemf_interval_select(int ertm_us)
 {
     const uint32_t primask=__get_PRIMASK();
     __disable_irq();
-    if(!initialized || ertm_us<=0)bemf_fault();
+    if(!initialized) bemf_fault();
     capture_stop();
+    /* Rel17 laststep() with lock may call nextstep() at rest, with
+     * ertm==0. Do not claim BEMF availability or manufacture a timeout
+     * capture for a stationary motor. Real running starts with ertm>0.
+     */
+    if (ertm_us<=0) {
+        interval_us=0U;
+        __set_PRIMASK(primask);
+        return;
+    }
     interval_us=(uint32_t)ertm_us;
     rejected_events=0U;
     if(selected_code) {

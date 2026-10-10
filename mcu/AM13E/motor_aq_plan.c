@@ -27,13 +27,16 @@ int am13e_motor_aq_plan_validate(const AM13E_MotorAQShadowPlan *plan)
          */
         if (a != 0U && b != 0U && b != AQ_FREEWHEEL_B)
             return 0;
-        if (a == 0U && b == AQ_FREEWHEEL_B) return 0;
+        /* B-only PWM is only legal as the complete 3-phase Rel17 idle
+         * braking image. Partial B-only patterns fail total-role checks.
+         */
         pwm += a != 0U;
         sink += b == AQ_SINK_B;
         freewheel += b == AQ_FREEWHEEL_B;
     }
     return (pwm==0U && sink==0U && freewheel==0U) ||
-           (pwm==1U && sink==1U && freewheel<=1U);
+           (pwm==1U && sink==1U && freewheel<=1U) ||
+           (pwm==0U && sink==0U && freewheel==3U);
 }
 int am13e_motor_aq_plan_sixstep(const AM13E_SixstepPlan *phase,
                                AM13E_MotorAQShadowPlan *out)
@@ -53,6 +56,22 @@ int am13e_motor_aq_plan_sixstep(const AM13E_SixstepPlan *phase,
             default:return 0;
         }
     }
+    if (!am13e_motor_aq_plan_validate(&p)) return 0;
+    *out=p;
+    return 1;
+}
+
+/* Rel17 laststep() with duty_lock=0: PWM1 on all three phases with
+ * complementary N outputs enabled. This is a LOGICAL low-side brake AQ
+ * image, not authorization to energize MOSFETs. The original Rel17
+ * duty-to-compare bank remains managed by am13e_app_motor_pwm_apply().
+ */
+int am13e_motor_aq_plan_drag_brake(AM13E_MotorAQShadowPlan *out)
+{
+    if (out==NULL) return 0;
+    AM13E_MotorAQShadowPlan p={{0U,AQ_FREEWHEEL_B,
+                                 0U,AQ_FREEWHEEL_B,
+                                 0U,AQ_FREEWHEEL_B}};
     if (!am13e_motor_aq_plan_validate(&p)) return 0;
     *out=p;
     return 1;

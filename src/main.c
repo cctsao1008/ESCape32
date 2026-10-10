@@ -383,7 +383,7 @@ static void laststep(void) {
 	if (lock) nextstep();
 	else {
 #if defined(AM13E)
-        am13e_app_motor_sixstep_idle();
+        am13e_app_motor_drag_brake_write();
 #else
 #ifdef PWM_ENABLE
 		TIM1_CCMR1 = TIM_CCMR1_OC1PE | TIM_CCMR1_OC1M_PWM2 | TIM_CCMR1_OC2PE | TIM_CCMR1_OC2M_PWM2;
