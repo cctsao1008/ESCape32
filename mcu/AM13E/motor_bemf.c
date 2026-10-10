@@ -6,6 +6,7 @@
 #include "motor_backend.h"
 #include "motor_audio_hw.h" /* Prevent COMP/ECAP1 rearming during sound */
 #include "motor_bemf.h" /* Declarations for init, abort and ECAP1 IRQ */
+#include "motor_bemf_event_plan.h"
 #include "board_reference_io.h" /* Provisional AM13E reference phase/BEMF pinmux */
 #include "motor_event_timer.h" /* Cancel obsolete TIMG12 on BEMF timeout */
 #include "clock_backend.h"
@@ -316,21 +317,22 @@ void ECAP1_IRQHandler(void)
        (flags&~BEMF_FLAGS)!=0U)bemf_fault();
     if (!calibration_done || !capture_ticks_per_ms) bemf_fault();
     const uint32_t ticks=DL_ECAP_getEventTimeStamp(BEMF_ECAP,DL_ECAP_EVENT_1);
-    const uint64_t us=((uint64_t)ticks*UINT64_C(1000)+
-                      capture_ticks_per_ms/2U)/capture_ticks_per_ms;
-    if(us==0U || us>INT32_MAX)bemf_fault();
-    if (ticks >= capture_timeout_ticks) {
+    int capture_us=0;
+    const AM13E_BemfSample sample=am13e_bemf_sample_plan(
+        ticks,capture_ticks_per_ms,capture_timeout_ticks,&capture_us);
+    if (sample==AM13E_BEMF_SAMPLE_TIMEOUT) {
         capture_stop();
         am13e_app_motor_timing_cancel();
         (void)am13e_app_motor_on_bemf_event(0,1);
         return;
     }
+    if (sample!=AM13E_BEMF_SAMPLE_EDGE)bemf_fault();
     ++captured_events;
     /* Rel17 rejects crossings earlier than ival/2. Keep ECAP1
      * continuously capturing until the shared policy accepts an edge.
      * Capture counter is NOT reset on a rejected edge.
      */
-    if(am13e_app_motor_on_bemf_event((int)us,0))
+    if(am13e_app_motor_on_bemf_event(capture_us,0))
         capture_stop();
     else
         ++rejected_events;

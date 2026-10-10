@@ -122,6 +122,7 @@ function(add_target_ti_am13e name)
             # of the IO-only FW1. Keep their independent MCU object and
             # host tests for the later board functional integration.
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_bemf.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_bemf_event_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_sine_table.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_phase_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_aq_plan.c"

@@ -21,6 +21,7 @@
 #include "motor_backend.h"
 #include "motor_safety.h"
 #include "motor_bemf.h"
+#include "motor_bemf_event_plan.h"
 #include "irq_vectors.h"
 #include "analog_runtime.h"
 /* Logical microsecond commutation timebase, not a TI register mapping. */
@@ -441,11 +442,25 @@ static void bemf_timeout_reset(void) {
  * Return zero for an early/spurious capture; do not change state.
  */
 static int bemf_zero_cross_delay(int capture_ticks) {
+#if defined(AM13E)
+    AM13E_BemfPolicyPlan plan;
+    const int result=am13e_bemf_policy_plan(
+        ival,ertm,capture_ticks,cfg.timing,&plan);
+    if (result<0) {
+        hard_fault_handler(); /* No fabricated valid commutation on error. */
+        return 0;
+    }
+    if (result==0) return 0;
+    fast=plan.fast;
+    ival=plan.interval_us;
+    return plan.delay_us;
+#else
     if (capture_ticks < ival >> 1) return 0;
     int u = ival * 3;
     fast = (capture_ticks < u >> 2 || capture_ticks > u >> 1) && ertm < 2000;
     ival = (capture_ticks + u) >> 2;
     return max((ival - (ival * cfg.timing >> 5)) >> 1, 1);
+#endif
 }
 
 #if !defined(AM13E)
