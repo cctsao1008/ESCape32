@@ -13,8 +13,8 @@ Boot-v2-only audit; see `APP_LINK_CONTRACT.md` for exact firmware layout.
 | Firmware update | APP-only erase/program/verify, signature-last | Boot Protocol and Flash Transaction Host Tests |
 | Boot handoff | VTOR `0x6000`, valid SP/PC, direct launch | `boot/mcu/AM13E/app.c`, actual Boot ELF |
 | Flash P/E | TI DriverLib Flash routines and SRAM RAMFUNC | ARM ELF/MAP; power-failure silicon behavior awaits HW |
-| FW1 and Boot build | Real `AM13E_FW1_V16.elf` and `BOOT5_PB14.elf` | GitHub Actions Run #38059304224 |
-| FW1 Packed Image | 33,984 bytes, full CRC | Real packed-image Boot Host tests, all 6 PASS |
+| FW1 and Boot build | Real `AM13E_FW1_V16.elf` and `BOOT5_PB14.elf` | GitHub Actions Run #38059589632 |
+| FW1 Packed Image | 33,968 bytes, full CRC | Real packed-image Boot Host tests, all 6 PASS |
 | FW2 source | Separate TI Sensorless FOC implementation | FW2 is **not** implemented by this FW1 port |
 | Hardware qualification | Not started | Deliberately deferred until software port complete |
 

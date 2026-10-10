@@ -2,7 +2,7 @@
 
 **Status: Software port integrated and CI/Host verified; physical HW validation
 and TI review remain outstanding.** Latest evidence:
-[Run #38059304224](https://github.com/cctsao1008/ESCape32/actions/runs/38059304224).
+[Run #38059589632](https://github.com/cctsao1008/ESCape32/actions/runs/38059304224).
 
 ## Authoritative rules
 
@@ -68,10 +68,10 @@ stay invalid until a new complete transaction.
 
 From linked ARM GNU objects and Image Packer/Host CI:
 - BOOT5_PB14.elf: **4,496 bytes** text+data+bss (not an on-chip test).
-- AM13E_FW1_V16.elf: text **31,680**, initialized data **552**,
+- AM13E_FW1_V16.elf: text **31,672**, initialized data **552**,
   BSS **5,336** bytes.
-- ARM objcopy raw BIN: **33,976 bytes**; verified packed image:
-  **33,984 bytes**, beneath 256 KiB transport max.
+- ARM objcopy raw BIN: **33,968 bytes**; verified packed image:
+  **33,968 bytes**, beneath 256 KiB transport max.
 - FW1 ELF symbols: `__app_vector_start__=0x6000`,
   `_cfg=0x4000`, `__ramfunct_start__=0x00C18000`.
 - Boot ELF symbols: `__app_flash_start__=__app_vector_start__=0x6000`;
@@ -80,6 +80,8 @@ From linked ARM GNU objects and Image Packer/Host CI:
 - Both ARM image-smoke and actual FW1 packed-image Host suites:
   **6/6 PASS each** (protocol, integrity, CRC, duplicate write,
   interrupted write, signature-last, simulated reboot).
+- Real linked-image audit: **16 address, RAMFUNC, CRC, MSP/PC and
+  manifest checks PASS** via `tools/verify_v16_image.py`.
 - Existing Motor/BEMF/Audio/Flash FW1 Host/ARM GNU compile gates PASS.
 
 **Not established:** AM13E silicon execution, real Flash endurance or
