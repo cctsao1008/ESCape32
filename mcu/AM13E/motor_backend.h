@@ -1,8 +1,9 @@
 /*
  * AM13E / ESCape32 Rel17 Application motor-control boundary (E1-B).
  *
- * No implementations are provided at this stage. An Application firmware
- * MUST NOT link until the platform supplies real, board-qualified drivers.
+ * Selected safety/timer foundations now have real implementations. The
+ * Application still must not be called board-qualified or ready-to-arm
+ * until full hardware backends and the product Trip Zone have been verified.
  *
  * CONTROL SEMANTICS:
  * - AM13E commutation intervals and zero-cross timestamps are logical
@@ -42,7 +43,8 @@ void am13e_app_motor_bemf_commutation_delay_us(int delay_us);
 void am13e_app_motor_bemf_sine_exit_us(int delay_us);
 void am13e_app_motor_sixstep_idle(void);
 void am13e_app_motor_pwm_apply(int duty, int freq_min_khz, int freq_max_khz,
-                                int ertm_us, int damp, int lock, int brushed);
+                                int ertm_us, int damp, int lock, int brushed,
+                                int running);
 void am13e_app_motor_brushed_write(int reverse, int damp);
 void am13e_app_motor_commutation_enable(int enable);
 void am13e_app_motor_fault_shutdown(void);

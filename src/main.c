@@ -932,7 +932,7 @@ void main(void) {
          * This interface has no assumed physical frequency/dead-time.
          */
         am13e_app_motor_pwm_apply(curduty, cfg.freq_min, cfg.freq_max,
-                                   ertm, cfg.damp, lock, brushed);
+                                   ertm, cfg.damp, lock, brushed, running);
 #else
 #ifdef FULL_DUTY // Allow 100% duty cycle
 		ccr = scale(curduty, 0, 2000, lock || (running && cfg.damp) ? DEAD_TIME : 0, arr--);
