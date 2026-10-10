@@ -3,7 +3,7 @@
 > **Corrected product I/O scope:** FW1 external command/telemetry is **PB14-only**: PWM/DShot receive, BiDShot and Extended DShot telemetry. No UART/UNICOMM2 is used by ESCape32 FW1. The historical UART symbols listed below are **not FW1 requirements**. See [FW1_PB14_ONLY_SCOPE.md](FW1_PB14_ONLY_SCOPE.md). Do not remove `src/telem.c::sendtelem()`: its Extended DShot scheduler remains active with UART transport excluded. `--no-undefined` stays mandatory for real remaining hardware backends.
 
 
-**Status:** Design / TODO; intentionally **NOT compiled**; no MCU callback stubs or fake return values.
+**Status:** Partial real AM13E implementation; unimplemented motor/BEMF, Audio and Flash callbacks remain intentionally unresolved. No fake or no-op backends.
 **Source of missing-symbol evidence:** E1-AO `e1ao-fw1-link.log` (22 distinct unresolved symbols / 32 references); incremental ARM GNU Object Compile PASS with zero warning for `cfg_flash_plan.c`. E1-AP adds the testable Flash write engine but has not yet passed its own ARM/Host rebuild.
 **Reference boundaries:** Original ESCape32 Rel17 `src/main.c`, `src/io.c`, `src/telem.c`, `src/util.c`, `src/prog.c`; AM13E target-specific contracts in `mcu/AM13E/*.h`; AM13E230x TI TRM/SDK; project SW/HW architecture baseline v1.6.
 
@@ -14,6 +14,16 @@
 - **E1-AO new tested helper:** `cfg_flash_plan.{c,h}` checks write destination is **exactly 0x4000**, the FW1 settings partition spans only `0x4000..0x4fff`, source is entirely SRAM_S `0x20000000..0x20017fff`, Flash sector size 2048 bytes, and ECC program-unit padding is a multiple of 16 bytes. Local host GCC `-O2 -Wall -Wextra -Werror -pedantic` **PASS for all 4096 sizes** and invalid address/overflow cases. Physical AM13E ARM GNU and Flash execution are NOT covered by this host test.
 - **Do not implement** `am13e_app_cfg_commit` as an ACK-only wrapper. Before any real erase/program, verify RAM execution of the entire FlashCTL call path (including interrupt/exception safety), FW1/FW2 partition boundaries, active-bank handling, ECC tail staging, read-back and power-loss recovery. The historical `linker_app_reference.ld` is not a production image map; retain `--no-undefined` until an actual Flash backend exists.
 - **Outstanding** (measured E1-AN): 14 Motor/Commutation/BEMF, 7 Audio, 1 Configuration Flash. The E1-AO planner is not itself a resolved backend symbol.
+
+## E1-AU — FW1 startup reaches AQ Shadow Readback (unpowered)
+
+**Measured E1-AT WSL:** ARM GNU incremental Object Compile PASS, 0 compiler warnings; strict FW1 Link FAIL with **21 distinct Undefined Symbols / 27 References**. Category split: Motor/BEMF 13 symbols/18 references; deferred Audio 7/8; Config Flash 1/1. Newlib nosys warning messages are separate from compiler diagnostics.
+
+**E1-AT Map distinction:** The uploaded failed-link AM13E_FW1.map contains motor_safety.c::am13e_app_motor_stage_inactive_aq_shadow, motor_safety.c::am13e_app_motor_stage_inactive_sixstep_aq and motor_aq_plan.c::am13e_motor_aq_plan_sixstep in "Discarded input sections", meaning these helpers were not yet reachable from live startup. A map from a failed link is NOT production image evidence.
+
+**E1-AU runtime integration:** src/main.c calls am13e_app_motor_inactive_aq_boot_preflight after the real MCPWM0 inactive init and before the unresolved IRQ-enable barrier. The new preflight stages each of the six original Rel17 encoded step tuples in both forward/reverse (12 cases); it invokes the actual six-channel AQ Shadow DriverLib writes/readback from E1-AT. It verifies the active AQ registers remain unchanged, restores all AQ shadows to zero (coast), checks PRIMASK=1, six MCU pads still GPIO input/Hi-Z, AQ SW force continuously Low, TBCLK disabled and Timebase Stop/Freeze. Failure invokes the original real fail-closed motor shutdown/reset. No physical output, PB13 gate or hardware Trip Zone is enabled.
+
+**Debug evidence fields:** Static volatile aq_boot_steps_passed is expected to reach 12 and aq_boot_coast_restored is expected to reach 1 during a real board preflight. This does NOT prove physical MCPWM, dead-band, BEMF zero crossing, overcurrent trip, gate polarity or power-stage safety. E1-AU requires the next WSL ARM GNU build / strict link / fresh map, followed by silicon debugging when a truly bootable firmware exists. Seven Audio symbols remain deferred, and no UART is part of FW1.
 
 ## E1-AT — Six-step Action Qualifier SHADOW staging (still safely disconnected)
 
