@@ -1,4 +1,4 @@
-name: E62 AM13E FW1 Compile and Strict Link
+name: AM13E FW1 Compile and Strict Link
 on:
   push:
     branches: [am13e-port-v2]
@@ -9,7 +9,7 @@ on:
       - 'boot/mcu/AM13E/**'
       - 'boot/tests/**'
       - 'boot/tools/**'
-      - '.github/workflows/e62-fw1-compile-link.yml'
+      - '.github/workflows/am13e-fw1-compile-link.yml'
   workflow_dispatch:
 
 jobs:
@@ -28,10 +28,10 @@ jobs:
       - name: Pin TI AM13E SDK source
         shell: bash
         run: |
-          git clone --quiet --depth 1 https://github.com/TexasInstruments/am13e2x_sdk.git /tmp/e62-ti-sdk
-          git -C /tmp/e62-ti-sdk fetch --quiet --depth 1 origin b872469ceef18de5e39a1d3acb0821ec158b44c7
-          git -C /tmp/e62-ti-sdk checkout --quiet --detach b872469ceef18de5e39a1d3acb0821ec158b44c7
-          test -f /tmp/e62-ti-sdk/source/driverlib/am13e230x/dl_flash.h
+          git clone --quiet --depth 1 https://github.com/TexasInstruments/am13e2x_sdk.git /tmp/am13e-ti-sdk
+          git -C /tmp/am13e-ti-sdk fetch --quiet --depth 1 origin b872469ceef18de5e39a1d3acb0821ec158b44c7
+          git -C /tmp/am13e-ti-sdk checkout --quiet --detach b872469ceef18de5e39a1d3acb0821ec158b44c7
+          test -f /tmp/am13e-ti-sdk/source/driverlib/am13e230x/dl_flash.h
           arm-none-eabi-gcc --version | head -1
 
       - name: Run Flash, BEMF and motor host regressions
@@ -39,15 +39,15 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          mkdir -p e62-ci-logs
+          mkdir -p am13e-ci-logs
           set -e
           {
             flags="-std=c11 -O2 -Wall -Wextra -Werror -Wpedantic -Imcu/AM13E"
             run_test () {
               name="$1"
               shift
-              cc $flags "$@" -o "/tmp/e62_$name"
-              "/tmp/e62_$name"
+              cc $flags "$@" -o "/tmp/am13e_$name"
+              "/tmp/am13e_$name"
               echo "PASS: $name"
             }
             run_test flash_plan mcu/AM13E/cfg_flash_plan.c mcu/AM13E/tests/cfg_flash_plan_host_test.c
@@ -59,41 +59,41 @@ jobs:
             run_test motor_lock mcu/AM13E/motor_phase_plan.c mcu/AM13E/motor_aq_plan.c mcu/AM13E/tests/motor_lock_aq_host_test.c
             run_test motor_audio mcu/AM13E/motor_audio_plan.c mcu/AM13E/tests/motor_audio_plan_host_test.c
             run_test sine_carrier mcu/AM13E/motor_sine_table.c mcu/AM13E/tests/test_sine_carrier_host.c
-            cc $flags -DAM13E mcu/AM13E/tests/test_bemf_timeout_host.c -o /tmp/e62_bemf_timeout
-            /tmp/e62_bemf_timeout
+            cc $flags -DAM13E mcu/AM13E/tests/test_bemf_timeout_host.c -o /tmp/am13e_bemf_timeout
+            /tmp/am13e_bemf_timeout
             echo "PASS: bemf_timeout"
-          } >e62-ci-logs/host-tests.log 2>&1
-          cat e62-ci-logs/host-tests.log
+          } >am13e-ci-logs/host-tests.log 2>&1
+          cat am13e-ci-logs/host-tests.log
 
       - name: Compile all original Rel17 FW1 objects and attempt strict full link
         id: build
         shell: bash
         run: |
           set +e
-          mkdir -p e62-ci-logs
-          cmake -S . -B e62-ci-build -G Ninja \
-            -DAM13E_SDK_ROOT=/tmp/e62-ti-sdk \
+          mkdir -p am13e-ci-logs
+          cmake -S . -B am13e-ci-build -G Ninja \
+            -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
             -DAM13E_ENABLE_FW1_LINK_GATE=ON \
             -DAM13E_ENABLE_APP_SMOKE=ON \
             -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/linker_boot_reference.ld" \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-            >e62-ci-logs/configure.log 2>&1
+            >am13e-ci-logs/configure.log 2>&1
           config_rc=$?
           if [ "$config_rc" -eq 0 ]; then
-            cmake --build e62-ci-build --target AM13E -j 2 \
-              >e62-ci-logs/compile.log 2>&1
+            cmake --build am13e-ci-build --target AM13E -j 2 \
+              >am13e-ci-logs/compile.log 2>&1
             compile_rc=$?
           else
             compile_rc=99
-            echo "SKIPPED (CMake configuration failed)" >e62-ci-logs/compile.log
+            echo "SKIPPED (CMake configuration failed)" >am13e-ci-logs/compile.log
           fi
           if [ "$compile_rc" -eq 0 ]; then
-            cmake --build e62-ci-build --target AM13E_FW1.elf -j 2 \
-              >e62-ci-logs/link.log 2>&1
+            cmake --build am13e-ci-build --target AM13E_FW1.elf -j 2 \
+              >am13e-ci-logs/link.log 2>&1
             link_rc=$?
           else
             link_rc=99
-            echo "SKIPPED (FW1 object compilation failed)" >e62-ci-logs/link.log
+            echo "SKIPPED (FW1 object compilation failed)" >am13e-ci-logs/link.log
           fi
           {
             echo "HEAD=$(git rev-parse HEAD)"
@@ -102,7 +102,7 @@ jobs:
             echo "OBJECT_COMPILE_RC=$compile_rc"
             echo "STRICT_LINK_RC=$link_rc"
             echo "NOTE=Diagnostic historical linker only; never flash."
-          } | tee e62-ci-logs/summary.txt
+          } | tee am13e-ci-logs/summary.txt
           echo "configure_rc=$config_rc" >> "$GITHUB_OUTPUT"
           echo "compile_rc=$compile_rc" >> "$GITHUB_OUTPUT"
           echo "link_rc=$link_rc" >> "$GITHUB_OUTPUT"
@@ -114,15 +114,15 @@ jobs:
         run: |
           set -e
           set -o pipefail
-          cmake --build e62-ci-build --target AM13E_APP_SMOKE -j 2 \
-            >e62-ci-logs/boot-link-pack.log 2>&1
-          cmake -S boot/tests/am13e_host -B e62-ci-boot-host -G Ninja \
+          cmake --build am13e-ci-build --target AM13E_APP_SMOKE -j 2 \
+            >am13e-ci-logs/boot-link-pack.log 2>&1
+          cmake -S boot/tests/am13e_host -B am13e-ci-boot-host -G Ninja \
             -DAM13E_HOST_SANITIZERS=OFF \
-            -DAM13E_HOST_PACKED_IMAGE="$(pwd)/e62-ci-build/AM13E_APP_SMOKE.e62v2.bin" \
-            >e62-ci-logs/boot-host-configure.log 2>&1
-          cmake --build e62-ci-boot-host -j 2 >e62-ci-logs/boot-host-build.log 2>&1
-          ctest --test-dir e62-ci-boot-host --output-on-failure \
-            2>&1 | tee e62-ci-logs/boot-host-test.log
+            -DAM13E_HOST_PACKED_IMAGE="$(pwd)/am13e-ci-build/AM13E_APP_SMOKE.am13e-smoke.bin" \
+            >am13e-ci-logs/boot-host-configure.log 2>&1
+          cmake --build am13e-ci-boot-host -j 2 >am13e-ci-logs/boot-host-build.log 2>&1
+          ctest --test-dir am13e-ci-boot-host --output-on-failure \
+            2>&1 | tee am13e-ci-logs/boot-host-test.log
 
       - name: Link and pack FULL FW1 v1.6, verify Boot Flash transaction in host memory
         id: v16
@@ -131,20 +131,20 @@ jobs:
         run: |
           set -e
           set -o pipefail
-          cmake --build e62-ci-build --target AM13E_FW1_V16_IMAGE -j 2 \
-            >e62-ci-logs/fw1-v16-build.log 2>&1
-          arm-none-eabi-size e62-ci-build/AM13E_FW1_V16.elf \
-            2>&1 | tee e62-ci-logs/fw1-v16-size.log
-          arm-none-eabi-objdump -h e62-ci-build/AM13E_FW1_V16.elf \
-            >e62-ci-logs/fw1-v16-sections.log
-          cmake -S boot/tests/am13e_host -B e62-ci-v16-host -G Ninja \
+          cmake --build am13e-ci-build --target AM13E_FW1_V16_IMAGE -j 2 \
+            >am13e-ci-logs/fw1-v16-build.log 2>&1
+          arm-none-eabi-size am13e-ci-build/AM13E_FW1_V16.elf \
+            2>&1 | tee am13e-ci-logs/fw1-v16-size.log
+          arm-none-eabi-objdump -h am13e-ci-build/AM13E_FW1_V16.elf \
+            >am13e-ci-logs/fw1-v16-sections.log
+          cmake -S boot/tests/am13e_host -B am13e-ci-v16-host -G Ninja \
             -DAM13E_HOST_SANITIZERS=OFF \
-            -DAM13E_HOST_PACKED_IMAGE="$(pwd)/e62-ci-build/AM13E_FW1_V16.e62.bin" \
-            >e62-ci-logs/v16-host-configure.log 2>&1
-          cmake --build e62-ci-v16-host -j 2 \
-            >e62-ci-logs/v16-host-build.log 2>&1
-          ctest --test-dir e62-ci-v16-host --output-on-failure \
-            2>&1 | tee e62-ci-logs/v16-host-test.log
+            -DAM13E_HOST_PACKED_IMAGE="$(pwd)/am13e-ci-build/AM13E_FW1_V16.am13e.bin" \
+            >am13e-ci-logs/v16-host-configure.log 2>&1
+          cmake --build am13e-ci-v16-host -j 2 \
+            >am13e-ci-logs/v16-host-build.log 2>&1
+          ctest --test-dir am13e-ci-v16-host --output-on-failure \
+            2>&1 | tee am13e-ci-logs/v16-host-test.log
 
       - name: Link complete ESCape32-derived 16KiB Bootloader for AM13E
         id: boot_elf
@@ -153,28 +153,28 @@ jobs:
         run: |
           set -e
           set -o pipefail
-          cmake --build e62-ci-build --target BOOT5_PB14.elf -j 2 \
-            >e62-ci-logs/boot-elf-link.log 2>&1
-          arm-none-eabi-size e62-ci-build/boot/BOOT5_PB14.elf \
-            | tee e62-ci-logs/boot-elf-size.log
-          arm-none-eabi-objdump -h e62-ci-build/boot/BOOT5_PB14.elf \
-            >e62-ci-logs/boot-elf-sections.log
+          cmake --build am13e-ci-build --target BOOT5_PB14.elf -j 2 \
+            >am13e-ci-logs/boot-elf-link.log 2>&1
+          arm-none-eabi-size am13e-ci-build/boot/BOOT5_PB14.elf \
+            | tee am13e-ci-logs/boot-elf-size.log
+          arm-none-eabi-objdump -h am13e-ci-build/boot/BOOT5_PB14.elf \
+            >am13e-ci-logs/boot-elf-sections.log
 
       - name: Audit v1.6 linked Boot/FW1 addresses and ELF-to-BIN integrity
         id: static_image
         shell: bash
         run: |
           set -o pipefail
-          python3 mcu/AM13E/tools/verify_v16_image.py --build e62-ci-build \
-            2>&1 | tee e62-ci-logs/fw1-v16-static-audit.log
+          python3 mcu/AM13E/tools/verify_v16_image.py --build am13e-ci-build \
+            2>&1 | tee am13e-ci-logs/fw1-v16-static-audit.log
 
       - name: Compile board-configured power stage (synthetic values, never flash)
         id: board_profile
         shell: bash
         run: |
           set -o pipefail
-          python3 mcu/AM13E/tests/board_profile_compile_smoke.py e62-ci-build \
-            2>&1 | tee e62-ci-logs/board-profile-compile.log
+          python3 mcu/AM13E/tests/board_profile_compile_smoke.py am13e-ci-build \
+            2>&1 | tee am13e-ci-logs/board-profile-compile.log
 
       - name: Summarize actual undefined symbols
         if: always()
@@ -182,7 +182,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import collections, json, pathlib, re
-          log=pathlib.Path("e62-ci-logs/link.log")
+          log=pathlib.Path("am13e-ci-logs/link.log")
           content=log.read_text(errors="replace") if log.exists() else ""
           pattern=r"undefined reference to [\x60']([^\x60']+)[\x60']"
           names=re.findall(pattern,content)
@@ -197,7 +197,7 @@ jobs:
             "audio":dict(sorted(audio.items())),
             "non_audio":dict(sorted(other.items()))
           }
-          pathlib.Path("e62-ci-logs/undefined-symbols.json").write_text(
+          pathlib.Path("am13e-ci-logs/undefined-symbols.json").write_text(
             json.dumps(report,indent=2)+"\n")
           print(json.dumps(report,indent=2))
           PY
@@ -206,17 +206,17 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e62-am13e-fw1-build-evidence
+          name: am13e-am13e-fw1-build-evidence
           path: |
-            e62-ci-logs/
-            e62-ci-build/AM13E_FW1.map
-            e62-ci-build/boot/BOOT5_PB14.map
-            e62-ci-build/boot/BOOT5_PB14.elf
-            e62-ci-build/AM13E_FW1_V16.map
-            e62-ci-build/AM13E_FW1_V16.elf
-            e62-ci-build/AM13E_FW1_V16.bin
-            e62-ci-build/AM13E_FW1_V16.e62.bin
-            e62-ci-build/AM13E_FW1_V16.json
+            am13e-ci-logs/
+            am13e-ci-build/AM13E_FW1.map
+            am13e-ci-build/boot/BOOT5_PB14.map
+            am13e-ci-build/boot/BOOT5_PB14.elf
+            am13e-ci-build/AM13E_FW1_V16.map
+            am13e-ci-build/AM13E_FW1_V16.elf
+            am13e-ci-build/AM13E_FW1_V16.bin
+            am13e-ci-build/AM13E_FW1_V16.am13e.bin
+            am13e-ci-build/AM13E_FW1_V16.json
           retention-days: 14
           if-no-files-found: warn
 

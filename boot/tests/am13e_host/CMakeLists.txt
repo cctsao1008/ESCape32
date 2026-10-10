@@ -54,7 +54,7 @@ add_test(NAME am13e_image_packer
 # separate CMake build directory, not in this native-GCC CTest tree.
 # Pass the actual absolute path. Never silently regenerate a synthetic image.
 set(AM13E_HOST_PACKED_IMAGE "" CACHE FILEPATH
-    "Real ARM ELF-derived E62 v2 packed image for transaction verification")
+    "Real ARM ELF-derived AM13E reference v2 packed image for transaction verification")
 if(AM13E_HOST_PACKED_IMAGE)
     if(NOT EXISTS "${AM13E_HOST_PACKED_IMAGE}")
         message(FATAL_ERROR

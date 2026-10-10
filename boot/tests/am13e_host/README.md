@@ -1,4 +1,4 @@
-# E62 / AM13E Host Validation
+# AM13E reference / AM13E Host Validation
 
 ## Stage D1: actual ESCape32 CMD_WRITE protocol over mock transport
 
@@ -18,7 +18,7 @@ With the Stage C2 packed ARM image already built:
 ```bash
 cmake -S boot/tests/am13e_host -B build-am13e-host-tests \
   -DCMAKE_C_COMPILER=gcc \
-  -DAM13E_HOST_PACKED_IMAGE="$PWD/build-am13e/AM13E_APP_SMOKE.e62v2.bin"
+  -DAM13E_HOST_PACKED_IMAGE="$PWD/build-am13e/AM13E_APP_SMOKE.am13e-smoke.bin"
 cmake --build build-am13e-host-tests -j"$(nproc)" && \
 ctest --test-dir build-am13e-host-tests --output-on-failure -V
 ```
@@ -57,7 +57,7 @@ via the native-GCC Mock Flash controller.
 
 The host maps Flash at `0x10006000` because Linux cannot directly map
 the MCU's low Flash addresses. The validator now checks Reset_Handler
-against the fixed **physical** E62 APP base `0x6000`, not the host
+against the fixed **physical** AM13E reference APP base `0x6000`, not the host
 pointer address. The ordinary host fixtures were adjusted accordingly.
 
 After successful Stage C2 ARM link + pack:
@@ -65,7 +65,7 @@ After successful Stage C2 ARM link + pack:
 ```bash
 cmake -S boot/tests/am13e_host -B build-am13e-host-tests \
   -DCMAKE_C_COMPILER=gcc \
-  -DAM13E_HOST_PACKED_IMAGE="$PWD/build-am13e/AM13E_APP_SMOKE.e62v2.bin"
+  -DAM13E_HOST_PACKED_IMAGE="$PWD/build-am13e/AM13E_APP_SMOKE.am13e-smoke.bin"
 cmake --build build-am13e-host-tests -j"$(nproc)"
 ctest --test-dir build-am13e-host-tests --output-on-failure -V
 ```
@@ -82,7 +82,7 @@ For a quick independent run after host build:
 
 ```bash
 ./build-am13e-host-tests/am13e_flash_transaction_test --flash-image \
-  build-am13e/AM13E_APP_SMOKE.e62v2.bin
+  build-am13e/AM13E_APP_SMOKE.am13e-smoke.bin
 ```
 
 This remains host emulation: AM13E Flash ECC, active-bank RAM execution,
@@ -109,8 +109,8 @@ The build should create these in `build-am13e/`:
 - `AM13E_APP_SMOKE.elf`: Cortex-M33 cross-linked ELF;
 - `AM13E_APP_SMOKE.map`: linker placement map;
 - `AM13E_APP_SMOKE.bin`: APP-base flat raw BIN starting at `0x6000`;
-- `AM13E_APP_SMOKE.e62v2.bin`: Stage C1 packed and verified image;
-- `AM13E_APP_SMOKE.e62v2.json`: image metadata manifest.
+- `AM13E_APP_SMOKE.am13e-smoke.bin`: Stage C1 packed and verified image;
+- `AM13E_APP_SMOKE.am13e-smoke.json`: image metadata manifest.
 
 This smoke target uses `objcopy --remove-section=.data` because the
 zero-length ARM linker `.data` section is marked `ALLOC, LOAD` at
@@ -146,7 +146,7 @@ the existing hardware bootloader.
 ## Stage C1: Image Pack / Verify (host-only)
 
 The new `boot/tools/pack_am13e_v2.py` packs **only v2 APP-base flat
-raw binaries**, not old vector-first `.e62.bin` files, and does **not**
+raw binaries**, not old vector-first `.am13e.bin` files, and does **not**
 flash the MCU.
 
 Expected raw binary input:
@@ -165,10 +165,10 @@ From the repository root:
 
 ```bash
 python3 boot/tools/pack_am13e_v2.py pack \
-    path/to/app-flat-at-0x6000.bin path/to/app-v2.e62.bin \
-    --manifest path/to/app-v2.e62.json
+    path/to/app-flat-at-0x6000.bin path/to/app-v2.am13e.bin \
+    --manifest path/to/app-v2.am13e.json
 
-python3 boot/tools/pack_am13e_v2.py verify path/to/app-v2.e62.bin
+python3 boot/tools/pack_am13e_v2.py verify path/to/app-v2.am13e.bin
 ```
 
 The `am13e_image_packer` CTest performs CLI roundtrip,
@@ -233,13 +233,13 @@ CTest targets:
 
 No additional shell-based build workflow is needed.
 
-## Image contract — **v2**, not the old vector-first .e62.bin
+## Image contract — **v2**, not the old vector-first .am13e.bin
 
 - APP base = `0x6000`.
 - ESCape32 legacy signature (`0x32EA`, little endian) = APP + 0.
-- E62 32-byte header = APP + `0x100`.
+- AM13E reference 32-byte header = APP + `0x100`.
 - Cortex-M33 initial MSP + Reset Handler = APP + `0x800`.
-- Header layout uses E62 v1's magic/version/target/length/CRC/flags
+- Header layout uses AM13E reference v1's magic/version/target/length/CRC/flags
   field definitions, but **the placement of vectors differs**.
 - Header CRC = first 28 bytes of the header.
 - Image CRC = image bytes `[0,image_length)`, excluding the 32-byte
@@ -254,7 +254,7 @@ No additional shell-based build workflow is needed.
   sequentially, restore metadata blocks 0 and then 1; `0x32EA` only
   becomes visible after successful whole-image verification.
 
-An earlier E62 image with vectors at `0x6000`, header at `0x6100`
+An earlier AM13E reference image with vectors at `0x6000`, header at `0x6100`
 **cannot** be installed as a v2 boot image unchanged. A compatible v2
 application linker and packager are still required.
 

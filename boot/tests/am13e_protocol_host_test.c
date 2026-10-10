@@ -257,7 +257,7 @@ static void queue_protocol(size_t image_bytes, const uint8_t *image) {
 }
 int main(int argc, char **argv) {
     if (argc != 2) {
-        fprintf(stderr, "Usage: %s path/to/AM13E_APP_SMOKE.e62v2.bin\n", argv[0]);
+        fprintf(stderr, "Usage: %s path/to/AM13E_APP_SMOKE.am13e-smoke.bin\n", argv[0]);
         return 2;
     }
     /* Reference golden vector, independent of the generated frames. */

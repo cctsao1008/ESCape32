@@ -89,7 +89,7 @@ static void run_tests(void) {
     CHECK(boot_am13e_image_check(first, end, NULL, 0U, &length)
           == AM13E_IMAGE_VALID);
     CHECK(length == IMAGE_LEN);
-    puts("PASS valid v2 E62 image metadata and CRC"); ++tests;
+    puts("PASS valid v2 AM13E reference image metadata and CRC"); ++tests;
 
     fixture();
     image[0x1000U] ^= 0x10U;

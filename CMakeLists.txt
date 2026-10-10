@@ -323,9 +323,9 @@ if(AM13E_ENABLE_APP_SMOKE)
     set(am13e_smoke_raw
         "${CMAKE_CURRENT_BINARY_DIR}/AM13E_APP_SMOKE.bin")
     set(am13e_smoke_packed
-        "${CMAKE_CURRENT_BINARY_DIR}/AM13E_APP_SMOKE.e62v2.bin")
+        "${CMAKE_CURRENT_BINARY_DIR}/AM13E_APP_SMOKE.am13e-smoke.bin")
     set(am13e_smoke_manifest
-        "${CMAKE_CURRENT_BINARY_DIR}/AM13E_APP_SMOKE.e62v2.json")
+        "${CMAKE_CURRENT_BINARY_DIR}/AM13E_APP_SMOKE.am13e-smoke.json")
 
     add_custom_command(
         OUTPUT "${am13e_smoke_raw}"
@@ -552,7 +552,7 @@ if(AM13E_ENABLE_FW1_V16_IMAGE)
     set_target_properties(AM13E_FW1_V16.elf PROPERTIES
         OUTPUT_NAME "AM13E_FW1_V16" SUFFIX ".elf")
     set(am13e_v16_raw "${CMAKE_CURRENT_BINARY_DIR}/AM13E_FW1_V16.bin")
-    set(am13e_v16_packed "${CMAKE_CURRENT_BINARY_DIR}/AM13E_FW1_V16.e62.bin")
+    set(am13e_v16_packed "${CMAKE_CURRENT_BINARY_DIR}/AM13E_FW1_V16.am13e.bin")
     set(am13e_v16_manifest "${CMAKE_CURRENT_BINARY_DIR}/AM13E_FW1_V16.json")
     add_custom_command(OUTPUT "${am13e_v16_raw}"
         COMMAND "${AM13E_V16_OBJCOPY}" -O binary --gap-fill=0xff

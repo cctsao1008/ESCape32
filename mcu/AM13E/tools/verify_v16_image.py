@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""E62 v1.6 real FW1/Boot ELF + Packed BIN static integration gate.
+"""AM13E reference v1.6 real FW1/Boot ELF + Packed BIN static integration gate.
 
 Read actual ARM linker symbols and sections, not a synthetic metadata image.
 This is a HOST/CI gate. It cannot qualify live motor, analog, Flash
@@ -56,7 +56,7 @@ def main():
     boot=root/"boot/BOOT5_PB14.elf"
     fw=root/"AM13E_FW1_V16.elf"
     raw=(root/"AM13E_FW1_V16.bin").read_bytes()
-    packed=(root/"AM13E_FW1_V16.e62.bin").read_bytes()
+    packed=(root/"AM13E_FW1_V16.am13e.bin").read_bytes()
     manifest=json.loads((root/"AM13E_FW1_V16.json").read_text())
     bs,fs=symbols(a.nm,boot),symbols(a.nm,fw)
     bsec,fsec=sections(a.readelf,boot),sections(a.readelf,fw)
@@ -118,7 +118,7 @@ def main():
             manifest["image_length"]==len(packed) and
             manifest["sha256"]==hashlib.sha256(packed).hexdigest(),
             "Manifest matches actual linked ELF-derived image")
-    print("PASS E62 v1.6 REAL Boot/FW1 software image static integration")
+    print("PASS AM13E reference v1.6 REAL Boot/FW1 software image static integration")
 
 if __name__=="__main__":
     main()

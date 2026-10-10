@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pack/verify E62 v1.6 vector-first APP image, no hardware flashing.
+"""Pack/verify AM13E reference v1.6 vector-first APP image, no hardware flashing.
 
 Input byte 0 is APP_BASE=0x6000 (Cortex-M33 vector table).
 The signature-last marker is at APP+0x400, metadata APP+0x500.
@@ -31,7 +31,7 @@ assert struct.calcsize(HEADER_FORMAT) == HEADER_SIZE
 
 
 class ImageError(ValueError):
-    """A raw image violates the E62 v2 boot image contract."""
+    """A raw image violates the AM13E reference v2 boot image contract."""
 
 
 def _u32(data: bytes, at: int) -> int:
@@ -112,9 +112,9 @@ def verify(image: bytes) -> dict[str, int | str]:
     if (magic, version, size, target, flags, reserved) != (
         HEADER_MAGIC, VERSION, HEADER_SIZE, TARGET_ID, 0, 0
     ):
-        raise ImageError("Incorrect E62 image header fields / target / flags")
+        raise ImageError("Incorrect AM13E image header fields / target / flags")
     if hdr_crc != _header_crc(image[HEADER_OFFSET:HEADER_OFFSET + HEADER_SIZE]):
-        raise ImageError("E62 image header CRC mismatch")
+        raise ImageError("AM13E image header CRC mismatch")
     if length != len(image):
         raise ImageError(f"Declared length {length} differs from file length {len(image)}")
     _vectors(image)
@@ -137,11 +137,11 @@ def verify(image: bytes) -> dict[str, int | str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="operation", required=True)
-    pack_parser = sub.add_parser("pack", help="Create a CRC-protected E62 v2 image")
+    pack_parser = sub.add_parser("pack", help="Create a CRC-protected AM13E reference v2 image")
     pack_parser.add_argument("raw", type=Path)
     pack_parser.add_argument("output", type=Path)
     pack_parser.add_argument("--manifest", type=Path, default=None)
-    verify_parser = sub.add_parser("verify", help="Verify an E62 v2 image file")
+    verify_parser = sub.add_parser("verify", help="Verify an AM13E reference v2 image file")
     verify_parser.add_argument("image", type=Path)
     args = parser.parse_args(argv)
     try:
@@ -157,7 +157,7 @@ def main(argv: list[str] | None = None) -> int:
             summary = verify(args.image.read_bytes())
         print(json.dumps(summary, indent=2))
     except (ImageError, OSError) as exc:
-        print(f"E62 v2 image {args.operation} FAILED: {exc}", file=sys.stderr)
+        print(f"AM13E reference v2 image {args.operation} FAILED: {exc}", file=sys.stderr)
         return 1
     return 0
 

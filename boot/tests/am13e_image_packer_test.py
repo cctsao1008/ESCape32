@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end Python CLI contract checks for the E62 v2 flat image packer."""
+"""End-to-end Python CLI contract checks for the AM13E reference v2 flat image packer."""
 
 import json
 from pathlib import Path
@@ -27,15 +27,15 @@ def run(*args, success=True):
 
 def main():
     count = 0
-    with tempfile.TemporaryDirectory(prefix="e62-pack-test-") as d:
+    with tempfile.TemporaryDirectory(prefix="am13e-pack-test-") as d:
         root = Path(d)
         raw_path = root / "raw.bin"
-        packed_path = root / "packed.e62v2.bin"
+        packed_path = root / "packed.am13e-smoke.bin"
         manifest_path = root / "packed.json"
         raw = bytearray(b"\xff" * IMAGE_SIZE)
         for offset in range(0x800, IMAGE_SIZE):
             raw[offset] = (offset * 13 + 7) & 0xFF
-        # E62 v1.6 vectors begin at APP+0.
+        # AM13E reference v1.6 vectors begin at APP+0.
         struct.pack_into("<II", raw, 0, 0x20001000, APP_BASE + 0x900 + 1)
         raw_path.write_bytes(raw)
         run("pack", raw_path, packed_path, "--manifest", manifest_path)
@@ -110,7 +110,7 @@ def main():
         print("PASS input overwrite blocked")
         count += 1
 
-    print(f"PASS {count} E62 v2 image packer tests")
+    print(f"PASS {count} AM13E reference v2 image packer tests")
 
 
 if __name__ == "__main__":
