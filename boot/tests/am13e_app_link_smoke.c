@@ -3,7 +3,8 @@
  *
  * This target has no motor-control, board pinmux, driver or runtime.
  * Its sole purpose is to prove that the ARM linker can emit the real M33
- * vector table at APP+0x800 behind an erased signature/header sector.
+ * vector table at APP+0; erased signature/header slots follow vectors
+ * in the same first 2 KiB sector (at +0x400/+0x500).
  */
 #include <stdint.h>
 

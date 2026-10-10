@@ -46,40 +46,41 @@ def main() -> int:
     info = json.loads(manifest.read_text())
     layout = sections(objdump, elf)
 
-    check(layout.get(".signature") == (0x6000, 4),
-          "ELF erased ESCape32 signature word located at 0x6000")
-    check(layout.get(".image_header") == (0x6100, 32),
-          "ELF 32-byte E62 metadata reservation at 0x6100")
-    check(layout.get(".intvecs", (None, 0))[0] == 0x6800 and
+    check(layout.get(".intvecs", (None, 0))[0] == 0x6000 and
           layout[".intvecs"][1] >= 16,
-          "ELF M33 vector table starts at 0x6800")
+          "ELF v1.6 M33 vector table starts at APP_BASE 0x6000")
+    check(layout.get(".signature") == (0x6400, 16),
+          "ELF ECC16 erased marker slot located at APP+0x400")
+    check(layout.get(".image_header") == (0x6500, 32),
+          "ELF 32-byte CRC metadata reservation at APP+0x500")
     check(layout.get(".text", (0, 0))[0] >= 0x6808 and
           layout[".text"][1] > 0,
           "ELF contains ARM application code after the M33 vectors")
 
-    check(raw_bytes[:4] == b"\xff" * 4 and
-          raw_bytes[0x100:0x120] == b"\xff" * 32,
+    check(raw_bytes[0x400:0x410] == b"\xff" * 16 and
+          raw_bytes[0x500:0x520] == b"\xff" * 32,
           "objcopy --gap-fill=0xff preserves erased metadata")
     check(len(raw_bytes) >= 0x810 and
           raw_bytes[0x600:0x800] == b"\xff" * 0x200,
           "raw BIN begins at 0x6000 and preserves metadata/vector gap")
 
-    sp, pc = struct.unpack_from("<II", raw_bytes, 0x800)
+    sp, pc = struct.unpack_from("<II", raw_bytes, 0)
     check(sp == 0x20018000 and pc & 1 and
           0x6800 <= pc & ~1 < 0x6000 + len(raw_bytes),
           "ARM-linked vector contains valid MSP and Thumb Reset_Handler")
-    check(image[:2] == b"\xea\x32" and
+    check(image[0x400:0x402] == b"\xea\x32" and
+          image[:0x400] == raw_bytes[:0x400] and
           image[0x800:len(raw_bytes)] == raw_bytes[0x800:],
           "packer publishes signature without altering linked vector/code")
     check(info["image_length"] == len(image) and
           len(image) <= 256 * 1024 and len(image) % 16 == 0,
           "manifest length matches 16-byte-aligned transport image")
 
-    header = image[0x100:0x120]
+    header = image[0x500:0x520]
     check(zlib.crc32(header[:28]) ==
           struct.unpack_from("<I", header, 28)[0],
           "packed E62 header CRC matches Python-independent CRC computation")
-    check(zlib.crc32(image[:0x100] + image[0x120:]) ==
+    check(zlib.crc32(image[:0x500] + image[0x520:]) ==
           struct.unpack_from("<I", header, 16)[0],
           "packed image CRC covers signed prefix and linker-generated payload")
 

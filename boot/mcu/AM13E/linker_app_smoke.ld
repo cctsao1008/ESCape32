@@ -3,9 +3,11 @@
  * NOT a production motor-controller application linker.
  * The current legacy ESCape32 CMD_WRITE addressing is limited to 256 KiB.
  *
- * Image base  0x00006000 : deferred 0x32EA signature / metadata sector
- * Image hdr   0x00006100 : 32 bytes reserved for v2 packager
- * M33 vectors 0x00006800 : actual initial MSP + Reset_Handler
+ * M33 vectors 0x00006000 : real initial MSP + Reset_Handler
+ * Signature   0x00006400 : deferred 0x32EA marker, ECC16 aligned
+ * Image hdr   0x00006500 : 32 bytes reserved for CRC metadata
+ * Code begins at >=0x00006800; 2KiB erase sector shared by vectors
+ * and metadata. This is the approved v1.6 vector-first contract.
  */
 ENTRY(Reset_Handler)
 
@@ -18,12 +20,21 @@ MEMORY
 
 SECTIONS
 {
-    .signature 0x00006000 : {
+    .intvecs 0x00006000 : {
         __app_image_start__ = .;
+        __app_vector_start__ = .;
+        KEEP(*(.intvecs))
+        __app_vector_end__ = .;
+    } > FLASH_META
+
+    .signature 0x00006400 : {
+        LONG(0xFFFFFFFF)
+        LONG(0xFFFFFFFF)
+        LONG(0xFFFFFFFF)
         LONG(0xFFFFFFFF)
     } > FLASH_META
 
-    .image_header 0x00006100 : {
+    .image_header 0x00006500 : {
         __app_image_header_start__ = .;
         LONG(0xFFFFFFFF)
         LONG(0xFFFFFFFF)
@@ -35,12 +46,6 @@ SECTIONS
         LONG(0xFFFFFFFF)
         __app_image_header_end__ = .;
     } > FLASH_META
-
-    .intvecs 0x00006800 : {
-        __app_vector_start__ = .;
-        KEEP(*(.intvecs))
-        __app_vector_end__ = .;
-    } > FLASH_APP
 
     .text : {
         *(.text .text.*)
@@ -78,11 +83,12 @@ SECTIONS
     /DISCARD/ : { *(.note.GNU-stack) }
 }
 
-ASSERT(ADDR(.signature) == 0x00006000, "V2 image must begin at APP 0x6000")
-ASSERT(SIZEOF(.signature) == 4, "Only an erased signature word is permitted")
-ASSERT(ADDR(.image_header) == 0x00006100, "V2 metadata must be at 0x6100")
-ASSERT(SIZEOF(.image_header) == 32, "V2 header must occupy exactly 32 bytes")
-ASSERT(ADDR(.intvecs) == 0x00006800, "M33 vectors must begin at 0x6800")
+ASSERT(ADDR(.intvecs) == 0x00006000, "v1.6 M33 vectors must begin at APP_BASE")
+ASSERT(SIZEOF(.intvecs) <= 0x400, "M33 vectors collide with reserved signature")
+ASSERT(ADDR(.signature) == 0x00006400, "Signature must be at APP+0x400")
+ASSERT(SIZEOF(.signature) == 16, "Signature slot must be one erased ECC16")
+ASSERT(ADDR(.image_header) == 0x00006500, "CRC header must be at APP+0x500")
+ASSERT(SIZEOF(.image_header) == 32, "Metadata must occupy 32 bytes")
 ASSERT(SIZEOF(.intvecs) >= 8, "M33 vectors must contain SP and PC")
 /* Strict smoke-only contract: exporting .data is intentionally disabled.
  * Refuse an initialized-data dependency instead of silently omitting it.
