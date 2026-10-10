@@ -19,6 +19,7 @@
 
 #if defined(AM13E)
 #include "motor_backend.h"
+#include "motor_safety.h"
 #include "irq_vectors.h"
 #include "adc_runtime.h"
 /* Logical microsecond commutation timebase, not a TI register mapping. */
@@ -713,6 +714,11 @@ void main(void) {
 #endif
 #if defined(AM13E)
     am13e_app_motor_init();
+    /* Readback only; all six PWM pads remain Hi-Z with TBCLK stopped. */
+    if (!am13e_app_motor_inactive_aq_boot_preflight()) {
+        am13e_app_motor_fault_shutdown();
+        am13e_app_motor_fault_reset();
+    }
 #else
 	TIM1_BDTR = TIM_DTG | TIM_BDTR_OSSR | TIM_BDTR_MOE;
 	TIM1_ARR = CLK_KHZ / 24 - 1;

@@ -10,6 +10,8 @@
 #include "motor_aq_plan.h"
 #include "motor_pwm_shadow_plan.h"
 uint32_t am13e_app_motor_inactive_preflight_ok(void);
+/* Boot-time register preflight, NOT power stage ready. */
+int am13e_app_motor_inactive_aq_boot_preflight(void);
 /* Write and read back six candidate AQ shadow registers, with output Hi-Z,
  * AQ shadow FREEZE and TBCLK stopped. Not a power-stage arming function.
  */

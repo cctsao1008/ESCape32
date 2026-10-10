@@ -303,6 +303,54 @@ int am13e_app_motor_stage_inactive_sixstep_aq(
     return am13e_app_motor_stage_inactive_aq_shadow(&aq);
 }
 
+/* E1-AU: FW1-startup reachable, INACTIVE AQ shadow verification.
+ * All PWM pads remain GPIO Hi-Z, AQ SW force low, TBCLK stopped.
+ * 12 original six-step vectors stage SHADOW registers only; then coast.
+ */
+static volatile uint32_t aq_boot_steps_passed;
+static volatile uint32_t aq_boot_coast_restored;
+int am13e_app_motor_inactive_aq_boot_preflight(void)
+{
+    if (__get_PRIMASK()==0U || !am13e_app_motor_inactive_preflight_ok() ||
+        (SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK)!=0U)
+        return 0;
+    static const uint16_t seq[6]={0x175U,0xD9U,0x1ABU,0x72U,0x1DEU,0xACU};
+    aq_boot_steps_passed=0U;
+    aq_boot_coast_restored=0U;
+    const uint32_t before[6]={
+        MCPWM0->PWM1_AQCTLA,MCPWM0->PWM1_AQCTLB,
+        MCPWM0->PWM2_AQCTLA,MCPWM0->PWM2_AQCTLB,
+        MCPWM0->PWM3_AQCTLA,MCPWM0->PWM3_AQCTLB
+    };
+    for(int reverse=0;reverse<=1;++reverse) {
+        for(unsigned step=0U;step<6U;++step) {
+            const uint32_t x=seq[step],mask=x>>3U;
+            const int p=(int)(x&mask),n=(int)((~x)&mask);
+            const int cc=(int)((mask>>3U)^(reverse?4U:0U));
+            if (!am13e_app_motor_stage_inactive_sixstep_aq(
+                    p,n,cc,0,reverse)) return 0;
+            ++aq_boot_steps_passed;
+        }
+    }
+    const AM13E_MotorAQShadowPlan coast={{0U,0U,0U,0U,0U,0U}};
+    if (!am13e_app_motor_stage_inactive_aq_shadow(&coast)) return 0;
+    const uint32_t after[6]={
+        MCPWM0->PWM1_AQCTLA,MCPWM0->PWM1_AQCTLB,
+        MCPWM0->PWM2_AQCTLA,MCPWM0->PWM2_AQCTLB,
+        MCPWM0->PWM3_AQCTLA,MCPWM0->PWM3_AQCTLB
+    };
+    for(unsigned i=0U;i<6U;++i)
+        if(after[i]!=before[i]) return 0;
+    if (MCPWM0->PWM1_AQCTLAS!=0U || MCPWM0->PWM1_AQCTLBS!=0U ||
+        MCPWM0->PWM2_AQCTLAS!=0U || MCPWM0->PWM2_AQCTLBS!=0U ||
+        MCPWM0->PWM3_AQCTLAS!=0U || MCPWM0->PWM3_AQCTLBS!=0U ||
+        !am13e_app_motor_inactive_preflight_ok() ||
+        (SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK)!=0U)
+        return 0;
+    aq_boot_coast_restored=1U;
+    return aq_boot_steps_passed==12U;
+}
+
 /* Rel17 util.c::resetcom(): restore *physical MCU-side inactive bridge*
  * around score/PCM playback. Never clear hardware Trip Zone or fault
  * latch, never assume PB13 gate enable polarity, and never substitute
