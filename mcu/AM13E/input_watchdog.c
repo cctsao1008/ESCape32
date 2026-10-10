@@ -16,6 +16,7 @@
  */
 #include "io_backend.h"
 #include "input_watchdog.h"
+#include "irq_vectors.h" /* hard_fault_handler: original Rel17 policy */
 #include <soc.h>
 #include <dl_wwdt.h>
 #include <dl_sysctl.h>
