@@ -48,12 +48,13 @@ void am13e_app_motor_runtime_enable_interrupts(void)
     if (__get_PRIMASK() != 1U || irq_barrier_released)
         irq_barrier_fault();
 
-    /* Product APP_BASE is not finalized; do not hard-code 0x6800.
-     * Require a Flash-resident, nonzero, aligned actual vector table.
+    /* The paired SW Architecture Baseline v1.6 requires exactly one
+     * APP_BASE=0x6000 for both FW1/FW2. Boot must not transfer execution
+     * to the legacy offset-vector (0x6800) image. All ISR/VTOR addresses
+     * are verified against the actual installed vector table below.
      */
     const uint32_t vtor=SCB->VTOR;
-    if (vtor < UINT32_C(0x6000) || vtor >= UINT32_C(0x80000) ||
-        (vtor & UINT32_C(0x7F)) != 0U)
+    if (vtor != UINT32_C(0x00006000))
         irq_barrier_fault();
 
     if (!vector_matches(SysTick_IRQn,SysTick_Handler) ||

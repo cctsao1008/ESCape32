@@ -1,120 +1,89 @@
-# AM13E ESCape32 Rel17 — Application / Boot / Link Contract
+# E62 AM13E23019 — FW1 v1.6 Boot / Application Link Contract
 
-**Status: architecture-alignment review; production linker NOT ready.**
-The earlier synthetic linker/real TI RAMFUNC tests remain PASS for
-a **historical Boot-format reference only**, not for the complete
-SW Architecture Baseline v1.6.
+**Status: Software port integrated and CI/Host verified; physical HW validation
+and TI review remain outstanding.** Latest evidence:
+[Run #38059304224](https://github.com/cctsao1008/ESCape32/actions/runs/38059304224).
 
-## 1. Source authority and build boundary
+## Authoritative rules
 
-1. **Software Architecture Baseline v1.6** owns normal ESC
-   behavior, FW1/FW2 separation, boot/update policy and Flash regions.
-2. **Hardware Architecture Baseline v1.6** owns AM13E peripheral
-   instances, physical pin map, HFXT, sensing and protection routes.
-3. **ESCape32 Rel17** owns the FW1 Application and is the Build/
-   source-level functional baseline.
-4. **TI SDK / CMSIS / DriverLib** provides the AM13E low-level MCU
-   support layer (same role as libopencm3 on the legacy targets).
-   A TI SDK example Application, generated SysConfig or standalone
-   build system is not the source of product architecture.
-5. The existing AM13E **Boot port** may be used to check Flash API,
-   startup/VTOR, handoff and firmware image mechanics, but does
-   not supersede the two v1.6 architecture baselines.
+The E62 Software Architecture Baseline **v1.6** specifies:
+- Boot: `0x00000000..0x00003FFF` (16 KiB).
+- FW1 config: `0x00004000..0x00004FFF` (4 KiB), preserved on app update.
+- FW2 config: `0x00005000..0x00005FFF` (4 KiB), preserved on app update.
+- **One** FW1 or FW2 installed in `0x00006000..0x0007FFFF` (488 KiB).
+- Exactly one boot-to-application entry/vector base at `0x00006000`.
+- No A/B, bank swap, rollback, or runtime FW selection.
 
-Canonical application entry: root ESCape32 CMake
-`add_target(AM13E AM13E)`; the current target is an OBJECT library
-only. No runnable Rel17 ELF/BIN has been produced.
+Those addresses are architectural. **Signature and metadata offsets below
+are E62 detailed design**, not literal requirements from the v1.6 baseline.
 
-## 2. SW Baseline v1.6 Flash policy — authoritative
+## Unified v1.6 image format
 
-| Region | Start | End (inclusive) | Capacity |
-| --- | --- | --- | ---: |
-| Common boot | `0x00000000` | `0x00003FFF` | 16 KiB |
-| FW1 parameters | `0x00004000` | `0x00004FFF` | 4 KiB |
-| FW2 parameters | `0x00005000` | `0x00005FFF` | 4 KiB |
-| Single application (FW1 **OR** FW2) | `0x00006000` | `0x0007FFFF` | 488 KiB |
+| Element | Address | Mechanism |
+|---|---|---|
+| Cortex-M33 MSP/Reset vector table | `0x6000` | Actual TI GCC startup `.intvecs` |
+| Signature ECC16 unit | `0x6400` | `0x32EA`, written LAST after verification |
+| CRC image header (32 bytes) | `0x6500` | Target/length/payload CRC/header CRC |
+| FW1 code and loadable ROM | `0x6800` onward | ARM ELF `.text`, load images |
+| Mutable `.cfg` | SRAM_S `0x20000000..` | Persistent source `_cfg=0x4000` |
+| Flash command `.TI.ramfunc` | SRAM_C `0x00C18000..` | Flash LMA + Startup copy |
 
-The FW1/FW2 parameter sectors are independently owned and
-**preserved across application reflashing**. No A/B image,
-bank swap, rollback slot or runtime firmware selector is selected.
+The first **2 KiB physical Flash sector** contains vectors and metadata;
+the deferred signature still prevents launch after a torn transaction.
+Boot's `boot_am13e_application_valid()` checks signature, target/length,
+CRC, MSP/Reset entry and image bounds; `boot_am13e_launch_application()`
+sets VTOR to **0x6000** and transfers MSP/PC directly to the app.
 
-The Baseline requires a fixed application-base vector/startup
-contract; the allocated 488 KiB Flash region does **not** by
-itself mandate transporting a 488 KiB image. FW1/FW2 are expected
-to fit the **existing 256 KiB transport limit**, which stays in
-place for now. Exact application marker, image header and CRC
-are **Detailed Design**, not already frozen by an existing smoke test.
+Use the same single-image layout for a future FW2 implementation.
 
-## 3. Current Boot implementation is NOT aligned yet — P0
+## Firmware build targets
 
-A prior Boot v2 proof-of-concept used:
+- `AM13E`: original Rel17 + complete AM13E Backend OBJECT library.
+- `AM13E_FW1_V16.elf`: **actual FW1 application ELF**, linker:
+  `mcu/AM13E/linker_app_v16.ld`.
+- `AM13E_FW1_V16_IMAGE`: objcopy BIN + CRC/metadata packed image + manifest.
+- `BOOT5_PB14.elf`: actual common Bootloader, linker:
+  `boot/mcu/AM13E/linker_boot_reference.ld` explicitly selected.
+- `AM13E_FW1.elf` / `mcu/AM13E/linker_app_reference.ld`:
+  **historical diagnostic ONLY**; not a v1.6 application artifact.
 
-- Signature at `0x6000`, 32-byte image header at `0x6100`,
-  and **actual vector table at `0x6800`**.
-- A **256 KiB** packed-image/write-transport upper limit;
-  **ACCEPTED for current FW1/FW2**, with final image-size verification.
-- A common **8 KiB** `0x4000..0x5FFF` config storage assumption
-  instead of FW1/FW2's independent 4 KiB regions.
+Image packer: `boot/tools/pack_am13e_v2.py` (its legacy file name is
+retained for tooling continuity; code/manifest implement v1.6).
 
-The existing `mcu/AM13E/linker_app_reference.ld` and
-`probe_app_linker.py` only exercise this older Boot arrangement.
-Their synthetic pass **does not validate** the v1.6 Flash layout,
-independent FW configuration
-retention, or compatibility with the required fixed
-application-entry contract.
+## Transport and update contract
 
-The `0x6000` APP_BASE versus `0x6800` vector arrangement requires
-an **explicit detailed-design reconciliation** across the ESCape32
-packer, Boot validation/jump and Application linker/startup.
-Do not silently adopt either arrangement based on a smoke ELF.
+The Bootloader retains upstream ESCape32 1 KiB write blocks with a
+one-byte index; packed image length remains **at most 256 KiB** until an
+explicit protocol change, even though the physical APP allocation is 488 KiB.
+Normal CMD_WRITE addresses only the APP region, never Boot or FW1/FW2 config.
 
-The current `_cfg = 0x4000` in the old linker can be a FW1
-parameter source, but **must be bounded to 4 KiB for FW1** and
-must not erase/write FW2's `0x5000..0x5FFF`. FW2 must use
-its own dedicated source/address/commit policy. No extra common
-config subregion is allowed without an architecture revision.
+Programming order remains `invalidate block 0, invalidate block 1,
+code/data blocks >=2, restore block 0, restore block 1`.
+Boot stages block 1's APP+0x400 signature ECC16 in RAM; it verifies
+the full image and received span against the CRC/header before writing
+that unit as the final committed data. Interrupted or stale updates
+stay invalid until a new complete transaction.
 
-**Until that reconciliation is implemented, the existing linker
-reference is NOT authorized as the production image format.**
+## Evidence — 2026-10-10
 
-## 4. Rel17 runtime and MCU startup compatibility
+From linked ARM GNU objects and Image Packer/Host CI:
+- BOOT5_PB14.elf: **4,496 bytes** text+data+bss (not an on-chip test).
+- AM13E_FW1_V16.elf: text **31,680**, initialized data **552**,
+  BSS **5,336** bytes.
+- ARM objcopy raw BIN: **33,976 bytes**; verified packed image:
+  **33,984 bytes**, beneath 256 KiB transport max.
+- FW1 ELF symbols: `__app_vector_start__=0x6000`,
+  `_cfg=0x4000`, `__ramfunct_start__=0x00C18000`.
+- Boot ELF symbols: `__app_flash_start__=__app_vector_start__=0x6000`;
+  real `boot_am13e_image_check` and `boot_am13e_launch_application`
+  linked.
+- Both ARM image-smoke and actual FW1 packed-image Host suites:
+  **6/6 PASS each** (protocol, integrity, CRC, duplicate write,
+  interrupted write, signature-last, simulated reboot).
+- Existing Motor/BEMF/Audio/Flash FW1 Host/ARM GNU compile gates PASS.
 
-- Original Rel17 motor-control/housekeeping/command code stays
-  in `src/*.c` and drives the AM13E peripheral adaptation.
-- Device startup and CMSIS exception vector names are bridged
-  by the target-specific `mcu/AM13E/irq_vectors.c`.
-- The Boot reference disables PRIMASK before handoff; runtime
-  safe interrupt enabling remains a required unimplemented
-  AM13E board service. Do not bypass the safety barrier.
-- Link `.data` Flash LMA -> SRAM VMA, `.bss` clear,
-  writable `.cfg`, M33 initial stack/Reset_Handler, and
-  `.TI.ramfunc` Flash LMA -> SRAM_C VMA using actual
-  startup/DriverLib when the agreed production image
-  format is defined.
-- The current GCC 15.2.1 non-flashable **synthetic** fixture
-  correctly places the actual TI
-  `DL_FRI_setReadWaitStates()` in SRAM_C RAMFUNC,
-  with separate Flash load data; this is verified evidence
-  for the DriverLib *section mechanism*, not for the final
-  Rel17 image.
-- 13/13 libc candidates exist in the selected GNU toolchain
-  archives, but complete production link success is not asserted.
-
-## 5. Next development order
-
-1. Keep `add_target(AM13E AM13E)` and rebuild all original
-   Rel17 Application objects after the CMake source update.
-2. Keep **256 KiB transport** and verify FW1/FW2 binary sizes.
-   Reconcile 4+4 KiB firmware parameters and the exact APP_BASE /
-   vector / marker semantics across ESCape32 + Boot reference.
-3. Validate a production linker **against that agreed contract**,
-   not by simply increasing the legacy linker region length.
-4. Implement board-specific hardware backends using the **HW
-   Baseline pin/peripheral map** (MCPWM0, CMPSS BEMF paths,
-   PB14 RX/BiDShot, ADC, safe ENABLE/nFAULT).
-5. Carry out real startup/ISR/motor validation only after
-   hardware and power-stage safety requirements are met.
-
-The current 11/11 Object Compile PASS, 46 cross-object resolved,
-60 undefined and real-FRI synthetic linker test remain valid,
-but do not override any outstanding architecture mismatch.
+**Not established:** AM13E silicon execution, real Flash endurance or
+reset/brownout behavior, actual PWM/BEMF/Audio function, gate/OC electrical
+polarity and thresholds, production release approval. Those remain in the
+separately scheduled final HW validation phase; they do **not** replace
+any firmware Source Porting task.
