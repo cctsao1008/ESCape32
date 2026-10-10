@@ -36,6 +36,11 @@ void SysTick_Handler(void)
 void PendSV_Handler(void)
 {
     pend_sv_handler();
+    /* DShot CMD_SAVE is queued by PB14/ECAP0 IRQ, not executed there.
+     * PendSV can be preempted by higher-priority valid RX, preserving
+     * WWDT feeding between individual Flash commands.
+     */
+    am13e_app_io_service_pending_save();
 }
 
 void HardFault_Handler(void)

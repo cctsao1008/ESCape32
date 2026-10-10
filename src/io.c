@@ -20,6 +20,7 @@
 #if defined(AM13E)
 #include "io_backend.h"
 #include "bidir_codec.h"
+#include "pb14_bidir_tx.h" /* DShot save waits for pending BiDShot reply */
 #else
 #ifdef AT32F4
 #define USART2_TDR USART2_DR
@@ -379,6 +380,14 @@ static int dshotcrc(int x, int inv) {
  * Called after physical framing and CRC acceptance on either MCU family.
  */
 static char cmd, cnt, rep;
+#if defined(AM13E)
+/* DSHOT_SAVE_SETTINGS arrives in ECAP0 IRQ at highest motor priority.
+ * Never erase/program Bank0 Flash from the DShot RX interrupt. PendSV
+ * services the request after TX completes, with a stable motor stop.
+ */
+static volatile uint8_t dshot_save_pending;
+static volatile uint8_t dshot_save_running;
+#endif
 
 static inline __attribute__((always_inline)) void dshot_apply_packet(int x) {
 	int tlm = x & 0x10;
@@ -421,7 +430,12 @@ static inline __attribute__((always_inline)) void dshot_apply_packet(int x) {
 			break;
 		case 12: // DSHOT_CMD_SAVE_SETTINGS
 			if (cnt != 6) break;
+#if defined(AM13E)
+            /* Do not block ECAP0 RX/WWDT or BiDShot reply for Flash. */
+            if (!dshot_save_running) dshot_save_pending = 1U;
+#else
 			beepval = savecfg();
+#endif
 			break;
 		case 13: // DSHOT_CMD_EXTENDED_TELEMETRY_ENABLE
 			if (cnt != 6) break;
@@ -1104,5 +1118,26 @@ static void cliirq(void) {
 #if defined(AM13E)
 int am13e_app_io_cli_line(char *line) {
     return execcmd(line);
+}
+#endif
+
+#if defined(AM13E)
+/* Rel17 DShot save command deferred from ECAP0 IRQ to lowest-priority
+ * PendSV. Normal valid-frame WWDT feeding remains owned by PB14 RX.
+ * Repeated commands are coalesced until this transaction completes.
+ */
+void am13e_app_io_service_pending_save(void)
+{
+    if (!dshot_save_pending || dshot_save_running) return;
+    if (am13e_pb14_bidir_tx_busy()) return; /* preserve current reply */
+    if (ertm || throt) {
+        dshot_save_pending=0U;
+        beepval=0; /* do not persist while throttle is requested */
+        return;
+    }
+    dshot_save_running=1U;
+    dshot_save_pending=0U;
+    beepval=savecfg();
+    dshot_save_running=0U;
 }
 #endif
