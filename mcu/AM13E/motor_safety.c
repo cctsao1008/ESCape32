@@ -13,6 +13,9 @@
 #include "motor_event_timer.h"
 #include "motor_safety.h"
 #include "motor_shadow_plan.h"
+#include "motor_pwm_shadow_plan.h"
+#include "util_backend.h" /* real Rel17 resetcom() prototype */
+#include "clock_backend.h"
 #include <soc.h>
 #include <dl_mcpwm.h>
 #include <dl_gpio.h>
@@ -201,6 +204,26 @@ int am13e_app_motor_stage_inactive_shadow(const AM13E_MotorShadowPlan *plan)
         am13e_app_motor_fault_reset();
     }
     __set_PRIMASK(previous_primask);
+    return 1;
+}
+
+/* E1-AS: prepare a FULL Rel17 duty/frequency shadow image then stage
+ * actual MCPWM0 shadow registers, but only in the previously validated
+ * inactive/Hi-Z/Stop-Freeze state. Caller MUST supply board-qualified
+ * dead ticks and must not treat this as enabling six-step PWM.
+ */
+int am13e_app_motor_stage_inactive_pwm_shadow(
+    const AM13E_MotorPwmShadowInputs *input,
+    AM13E_MotorShadowPlan *snapshot)
+{
+    if (input == NULL || input->clock_hz != (AM13E_APP_MCLK_HZ / 2U))
+        return 0;
+    AM13E_MotorShadowPlan plan;
+    if (!am13e_motor_pwm_shadow_plan(input,&plan))
+        return 0;
+    if (!am13e_app_motor_stage_inactive_shadow(&plan))
+        return 0;
+    if (snapshot != NULL) *snapshot=plan;
     return 1;
 }
 

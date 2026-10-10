@@ -15,6 +15,13 @@
 - **Do not implement** `am13e_app_cfg_commit` as an ACK-only wrapper. Before any real erase/program, verify RAM execution of the entire FlashCTL call path (including interrupt/exception safety), FW1/FW2 partition boundaries, active-bank handling, ECC tail staging, read-back and power-loss recovery. The historical `linker_app_reference.ld` is not a production image map; retain `--no-undefined` until an actual Flash backend exists.
 - **Outstanding** (measured E1-AN): 14 Motor/Commutation/BEMF, 7 Audio, 1 Configuration Flash. The E1-AO planner is not itself a resolved backend symbol.
 
+## E1-AS — Rel17 PWM policy into inert MCPWM0 registers
+
+- **E1-AR measured:** ARM GNU Object Compile PASS with **one** application warning: `-Wmissing-prototypes` for `am13e_app_commutation_reset()`. E1-AS fixes this by including its existing declaration in `util_backend.h`. Strict FW1 Link still FAIL: **21 unique symbols / 27 references**, now broken down Motor/BEMF **13 / 18**, Audio (deferred) **7 / 8**, Config Flash **1 / 1**. The real commutation-reset backend eliminated one symbol / five references compared with E1-AP; no UART symbols reappeared.
+- **E1-AS integrated staging:** `motor_pwm_shadow_plan.{c,h}` composes Rel17 period interpolation, logical duty mapping, lock/damp/running/brushed/dead ticks and FULL_DUTY into six MCPWM0 compare shadows. `am13e_app_motor_stage_inactive_pwm_shadow()` calls the existing *real-register* stage and readback with MCU PWM pads GPIO Hi-Z, AQ continuous-low and TBCLK STOP/FREEZE, and refuses any clock other than the verified 100MHz peripheral contract. **No duty/phase/AQ/dead-band/gate outputs are enabled.**
+- **Fail-closed semantics:** if FULL_DUTY yields compare > programmed period (e.g. logical duty 2000), reject that staging request instead of silently clipping the Rel17 value; final output semantics require dedicated MCPWM silicon verification. No assumption that six identical shadow compares are valid complementary gate waveforms.
+- **Local Host GCC reference fixture:** 13,600 cross-product policy cases PASS (`-O2 -Wall -Wextra -Werror -pedantic`). E1-AS committed source still requires user WSL Host GCC and ARM GNU Build/Strict Link; the E1-AR linker count is the last measured count.
+
 ## E1-AR — Motor-first priority; Audio postponed
 
 **Product decision:** Defer all seven Audio/Music/PCM symbols until the motor-control hardware path is functional and validated. They share the MCPWM resource, but note/PCM waveforms, volume, pacing and audio ownership **still require separate implementation/validation** later. No dummy Audio functions and no removal of the original Rel17 audio logic.
