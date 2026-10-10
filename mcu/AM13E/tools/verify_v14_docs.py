@@ -145,6 +145,32 @@ def check_current_contract():
     require(not (ROOT/"mcu/AM13E/linker_app_rel17.ld").exists() and
             not (ROOT/"boot/mcu/AM13E/linker_boot_reference.ld").exists(),
             "Duplicate linker paths remain")
+    app_entry=read("mcu/AM13E/entry.c")
+    boot_entry=read("boot/mcu/AM13E/entry.c")
+    app_main=read("src/main.c")
+    boot_main=read("boot/src/main.c")
+    app_sources=read("mcu/AM13E/config.cmake")
+    boot_sources=read("boot/mcu/AM13E/config.cmake")
+    require("mcu/AM13E/entry.c" in app_sources and
+            "boot/mcu/AM13E/entry.c" in boot_sources and
+            "boot/mcu/AM13E/entry.c" not in app_sources and
+            "mcu/AM13E/entry.c" not in boot_sources,
+            "Application/Boot entry.c ownership or source selection drifted")
+    require("int main(void)" in app_entry and
+            "am13e_rel17_app_main();" in app_entry and
+            "void am13e_rel17_app_main(void)" in app_main and
+            "int main(void)" in boot_entry and
+            "am13e_rel17_boot_main();" in boot_entry and
+            "void am13e_rel17_boot_main(void)" in boot_main and
+            "void main(void)" in app_main and
+            "void main(void)" in boot_main,
+            "Cortex-M33 entry ABI or original Rel17 control-loop signature lost")
+    host_entry=read("boot/tests/am13e_protocol_entry.c")
+    require("#define am13e_rel17_boot_main boot_am13e_protocol_entry" in
+            host_entry and
+            "#define write boot_am13e_flash_write" in host_entry,
+            "Native Host Boot harness no longer tests original dispatcher")
+    print("PASS: one TI-compatible main bridge per ARM image, original Rel17 void loops")
     print("PASS: native Application/Boot config.ld linker ownership")
     print("PASS: native Application/Boot config.c and config.cmake ownership")
     print("PASS: exact original Rev1.4 source docs SHA-256")

@@ -726,8 +726,12 @@ static int park(void) {
 #endif
 
 #if defined(AM13E)
-/* TI GCC startup calls extern int main(void); legacy targets retain void. */
-int main(void) {
+/* The Cortex-M33 ABI adapter lives in mcu/AM13E/entry.c.
+ * Rel17's control-loop body keeps its original void-return contract.
+ * Legacy MCU main() and behavior remain unchanged.
+ */
+void am13e_rel17_app_main(void);
+void am13e_rel17_app_main(void) {
 #else
 void main(void) {
 #endif

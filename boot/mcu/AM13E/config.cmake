@@ -1,6 +1,7 @@
 # Native Rel17 v1.4 Boot source selection, independent from Application sources.
         set(am13e_sources
             "${PROJECT_SOURCE_DIR}/boot/src/main.c"
+            "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/entry.c"
             "${PROJECT_SOURCE_DIR}/boot/src/io.c"
             "${PROJECT_SOURCE_DIR}/boot/src/util.c"
             "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/flash_range.c"

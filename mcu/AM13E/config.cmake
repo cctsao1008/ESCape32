@@ -1,6 +1,7 @@
 # Native Rel17 v1.4 Application source selection and selected Reference board options.
         set(am13e_sources
             "${PROJECT_SOURCE_DIR}/src/main.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/entry.c"
             "${PROJECT_SOURCE_DIR}/src/io.c"
             "${PROJECT_SOURCE_DIR}/src/telem.c" # Original Rel17 telemetry source stays linked
             "${PROJECT_SOURCE_DIR}/src/util.c"

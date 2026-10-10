@@ -70,6 +70,14 @@ def main():
           "int AM13E_WRITE_ENTRY(" in src("boot/mcu/AM13E/flash.c"),
           "AM13E CMD_WRITE must use original Rel17 write() entry")
 
+    check("void am13e_rel17_boot_main(void)" in boot and
+          "void main(void)" in boot and
+          "void am13e_rel17_app_main(void)" in src("src/main.c") and
+          "void main(void)" in src("src/main.c") and
+          "int main(void)" in src("boot/mcu/AM13E/entry.c") and
+          "int main(void)" in src("mcu/AM13E/entry.c"),
+          "Native Startup entry bridge must preserve Rel17 void main behavior")
+
     partition=src("mcu/AM13E/flash_partition.h")
     ld=src("mcu/AM13E/config.ld")
     boot_ld=src("boot/mcu/AM13E/config.ld")

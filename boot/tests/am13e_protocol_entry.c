@@ -1,11 +1,10 @@
-/* Compile the unmodified shared boot/src/main.c protocol dispatcher
- * into the native host harness under a non-host-main symbol.
- * Production Boot still compiles boot/src/main.c directly.
- */
-/* Host only: redirect the original Boot write() hook to its identical
- * AM13E_FLASH_TEST symbol; avoid interposing libc/POSIX write().
+/* Native Host harness compiles the actual AM13E Rel17 Boot dispatcher.
+ * The standalone ARM entry.c is not linked into Host CTest, so rename
+ * only the dispatcher function, never the Host's int main(void).
+ * The Flash write() symbol is substituted to avoid the POSIX libc ABI.
  */
 #define write boot_am13e_flash_write
-#define main boot_am13e_protocol_entry
+#define am13e_rel17_boot_main boot_am13e_protocol_entry
 #include "../src/main.c"
+#undef am13e_rel17_boot_main
 #undef write

@@ -60,7 +60,7 @@ function/semantic path; it does not mean the exact proposed
 | Original Boot `update()` / `setwrp()` | AM13E handlers still return `RES_ERROR` | **MISSING — mandatory source feature gap** |
 | Source-defined conditional input and telemetry | Analog receiver, serial receiver/telemetry, Hall and board-specific routes incomplete | PARTIAL — not excluded from v1.4 |
 | Native `add_target()` with MCU-local `config.c/h/cmake/ld` | App/Boot `config.cmake` own real Source lists; `config.c` implement native `init()`; active Rel17 image profile selects their `config.ld` | ALIGNED for selected Reference source/linker; hardware still pending |
-| Native `entry.c` Startup bridge | Linked ARM vector/startup passes; standalone App/Boot `entry.c` absent | NEEDS actual startup ABI review, not automatically equivalent |
+| Native `entry.c` Startup bridge | App `mcu/AM13E/entry.c` and Boot `boot/mcu/AM13E/entry.c` expose TI-compatible `int main(void)`, calling separate original Rel17 `void` control-loop bodies; one TI SDK startup object per ELF | SOURCE + LINK ALIGNED; M33 handoff and physical startup still pending |
 | Additional HAL / parallel control stack | MCU responsibilities in source modules; original Rel17 motor policy retained | No full independent HAL detected |
 
 The current Reference Board isolates motor outputs and does not
@@ -70,9 +70,9 @@ Rel17 conditional source capabilities.
 
 ## Next implementation gates
 
-1. Review Cortex-M33 Startup ABI. The Application already supplies
-   `int main(void)` in AM13E; the Boot parser uses upstream
-   `void main(void)`. Avoid duplicate vectors/entry and legacy changes.
+1. Verify Boot and Application Startup/Entry bridge against the exact
+   TI SDK startup and their linked ELF symbol ownership; static/CI
+   evidence is not hardware launch/reset/ROM BSL qualification.
 2. Reuse original source hooks for selected conditional analog,
    serial, Hall and GPIO feature branches. Validate the actual board
    wiring before claiming any mode physically supported.

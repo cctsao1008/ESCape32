@@ -65,6 +65,17 @@ def main():
     check("write" in b and "boot_am13e_flash_write" not in b and
           0<=b["write"]<0x4000,
           "Native Boot exports upstream Rel17 write(), not old private alias")
+    check(all(symbol in b for symbol in
+              ("main", "am13e_rel17_boot_main", "Reset_Handler")) and
+          all(0<=b[symbol]<0x4000 for symbol in
+              ("main", "am13e_rel17_boot_main", "Reset_Handler")) and
+          all(symbol in f for symbol in
+              ("main", "am13e_rel17_app_main", "Reset_Handler")) and
+          all(APP<=f[symbol]<END for symbol in
+              ("main", "am13e_rel17_app_main", "Reset_Handler")) and
+          "am13e_rel17_app_main" not in b and
+          "am13e_rel17_boot_main" not in f,
+          "Each image links TI Reset_Handler, int main entry and its own Rel17 void dispatcher")
     ram=bs.get(".TI.ramfunc",(0,0))
     fw_ram=fs.get(".TI.ramfunc",(0,0))
     check(0xC18000<=ram[0]<ram[0]+ram[1]<=0xC20000 and

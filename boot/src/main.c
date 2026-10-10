@@ -33,7 +33,16 @@
 #define RES_OK    0
 #define RES_ERROR 1
 
+#if defined(AM13E)
+/* The TI Reset_Handler calls int main(void) in boot/mcu/AM13E/entry.c.
+ * Rel17's command dispatcher remains a void function, without a
+ * duplicate vector/Reset_Handler or a new protocol implementation.
+ */
+void am13e_rel17_boot_main(void);
+void am13e_rel17_boot_main(void) {
+#else
 void main(void) {
+#endif
 #if defined(AM13E)
     /* Boot entry/reboot session always begins at legacy window 0.
      * Old CMD_READ/WRITE clients remain binary compatible up to 256KiB.
