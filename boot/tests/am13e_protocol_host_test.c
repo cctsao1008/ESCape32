@@ -243,7 +243,16 @@ static void queue_protocol(size_t image_bytes,const uint8_t *image){
         if(absolute==0U)queue_write(0U,image,n,false,RES_OK);
     }
     if(window)queue_window(0U,RES_OK);
-    queue_read(0U,32U,image); /* Flat first 32 bytes unchanged. */
+    /* Short ELF-link smoke binaries can be smaller than the 32-byte
+     * READ payload. CMD_READ returns the programmed prefix followed by
+     * erased (0xff) Flash, not bytes past the end of the BIN buffer.
+     */
+    uint8_t first32[32];
+    memset(first32,0xff,sizeof first32);
+    const size_t available=image_bytes<sizeof first32?
+                           image_bytes:sizeof first32;
+    memcpy(first32,image,available);
+    queue_read(0U,32U,first32);
     input_val(CMD_UPDATE);expected_val(RES_ERROR); /* Known v1.4 gap */
     input_val(CMD_SETWRP);input_val(0x33U);expected_val(RES_ERROR);
     input_val(CMD_PROBE);expected_val(RES_OK);
