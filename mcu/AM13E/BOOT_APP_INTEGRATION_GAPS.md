@@ -8,7 +8,7 @@ Boot-v2-only audit; see `APP_LINK_CONTRACT.md` for exact firmware layout.
 |---|---|---|
 | APP_BASE/vector | Both FW1 and common Boot use `0x6000` | Linked ELF sections/symbols, ARM startup, host validator |
 | Signature/header CRC | Signature `+0x400`; header `+0x500` | Image packer + actual Boot CRC checks |
-| Single APP allocation | `0x6000..0x7FFFF` (488 KiB) | `linker_app_v16.ld`; current 256 KiB transport cap remains |
+| Single APP allocation | `0x6000..0x7FFFF` (488 KiB) | `linker_app_v16.ld`, `flash_partition.h`, CMD_WINDOW0/1, 257KiB protocol and integrity host regression |
 | FW1/FW2 params | Dedicated `0x4000..0x4FFF` and `0x5000..0x5FFF` | Link assertions, separated FW1 Flash Writer |
 | Firmware update | APP-only erase/program/verify, signature-last | Boot Protocol and Flash Transaction Host Tests |
 | Boot handoff | VTOR `0x6000`, valid SP/PC, direct launch | `boot/mcu/AM13E/app.c`, actual Boot ELF |
@@ -25,8 +25,10 @@ do not mistake either for the actual FW1 linker.
 
 The Baseline explicitly defers image marker/CRC **format** to detailed
 design. The new `+0x400/+0x500` metadata placement is that design choice,
-not a silent change to the architecture. No change to WiFi-Link's 1KiB
-block protocol or single-image FW1/FW2 selection was introduced.
+not a silent change to the architecture. The AM13E-only CMD_WINDOW=6 extension retains each original 1KiB
+READ/WRITE frame but extends its effective block number; WiFi-Link must
+be updated before using the upper Application region. The single-image
+FW1/FW2 selection and on-flash signature/metadata ABI are unchanged.
 
 See **APP_LINK_CONTRACT.md** and the CI logs before changing packaging,
 STM32 compatibility logic, or Boot/App startup. 

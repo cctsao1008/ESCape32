@@ -96,9 +96,9 @@
 #define AM13E_BOARD_NTC_MODEL 3
 #endif
 
-/* PB15 nFAULT -> OST1 is always installed/checked at runtime.
- * Independent OC -> OST2 is an OPTIONAL board path (PINCM=0 disables
- * only the second trip). COMP_MAP=132 is G431 BEMF, not actual OC.
+/* Five explicit IO-only auxiliaries: PB15 nFAULT is a plain input,
+ * never OST1 or SysTick sampled. Optional OC is pin-mode-only, never
+ * OST2. COMP_MAP=132 is G431 BEMF, not independent OC.
  */
 #ifndef AM13E_BOARD_OC_GPIO_PINCM
 #define AM13E_BOARD_OC_GPIO_PINCM 0

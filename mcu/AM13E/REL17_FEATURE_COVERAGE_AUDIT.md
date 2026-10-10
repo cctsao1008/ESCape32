@@ -37,7 +37,8 @@
 
 - **Five IO-only exclusions**: PB13 Gate Enable, PB15 driver nFAULT, independent OC Trip, Serial Telemetry TX and current limiting are **pin-mode initialized only** (the last three are unassigned until a real pin is selected). No Gate activation, OST1/OST2, Serial TX or current-limit algorithm is connected in FW1. PWM/RED/FED remains internally operational with phase pins isolated. This is not a motor-spinning configuration.
 - **Motor and Audio share MCPWM0**, and ownership is exclusive. Do not add a standalone GPIO beeper path.
-- Current Reference Image: `APP_BASE=0x6000` and existing single-slot 1KiB-block/8-bit-index update transport. **Preserve magic, CRC, signature, vector, and existing Boot/Flash semantics.** A different profile would need its own explicit ABI/version/migration validation; changing an output filename is not an ABI migration.
+- Current Reference Image: `APP_BASE=0x6000`, single-slot 1 KiB block
+  transport with AM13E-only `CMD_WINDOW=6` for 488 blocks (window 0/1). **Preserve magic, CRC, signature, vector, and existing Boot/Flash semantics.** A different profile would need its own explicit ABI/version/migration validation; changing an output filename is not an ABI migration.
 - Host/CI PASS is source-level evidence, not AM13E silicon timing, a gate-drive clearance, or a complete generic board-independent FW1.
 
 ## Remaining source-port backlog (not yet PASS)

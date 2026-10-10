@@ -52,10 +52,18 @@ retained for tooling continuity; code/manifest implement v1.6).
 
 ## Transport and update contract
 
-The Bootloader retains upstream ESCape32 1 KiB write blocks with a
-one-byte index; packed image length remains **at most 256 KiB** until an
-explicit protocol change, even though the physical APP allocation is 488 KiB.
-Normal CMD_WRITE addresses only the APP region, never Boot or FW1/FW2 config.
+The Bootloader retains the original 1 KiB, 8-bit READ/WRITE frames,
+and adds the *AM13E-only* complement-framed `CMD_WINDOW=6` extension
+from Integration Design Rev1.1. Window 0 is selected at Boot entry;
+`CMD_WINDOW=1` addresses effective blocks 256..487 and rejects 488..511.
+The full **488 KiB** application partition is now addressable; existing
+hosts remain compatible for their original `<256 KiB` blocks but **cannot
+upload larger images without a corresponding WiFi-Link host update**.
+
+The physical writer snapshots an entire 2 KiB sector into aligned SRAM,
+merges each 1 KiB logical block, then erases/programs/verifies the sector
+through SRAM-resident Flash command functions. The other sector half is
+preserved. Normal writes authorize APP only, never Boot or FW1/FW2 config.
 
 Programming order remains `invalidate block 0, invalidate block 1,
 code/data blocks >=2, restore block 0, restore block 1`.
@@ -71,7 +79,8 @@ From linked ARM GNU objects and Image Packer/Host CI:
 - AM13E_FW1_V16.elf: text **31,672**, initialized data **552**,
   BSS **5,336** bytes.
 - ARM objcopy raw BIN: **33,968 bytes**; verified packed image:
-  **33,968 bytes**, beneath 256 KiB transport max.
+  **33,968 bytes**, beneath the now-enforced 488 KiB APP transport bound
+  (this historical payload size does not prove a large on-chip update).
 - FW1 ELF symbols: `__app_vector_start__=0x6000`,
   `_cfg=0x4000`, `__ramfunct_start__=0x00C18000`.
 - Boot ELF symbols: `__app_flash_start__=__app_vector_start__=0x6000`;
@@ -83,6 +92,16 @@ From linked ARM GNU objects and Image Packer/Host CI:
 - Real linked-image audit: **16 address, RAMFUNC, CRC, MSP/PC and
   manifest checks PASS** via `tools/verify_v16_image.py`.
 - Existing Motor/BEMF/Audio/Flash FW1 Host/ARM GNU compile gates PASS.
+- CMD_WINDOW=6 Host test covers 256/487 valid and 488 invalid.
+- Dedicated 257 KiB real-ARM-prefix image fixture runs the actual
+  Boot protocol, dual-window write, deferred signature and CRC check.
+- 2 KiB SRAM-buffered RMW Host test preserves the adjacent 1 KiB half.
+
+**Hardware and service limits:** there is no proven production WiFi-Link
+implementation of CMD_WINDOW yet. Actual same-bank Flash execution,
+power-interruption endurance and protection granularity require MCU
+validation. Neither FW2 nor automatic Firmware Type/Version service
+wire encoding is supplied by this FW1 port.
 
 **Not established:** AM13E silicon execution, real Flash endurance or
 reset/brownout behavior, actual PWM/BEMF/Audio function, gate/OC electrical

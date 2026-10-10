@@ -129,3 +129,13 @@ are **IO-only**; no Gate/Trip/UART/current-limit behavior is linked to
 the Reference FW1. RED/FED and analog numeric model are still
 configured internally, with MCPWM output pads isolated. See
 `BOARD_CONFIGURATION.md` for exact pin definitions and feature scope.
+
+## Integration Design Rev1.1 alignment
+
+Architecture implementation notes and Axx/Cxx/Bxx semantic mapping live in
+`INTEGRATION_ARCHITECTURE_ALIGNMENT.md`. Native `mcu/AM13E` is the existing
+AM13E23019 target directory; no duplicate framework or fake TI FOC
+Application was introduced. A shared `flash_partition.h` governs
+Boot/FW1/FW2 region owners in C, in addition to their strict Linker
+Scripts. `CMD_WINDOW=6` extends Boot 1KiB addressing to all 488 logical
+APP blocks; it does not silently add A/B or a second installed image.
