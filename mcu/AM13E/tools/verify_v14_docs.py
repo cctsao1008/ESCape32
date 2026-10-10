@@ -53,10 +53,13 @@ def check_current_contract():
                 "Superseded non-v1.4 rule still active: "+path)
 
     audit=read("mcu/AM13E/REL17_V14_SOURCE_GAP_AUDIT.md")
-    require("Conditional native adapter missing" in audit and
-            "CMD_UPDATE" in audit and "CMD_SETWRP" in audit and
+    require("| Hall/hybrid commutation |" in audit and
+            "| KISS/iBUS/S.Port/CRSF/MSB/HoTT telemetry |" in audit and
+            "| 4 | `CMD_UPDATE` |" in audit and
+            "| 5 | `CMD_SETWRP` |" in audit and
+            "**Conformance status: PARTIAL" in audit and
             "NOT excluded" in audit,
-            "Must track mandatory original Rel17 feature gaps")
+            "Must track actual missing Rel17 feature families, not obsolete status wording")
     manifest=json.loads(read("mcu/AM13E/REL17_FUNCTIONAL_COVERAGE.json"))
     require("io_only" not in manifest and
             "reference_io_state" in manifest and
