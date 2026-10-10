@@ -15,6 +15,16 @@
 - **Do not implement** `am13e_app_cfg_commit` as an ACK-only wrapper. Before any real erase/program, verify RAM execution of the entire FlashCTL call path (including interrupt/exception safety), FW1/FW2 partition boundaries, active-bank handling, ECC tail staging, read-back and power-loss recovery. The historical `linker_app_reference.ld` is not a production image map; retain `--no-undefined` until an actual Flash backend exists.
 - **Outstanding** (measured E1-AN): 14 Motor/Commutation/BEMF, 7 Audio, 1 Configuration Flash. The E1-AO planner is not itself a resolved backend symbol.
 
+## E1-AV — Rel17 live Motor Runtime write path (not validation)
+
+**Implementation priority corrected:** Port the Rel17 callable motor functions first. Build / host tests run during implementation; physical functional verification and acceptance are separate later phases. No further standalone AQ preflight expansion.
+
+- Implemented in the existing MCPWM0 backend, not a second ESC: **am13e_app_motor_sixstep_write**, **am13e_app_motor_pwm_apply**, **am13e_app_motor_commutation_commit**, and **am13e_app_motor_sixstep_idle**. These functions are called directly by unchanged Rel17 nextstep/main control flow; they now schedule six AQ and six Compare shadow register updates using hardware ZERO load events and write/readback MCPWM registers. The final coast path also forces safe inactive hardware state. No fake-success callbacks.
+- **Full parity NOT YET attained**: active freewheel (\`damp\`), dead-band calibration, lock mode, real gate output / PB13 enable, inverter polarity and MCPWM timebase start are still unresolved. Requests requiring damp or dead-time correction **fault closed** rather than silently approximating them. \`am13e_app_motor_commutation_enable\` remains unresolved, so this is a genuine internally integrated runtime data path but **cannot yet rotate a motor**.
+- Six-step AQ \`p/n/cc\` preserved through the validated Rel17 phase encoder; PB14 remains the only ESC interface. The original 16–96 kHz frequency and logical duty ramp calculations use existing Rel17-matched planners. \`FULL_DUTY\` remains a compile-time policy, but values exceeding MCPWM Compare validity are rejected, not clipped.
+- E1-AU software startup preflight is retained as prior work, not a future focus. Audio seven undefined symbols and config Flash one symbol are deferred. Existing strict \`--no-undefined\` is unchanged. **E1-AV requires fresh WSL ARM GNU Compile and Link**; last measured E1-AT is 21 missing symbols / 27 references.
+- Next motor porting work: proper complementary B-leg Dead-band policy and six-step sink/float fidelity, real \`commutation_enable\` TBCLK/pad control with product gate and fault ownership, BEMF CMPSS event routing/ISR, sine startup, brushed mode, comparator timing/selection. Do not infer physical Gate Enable polarity or energize the power stage from firmware alone.
+
 ## E1-AU — FW1 startup reaches AQ Shadow Readback (unpowered)
 
 **Measured E1-AT WSL:** ARM GNU incremental Object Compile PASS, 0 compiler warnings; strict FW1 Link FAIL with **21 distinct Undefined Symbols / 27 References**. Category split: Motor/BEMF 13 symbols/18 references; deferred Audio 7/8; Config Flash 1/1. Newlib nosys warning messages are separate from compiler diagnostics.

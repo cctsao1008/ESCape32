@@ -351,6 +351,186 @@ int am13e_app_motor_inactive_aq_boot_preflight(void)
     return aq_boot_steps_passed==12U;
 }
 
+/* E1-AV: Rel17 motor runtime callbacks: not a preflight or a fake HAL.
+ * Logical commutation and duty changes now reach live MCPWM shadow
+ * registers. AQ/compare transfers happen together at ZERO events.
+ *
+ * Initial board output gating is STILL separate (external gate enable
+ * polarity, Trip Zone, and dead-band have not been established).
+ * No callback in this block toggles GPIO output pads or PB13.
+ */
+static volatile uint32_t runtime_aq_updates;
+static volatile uint32_t runtime_pwm_updates;
+static volatile uint32_t runtime_commit_count;
+static volatile uint32_t runtime_phase_pending;
+static uint16_t runtime_aq_last[6];
+
+static const DL_MCPWM_ACTION_QUALIFIER_MODULE runtime_aq_modules[6]={
+    DL_MCPWM_ACTION_QUALIFIER_1A, DL_MCPWM_ACTION_QUALIFIER_1B,
+    DL_MCPWM_ACTION_QUALIFIER_2A, DL_MCPWM_ACTION_QUALIFIER_2B,
+    DL_MCPWM_ACTION_QUALIFIER_3A, DL_MCPWM_ACTION_QUALIFIER_3B
+};
+static const DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE runtime_aq_outputs[6]={
+    DL_MCPWM_AQ_OUTPUT_1A, DL_MCPWM_AQ_OUTPUT_1B,
+    DL_MCPWM_AQ_OUTPUT_2A, DL_MCPWM_AQ_OUTPUT_2B,
+    DL_MCPWM_AQ_OUTPUT_3A, DL_MCPWM_AQ_OUTPUT_3B
+};
+static const DL_MCPWM_COUNTER_COMPARE_MODULE runtime_compare_modules[6]={
+    DL_MCPWM_COUNTER_COMPARE_1A, DL_MCPWM_COUNTER_COMPARE_1B,
+    DL_MCPWM_COUNTER_COMPARE_2A, DL_MCPWM_COUNTER_COMPARE_2B,
+    DL_MCPWM_COUNTER_COMPARE_3A, DL_MCPWM_COUNTER_COMPARE_3B
+};
+
+static void runtime_fault(void)
+{
+    am13e_app_motor_fault_shutdown();
+    am13e_app_motor_fault_reset();
+}
+
+/* Called by Rel17 nextstep(). Full six-bit p/n masks and comparator
+ * code are validated against the original six commutation tuples.
+ * AQ shadow load is switched from startup FREEZE to synchronous ZERO:
+ * this is real hardware scheduling, not debugger-only staging.
+ */
+void am13e_app_motor_sixstep_write(int positive_mask,int negative_mask,
+                                   int floating_phase,int damp,int reverse)
+{
+    AM13E_SixstepPlan phase;
+    AM13E_MotorAQShadowPlan aq;
+    if (!safety_initialized || fault_latched ||
+        !am13e_motor_plan_sixstep(positive_mask,negative_mask,
+                                  floating_phase,damp,reverse,&phase))
+        runtime_fault();
+    /* Complementary freewheel requires real MCPWM dead-band, not the
+     * non-complementary AQ candidate. Never silently downgrade damp.
+     * Coast has no energized PWM leg, so damp does not apply there.
+     */
+    if (phase.damp && (positive_mask || negative_mask))
+        runtime_fault();
+    phase.damp=0U;
+    if (!am13e_motor_aq_plan_sixstep(&phase,&aq)) runtime_fault();
+
+    const uint32_t primask=__get_PRIMASK();
+    __disable_irq();
+    for(unsigned i=0U;i<6U;++i) {
+        DL_MCPWM_setActionQualifierShadowLoadMode(
+            MCPWM0,runtime_aq_modules[i],DL_MCPWM_AQ_LOAD_ON_CNTR_ZERO);
+        DL_MCPWM_setActionQualifierActionCompleteShadow(
+            MCPWM0,runtime_aq_outputs[i],aq.action[i]);
+        runtime_aq_last[i]=aq.action[i];
+    }
+    const uint32_t readback[6]={
+        MCPWM0->PWM1_AQCTLAS,MCPWM0->PWM1_AQCTLBS,
+        MCPWM0->PWM2_AQCTLAS,MCPWM0->PWM2_AQCTLBS,
+        MCPWM0->PWM3_AQCTLAS,MCPWM0->PWM3_AQCTLBS
+    };
+    for(unsigned i=0U;i<6U;++i)
+        if(readback[i] != (uint32_t)aq.action[i])runtime_fault();
+    runtime_phase_pending=1U;
+    ++runtime_aq_updates;
+    __set_PRIMASK(primask);
+}
+
+/* Rel17 16..96 kHz ramp and logical 0..2000 duty are preserved by
+ * the E1-AH/E1-AI/E1-AS planners. Duty is sent to all 6 compare
+ * shadows and latched on timebase ZERO, not through an unqualified
+ * fixed-duty waveform or fixed-frequency shortcut.
+ */
+void am13e_app_motor_pwm_apply(int duty,int freq_min_khz,int freq_max_khz,
+                                int ertm_us,int damp,int lock,int brushed,
+                                int running)
+{
+    if (!safety_initialized || fault_latched)runtime_fault();
+    AM13E_MotorPwmShadowInputs input={
+        .clock_hz=AM13E_APP_MCLK_HZ/2U,
+        .freq_min_khz=freq_min_khz,
+        .freq_max_khz=freq_max_khz,
+        .ertm_us=ertm_us,
+        .logical_duty=duty,
+        .board_dead_ticks=0, /* Not a claim of 0ns acceptable deadtime. */
+        .lock=lock,.running=running,.damp=damp,.brushed=brushed,
+#ifdef FULL_DUTY
+        .full_duty=1
+#else
+        .full_duty=0
+#endif
+    };
+    /* When the control requires dead-time compensation, no board
+     * qualified count is available. Reject instead of applying 0ns.
+     * The proper complementary/dead-band runtime remains to be ported.
+     */
+    if (lock || (running && damp))runtime_fault();
+    AM13E_MotorShadowPlan plan;
+    if (!am13e_motor_pwm_shadow_plan(&input,&plan))runtime_fault();
+
+    const uint32_t primask=__get_PRIMASK();
+    __disable_irq();
+    DL_MCPWM_setPeriodLoadMode(MCPWM0,
+                               DL_MCPWM_PERIOD_SHADOW_LOAD_ENABLE);
+    DL_MCPWM_setTimeBasePeriodShadow(MCPWM0,plan.period);
+    for(unsigned i=0U;i<6U;++i) {
+        DL_MCPWM_setCounterCompareShadowLoadMode(
+            MCPWM0,runtime_compare_modules[i],
+            DL_MCPWM_COMP_LOAD_ON_CNTR_ZERO);
+        DL_MCPWM_setCounterCompareShadowValue(
+            MCPWM0,runtime_compare_modules[i],plan.compare[i]);
+        if (DL_MCPWM_getCounterCompareShadowValue(
+                MCPWM0,runtime_compare_modules[i])!=plan.compare[i])
+            runtime_fault();
+    }
+    if(DL_MCPWM_getTimeBasePeriodShadow(MCPWM0)!=plan.period)
+        runtime_fault();
+    ++runtime_pwm_updates;
+    __set_PRIMASK(primask);
+}
+
+/* Rel17 laststep(), start boundary: AQ shadow-to-active transfers are
+ * scheduled on ZERO, on ALL six channels together. When the motor
+ * timebase is already frozen, explicitly write the same AQ active
+ * configuration so the next eventual enable starts from a coherent
+ * image. Software force LOW and external pads remain unchanged.
+ */
+void am13e_app_motor_commutation_commit(void)
+{
+    if (!safety_initialized || fault_latched)runtime_fault();
+    const uint32_t primask=__get_PRIMASK();
+    __disable_irq();
+    if (runtime_phase_pending &&
+        (MCPWM0->TBCTL & MCPWM_TBCTL_CTRMODE_MASK)==
+         (uint32_t)DL_MCPWM_COUNTER_MODE_STOP_FREEZE) {
+        for(unsigned i=0U;i<6U;++i)
+            DL_MCPWM_setActionQualifierActionCompleteActive(
+                MCPWM0,runtime_aq_outputs[i],runtime_aq_last[i]);
+    }
+    runtime_phase_pending=0U;
+    ++runtime_commit_count;
+    __set_PRIMASK(primask);
+}
+
+/* A real coast transition for Rel17 laststep(), not an empty callback.
+ * Hold all six outputs LOW and return the six AQ shadow/active words
+ * to zero. Never clear a hardware fault or energize a bridge here.
+ */
+void am13e_app_motor_sixstep_idle(void)
+{
+    if (!safety_initialized || fault_latched)runtime_fault();
+    const uint32_t primask=__get_PRIMASK();
+    __disable_irq();
+    force_pwm_inactive();
+    disconnect_pwm_pads();
+    for(unsigned i=0U;i<6U;++i) {
+        DL_MCPWM_setActionQualifierActionCompleteShadow(
+            MCPWM0,runtime_aq_outputs[i],0U);
+        DL_MCPWM_setActionQualifierActionCompleteActive(
+            MCPWM0,runtime_aq_outputs[i],0U);
+        runtime_aq_last[i]=0U;
+    }
+    runtime_phase_pending=0U;
+    if(!pwm_registers_inactive() || !pwm_pads_disconnected())
+        runtime_fault();
+    __set_PRIMASK(primask);
+}
+
 /* Rel17 util.c::resetcom(): restore *physical MCU-side inactive bridge*
  * around score/PCM playback. Never clear hardware Trip Zone or fault
  * latch, never assume PB13 gate enable polarity, and never substitute
