@@ -484,6 +484,54 @@ void am13e_app_motor_pwm_apply(int duty,int freq_min_khz,int freq_max_khz,
     __set_PRIMASK(primask);
 }
 
+/* Rel17 brushed start: forward drives phases U/W with PWM and uses
+ * V as the static return leg; reverse PWM-drives V and returns via U/W.
+ * This is the original non-PWM_ENABLE, non-damped six-output mapping
+ * from src/main.c, not a substitute six-step commutation sequence.
+ *
+ * AQ is scheduled at ZERO and committed on a stopped timebase through
+ * the normal Rel17 commit path. Gate pads and software force remain
+ * physically inactive until the separate, board-qualified enable path.
+ * Active freewheel/braking with damp requires verified complementary
+ * gates and dead-band. Until then, reject it rather than synthesizing
+ * unsafe overlap or silently downgrading requested behavior.
+ */
+void am13e_app_motor_brushed_write(int reverse,int damp)
+{
+    if (!safety_initialized || fault_latched ||
+        (reverse != 0 && reverse != 1) || damp != 0)
+        runtime_fault();
+
+    const uint16_t pwm = (uint16_t)(DL_MCPWM_AQ_OUTPUT_HIGH_ZERO |
+                                    DL_MCPWM_AQ_OUTPUT_LOW_UP_CMPA);
+    const uint16_t sink = (uint16_t)DL_MCPWM_AQ_OUTPUT_HIGH_ZERO;
+    const uint16_t action[6] = {
+        reverse ? 0U : pwm, reverse ? sink : 0U,
+        reverse ? pwm : 0U, reverse ? 0U : sink,
+        reverse ? 0U : pwm, reverse ? sink : 0U
+    };
+    const uint32_t primask=__get_PRIMASK();
+    __disable_irq();
+    for(unsigned i=0U;i<6U;++i) {
+        DL_MCPWM_setActionQualifierShadowLoadMode(
+            MCPWM0,runtime_aq_modules[i],DL_MCPWM_AQ_LOAD_ON_CNTR_ZERO);
+        DL_MCPWM_setActionQualifierActionCompleteShadow(
+            MCPWM0,runtime_aq_outputs[i],action[i]);
+        runtime_aq_last[i]=action[i];
+    }
+    const uint32_t readback[6]={
+        MCPWM0->PWM1_AQCTLAS,MCPWM0->PWM1_AQCTLBS,
+        MCPWM0->PWM2_AQCTLAS,MCPWM0->PWM2_AQCTLBS,
+        MCPWM0->PWM3_AQCTLAS,MCPWM0->PWM3_AQCTLBS
+    };
+    for(unsigned i=0U;i<6U;++i)
+        if(readback[i] != (uint32_t)action[i])runtime_fault();
+    runtime_phase_pending=1U;
+    ++runtime_aq_updates;
+    __set_PRIMASK(primask);
+    am13e_app_motor_commutation_commit();
+}
+
 /* Rel17 laststep(), start boundary: AQ shadow-to-active transfers are
  * scheduled on ZERO, on ALL six channels together. When the motor
  * timebase is already frozen, explicitly write the same AQ active
