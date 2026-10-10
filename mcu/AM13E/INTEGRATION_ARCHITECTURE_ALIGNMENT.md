@@ -1,13 +1,15 @@
-> **Rev1.4 supersedes Rev1.1 as the design authority.**
-> This document maps the former Rev1.1 proposal and is retained for history.
-> Current v1.4 source/Boot parity must be checked against original ESCape32 rel17,
-> not against this earlier interface inventory. The previous statement that
-> 0x5000..0x5fff is FW2 configuration is obsolete; it is **Reserved**.
-> The previous 50ms PWM/DShot auto-unlock is also obsolete.
-> The v1.6 image CRC/signature contract is intentionally unchanged pending
-> an explicit Boot ABI migration decision. CMD_UPDATE and CMD_SETWRP remain
-> required but unimplemented on AM13E.
->
+> **Archived Rev1.1 architecture analysis — not the current Boot/Image ABI.**
+> The **active Rel17 Rev1.4 contract** uses `Cfg.id=0x32EA` at 0x4000
+> and Cortex-M33 APP vectors at 0x6000. Firmware size comes from the
+> linked binary (maximum 488 KiB). APP signature/header/image CRC and
+> 50 ms automatic PWM/DShot mode unlock are retired. Address
+> 0x5000..0x5fff is Reserved, not FW2 configuration.
+> For current normative requirements consult
+> [APP_LINK_CONTRACT.md](APP_LINK_CONTRACT.md) and
+> [REL17_V14_SOURCE_GAP_AUDIT.md](REL17_V14_SOURCE_GAP_AUDIT.md).
+> The earlier Rev1.1 interface discussion below remains historical
+> engineering context and cannot override current source/CI behavior.
+
 # ESCape32 Rel17 / AM13E23019 — Integration Architecture Alignment
 
 **Review basis:** the user-supplied `Integration_Design.md`,
@@ -154,9 +156,10 @@ not be described as physical motor-drive/safety specification compliance**.
    same-bank SRAM command execution/readback, protection granularity,
    CCM security/startup details, PWM output/deadtime/IO polarity,
    PB14 3.3/5V contention, analog CMPSS and ECAP/DMA IRQ budget.
-5. **Receiver mode policy**: original persistent receiver mode supersedes the 50ms gap; a
-   Detailed Design convention needing input/failsafe system tests,
-   not an upstream-mandated time or physical validation result.
+5. **Receiver mode policy**: once Servo, Oneshot125, or DShot
+   is selected, 50 ms of silence does not unlock the chosen handler.
+   A deliberate decoder reset is required to identify a new protocol.
+   Input and failsafe timing still require physical tests.
 6. **Reference board independence**: concrete oscillator, analog
    routes, phase pinmux and APP linker remain Reference Profile
    providers. A second runnable board/image profile has not been
