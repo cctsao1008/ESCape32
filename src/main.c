@@ -535,11 +535,21 @@ int am13e_app_motor_on_bemf_event(int capture_us, int timeout) {
 /* Rel17 ADC scaling and protection logic is shared unchanged. */
 void adcdata(int t, int u, int v, int c, int a) {
 	static int z = 3300, st = -1, su = -1, sa = -1;
+#if defined(AM13E)
+    /* ADC0 INT1 invokes this only after a valid calibrated NTC/VBUS
+     * sample pair. No E62 current sense pin has been assigned, so do
+     * NOT perform the legacy shunt-zero calibration on invented data.
+     */
+    ready=1;
+    c=0;
+    (void)z;
+#else
 	if ((c -= z) >= 0) ready = 1;
 	else {
 		if (!ready) z += c >> 1;
 		c = 0;
 	}
+#endif
 	temp1 = max((t = smooth(&st, t, 10)) >> 2, 0); // C
 	temp2 = hall || cfg.prot_sens ? max((u = smooth(&su, TEMP_SENS(u), 10)) >> 2, 0) : 0; // C
 #if SENS_CNT >= 1

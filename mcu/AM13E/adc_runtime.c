@@ -12,6 +12,7 @@
  */
 #include "adc_runtime.h"
 #include "clock_backend.h"
+#include "adc_calibration_plan.h"
 /* Rel17 owns the public adctrig() declaration; include its canonical API. */
 #include "common.h"
 #include <soc.h>
@@ -107,6 +108,45 @@ void adctrig(void)
 }
 
 /* TI startup_gcc_arm.c actual ADC0/INT1 vector. */
+
+/* The E62 IO plan identifies PA6/PA28 channels but NOT the board's
+ * Vref, voltage divider, NTC supply/pull-up or temperature curve.
+ * No fabricated physical measurements may feed Rel17 adcdata().
+ * A reviewed board profile must provide all six independent values.
+ */
+#ifdef AM13E_E62_SENSORS_CALIBRATED
+#if AM13E_E62_SENSORS_CALIBRATED != 1
+#error "AM13E_E62_SENSORS_CALIBRATED must be 1"
+#endif
+#if !defined(AM13E_E62_ADC_FULLSCALE) || \
+    !defined(AM13E_E62_ADC_VREF_MV) || \
+    !defined(AM13E_E62_NTC_SUPPLY_MV) || \
+    !defined(AM13E_E62_VBUS_TOP_OHMS) || \
+    !defined(AM13E_E62_VBUS_BOTTOM_OHMS) || \
+    !defined(AM13E_E62_NTC_MODEL)
+#error "E62 calibrated ADC requires Vref, fullscale, VBUS divider and NTC model"
+#endif
+_Static_assert(AM13E_E62_NTC_MODEL>=1 && AM13E_E62_NTC_MODEL<=4,
+               "Unsupported Rel17 NTC10K3455 curve selection");
+static const AM13E_AdcCalibration adc_board_cal={
+    AM13E_E62_ADC_FULLSCALE,
+    AM13E_E62_ADC_VREF_MV,
+    AM13E_E62_NTC_SUPPLY_MV,
+    AM13E_E62_VBUS_TOP_OHMS,
+    AM13E_E62_VBUS_BOTTOM_OHMS
+};
+static int32_t board_ntc_qc(uint16_t ntc_mv)
+{
+    switch(AM13E_E62_NTC_MODEL) {
+        case 1:return NTC10K3455UP2K((int)ntc_mv);
+        case 2:return NTC10K3455LO2K((int)ntc_mv);
+        case 3:return NTC10K3455UP10K((int)ntc_mv);
+        case 4:return NTC10K3455LO10K((int)ntc_mv);
+        default:adc_fail_closed();return 0;
+    }
+}
+#endif
+
 void ADC0_INT1_IRQHandler(void)
 {
     if (!adc_initialized || !adc_inflight ||
@@ -125,6 +165,20 @@ void ADC0_INT1_IRQHandler(void)
         DL_ADC_readResult(AM13E_ADC_RESULTS, AM13E_ADC_VBUS_SOC);
     ++adc_latest.sample_count;
     ++adc_sample_seq;
+#ifdef AM13E_E62_SENSORS_CALIBRATED
+    /* Feed the ACTUAL Rel17 smoothing/temperature/voltage protection
+     * only after one coherent two-channel ADC sequence has completed.
+     * The board's physical NTC and VBUS calibration values are required.
+     * No current sensor appears in IO Plan v1.0; original SENS_CNT is
+     * restricted to one (voltage) in this calibrated build.
+     */
+    AM13E_AdcScaled scaled;
+    if(!am13e_adc_scale_pair(&adc_board_cal,
+           adc_latest.ntc_main_adc0_in17,adc_latest.vbus_adc0_in11,
+           &scaled)) adc_fail_closed();
+    adcdata(board_ntc_qc(scaled.ntc_normalized_mv),0,
+            (int)scaled.vbus_centivolts,0,0);
+#endif
     DL_ADC_clearInterruptStatus(AM13E_ADC, AM13E_ADC_IRQ);
     adc_inflight = 0U;
 }

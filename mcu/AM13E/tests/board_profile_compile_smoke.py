@@ -33,8 +33,17 @@ flags=[
     "-DAM13E_MOTOR_DB_SWAP_A=0",
     "-DAM13E_MOTOR_DB_SWAP_B=0",
     "-DAM13E_MOTOR_DB_COMPARE_OFFSET_TICKS=40",
+    # Synthetic ADC numbers below exist ONLY to exercise compiler paths.
+    "-DAM13E_E62_SENSORS_CALIBRATED=1",
+    "-DAM13E_E62_ADC_FULLSCALE=4095",
+    "-DAM13E_E62_ADC_VREF_MV=3300",
+    "-DAM13E_E62_NTC_SUPPLY_MV=3300",
+    "-DAM13E_E62_VBUS_TOP_OHMS=100000",
+    "-DAM13E_E62_VBUS_BOTTOM_OHMS=10000",
+    "-DAM13E_E62_NTC_MODEL=3",
 ]
-targets={"motor_safety.c","motor_power_stage.c","motor_runtime_irq.c"}
+targets={"motor_safety.c","motor_power_stage.c","motor_runtime_irq.c",
+         "adc_runtime.c","main.c","util.c"}
 observed=set()
 for obj in commands:
     src=pathlib.Path(obj["file"]).name
@@ -66,4 +75,4 @@ for obj in commands:
     if result.returncode: raise SystemExit(result.returncode)
 if observed!=targets:
     raise SystemExit(f"Missing source(s) from compile database: {targets-observed}")
-print("PASS: 3 board-configured compilation fixtures; NO physical qualification")
+print("PASS: 6 board-configured compilation fixtures; NO physical qualification")

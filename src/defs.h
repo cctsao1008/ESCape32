@@ -71,6 +71,26 @@
 #define SENS_CNT 3
 #endif
 
+#if defined(AM13E) && defined(AM13E_E62_SENSORS_CALIBRATED)
+#if AM13E_E62_SENSORS_CALIBRATED != 1
+#error "AM13E_E62_SENSORS_CALIBRATED must equal 1"
+#endif
+/* The E62 IO Plan currently has VBUS and NTC, but no physical current
+ * measurement input. Use the original Rel17 voltage protection branch
+ * without fabricating a legacy SENS_MAP ADC pin or current channel.
+ */
+#undef SENS_CNT
+#define SENS_CNT 1
+#ifndef VOLT_MUL
+/* ADC adapter supplies v in 0.01V units, and Rel17 formula has a
+ * nominal gain of 100*164/16384 (~1.001) at telem_volt=0.
+ */
+#define VOLT_MUL 100
+#elif VOLT_MUL != 100
+#error "AM13E ADC centivolts require Rel17 VOLT_MUL=100"
+#endif
+#endif
+
 #ifndef LED_MAP
 #ifdef LED_WS2812
 #define LED_CNT 3
