@@ -10,6 +10,7 @@
  * the still-unqualified physical gate-enable and hardware Trip contract.
  */
 #include "motor_backend.h"
+#include "motor_audio_hw.h" /* Exclusive MCPWM Motor/Audio resource owner */
 #include "board_io_plan_v1.h" /* Pin/function assertions, no gate enable */
 #include "motor_event_timer.h"
 #include "motor_bemf.h"
@@ -49,6 +50,9 @@ _Static_assert(DL_MCPWM_COUNTER_MODE_STOP_FREEZE == 2U,
 static volatile uint32_t safety_initialized;
 static volatile uint32_t fault_latched;
 static volatile uint32_t motor_timebase_running; /* MCPWM0 internal counter ONLY */
+/* 0=Drive/idle, 1=Rel17 Music, 2=Rel17 AU/PCM. Audio never muxes pads. */
+static volatile uint32_t audio_owner;
+static volatile uint32_t audio_period_valid;
 static volatile uint32_t motor_timebase_starts;
 static volatile uint32_t motor_timebase_stops;
 static volatile uint32_t sine_entry_pending;
@@ -264,6 +268,8 @@ void am13e_app_motor_init(void)
     safety_initialized = 0U;
     fault_latched = 0U;
     motor_timebase_running = 0U;
+    audio_owner = 0U;
+    audio_period_valid = 0U;
     sine_entry_pending = 0U;
     sine_mode_active = 0U;
     drag_brake_aq_staged = 0U;
@@ -541,6 +547,7 @@ static void runtime_fault(void)
 void am13e_app_motor_sixstep_write(int positive_mask,int negative_mask,
                                    int floating_phase,int damp,int reverse)
 {
+    if (audio_owner) runtime_fault();
     AM13E_SixstepPlan phase;
     AM13E_MotorAQShadowPlan aq;
     if (!safety_initialized || fault_latched ||
@@ -591,6 +598,7 @@ void am13e_app_motor_pwm_apply(int duty,int freq_min_khz,int freq_max_khz,
                                 int ertm_us,int damp,int lock,int brushed,
                                 int running)
 {
+    if (audio_owner) runtime_fault();
     if (!safety_initialized || fault_latched)runtime_fault();
     AM13E_MotorPwmShadowInputs input={
         .clock_hz=AM13E_APP_MCLK_HZ/2U,
@@ -682,6 +690,7 @@ void am13e_app_motor_pwm_apply(int duty,int freq_min_khz,int freq_max_khz,
  */
 void am13e_app_motor_brushed_write(int reverse,int damp)
 {
+    if (audio_owner) runtime_fault();
     if (!safety_initialized || fault_latched ||
         (reverse != 0 && reverse != 1) || (damp != 0 && damp != 1))
         runtime_fault();
@@ -738,6 +747,7 @@ void am13e_app_motor_brushed_write(int reverse,int damp)
  */
 void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
 {
+    if (audio_owner) runtime_fault();
     if (!safety_initialized || fault_latched ||
         (unsigned)a>=360U || (unsigned)b>=360U || (unsigned)c>=360U ||
         power<0 || power>120 || (start!=0 && start!=1) ||
@@ -845,6 +855,7 @@ void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
  */
 void am13e_app_motor_sine_finish(void)
 {
+    if (audio_owner) runtime_fault();
     const uint32_t irqmask=__get_PRIMASK();
     __disable_irq();
     if (!safety_initialized || fault_latched ||
@@ -863,6 +874,7 @@ void am13e_app_motor_sine_finish(void)
  */
 void am13e_app_motor_commutation_commit(void)
 {
+    if (audio_owner) runtime_fault();
     if (!safety_initialized || fault_latched)runtime_fault();
     const uint32_t primask=__get_PRIMASK();
     __disable_irq();
@@ -890,6 +902,7 @@ void am13e_app_motor_commutation_commit(void)
  */
 void am13e_app_motor_commutation_enable(int enable)
 {
+    if (audio_owner) runtime_fault();
     const uint32_t irqmask=__get_PRIMASK();
     __disable_irq();
     if (!safety_initialized || fault_latched ||
@@ -938,6 +951,161 @@ void am13e_app_motor_commutation_enable(int enable)
     __set_PRIMASK(irqmask);
 }
 
+
+/* Rel17 Motor Audio borrows MCPWM0, never a separate beeper GPIO.
+ * All six pads stay GPIO INPUT; continuous software force LOW remains
+ * mandatory even while the internal AUDIO waveform/counter is active.
+ * Physical sound and its gate polarity/deadtime require board signoff.
+ */
+static void audio_stage_compare_locked(uint16_t u, uint16_t w,int active)
+{
+    const uint16_t pwm=(uint16_t)(DL_MCPWM_AQ_OUTPUT_HIGH_ZERO |
+                                  DL_MCPWM_AQ_OUTPUT_LOW_UP_CMPA);
+    const uint16_t inverse=(uint16_t)(DL_MCPWM_AQ_OUTPUT_LOW_ZERO |
+                                      DL_MCPWM_AQ_OUTPUT_HIGH_UP_CMPB);
+    const uint16_t sink=(uint16_t)DL_MCPWM_AQ_OUTPUT_HIGH_ZERO;
+    const uint16_t wave[6]={u?pwm:0U,u?inverse:0U,0U,
+                             (u||w)?sink:0U,w?pwm:0U,w?inverse:0U};
+    const uint16_t compare[6]={u,u,0U,0U,w,w};
+    for (unsigned i=0U;i<6U;++i) {
+        DL_MCPWM_setActionQualifierShadowLoadMode(
+            MCPWM0,runtime_aq_modules[i],DL_MCPWM_AQ_LOAD_ON_CNTR_ZERO);
+        DL_MCPWM_setActionQualifierActionCompleteShadow(
+            MCPWM0,runtime_aq_outputs[i],wave[i]);
+        DL_MCPWM_setCounterCompareShadowLoadMode(
+            MCPWM0,runtime_compare_modules[i],DL_MCPWM_COMP_LOAD_ON_CNTR_ZERO);
+        DL_MCPWM_setCounterCompareShadowValue(
+            MCPWM0,runtime_compare_modules[i],compare[i]);
+        if (DL_MCPWM_getCounterCompareShadowValue(
+            MCPWM0,runtime_compare_modules[i])!=compare[i])
+            runtime_fault();
+        if(active){
+            DL_MCPWM_setCounterCompareActiveValue(
+                MCPWM0,runtime_compare_modules[i],compare[i]);
+            DL_MCPWM_setActionQualifierActionCompleteActive(
+                MCPWM0,runtime_aq_outputs[i],wave[i]);
+        }
+    }
+}
+
+/* Must be called only after Rel17 util.c::resetcom() and its ertm/busy
+ * admission check. Drive callbacks reject audio_owner from this point.
+ * Preserve PB14 RX/TIMG4, PB15 OST, 16kHz SysTick and GPIO Hi-Z.
+ */
+void am13e_app_motor_audio_begin(int mode)
+{
+    if (mode!=1 && mode!=2) runtime_fault();
+    const uint32_t mask=__get_PRIMASK();
+    __disable_irq();
+    if (!safety_initialized || fault_latched || audio_owner ||
+        motor_timebase_running || !pwm_registers_inactive() ||
+        !pwm_pads_disconnected() ||
+        !am13e_app_motor_nfault_trip_ready() ||
+        am13e_app_nfault_asserted() ||
+        (SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
+        runtime_fault();
+    am13e_app_motor_timing_cancel();
+    am13e_app_motor_bemf_abort();
+    sine_mode_active=0U;
+    sine_entry_pending=0U;
+    drag_brake_aq_staged=0U;
+    lock_brake_aq_staged=0U;
+    runtime_phase_pending=0U;
+    audio_owner=(uint32_t)mode;
+    audio_period_valid=0U;
+    DL_MCPWM_setClockPrescaler(MCPWM0,
+         mode==1?DL_MCPWM_CLOCK_DIVIDER_16:DL_MCPWM_CLOCK_DIVIDER_1);
+    if ((MCPWM0->TBCTL & MCPWM_TBCTL_CLKDIV_MASK) !=
+       (uint32_t)(mode==1?DL_MCPWM_CLOCK_DIVIDER_16:
+                  DL_MCPWM_CLOCK_DIVIDER_1)<<MCPWM_TBCTL_CLKDIV_OFS)
+        runtime_fault();
+    audio_stage_compare_locked(0U,0U,1);
+    __set_PRIMASK(mask);
+}
+
+void am13e_app_motor_audio_period(uint16_t period)
+{
+    const uint32_t mask=__get_PRIMASK();
+    __disable_irq();
+    if (!audio_owner || period<2U || fault_latched ||
+        !pwm_pads_disconnected()) runtime_fault();
+    /* A note change is a genuine motor-timebase mode change. Stop,
+     * reset phase and program both shadow and active registers before
+     * the next period. No previous DRIVE/PCM waveform can leak through.
+     */
+    force_pwm_inactive();
+    motor_timebase_running=0U;
+    DL_MCPWM_setPeriodLoadMode(MCPWM0,DL_MCPWM_PERIOD_SHADOW_LOAD_ENABLE);
+    DL_MCPWM_setTimeBasePeriodShadow(MCPWM0,period);
+    DL_MCPWM_setTimeBasePeriodActive(MCPWM0,period);
+    DL_MCPWM_setTimeBaseCounter(MCPWM0,0U);
+    audio_stage_compare_locked(0U,0U,1);
+    audio_period_valid=1U;
+    if (DL_MCPWM_getTimeBasePeriodShadow(MCPWM0)!=period ||
+        DL_MCPWM_getTimeBasePeriodActive(MCPWM0)!=period ||
+        !pwm_registers_inactive()) runtime_fault();
+    __set_PRIMASK(mask);
+}
+
+void am13e_app_motor_audio_compare(uint16_t u,uint16_t w)
+{
+    const uint32_t mask=__get_PRIMASK();
+    __disable_irq();
+    if (!audio_owner || !audio_period_valid || fault_latched ||
+        !pwm_pads_disconnected() ||
+        u >= DL_MCPWM_getTimeBasePeriodActive(MCPWM0) ||
+        w >= DL_MCPWM_getTimeBasePeriodActive(MCPWM0))
+        runtime_fault();
+    const int frozen=!motor_timebase_running;
+    if (frozen && !pwm_registers_inactive()) runtime_fault();
+    audio_stage_compare_locked(u,w,frozen);
+    if(frozen){
+        DL_MCPWM_setTimeBaseCounter(MCPWM0,0U);
+        DL_MCPWM_setTimeBaseCounterMode(MCPWM0,DL_MCPWM_COUNTER_MODE_UP);
+        DL_MCPWM_enableTBCLK();
+        motor_timebase_running=1U;
+        if (!pwm_pads_disconnected() ||
+            !(SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
+            runtime_fault();
+    }
+    __set_PRIMASK(mask);
+}
+
+uint16_t am13e_app_motor_audio_counter(void)
+{
+    if(!audio_owner || !motor_timebase_running) runtime_fault();
+    return DL_MCPWM_getTimeBaseCounterValue(MCPWM0);
+}
+
+void am13e_app_motor_audio_end(void)
+{
+    const uint32_t mask=__get_PRIMASK();
+    __disable_irq();
+    if (!audio_owner || !safety_initialized || fault_latched)
+        runtime_fault();
+    force_pwm_inactive();
+    disconnect_pwm_pads();
+    motor_timebase_running=0U;
+    /* Restore the unqualified DRIVE staging default: divider 1,
+     * 24kHz carrier, zero compare/AQ in both active and shadow banks.
+     * The normal six-step PWM Apply will seed exact running settings.
+     */
+    DL_MCPWM_setClockPrescaler(MCPWM0,DL_MCPWM_CLOCK_DIVIDER_1);
+    DL_MCPWM_setPeriodLoadMode(MCPWM0,DL_MCPWM_PERIOD_SHADOW_LOAD_ENABLE);
+    const uint16_t period=(uint16_t)
+        ((AM13E_APP_MCLK_HZ/2U)/UINT32_C(24000)-1U);
+    DL_MCPWM_setTimeBasePeriodShadow(MCPWM0,period);
+    DL_MCPWM_setTimeBasePeriodActive(MCPWM0,period);
+    audio_stage_compare_locked(0U,0U,1);
+    DL_MCPWM_setTimeBaseCounter(MCPWM0,0U);
+    audio_period_valid=0U;
+    audio_owner=0U;
+    if (!pwm_registers_inactive() || !pwm_pads_disconnected() ||
+        (SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
+        runtime_fault();
+    __set_PRIMASK(mask);
+}
+
 /* Rel17 laststep() with lock==0 switches all three TIM1 channels
  * to PWM1 while the complementary N gates remain selected. Mirror
  * that exact LOGICAL three-low-side brake AQ image with physical pads
@@ -949,6 +1117,7 @@ void am13e_app_motor_commutation_enable(int enable)
  */
 void am13e_app_motor_drag_brake_write(void)
 {
+    if (audio_owner) runtime_fault();
     if (!safety_initialized || fault_latched) runtime_fault();
     AM13E_MotorAQShadowPlan aq;
     if (!am13e_motor_aq_plan_drag_brake(&aq)) runtime_fault();
@@ -987,6 +1156,7 @@ void am13e_app_motor_drag_brake_write(void)
  */
 void am13e_app_motor_lock_brake_stage(int lock,int phase_step)
 {
+    if (audio_owner) runtime_fault();
     if (!safety_initialized || fault_latched || lock<1 || lock>2 ||
         phase_step<1 || phase_step>6 || !runtime_phase_pending ||
         !pwm_registers_inactive() || !pwm_pads_disconnected())
@@ -1010,6 +1180,7 @@ void am13e_app_motor_lock_brake_stage(int lock,int phase_step)
 void am13e_app_motor_brake_counter_update(int running,int step,
                                            int brushed,int lock,int duty)
 {
+    if (audio_owner) runtime_fault();
     if (!safety_initialized || fault_latched || duty<0 || duty>2000 ||
         lock<0 || lock>2 || (running!=0 && running!=1) ||
         (brushed!=0 && brushed!=1))
@@ -1045,6 +1216,7 @@ void am13e_app_motor_brake_counter_update(int running,int step,
  */
 void am13e_app_motor_sixstep_idle(void)
 {
+    if (audio_owner) runtime_fault();
     if (!safety_initialized || fault_latched)runtime_fault();
     const uint32_t primask=__get_PRIMASK();
     __disable_irq();
@@ -1085,6 +1257,7 @@ void am13e_app_motor_sixstep_idle(void)
  */
 void am13e_app_commutation_reset(void)
 {
+    if (audio_owner) runtime_fault(); /* resetcom before begin/after end */
     const uint32_t irqmask = __get_PRIMASK();
     __disable_irq();
     if (!safety_initialized || fault_latched) {
@@ -1116,6 +1289,8 @@ void am13e_app_motor_fault_shutdown(void)
      */
     __disable_irq();
     fault_latched = 1U;
+    audio_owner=0U;
+    audio_period_valid=0U;
     sine_entry_pending=0U;
     sine_mode_active=0U;
     drag_brake_aq_staged=0U;
