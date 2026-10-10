@@ -24,6 +24,17 @@ if(AM13E_HOST_SANITIZERS AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 add_test(NAME am13e_flash_transaction COMMAND am13e_flash_transaction_test)
 
+# Native Boot staging helpers (no Flash writer, no new protocol parser).
+add_executable(am13e_update_staging_test
+    "${REPO_ROOT}/boot/tests/am13e_update_staging_test.c"
+    "${REPO_ROOT}/boot/mcu/AM13E/update_staging.c")
+target_compile_features(am13e_update_staging_test PRIVATE c_std_11)
+target_include_directories(am13e_update_staging_test PRIVATE
+    "${REPO_ROOT}/boot/mcu/AM13E")
+target_compile_options(am13e_update_staging_test PRIVATE
+    -O1 -g -Wall -Wextra -Werror)
+add_test(NAME am13e_update_staging COMMAND am13e_update_staging_test)
+
 add_executable(am13e_app_validity_test
     "${REPO_ROOT}/boot/tests/am13e_app_validity_test.c"
     "${REPO_ROOT}/boot/mcu/AM13E/app_validity.c")
@@ -68,7 +79,8 @@ if(AM13E_HOST_PACKED_IMAGE)
         "${REPO_ROOT}/boot/src/io.c"
         "${REPO_ROOT}/boot/mcu/AM13E/flash_range.c"
         "${REPO_ROOT}/boot/mcu/AM13E/flash.c"
-        "${REPO_ROOT}/boot/mcu/AM13E/app_validity.c")
+        "${REPO_ROOT}/boot/mcu/AM13E/app_validity.c"
+        "${REPO_ROOT}/boot/mcu/AM13E/update_staging.c")
     target_compile_features(am13e_boot_protocol_test PRIVATE c_std_11)
     target_compile_definitions(am13e_boot_protocol_test PRIVATE
         AM13E AM13E_FLASH_TEST IO_PB14)

@@ -97,6 +97,17 @@ the supported full FW1 profile selects `pack_am13e_rel17.py`.
 Only `AM13E_IMAGE_PROFILE=REL17_V14` is supported for linked FW1;
 `NONE` is for object-only builds with the full image disabled.
 
+## CMD_UPDATE bounded staging (Boot commit still missing)
+
+The actual original Rel17 Boot parser now uses `recvdata()` to receive
+up to sixteen 1KiB CRC-checked frames in a bounded SRAM_S buffer,
+sending original `RES_OK` per accepted block. A short frame stops
+reception; a bad CRC/count aborts without that frame's ACK. Complete
+receipt **always ends with `RES_ERROR`** and zeroizes staged bytes.
+No Boot Bank0 Erase/Program/Reset is enabled; `CMD_SETWRP` remains
+unsupported. Native Host CTest covers 16KiB/short/CRC/invalid frame
+and Boot/Cfg/Reserved preservation. This is NOT full self-update.
+
 ## Acceptance limits
 
 ARM strict link, native Host CTest, wire-frame CRC/Flash mock,

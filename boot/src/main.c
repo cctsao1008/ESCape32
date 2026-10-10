@@ -163,7 +163,7 @@ void main(void) {
                     sendval(RES_OK);
                     if(len<(int)AM13E_BOOT_STAGE_BLOCK_BYTES)break;
                 }
-                /* Current update() Flash commit is NOT IMPLEMENTED:
+                /* Current Boot Flash commit is NOT IMPLEMENTED:
                  * explicitly reject completion and clear SRAM stage.
                  */
                 boot_am13e_stage_abort();

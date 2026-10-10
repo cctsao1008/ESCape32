@@ -1,10 +1,10 @@
 # AM13E23019 — ESCape32 Rel17 CMD_UPDATE Source Gap Review
 
-**Status: SOURCE-LEVEL REVIEW / NOT IMPLEMENTED.**
-**Active profile:** Rel17 v1.4, `am13e-port-v2`. This is not silicon,
-power-fail, recovery or released update evidence. Boot `CMD_UPDATE=4`
-must continue to return `RES_ERROR`; no Boot Bank0 Erase/Program
-is enabled by this review.
+**Status: BOUNDED SRAM STAGING IMPLEMENTED / BOOT COMMIT NOT IMPLEMENTED.**
+**Active profile:** Rel17 v1.4, `am13e-port-v2`. The real Boot command
+receives CRC-checked blocks and sends original per-block `RES_OK` but
+**always ends with final `RES_ERROR` — NO BANK0 ERASE/PROGRAM/RESET**.
+This is not silicon, recovery or full Boot Self-update evidence.
 
 ## Evidence and authority
 
@@ -84,14 +84,22 @@ Boot validity gate. The active FW1 launch remains
 
 ## Current source/CI state
 
-- `boot/src/main.c`: AM13E `CMD_UPDATE` immediately returns
-  `RES_ERROR`, before consuming data or touching Bank0. This is
-  deliberate fail-closed **NOT IMPLEMENTED** behavior.
+- `boot/src/main.c`: AM13E `CMD_UPDATE` uses the original
+  `recvdata()`/per-frame `RES_OK` for 4..1024B, max 16 frames,
+  short-last terminates. SRAM is cleared after completion; **final
+  `RES_ERROR`**, no Bank0 self-programming or success reset.
+- `boot/mcu/AM13E/update_staging.c`: real aligned 16KiB SRAM_S
+  buffer with ordered/capacity/4-byte checks, abort zeroization,
+  basic M33 reset-vector plausibility (not authenticity/completeness).
 - `boot/mcu/AM13E/flash.c`: implements **APP-only CMD_WRITE**
   with 1 KiB logical / 2 KiB SRAM RMW, not Boot self-update.
-- `boot/tests/am13e_protocol_host_test.c`: asserts
-  `CMD_UPDATE` NAK, command resynchronization, all three
-  `CMD_SETWRP` selectors still NAK, and Boot/Cfg/Reserved unchanged.
+- `boot/tests/am13e_protocol_host_test.c`: tests original CRC
+  per-block ACK for short-last/full 16KiB, corrupted CRC and count
+  resynchronization, final NAK, three `CMD_SETWRP` modes still NAK,
+  and Boot/Cfg/Reserved unchanged.
+- `boot/tests/am13e_update_staging_test.c`: tests 16KiB, 17th
+  frame, misaligned/duplicate/out-of-order frames, 4B/1020B short
+  tails, abort/clear and Cortex-M33 Boot vector plausibility.
 - `verify_v14_source_scope.py`: rejects unreviewed self-update
   activation while keeping the existing source gap explicit.
 - `verify_v14_docs.py`: requires this review and missing-operation
@@ -99,8 +107,8 @@ Boot validity gate. The active FW1 launch remains
 
 ## Safe implementation sequence (future work, not completed here)
 
-1. Freeze a testable 16 KiB max Boot transfer contract preserving
-   upstream command framing and short-last-block semantics.
+1. **DONE, source/Host only:** 16KiB bounded SRAM staging and
+   original receive/ACK/short-last CRC wire framing.
 2. Produce real ELF-derived Boot BIN and negative fixtures:
    empty/oversized/incomplete input, bad Frame CRC, bad Boot vectors,
    overrun, power interruption at each sector, protected target.
@@ -112,6 +120,6 @@ Boot validity gate. The active FW1 launch remains
 5. Only then integrate Boot-only Erase/Program/Verify/Reset and
    validate host success/retry/recovery behavior on an AM13E board.
 
-**Acceptance wording:** SOURCE GAP REVIEWED; `CMD_UPDATE` still
-NOT IMPLEMENTED; Boot Bank0 programming DISABLED; Host/ARM CI
-is NOT hardware qualification.
+**Acceptance wording:** BOUNDED SRAM STAGING / frame ACK IMPLEMENTED;
+full `CMD_UPDATE` Boot Flash Commit still NOT IMPLEMENTED; NO BANK0
+ERASE. Host/ARM CI is NOT hardware qualification.

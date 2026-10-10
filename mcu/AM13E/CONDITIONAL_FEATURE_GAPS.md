@@ -14,7 +14,7 @@ approved exclusion. See [V14_DESIGN_AUTHORITY.md](V14_DESIGN_AUTHORITY.md).
 | Sine/Brushed/Hall/hybrid modes | Internal motor software tested in part; conditional Hall/board adapter pending |
 | BEC/LED/ERPM/PARK/beacon | Existing original guards retained; selected board GPIO implementations pending |
 | Current/voltage/temperature | Original `SENS_MAP`/board-dependent channels; reference NTC/VBUS numeric model tested, current route unqualified |
-| Boot self-update and write-protection | `CMD_UPDATE=4` and `CMD_SETWRP=5` still return `RES_ERROR`, mandatory implementation blockers |
+| Boot self-update and write-protection | `CMD_UPDATE=4` now receives original framed blocks into bounded 16KiB SRAM with per-block ACK; **final `RES_ERROR`** remains until safe Bank0 commit is qualified. `CMD_SETWRP=5` still returns `RES_ERROR`. Both remain mandatory gaps |
 | Six-step physical power stage | Pads/gate physically disabled in Reference; no motor-drive hardware approval |
 
 The Rev1.4 mapping's `hal_motor.c`, `hal_input.c`, etc. are

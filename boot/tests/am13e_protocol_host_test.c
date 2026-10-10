@@ -18,6 +18,7 @@
 
 #include "dl_flash.h"
 #include "app_validity.h"
+#include "update_staging.h"
 
 #define MAP_ADDRESS UINT32_C(0x10000000)
 #define MAP_LENGTH  UINT32_C(0x00080000)
@@ -98,6 +99,19 @@ static void queue_write(unsigned block, const uint8_t *payload,
     little_endian_32(value, crc);
     input_bytes(crc, 4U);
     if (expected_ack >= 0) expected_val((uint8_t)expected_ack);
+}
+static void queue_update_frame(const uint8_t *data,unsigned n,
+                               bool bad_crc,int expected_ack)
+{
+    CHECK(data!=NULL&&n>=4U&&n<=BLOCK_BYTES&&(n&3U)==0U);
+    input_val((uint8_t)(n/4U-1U));
+    input_bytes(data,n);
+    uint8_t crc[4];
+    uint32_t check=software_crc(data,n);
+    if(bad_crc)check^=1U;
+    little_endian_32(check,crc);
+    input_bytes(crc,4U);
+    if(expected_ack>=0)expected_val((uint8_t)expected_ack);
 }
 static void queue_window(unsigned requested,int expected_ack) {
     CHECK(requested<=255U);
@@ -253,12 +267,31 @@ static void queue_protocol(size_t image_bytes,const uint8_t *image){
                            image_bytes:sizeof first32;
     memcpy(first32,image,available);
     queue_read(0U,32U,first32);
-    /* Source-gap guard: CMD_UPDATE rejects before consuming an update
-     * payload, so the next command remains framed and Boot stays intact.
-     * Reject all three upstream WRP modes and an invalid selector.
+    /* Original CRC frames and per-block ACKs now reach a bounded SRAM
+     * stage. Always reject final Boot update: Bank0 erase is DISABLED.
      */
-    input_val(CMD_UPDATE);expected_val(RES_ERROR);
+    uint8_t boot_image[AM13E_BOOT_STAGE_BYTES];
+    memset(boot_image,0xa6,sizeof boot_image);
+    little_endian_32(UINT32_C(0x20018000),boot_image);
+    little_endian_32(UINT32_C(0x00000101),boot_image+4);
+    input_val(CMD_UPDATE);
+    queue_update_frame(boot_image,4U,false,RES_OK);
+    expected_val(RES_ERROR);
     input_val(CMD_PROBE);expected_val(RES_OK);
+    input_val(CMD_UPDATE);
+    for(unsigned k=0;k<AM13E_BOOT_STAGE_BLOCKS;k++)
+        queue_update_frame(boot_image+k*BLOCK_BYTES,BLOCK_BYTES,false,RES_OK);
+    expected_val(RES_ERROR);
+    input_val(CMD_PROBE);expected_val(RES_OK);
+    input_val(CMD_UPDATE);
+    queue_update_frame(boot_image,1024U,false,RES_OK);
+    queue_update_frame(boot_image+1024U,16U,true,-1);
+    input_val(CMD_PROBE);expected_val(RES_OK);
+    input_val(CMD_UPDATE);
+    const uint8_t bad_count[2]={0x03U,0x03U};
+    input_bytes(bad_count,sizeof bad_count);
+    input_val(CMD_PROBE);expected_val(RES_OK);
+    /* Reject all three upstream WRP modes and an invalid selector. */
     input_val(CMD_SETWRP);input_val(0x33U);expected_val(RES_ERROR);
     input_val(CMD_SETWRP);input_val(0x44U);expected_val(RES_ERROR);
     input_val(CMD_SETWRP);input_val(0x55U);expected_val(RES_ERROR);
@@ -332,7 +365,10 @@ int main(int argc, char **argv) {
         CHECK(*((uint8_t *)(uintptr_t)(MAP_ADDRESS+0x5000U+i))==0x44U);
     puts("PASS original Cfg.id + M33 vector enables launch, no image CRC");
     puts("PASS Boot/Config/Reserved preserved, linked-sized flat image");
-    puts("PASS CMD_UPDATE rejects before erase; CMD_SETWRP modes reject safely");
+    CHECK(!boot_am13e_stage_complete());
+    CHECK(boot_am13e_stage_length()==0U);
+    puts("PASS CMD_UPDATE 16KiB/short/CRC ACK and final NAK; no Bank0 Flash");
+    puts("PASS CMD_SETWRP modes reject safely");
     free(image);
     puts("PASS Stage D1 common ESCape32 Boot Protocol integration");
     return 0;

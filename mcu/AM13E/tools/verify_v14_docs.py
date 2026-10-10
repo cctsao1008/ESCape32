@@ -173,6 +173,17 @@ def check_current_contract():
             "#define write boot_am13e_flash_write" in host_entry,
             "Native Host Boot harness no longer tests original dispatcher")
     print("PASS: one TI-compatible main bridge per ARM image, original Rel17 void loops")
+    update_stage=read("boot/mcu/AM13E/update_staging.c")
+    update_parser=read("boot/src/main.c")
+    require("boot_am13e_stage_accept" in update_stage and
+            "boot_am13e_stage_vector_plausible" in update_stage and
+            "boot_am13e_stage_begin();" in update_parser and
+            "recvdata((char *)dst)" in update_parser and
+            "boot_am13e_stage_abort();" in update_parser and
+            "update_staging.c" in read("boot/mcu/AM13E/config.cmake") and
+            "am13e_update_staging" in read("boot/tests/am13e_host/CMakeLists.txt"),
+            "Original CMD_UPDATE SRAM stage not linked and tested")
+    print("PASS: bounded CMD_UPDATE SRAM staging; Boot Bank0 commit blocked")
     print("PASS: native Application/Boot config.ld linker ownership")
     print("PASS: native Application/Boot config.c and config.cmake ownership")
     print("PASS: exact original Rev1.4 source docs SHA-256")
