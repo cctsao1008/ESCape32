@@ -176,7 +176,7 @@ void am13e_app_motor_bemf_init(void)
     calibration_done=0U;
     DL_ECAP_resetCounters(BEMF_ECAP);
     DL_ECAP_startCounter(BEMF_ECAP);
-    calibration_start=DL_ECAP_getTimeStampCounter(BEMF_ECAP);
+    calibration_start=0U; /* first SysTick provides phase-aligned origin */
 #ifdef AM13E_BEMF_BOARD_ANALOG_VERIFIED
     configure_phase_cmp(CMPSS0,DL_SYSCTL_PWREN_CMPSS0,DL_SYSCTL_CMPSS0_MUX,
         AM13E_BEMF_CMP0_HP_PINCM,AM13E_BEMF_CMP0_HN_PINCM,
@@ -315,7 +315,17 @@ void am13e_app_motor_bemf_tick(void)
      * is needed. Match the already-established PB14 ECAP0 approach.
      */
     if (!calibration_done) {
-        if (++calibration_ticks >= BEMF_CALIB_SYSTICKS) {
+        /* Sampling from init() to the 16th tick would depend on the
+         * initial fractional SysTick phase (up to 62.5us / 6.25%).
+         * Take the start stamp ON the first SysTick and finish after
+         * exactly sixteen complete subsequent 62.5us intervals.
+         */
+        if (calibration_ticks == 0U) {
+            calibration_start=DL_ECAP_getTimeStampCounter(BEMF_ECAP);
+            calibration_ticks=1U;
+            return;
+        }
+        if (++calibration_ticks == BEMF_CALIB_SYSTICKS+1U) {
             const uint32_t elapsed=DL_ECAP_getTimeStampCounter(BEMF_ECAP)-
                                    calibration_start;
             const uint32_t measured=(elapsed+500U)/1000U;
