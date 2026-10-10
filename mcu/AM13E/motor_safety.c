@@ -537,13 +537,14 @@ void am13e_app_motor_sixstep_write(int positive_mask,int negative_mask,
         !am13e_motor_plan_sixstep(positive_mask,negative_mask,
                                   floating_phase,damp,reverse,&phase))
         runtime_fault();
-    /* Complementary freewheel requires real MCPWM dead-band, not the
-     * non-complementary AQ candidate. Never silently downgrade damp.
-     * Coast has no energized PWM leg, so damp does not apply there.
+    /* Preserve actual Rel17 cfg.damp and generate the complementary
+     * active-freewheel AQ image ONLY with an explicit board-configured
+     * hardware dead-band. Without it remain fail-closed, not downgraded.
+     * No power-stage output is connected even in a qualified DB build.
      */
-    if (phase.damp && (positive_mask || negative_mask))
-        runtime_fault();
-    phase.damp=0U;
+#ifndef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
+    if (phase.damp && (positive_mask || negative_mask)) runtime_fault();
+#endif
     if (!am13e_motor_aq_plan_sixstep(&phase,&aq)) runtime_fault();
 
     const uint32_t primask=__get_PRIMASK();
@@ -601,7 +602,13 @@ void am13e_app_motor_pwm_apply(int duty,int freq_min_khz,int freq_max_khz,
      * qualified count is available. Reject instead of applying 0ns.
      * The proper complementary/dead-band runtime remains to be ported.
      */
-    if (lock || (running && damp))runtime_fault();
+    /* Lock/active braking has additional phase and trip requirements;
+     * keep that case rejected even when DB is configured.
+     */
+    if (lock) runtime_fault();
+#ifndef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
+    if (running && damp) runtime_fault();
+#endif
     AM13E_MotorShadowPlan plan;
     if (!am13e_motor_pwm_shadow_plan(&input,&plan))runtime_fault();
 
@@ -664,16 +671,20 @@ void am13e_app_motor_pwm_apply(int duty,int freq_min_khz,int freq_max_khz,
 void am13e_app_motor_brushed_write(int reverse,int damp)
 {
     if (!safety_initialized || fault_latched ||
-        (reverse != 0 && reverse != 1) || damp != 0)
+        (reverse != 0 && reverse != 1) || (damp != 0 && damp != 1))
         runtime_fault();
-
+#ifndef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
+    if (damp) runtime_fault();
+#endif
     const uint16_t pwm = (uint16_t)(DL_MCPWM_AQ_OUTPUT_HIGH_ZERO |
                                     DL_MCPWM_AQ_OUTPUT_LOW_UP_CMPA);
     const uint16_t sink = (uint16_t)DL_MCPWM_AQ_OUTPUT_HIGH_ZERO;
+    const uint16_t freewheel = (uint16_t)(DL_MCPWM_AQ_OUTPUT_LOW_ZERO |
+                                          DL_MCPWM_AQ_OUTPUT_HIGH_UP_CMPB);
     const uint16_t action[6] = {
-        reverse ? 0U : pwm, reverse ? sink : 0U,
-        reverse ? pwm : 0U, reverse ? 0U : sink,
-        reverse ? 0U : pwm, reverse ? sink : 0U
+        reverse ? 0U : pwm, reverse ? sink : (damp ? freewheel : 0U),
+        reverse ? pwm : 0U, reverse ? (damp ? freewheel : 0U) : sink,
+        reverse ? 0U : pwm, reverse ? sink : (damp ? freewheel : 0U)
     };
     const uint32_t primask=__get_PRIMASK();
     __disable_irq();

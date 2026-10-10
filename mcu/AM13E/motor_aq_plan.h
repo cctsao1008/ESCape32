@@ -1,7 +1,7 @@
-/* E1-AT: candidate Rel17 six-step -> MCPWM0 AQ SHADOW event words.
- * These are internal register images, NOT board-qualified gate drive.
- * For physical safety this stage supports only unpowered/coast PWM roles.
- * Damp/complementary is rejected until dead-band/Trip Zone are qualified.
+/* Rel17 Six-step -> MCPWM0 AQ Shadow: coast, sink, PWM and damp
+ * complementary images. Damp is permitted by the physical Runtime only
+ * under explicit board dead-band configuration and forced pad isolation.
+ * These logical event words do not authorize physical gate output.
  */
 #pragma once
 #include "motor_phase_plan.h"
