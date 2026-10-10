@@ -127,6 +127,96 @@ static int pwm_registers_inactive(void)
                                     MCPWM_PWM3_AQSFRC_PWMB_MASK)) == expected;
 }
 
+
+/* Motor Dead-band is a real MCPWM DBCTL/DBRED/DBFED runtime setting.
+ * No board values are inferred from STM32 DEAD_TIME or an EVM example.
+ * E62 product integration must explicitly verify the actual gate polarity,
+ * input routing, output swaps and both edge delays before opting in.
+ */
+#ifdef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
+#if AM13E_MOTOR_BOARD_DEADBAND_VERIFIED != 1
+#error "AM13E_MOTOR_BOARD_DEADBAND_VERIFIED must be 1"
+#endif
+#if !defined(AM13E_MOTOR_DB_RED_TICKS) || \
+    !defined(AM13E_MOTOR_DB_FED_TICKS) || \
+    !defined(AM13E_MOTOR_DB_RED_POLARITY) || \
+    !defined(AM13E_MOTOR_DB_FED_POLARITY) || \
+    !defined(AM13E_MOTOR_DB_RED_INPUT) || \
+    !defined(AM13E_MOTOR_DB_FED_INPUT) || \
+    !defined(AM13E_MOTOR_DB_SWAP_A) || \
+    !defined(AM13E_MOTOR_DB_SWAP_B) || \
+    !defined(AM13E_MOTOR_DB_COMPARE_OFFSET_TICKS)
+#error "E62 verified dead-band requires all physical polarity/input/delay fields"
+#endif
+_Static_assert(AM13E_MOTOR_DB_RED_TICKS > 0 &&
+               AM13E_MOTOR_DB_RED_TICKS < 0x4000 &&
+               AM13E_MOTOR_DB_FED_TICKS > 0 &&
+               AM13E_MOTOR_DB_FED_TICKS < 0x4000 &&
+               AM13E_MOTOR_DB_COMPARE_OFFSET_TICKS >= 0 &&
+               AM13E_MOTOR_DB_COMPARE_OFFSET_TICKS < 0x4000 &&
+               (AM13E_MOTOR_DB_RED_POLARITY == 0 ||
+                AM13E_MOTOR_DB_RED_POLARITY == 1) &&
+               (AM13E_MOTOR_DB_FED_POLARITY == 0 ||
+                AM13E_MOTOR_DB_FED_POLARITY == 1) &&
+               (AM13E_MOTOR_DB_RED_INPUT == DL_MCPWM_DB_INPUT_PWMA ||
+                AM13E_MOTOR_DB_RED_INPUT == DL_MCPWM_DB_INPUT_PWMB) &&
+               (AM13E_MOTOR_DB_FED_INPUT == DL_MCPWM_DB_INPUT_PWMA ||
+                AM13E_MOTOR_DB_FED_INPUT == DL_MCPWM_DB_INPUT_PWMB ||
+                AM13E_MOTOR_DB_FED_INPUT == DL_MCPWM_DB_INPUT_DB_RED) &&
+               (AM13E_MOTOR_DB_SWAP_A == 0 || AM13E_MOTOR_DB_SWAP_A == 1) &&
+               (AM13E_MOTOR_DB_SWAP_B == 0 || AM13E_MOTOR_DB_SWAP_B == 1),
+               "Invalid board-verified MCPWM dead-band topology/delay");
+#endif
+
+static void configure_motor_deadband_isolated(void)
+{
+    /* Called after actual MCPWM init while TBCLK is frozen, all AQ SW
+     * actions are forced LOW and all six physical pads are GPIO inputs.
+     * Configuring these device registers does not energize a half-bridge.
+     */
+#ifdef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
+    DL_MCPWM_DeadBandConfig db = {
+        .enableRisingEdgeDelayOnPathA=true,
+        .enableFallingEdgeDelayOnPathB=true,
+        .enableOutputSwapA=(AM13E_MOTOR_DB_SWAP_A!=0),
+        .enableOutputSwapB=(AM13E_MOTOR_DB_SWAP_B!=0),
+        .risingEdgeDelayPolarity=
+             (DL_MCPWM_DEADBAND_POLARITY)AM13E_MOTOR_DB_RED_POLARITY,
+        .fallingEdgeDelayPolarity=
+             (DL_MCPWM_DEADBAND_POLARITY)AM13E_MOTOR_DB_FED_POLARITY,
+        .risingEdgeDelayInputSource=AM13E_MOTOR_DB_RED_INPUT,
+        .fallingEdgeDelayInputSource=AM13E_MOTOR_DB_FED_INPUT,
+        .risingEdgeDelayCount=AM13E_MOTOR_DB_RED_TICKS,
+        .fallingEdgeDelayCount=AM13E_MOTOR_DB_FED_TICKS
+    };
+    DL_MCPWM_configureDeadBand(MCPWM0,&db);
+    /* Explicit fixed-delay shadow handling: do not transfer an
+     * unqualified value at an arbitrary PWM Zero/Period edge.
+     */
+    DL_MCPWM_setRisingEdgeDelayCountShadowLoadMode(
+        MCPWM0,DL_MCPWM_RED_LOAD_FREEZE);
+    DL_MCPWM_setFallingEdgeDelayCountShadowLoadMode(
+        MCPWM0,DL_MCPWM_FED_LOAD_FREEZE);
+    if ((MCPWM0->DBCTL & MCPWM_DBCTL_OUT_MODE_MASK)!=3U ||
+        (MCPWM0->DBRED & MCPWM_DBRED_DBRED_MASK)!=AM13E_MOTOR_DB_RED_TICKS ||
+        (MCPWM0->DBFED & MCPWM_DBFED_DBFED_MASK)!=AM13E_MOTOR_DB_FED_TICKS ||
+        (MCPWM0->DBREDS & MCPWM_DBREDS_DBREDS_MASK)!=AM13E_MOTOR_DB_RED_TICKS ||
+        (MCPWM0->DBFEDS & MCPWM_DBFEDS_DBFEDS_MASK)!=AM13E_MOTOR_DB_FED_TICKS)
+        am13e_app_motor_fault_reset();
+#else
+    /* Unqualified board: do not invent a valid dead-time. Explicitly
+     * disable both DB output paths as well as any output swap.
+     */
+    DL_MCPWM_setDeadBandDelayMode(MCPWM0,DL_MCPWM_DB_RED,false);
+    DL_MCPWM_setDeadBandDelayMode(MCPWM0,DL_MCPWM_DB_FED,false);
+    DL_MCPWM_setDeadBandOutputSwapMode(MCPWM0,DL_MCPWM_DB_OUTPUT_A,false);
+    DL_MCPWM_setDeadBandOutputSwapMode(MCPWM0,DL_MCPWM_DB_OUTPUT_B,false);
+    if ((MCPWM0->DBCTL &
+         (MCPWM_DBCTL_OUT_MODE_MASK|MCPWM_DBCTL_OUTSWAP_MASK))!=0U)
+        am13e_app_motor_fault_reset();
+#endif
+}
+
 void am13e_app_motor_init(void)
 {
     /* Rel17 main() calls here after real clock/initgpio/input setup.
@@ -168,6 +258,7 @@ void am13e_app_motor_init(void)
     config.tripZoneConfig.actionOnB = DL_MCPWM_TZ_ACTION_HIGH_Z;
     DL_MCPWM_init(MCPWM0, &config);
     force_pwm_inactive();
+    configure_motor_deadband_isolated();
     if (!pwm_pads_disconnected() || !pwm_registers_inactive()) {
         am13e_app_motor_fault_shutdown();
         am13e_app_motor_fault_reset();
@@ -463,7 +554,11 @@ void am13e_app_motor_pwm_apply(int duty,int freq_min_khz,int freq_max_khz,
         .freq_max_khz=freq_max_khz,
         .ertm_us=ertm_us,
         .logical_duty=duty,
-        .board_dead_ticks=0, /* Not a claim of 0ns acceptable deadtime. */
+#ifdef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
+        .board_dead_ticks=AM13E_MOTOR_DB_COMPARE_OFFSET_TICKS,
+#else
+        .board_dead_ticks=0, /* Unqualified: lock/damp remain fail-closed. */
+#endif
         .lock=lock,.running=running,.damp=damp,.brushed=brushed,
 #ifdef FULL_DUTY
         .full_duty=1
