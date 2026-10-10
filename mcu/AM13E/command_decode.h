@@ -5,6 +5,11 @@
 #pragma once
 #include <stdint.h>
 
+typedef enum {
+    AM13E_PB14_RX_UNDECIDED=0,
+    AM13E_PB14_RX_PWM=1,
+    AM13E_PB14_RX_DSHOT=2
+} AM13E_PB14_RxMode;
 typedef struct {
     uint32_t last_start;
     uint32_t last_end;
@@ -18,6 +23,7 @@ typedef struct {
     uint8_t decoded_bits;
     uint8_t active;
     uint8_t inverted;
+    uint8_t rx_mode; /* One logical mode at a time. */
 } AM13E_PB14_Decoder;
 
 /* Conservative four-edge capture sanity check. Uses calibrated eCAP Hz.

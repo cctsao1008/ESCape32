@@ -100,8 +100,11 @@ static void finish_frame(AM13E_PB14_Decoder *d, AM13E_PB14_DshotCallback cb)
             return;
         }
     }
-    if (d->decoded_bits == 16U && cb != NULL && cb(d->bits, d->inverted)) {
+    if (d->decoded_bits == 16U &&
+        d->rx_mode!=AM13E_PB14_RX_PWM &&
+        cb != NULL && cb(d->bits, d->inverted)) {
         ++d->good_dshot;
+        d->rx_mode=AM13E_PB14_RX_DSHOT;
     } else if (d->decoded_bits != 0U) {
         ++d->rejected;
     }
@@ -134,8 +137,15 @@ void am13e_pb14_decoder_pulse(AM13E_PB14_Decoder *d, uint32_t start,
         d->pending_width <= 2200U * us_ticks) {
         clear_frame(d);
         const unsigned usec = (unsigned)((d->pending_width + us_ticks / 2U) / us_ticks);
-        if (pwm != NULL) pwm(usec);
-        ++d->good_pwm;
+        if (d->rx_mode==AM13E_PB14_RX_DSHOT) {
+            /* A DShot-locked physical receiver may not inject PWM
+             * throttle updates or refresh the command watchdog. */
+            ++d->rejected;
+        } else {
+            if (pwm != NULL) pwm(usec);
+            ++d->good_pwm;
+            d->rx_mode=AM13E_PB14_RX_PWM;
+        }
     } else if (period >= us_ticks / 2U && period <= 9U * us_ticks &&
                d->pending_width < period &&
                (d->last_bit_period == 0U ||
@@ -169,7 +179,24 @@ void am13e_pb14_decoder_pulse(AM13E_PB14_Decoder *d, uint32_t start,
 void am13e_pb14_decoder_idle(AM13E_PB14_Decoder *d, uint32_t now,
                              AM13E_PB14_DshotCallback dshot)
 {
-    if (d == NULL || !d->active || !d->last_bit_period) return;
+    if (d==NULL || !d->tick_hz) return;
+    /* Explicit receiver quiescence before a protocol mode change.
+     * The existing 50ms maximum capture gap supplies the software
+     * silence boundary; it is a detailed design choice, not a
+     * physical failsafe/watchdog duration qualification. No callback
+     * is accepted while resetting partial-frame state.
+     */
+    if((d->last_start || d->last_end) &&
+       (uint32_t)(now-d->last_end)>d->tick_hz/20U) {
+        d->rx_mode=AM13E_PB14_RX_UNDECIDED;
+        d->active=0U;
+        d->last_start=0U;
+        d->last_end=0U;
+        d->pending_width=0U;
+        clear_frame(d);
+        return;
+    }
+    if (!d->active || !d->last_bit_period) return;
     /* Gap timeout remains a recovery path for truncated frames; a
      * normal 16-pulse DShot command finishes at its final captured edge.
      * Physical bidirectional output scheduling is a separate driver.
