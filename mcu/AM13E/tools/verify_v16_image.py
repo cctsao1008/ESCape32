@@ -19,7 +19,7 @@ SIG = 0x6400
 HDR = 0x6500
 CODE = 0x6800
 FLASH_END = 0x80000
-TRANSPORT = 0x40000
+TRANSPORT = 0x7A000
 
 def run(*args):
     return subprocess.check_output([str(s) for s in args], text=True)
@@ -71,7 +71,7 @@ def main():
             fs.get("_cfg")==0x4000,
             "FW1 APP/VTOR 0x6000 and exclusive FW1 cfg 0x4000")
     require(fs.get("__app_flash_payload_end__",0)<=APP+TRANSPORT,
-            "Current 256KiB transport can carry real FW1 ELF payload")
+            "CMD_WINDOW transport can carry full 488KiB FW1 ELF payload")
     require(fsec.get(".intvecs",(None,0))[0]==APP and
             64<=fsec[".intvecs"][1]<=0x400,
             "TI M33 startup vector table fits before APP+0x400 marker")
@@ -90,7 +90,7 @@ def main():
     require(b_ram[0]<=bs.get("DL_Flash_eraseSector",0)<b_ram[0]+b_ram[1] and
             b_ram[0]<=bs.get("DL_Flash_program",0)<b_ram[0]+b_ram[1],
             "Real TI Boot erase/program DriverLib routines linked into SRAM_C")
-    require(0x6000<=fs.get("__ramfunct_load__",0)<0x46000 and
+    require(0x6000<=fs.get("__ramfunct_load__",0)<0x80000 and
             fs.get("__ramfunct_load__") != fs.get("__ramfunct_start__"),
             "FW1 SRAM RAMFUNC has separate Flash load address")
     require(0x20000000<=fs.get("__data_start__",0)<0x20018000 and

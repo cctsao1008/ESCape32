@@ -4,6 +4,7 @@
 */
 #include "common.h"
 #include <stdint.h>
+#include "../../../mcu/AM13E/flash_partition.h"
 
 #ifdef AM13E_FLASH_TEST
 /* Host test-only: use the same mapped Flash bounds as flash.c. */
@@ -22,7 +23,7 @@ static bool flash_range(unsigned block, unsigned length, uintptr_t *start) {
     const uintptr_t first = BOOT_APP_FIRST;
     const uintptr_t limit = BOOT_APP_END;
     const uintptr_t offset = (uintptr_t)block * UINT32_C(1024);
-    if (!length || length > 1024U || (length & 3U) || block > 255U || limit <= first ||
+    if (!length || length > AM13E_FLASH_LOGICAL_BLOCK || (length & 3U) || block >= AM13E_FLASH_APP_BLOCKS || limit <= first ||
         block > UINT32_MAX / UINT32_C(1024) ||
         offset > limit - first ||
         (uintptr_t)length > limit - first - offset)

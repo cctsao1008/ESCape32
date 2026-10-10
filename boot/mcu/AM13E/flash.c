@@ -44,7 +44,7 @@ enum update_phase {
 };
 static enum update_phase update_phase;
 static unsigned next_block = 2U;
-static unsigned last_block = 256U;
+static unsigned last_block = AM13E_FLASH_APP_BLOCKS;
 static unsigned last_length;
 
 /* Test-only simulation of a reset: volatile session state is lost while
@@ -57,7 +57,7 @@ void boot_am13e_test_reset_update_state(void) {
     pending_signature_valid = false;
     update_phase = UPDATE_IDLE;
     next_block = 2U;
-    last_block = 256U;
+    last_block = AM13E_FLASH_APP_BLOCKS;
     last_length = 0U;
 }
 #endif
@@ -164,7 +164,7 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
         if (block == 0U) {
             update_phase = UPDATE_INVALIDATED_0;
             next_block = 2U;
-            last_block = 256U;
+            last_block = AM13E_FLASH_APP_BLOCKS;
             last_length = 0U;
         } else {
             update_phase = UPDATE_PROGRAM;

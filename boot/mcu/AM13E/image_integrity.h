@@ -11,11 +11,12 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
+#include "../../../mcu/AM13E/flash_partition.h"
 
 /* Architectural addresses are fixed for AM13E reference v2. Host memory may be
  * mapped elsewhere, but the M33 Reset Handler remains a physical address.
  */
-#define AM13E_IMAGE_APP_BASE            UINT32_C(0x00006000)
+#define AM13E_IMAGE_APP_BASE            AM13E_FLASH_APP_BASE
 #define AM13E_IMAGE_HEADER_OFFSET       0x500U
 #define AM13E_IMAGE_HEADER_SIZE         32U
 #define AM13E_IMAGE_SIGNATURE_OFFSET    0x400U
@@ -24,7 +25,7 @@
 #define AM13E_IMAGE_MAGIC               UINT32_C(0x49323645)
 #define AM13E_IMAGE_TARGET              UINT32_C(0x33314d41)
 #define AM13E_IMAGE_HEADER_VERSION      1U
-#define AM13E_IMAGE_MAX_TRANSPORT_BYTES (256U * 1024U)
+#define AM13E_IMAGE_MAX_TRANSPORT_BYTES AM13E_FLASH_APP_BYTES
 
 typedef enum {
     AM13E_IMAGE_INVALID_ARGUMENT = 0,

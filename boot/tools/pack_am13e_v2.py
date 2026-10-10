@@ -22,7 +22,7 @@ SIGNATURE_OFFSET = 0x400
 HEADER_OFFSET = 0x500
 METADATA_SECTOR = 0x800
 HEADER_SIZE = 32
-MAX_LENGTH = 256 * 1024
+MAX_LENGTH = (0x80000 - APP_BASE)  # 488 KiB, two CMD_WINDOW ranges
 HEADER_MAGIC = 0x49323645  # "legacy-image-magic"
 TARGET_ID = 0x33314D41    # "AM13"
 VERSION = 1
@@ -72,7 +72,7 @@ def _reject_old_boot_v2(image: bytes) -> None:
 def pack(raw: bytes) -> bytes:
     _reject_old_boot_v2(raw)
     if len(raw) > MAX_LENGTH:
-        raise ImageError("Image exceeds 256 KiB legacy CMD_WRITE addressing limit")
+        raise ImageError("Image exceeds 488 KiB AM13E single Application partition")
     if len(raw) < METADATA_SECTOR + 2:
         raise ImageError("Raw binary has no linked code after first metadata sector")
     if raw[HEADER_OFFSET:HEADER_OFFSET + HEADER_SIZE] not in (
@@ -86,7 +86,7 @@ def pack(raw: bytes) -> bytes:
     image = bytearray(raw)
     image.extend(b"\xff" * ((-len(image)) & 15))
     if len(image) > MAX_LENGTH:
-        raise ImageError("16-byte padded image exceeds 256 KiB")
+        raise ImageError("16-byte padded image exceeds 488 KiB")
     _vectors(image)
     image[SIGNATURE_OFFSET:SIGNATURE_OFFSET + 16] = b"\xff" * 16
     image[SIGNATURE_OFFSET:SIGNATURE_OFFSET + 2] = b"\xea\x32"

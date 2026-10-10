@@ -4,8 +4,9 @@
  *
  * This is a fully linked FW1 firmware candidate, NOT hardware-qualified.
  * Fixed 16KiB Boot, separate FW1/FW2 4KiB parameter regions, physical
- * 488KiB shared APP allocation. Legacy WiFi-Link 1KiB CMD_WRITE with a
- * one-byte block index still limits the transferred binary to 256KiB.
+ * 488KiB shared APP allocation. AM13E Boot CMD_WINDOW=6 covers
+ * all 488 logical 1KiB blocks; older WiFi-Link clients need an explicit
+ * window-aware update to transfer >256KiB images.
  * Input/output markers, CRC and signature-last commit are validated by
  * Boot/Packer host tests. Do NOT program power hardware on CI evidence.
  *
@@ -157,8 +158,8 @@ ASSERT(ORIGIN(FLASH_CFG2) == 0x5000 && LENGTH(FLASH_CFG2)==0x1000,
        "Independent FW2 config region must be preserved")
 ASSERT(ORIGIN(FLASH_APP) + LENGTH(FLASH_APP) == 0x00080000,
        "Physical application allocation must end at 512KiB Flash")
-ASSERT(__app_flash_payload_end__ <= 0x00046000,
-       "Packed application exceeds 256 KiB CMD_WRITE transport")
+ASSERT(__app_flash_payload_end__ <= 0x00080000,
+       "Packed application exceeds 488 KiB partition (CMD_WINDOW transport)")
 ASSERT(__data_start__ >= ORIGIN(RAM_S) &&
        __bss_end__ <= ORIGIN(RAM_S) + LENGTH(RAM_S),
        "Application RAM_S sections overflow")

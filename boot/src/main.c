@@ -25,11 +25,21 @@
 #define CMD_WRITE  3
 #define CMD_UPDATE 4
 #define CMD_SETWRP 5
+#if defined(AM13E)
+#define CMD_WINDOW 6 /* v1.6: 2 windows of 256 logical 1KiB blocks */
+#include "../../mcu/AM13E/flash_partition.h"
+#endif
 
 #define RES_OK    0
 #define RES_ERROR 1
 
 void main(void) {
+#if defined(AM13E)
+    /* Boot entry/reboot session always begins at legacy window 0.
+     * Old CMD_READ/WRITE clients remain binary compatible up to 256KiB.
+     */
+    unsigned app_window=0U;
+#endif
 	init();
 	initio();
 #if defined(AM13E)
@@ -72,11 +82,13 @@ void main(void) {
 #if defined(AM13E)
 				/* The MCU backend validates address arithmetic and readable Flash. */
 				const void *read_addr = 0;
-				const unsigned read_len = (unsigned)(cnt + 1) << 2;
-				if (!boot_am13e_read_range((unsigned)num, read_len, &read_addr)) {
-					sendval(RES_ERROR);
-					break;
-				}
+                const unsigned read_len=(unsigned)(cnt+1)<<2;
+                const unsigned block=(app_window<<8U)|(unsigned)num;
+                /* Invalid READ has no rel17 error data frame; abort
+                 * current command instead of sending ambiguous bytes.
+                 */
+                if (!boot_am13e_read_range(block,read_len,&read_addr))
+                    goto done;
 				senddata(read_addr, (int)read_len);
 #else
 				senddata(_rom_end + (num << 10), (cnt + 1) << 2);
@@ -92,7 +104,8 @@ void main(void) {
 #if defined(AM13E)
 				/* Reject out-of-region or unaligned writes before touching Flash. */
 				char *write_addr = 0;
-				if (!boot_am13e_write_range((unsigned)num, (unsigned)len, &write_addr)) {
+				const unsigned block=(app_window<<8U)|(unsigned)num;
+                if (!boot_am13e_write_range(block,(unsigned)len,&write_addr)) {
 					sendval(RES_ERROR);
 					break;
 				}
@@ -102,7 +115,24 @@ void main(void) {
 #endif
 				break;
 			}
-			case CMD_UPDATE: { // Update bootloader
+			#if defined(AM13E)
+            case CMD_WINDOW: {
+                /* Complement-coded one-byte selector, same recvval()
+                 * framing as CMD_READ/WRITE arguments.
+                 * Unsupported values never change the active window.
+                 */
+                const int selected=recvval();
+                if(selected<0) goto done;
+                if(selected>1) {
+                    sendval(RES_ERROR);
+                    break;
+                }
+                app_window=(unsigned)selected;
+                sendval(RES_OK);
+                break;
+            }
+#endif
+            case CMD_UPDATE: { // Update bootloader
 #if defined(AM13E)
 				/* Self-update must execute from a verified RAM-resident writer.
 				 * The STM32 _rom/_ram_end buffering contract is not portable.

@@ -1,9 +1,10 @@
 #include "cfg_flash_plan.h"
+#include "flash_partition.h"
 #include <stdint.h>
 #include <stddef.h>
-#define FW1_CFG_FIRST UINT32_C(0x00004000)
-#define FW1_CFG_END UINT32_C(0x00005000)
-#define FW1_SECTOR_BYTES UINT32_C(2048)
+#define FW1_CFG_FIRST AM13E_FLASH_FW1_PARAM_BASE
+#define FW1_CFG_END AM13E_FLASH_FW1_PARAM_END
+#define FW1_SECTOR_BYTES AM13E_FLASH_ERASE_SECTOR
 #define FLASH_ECC_WRITE_BYTES UINT32_C(16)
 #define RAM_S_FIRST UINT32_C(0x20000000)
 #define RAM_S_END UINT32_C(0x20018000)
