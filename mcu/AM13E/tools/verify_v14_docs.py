@@ -151,10 +151,12 @@ def check_current_contract():
     boot_main=read("boot/src/main.c")
     app_sources=read("mcu/AM13E/config.cmake")
     boot_sources=read("boot/mcu/AM13E/config.cmake")
-    require("mcu/AM13E/entry.c" in app_sources and
-            "boot/mcu/AM13E/entry.c" in boot_sources and
-            "boot/mcu/AM13E/entry.c" not in app_sources and
-            "mcu/AM13E/entry.c" not in boot_sources,
+    app_entry_source='"${PROJECT_SOURCE_DIR}/mcu/AM13E/entry.c"'
+    boot_entry_source='"${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/entry.c"'
+    require(app_entry_source in app_sources and
+            boot_entry_source in boot_sources and
+            boot_entry_source not in app_sources and
+            app_entry_source not in boot_sources,
             "Application/Boot entry.c ownership or source selection drifted")
     require("int main(void)" in app_entry and
             "am13e_rel17_app_main();" in app_entry and
