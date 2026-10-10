@@ -46,11 +46,11 @@ def check_ram_flash_branches(objdump, boot, ram_start, ram_bytes):
     preflight=0
     commit_calls=0
     for line in asm.splitlines():
-        h=re.match(r"^\\s*[0-9a-fA-F]+\\s+<([^>]+)>:\\s*$",line)
+        h=re.match(r"^\s*[0-9a-fA-F]+\s+<([^>]+)>:\s*$",line)
         if h:
             function=h.group(1)
             continue
-        match=re.match(r"^\\s*([0-9a-fA-F]+):\\s+([A-Za-z][A-Za-z0-9_.]*)\\s*(.*)$",line)
+        match=re.match(r"^\s*([0-9a-fA-F]+):\s+([A-Za-z][A-Za-z0-9_.]*)\s*(.*)$",line)
         if not match:continue
         address=int(match.group(1),16)
         if not (ram_start<=address<end):continue
@@ -63,7 +63,7 @@ def check_ram_flash_branches(objdump, boot, ram_start, ram_bytes):
             continue
         if baseop=="bx" and operand.strip()=="lr":
             continue
-        target=re.search(r"(?<![0-9a-zA-Z])(?:0x)?([0-9a-fA-F]{6,8})\\s+<([^>]+)>",operand)
+        target=re.search(r"(?<![0-9a-zA-Z])(?:0x)?([0-9a-fA-F]{6,8})\s+<([^>]+)>",operand)
         if target is None:
             raise AssertionError("SRAM Flash code has unverifiable branch "+
                                  function+": "+line.strip())
