@@ -10,7 +10,7 @@
  * pin is NOT proof of a functional gate-driver fault path.
  */
 #include <soc.h>
-#include "gpio_runtime.h"
+#include "fault_input.h"
 #include <dl_gpio.h>
 
 #define AM13E_NFAULT_GPIO GPIO1

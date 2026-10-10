@@ -1,5 +1,5 @@
 /* Pure arithmetic / unit contract, NOT a measured AM13E reference NTC or divider. */
-#include "adc_calibration_plan.h"
+#include "analog_calibration_plan.h"
 #include <stdint.h>
 #include <assert.h>
 #include <stdio.h>

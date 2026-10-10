@@ -95,31 +95,31 @@ function(add_target_ti_am13e name)
             # FW1 does not instantiate the optional UART telemetry hardware.
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/irq_vectors.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/reset_cause.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/gpio_runtime.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/adc_pair_backend.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/adc_runtime.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/adc_calibration_plan.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/fault_input.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/analog_sampling_backend.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/analog_runtime.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/analog_calibration_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/command_input_route_backend.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/pb14_capture.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/pb14_decode.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/command_capture.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/command_decode.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_codec.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_timing.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/pb14_bidir_tx.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/command_reply.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/system_runtime.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_runtime_irq.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/arming_window.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_xtal25_pll200.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_source_reference.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/board_clock_reference.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_pad_route_plan.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_pad_backend.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/board_motor_pad_reference.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_output_route_plan.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_output_backend.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/board_motor_output_reference.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_safety.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_power_stage.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_audio.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_audio_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/fault_trip_route_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/fault_trip_backend.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_nfault_trip.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_fault_route.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_bemf.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_sine_table.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_phase_plan.c"
@@ -421,7 +421,7 @@ add_target(AM13E AM13E)
 # gate enable, analog channel, board clock or Flash partition is selected.
 # It is NOT a runnable firmware or a motor-output qualification gate.
 add_library(AM13E_PORTABLE_LOGIC OBJECT EXCLUDE_FROM_ALL
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/adc_calibration_plan.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/analog_calibration_plan.c"
     "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_codec.c"
     "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_timing.c"
     "${PROJECT_SOURCE_DIR}/mcu/AM13E/fault_trip_route_plan.c"
@@ -474,7 +474,7 @@ target_compile_options(AM13E_MCU_RUNTIME_TICK PRIVATE
 # Compile real TI ADC0/1/2 pair initialization without choosing
 # a sensor pin or external calibration; object-only, not executable.
 add_library(AM13E_MCU_ADC_PAIR_BACKEND OBJECT EXCLUDE_FROM_ALL
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/adc_pair_backend.c")
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/analog_sampling_backend.c")
 target_include_directories(AM13E_MCU_ADC_PAIR_BACKEND PRIVATE
     "${PROJECT_SOURCE_DIR}/mcu/AM13E")
 target_include_directories(AM13E_MCU_ADC_PAIR_BACKEND SYSTEM PRIVATE
@@ -505,8 +505,8 @@ target_compile_options(AM13E_MCU_COMMAND_INPUT_ROUTE PRIVATE
 # Real TI board-neutral six-MCPWM-pad GPIO/PINCM backend; no gate enable.
 # Source-only object, never a qualified ESC output executable.
 add_library(AM13E_MCU_MOTOR_PAD_BACKEND OBJECT EXCLUDE_FROM_ALL
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_pad_route_plan.c"
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_pad_backend.c")
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_output_route_plan.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_output_backend.c")
 target_include_directories(AM13E_MCU_MOTOR_PAD_BACKEND PRIVATE
     "${PROJECT_SOURCE_DIR}/mcu/AM13E")
 target_include_directories(AM13E_MCU_MOTOR_PAD_BACKEND SYSTEM PRIVATE
@@ -533,7 +533,7 @@ if(AM13E_BUILD_CLOCK_DIAGNOSTIC)
     add_executable(AM13E_CLOCK.elf EXCLUDE_FROM_ALL
         "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_diagnostic_entry.c"
         "${PROJECT_SOURCE_DIR}/mcu/AM13E/system_runtime.c"
-        "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_xtal25_pll200.c"
+        "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_source_reference.c"
         "${PROJECT_SOURCE_DIR}/mcu/AM13E/board_clock_reference.c"
         "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_common.c"
         "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_fri.c"

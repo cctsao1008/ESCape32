@@ -9,7 +9,7 @@
 #endif
 #include <soc.h>
 #include <dl_gpio.h>
-#include "motor_pad_route_plan.h"
+#include "motor_output_route_plan.h"
 
 typedef struct {
     GPIO_Regs *gpio;

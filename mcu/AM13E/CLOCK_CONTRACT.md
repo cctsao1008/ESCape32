@@ -42,7 +42,7 @@ oscillator or PLL operation on a physical board.
 - `src/main.c` and the other original ESCape32 Rel17 sources
   own FW1 control and application behavior.
 - `mcu/AM13E/system_runtime.c`,
-  `mcu/AM13E/clock_xtal25_pll200.c` and
+  `mcu/AM13E/clock_source_reference.c` and
   `mcu/AM13E/clock_backend.h` own **AM13E MCU adaptation**.
 - TI SDK/CMSIS/DriverLib supply low-level peripheral access
   just as libopencm3 supports existing STM32 targets.
@@ -58,7 +58,7 @@ from the ESCape32 root CMake project.
 
 ## Current clock code and safety boundary
 
-`clock_xtal25_pll200.c` uses real TI registers and DriverLib,
+`clock_source_reference.c` uses real TI registers and DriverLib,
 checks inherited SYSOSC, increases Flash RWAIT before changing
 MCLK, uses finite software polls for oscillator/PLL status,
 and returns the configured **nominal** 200 MHz only after

@@ -7,5 +7,5 @@
 #ifndef AM13E
 #error "AM13E board pad route only"
 #endif
-#include "motor_pad_backend.h"
+#include "motor_output_backend.h"
 const AM13E_MotorPadRoute *am13e_board_motor_pad_route(void);

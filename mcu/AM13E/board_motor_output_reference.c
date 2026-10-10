@@ -2,8 +2,8 @@
  * PA8/PA11, PA9/PA30, PA10/PA31 remain the exact old MCPWM0 map.
  * These values do NOT authorize output without gate/Trip/RED/FED review.
  */
-#include "board_motor_pad_provider.h"
-#include "board_io_plan_v1.h"
+#include "board_motor_output_provider.h"
+#include "board_reference_io.h"
 
 static const AM13E_MotorPadRoute reference_route = {
     .gpio = GPIO0,

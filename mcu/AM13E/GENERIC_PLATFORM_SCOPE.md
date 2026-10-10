@@ -56,7 +56,7 @@ This document is a porting boundary, not a hardware qualification.
 - `fault_trip_backend.[ch]` is a **board-neutral TI DriverLib backend** with
   explicit MCPWM/XBAR route parameters, route consistency checks and actual
   register/status readback. It never selects pins, arms outputs or clears OST.
-- `motor_nfault_trip.c` is the **Reference Board adapter** choosing PB15,
+- `motor_fault_route.c` is the **Reference Board adapter** choosing PB15,
   INPUTXBAR2, PWMXBAR1, active-low and MCPWM0 OST1. Fault latching,
   readback and fail-closed error handling remain mandatory.
 - `AM13E_MCU_FAULT_TRIP_BACKEND` is an independent board-free ARM object
@@ -73,7 +73,7 @@ This document is a porting boundary, not a hardware qualification.
   without selecting an oscillator, PLL or image profile.
 - `board_clock_reference.c` owns the existing 25MHz XTAL/200MHz PLL
   and clock-good readback. It still calls the original, bounded-polling
-  `clock_xtal25_pll200.c` DriverLib/register implementation.
+  `clock_source_reference.c` DriverLib/register implementation.
 - `AM13E_MCU_RUNTIME_TICK` compiles this reusable ARM object without a
   linked reference clock; missing a real provider must remain a linker
   error on any future complete generic firmware, never a fake stub.
@@ -82,13 +82,13 @@ This document is a porting boundary, not a hardware qualification.
 
 ## Generic ADC pair acquisition split
 
-- `adc_pair_backend.[ch]` owns the real TI ADC reset/power, SOC pair,
+- `analog_sampling_backend.[ch]` owns the real TI ADC reset/power, SOC pair,
   sequencer, IRQ-source setup and analog stabilization delay. All
   pinmux/physical-channel selections are explicit `AM13E_AdcPairRoute`
   values, not board defaults. The backend rejects nonconsecutive SOC
   pairs and inconsistent initialization preconditions.
-- `adc_board_reference.h` owns only the reference ADC0 PA6/PA28 and
-  ADCIN17/11 wiring. `adc_runtime.c` remains the Rel17 ISR/housekeeping
+- `analog_reference.h` owns only the reference ADC0 PA6/PA28 and
+  ADCIN17/11 wiring. `analog_runtime.c` remains the Rel17 ISR/housekeeping
   adapter and does not invent VREF, divider or NTC curves.
 - The board-neutral object compile gate is `AM13E_MCU_ADC_PAIR_BACKEND`.
   Existing calibrated/uncalibrated Rel17 firmware behavior is unchanged;
@@ -101,7 +101,7 @@ The new `fault_trip_route_plan.c` has no SDK or board dependency. The actual TI 
 ## Command input GPIO/XBAR source split
 
 - `command_input_route_backend.[ch]` performs real TI digital-input init and INPUTXBAR route/readback. Its descriptor requires the pin, GPIO function and XBAR route explicitly, without configuring motor outputs, pull/bias or board voltages.
-- `command_input_reference.h` owns Reference PB14/GPIO46 to ECAP0 route. `pb14_capture.c` retains the existing exact DShot/servo callbacks, ECAP capture/IRQ/clock calibration and BiDShot dispatch.
+- `command_input_reference.h` owns Reference PB14/GPIO46 to ECAP0 route. `command_capture.c` retains the existing exact DShot/servo callbacks, ECAP capture/IRQ/clock calibration and BiDShot dispatch.
 - `AM13E_MCU_COMMAND_INPUT_ROUTE` independently ARM-compiles the generic MCU object with no Board Profile selected. Board physical pin levels, capture latency and ECAP/DMA race verification are open.
 
 ## Explicit Boot/Image Profile selection
@@ -113,8 +113,8 @@ The new `fault_trip_route_plan.c` has no SDK or board dependency. The actual TI 
 
 ## Six-MCPWM-pad route ownership refactor
 
-- `motor_pad_route_plan.[ch]` enforces 6-entry unique GPIO bits/PINCM and exact combined mask in native host regressions.
-- `motor_pad_backend.[ch]` is a TI DriverLib-based, board-neutral GPIO/PINCM implementation. It disconnects all six pads to digital input, validates actual GPIO input/peripheral-function readback, and applies/reads PWM alternate function and inversion only when called by existing qualified power-stage attach logic.
-- `board_motor_pad_reference.c` is the required **Reference v1.6** provider for PA8/11/9/30/10/31. There is no implicit generic route or weak default. A different board must provide its own mapping and separate reviewed gate/Trip/RED/FED.
+- `motor_output_route_plan.[ch]` enforces 6-entry unique GPIO bits/PINCM and exact combined mask in native host regressions.
+- `motor_output_backend.[ch]` is a TI DriverLib-based, board-neutral GPIO/PINCM implementation. It disconnects all six pads to digital input, validates actual GPIO input/peripheral-function readback, and applies/reads PWM alternate function and inversion only when called by existing qualified power-stage attach logic.
+- `board_motor_output_reference.c` is the required **Reference v1.6** provider for PA8/11/9/30/10/31. There is no implicit generic route or weak default. A different board must provide its own mapping and separate reviewed gate/Trip/RED/FED.
 - `motor_safety.c` no longer directly selects PA8/11/9/30/10/31; the same default Motor MCPWM0, exclusive audio ownership and safe-off readback remain. `motor_power_stage.c` keeps PB13 inactive-first/active-last, mandatory OST/OC/Dead-band checks, and fail-closed behavior. CI gates generic ARM backend, Reference firmware/link and dedicated native invalid-pad-route regression.
 - This is **not** a physical enable approval, and MCU GPIO input Hi-Z must not be equated with guaranteed external power-driver shutdown.

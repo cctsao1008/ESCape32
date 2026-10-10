@@ -1,4 +1,4 @@
-#include "adc_calibration_plan.h"
+#include "analog_calibration_plan.h"
 #include <stddef.h>
 #include <stdint.h>
 

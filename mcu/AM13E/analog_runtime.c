@@ -10,11 +10,11 @@
  * that temperature/voltage protection is functional.
  * No MCPWM/PB13 outputs are configured or enabled here.
  */
-#include "adc_runtime.h"
+#include "analog_runtime.h"
 #include "clock_backend.h"
-#include "adc_calibration_plan.h"
-#include "adc_pair_backend.h"
-#include "adc_board_reference.h"
+#include "analog_calibration_plan.h"
+#include "analog_sampling_backend.h"
+#include "analog_reference.h"
 /* Rel17 owns the public adctrig() declaration; include its canonical API. */
 #include "common.h"
 #include <soc.h>
@@ -38,7 +38,7 @@ static void adc_fail_closed(void)
 }
 
 /* Reference ADC0 ISR and Rel17 housekeeping adapter; MCU sequencer
- * register programming belongs to the reusable adc_pair_backend.
+ * register programming belongs to the reusable analog_sampling_backend.
  */
 void am13e_app_adc_init(void)
 {

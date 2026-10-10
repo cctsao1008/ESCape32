@@ -2,7 +2,7 @@
  * A complete DShot packet enters the existing Rel17 CRC/throttle callback.
  * This decoder does not fabricate a watchdog feed, telemetry or PWM output.
  */
-#include "pb14_decode.h"
+#include "command_decode.h"
 #include <stddef.h>
 
 /* Require plausible, forward-ordered edges in one four-event ECAP0
@@ -11,7 +11,7 @@
  * This guard cannot detect a COMPLETE four-event register overwrite:
  * only the hardware latency / DMA measurement can establish that.
  */
-int am13e_pb14_capture_group_valid(uint32_t start1, uint32_t end1,
+int am13e_command_capture_group_valid(uint32_t start1, uint32_t end1,
                                    uint32_t start2, uint32_t end2,
                                    uint32_t tick_hz)
 {
@@ -33,7 +33,7 @@ static void clear_frame(AM13E_PB14_Decoder *d)
     d->last_bit_period = 0U;
 }
 
-void am13e_pb14_decoder_abort(AM13E_PB14_Decoder *d)
+void am13e_command_decoder_abort(AM13E_PB14_Decoder *d)
 {
     if (d == NULL) return;
     ++d->rejected;
@@ -44,7 +44,7 @@ void am13e_pb14_decoder_abort(AM13E_PB14_Decoder *d)
     clear_frame(d);
 }
 
-void am13e_pb14_decoder_reset(AM13E_PB14_Decoder *d, uint32_t tick_hz, int inverted)
+void am13e_command_decoder_reset(AM13E_PB14_Decoder *d, uint32_t tick_hz, int inverted)
 {
     if (d == NULL) return;
     *d = (AM13E_PB14_Decoder){0};
@@ -81,7 +81,7 @@ static void finish_frame(AM13E_PB14_Decoder *d, AM13E_PB14_DshotCallback cb)
     clear_frame(d);
 }
 
-void am13e_pb14_decoder_pulse(AM13E_PB14_Decoder *d, uint32_t start,
+void am13e_command_decoder_pulse(AM13E_PB14_Decoder *d, uint32_t start,
                               uint32_t end, AM13E_PB14_PwmCallback pwm,
                               AM13E_PB14_DshotCallback dshot)
 {
@@ -139,7 +139,7 @@ void am13e_pb14_decoder_pulse(AM13E_PB14_Decoder *d, uint32_t start,
     }
 }
 
-void am13e_pb14_decoder_idle(AM13E_PB14_Decoder *d, uint32_t now,
+void am13e_command_decoder_idle(AM13E_PB14_Decoder *d, uint32_t now,
                              AM13E_PB14_DshotCallback dshot)
 {
     if (d == NULL || !d->active || !d->last_bit_period) return;

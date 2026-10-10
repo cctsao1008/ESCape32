@@ -6,7 +6,7 @@
 #include "motor_backend.h"
 #include "motor_audio_hw.h" /* Prevent COMP/ECAP1 rearming during sound */
 #include "motor_bemf.h" /* Declarations for init, abort and ECAP1 IRQ */
-#include "board_io_plan_v1.h" /* Provisional AM13E reference phase/BEMF pinmux */
+#include "board_reference_io.h" /* Provisional AM13E reference phase/BEMF pinmux */
 #include "motor_event_timer.h" /* Cancel obsolete TIMG12 on BEMF timeout */
 #include "clock_backend.h"
 #include "irq_vectors.h"

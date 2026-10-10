@@ -112,7 +112,7 @@ ELF using a mock driver and NOT the completed FW1.
 
 - Real TI `startup_gcc_arm.c` Reset_Handler and .intvecs.
 - Real `system_runtime.c` `init()` and
-  `clock_xtal25_pll200.c`: 25MHz HFXT -> PLL400 ->
+  `clock_source_reference.c`: 25MHz HFXT -> PLL400 ->
   nominal 200MHz MCLK, with real `dl_common.c` and
   `dl_fri.c` support.
 - Dedicated `clock_diagnostic_entry.c` provides its
@@ -194,7 +194,7 @@ User-provided `e1d-arming-build.log` confirms a successful
 CMake regeneration followed by **8/8 incremental object compilations**,
 with no compiler warning/error. The newly added
 `mcu/AM13E/arming_window.c.obj` compiled; `system_runtime.c`,
-`clock_xtal25_pll200.c`, and the recompiled Rel17
+`clock_source_reference.c`, and the recompiled Rel17
 `src/io.c`, `src/telem.c`, `src/util.c`,
 `src/main.c`, and `src/prog.c` also compiled.
 Together with previously compiled objects, the target has
@@ -505,7 +505,7 @@ User uploaded `e1c-driverlib-build.log`,
 
 - **11/11 AM13E ARM Objects PASS**, latest incremental Ninja build
   compiled `dl_common.c`, `dl_fri.c`, `system_runtime.c`
-  and `clock_xtal25_pll200.c` without diagnostics.
+  and `clock_source_reference.c` without diagnostics.
 - `compile_commands` contains 11 entries targeting AM13E among
   365 total; all 11 use the same ARM GNU 15.2 toolchain, target
   `-march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
@@ -574,7 +574,7 @@ TI AM13E SDK:
 **Since the log**, genuine TI SDK `dl_common.c` and
 `dl_fri.c` were added to the AM13E Object CMake target,
 without dummy drivers or changing Boot/legacy selection.
-`clock_xtal25_pll200.c` now waits for retained XTAL and
+`clock_source_reference.c` now waits for retained XTAL and
 SYSPLL **GOOD-or-OFF** status before disabling either source.
 These changes **have not yet been compiled in WSL**.
 
@@ -624,7 +624,7 @@ been compiled with ARM GCC or validated on hardware**.
 
 - `mcu/AM13E/clock_backend.h`: nominal 25MHz XTAL, 400MHz
   VCO, 200MHz MCLK interface constants and return contract.
-- `mcu/AM13E/clock_xtal25_pll200.c`: actual TI SYSCTL/FRI
+- `mcu/AM13E/clock_source_reference.c`: actual TI SYSCTL/FRI
   register control. PDIV=/2, QDIV register=31 (effective ×32),
   SYSPLLCLK0 RDIV=/2, source=HFCLK; selects the factory
   feedback-input 8..16MHz tuning bin for fLOOPIN=12.5MHz.
@@ -1441,7 +1441,7 @@ User-provided `e1d-arming-build.log` confirms a successful
 CMake regeneration followed by **8/8 incremental object compilations**,
 with no compiler warning/error. The newly added
 `mcu/AM13E/arming_window.c.obj` compiled; `system_runtime.c`,
-`clock_xtal25_pll200.c`, and the recompiled Rel17
+`clock_source_reference.c`, and the recompiled Rel17
 `src/io.c`, `src/telem.c`, `src/util.c`,
 `src/main.c`, and `src/prog.c` also compiled.
 Together with previously compiled objects, the target has
@@ -1752,7 +1752,7 @@ User uploaded `e1c-driverlib-build.log`,
 
 - **11/11 AM13E ARM Objects PASS**, latest incremental Ninja build
   compiled `dl_common.c`, `dl_fri.c`, `system_runtime.c`
-  and `clock_xtal25_pll200.c` without diagnostics.
+  and `clock_source_reference.c` without diagnostics.
 - `compile_commands` contains 11 entries targeting AM13E among
   365 total; all 11 use the same ARM GNU 15.2 toolchain, target
   `-march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
@@ -1821,7 +1821,7 @@ TI AM13E SDK:
 **Since the log**, genuine TI SDK `dl_common.c` and
 `dl_fri.c` were added to the AM13E Object CMake target,
 without dummy drivers or changing Boot/legacy selection.
-`clock_xtal25_pll200.c` now waits for retained XTAL and
+`clock_source_reference.c` now waits for retained XTAL and
 SYSPLL **GOOD-or-OFF** status before disabling either source.
 These changes **have not yet been compiled in WSL**.
 
@@ -1871,7 +1871,7 @@ been compiled with ARM GCC or validated on hardware**.
 
 - `mcu/AM13E/clock_backend.h`: nominal 25MHz XTAL, 400MHz
   VCO, 200MHz MCLK interface constants and return contract.
-- `mcu/AM13E/clock_xtal25_pll200.c`: actual TI SYSCTL/FRI
+- `mcu/AM13E/clock_source_reference.c`: actual TI SYSCTL/FRI
   register control. PDIV=/2, QDIV register=31 (effective ×32),
   SYSPLLCLK0 RDIV=/2, source=HFCLK; selects the factory
   feedback-input 8..16MHz tuning bin for fLOOPIN=12.5MHz.
@@ -2706,7 +2706,7 @@ ELF using a mock driver and NOT the completed FW1.
 
 - Real TI `startup_gcc_arm.c` Reset_Handler and .intvecs.
 - Real `system_runtime.c` `init()` and
-  `clock_xtal25_pll200.c`: 25MHz HFXT -> PLL400 ->
+  `clock_source_reference.c`: 25MHz HFXT -> PLL400 ->
   nominal 200MHz MCLK, with real `dl_common.c` and
   `dl_fri.c` support.
 - Dedicated `clock_diagnostic_entry.c` provides its
@@ -2788,7 +2788,7 @@ User-provided `e1d-arming-build.log` confirms a successful
 CMake regeneration followed by **8/8 incremental object compilations**,
 with no compiler warning/error. The newly added
 `mcu/AM13E/arming_window.c.obj` compiled; `system_runtime.c`,
-`clock_xtal25_pll200.c`, and the recompiled Rel17
+`clock_source_reference.c`, and the recompiled Rel17
 `src/io.c`, `src/telem.c`, `src/util.c`,
 `src/main.c`, and `src/prog.c` also compiled.
 Together with previously compiled objects, the target has
@@ -3099,7 +3099,7 @@ User uploaded `e1c-driverlib-build.log`,
 
 - **11/11 AM13E ARM Objects PASS**, latest incremental Ninja build
   compiled `dl_common.c`, `dl_fri.c`, `system_runtime.c`
-  and `clock_xtal25_pll200.c` without diagnostics.
+  and `clock_source_reference.c` without diagnostics.
 - `compile_commands` contains 11 entries targeting AM13E among
   365 total; all 11 use the same ARM GNU 15.2 toolchain, target
   `-march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
@@ -3168,7 +3168,7 @@ TI AM13E SDK:
 **Since the log**, genuine TI SDK `dl_common.c` and
 `dl_fri.c` were added to the AM13E Object CMake target,
 without dummy drivers or changing Boot/legacy selection.
-`clock_xtal25_pll200.c` now waits for retained XTAL and
+`clock_source_reference.c` now waits for retained XTAL and
 SYSPLL **GOOD-or-OFF** status before disabling either source.
 These changes **have not yet been compiled in WSL**.
 
@@ -3218,7 +3218,7 @@ been compiled with ARM GCC or validated on hardware**.
 
 - `mcu/AM13E/clock_backend.h`: nominal 25MHz XTAL, 400MHz
   VCO, 200MHz MCLK interface constants and return contract.
-- `mcu/AM13E/clock_xtal25_pll200.c`: actual TI SYSCTL/FRI
+- `mcu/AM13E/clock_source_reference.c`: actual TI SYSCTL/FRI
   register control. PDIV=/2, QDIV register=31 (effective ×32),
   SYSPLLCLK0 RDIV=/2, source=HFCLK; selects the factory
   feedback-input 8..16MHz tuning bin for fLOOPIN=12.5MHz.
@@ -4035,7 +4035,7 @@ User-provided `e1d-arming-build.log` confirms a successful
 CMake regeneration followed by **8/8 incremental object compilations**,
 with no compiler warning/error. The newly added
 `mcu/AM13E/arming_window.c.obj` compiled; `system_runtime.c`,
-`clock_xtal25_pll200.c`, and the recompiled Rel17
+`clock_source_reference.c`, and the recompiled Rel17
 `src/io.c`, `src/telem.c`, `src/util.c`,
 `src/main.c`, and `src/prog.c` also compiled.
 Together with previously compiled objects, the target has
@@ -4346,7 +4346,7 @@ User uploaded `e1c-driverlib-build.log`,
 
 - **11/11 AM13E ARM Objects PASS**, latest incremental Ninja build
   compiled `dl_common.c`, `dl_fri.c`, `system_runtime.c`
-  and `clock_xtal25_pll200.c` without diagnostics.
+  and `clock_source_reference.c` without diagnostics.
 - `compile_commands` contains 11 entries targeting AM13E among
   365 total; all 11 use the same ARM GNU 15.2 toolchain, target
   `-march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
@@ -4415,7 +4415,7 @@ TI AM13E SDK:
 **Since the log**, genuine TI SDK `dl_common.c` and
 `dl_fri.c` were added to the AM13E Object CMake target,
 without dummy drivers or changing Boot/legacy selection.
-`clock_xtal25_pll200.c` now waits for retained XTAL and
+`clock_source_reference.c` now waits for retained XTAL and
 SYSPLL **GOOD-or-OFF** status before disabling either source.
 These changes **have not yet been compiled in WSL**.
 
@@ -4465,7 +4465,7 @@ been compiled with ARM GCC or validated on hardware**.
 
 - `mcu/AM13E/clock_backend.h`: nominal 25MHz XTAL, 400MHz
   VCO, 200MHz MCLK interface constants and return contract.
-- `mcu/AM13E/clock_xtal25_pll200.c`: actual TI SYSCTL/FRI
+- `mcu/AM13E/clock_source_reference.c`: actual TI SYSCTL/FRI
   register control. PDIV=/2, QDIV register=31 (effective ×32),
   SYSPLLCLK0 RDIV=/2, source=HFCLK; selects the factory
   feedback-input 8..16MHz tuning bin for fLOOPIN=12.5MHz.

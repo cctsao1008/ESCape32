@@ -43,7 +43,7 @@ flags=[
     "-DAM13E_BOARD_NTC_MODEL=3",
 ]
 targets={"motor_safety.c","motor_power_stage.c","motor_runtime_irq.c",
-         "adc_runtime.c","main.c","util.c"}
+         "analog_runtime.c","main.c","util.c"}
 observed=set()
 for obj in commands:
     src=pathlib.Path(obj["file"]).name

@@ -5,9 +5,9 @@
  * src/main.c. This file adapts the TI startup CMSIS vector names only.
  */
 #include "irq_vectors.h"
-#include "gpio_runtime.h"
+#include "fault_input.h"
 #include "io_backend.h"
-#include "pb14_capture.h"
+#include "command_capture.h"
 #include "motor_bemf.h"
 #include <dl_gpio.h>
 
