@@ -9,7 +9,7 @@ and TI review remain outstanding.** Latest evidence:
 The E62 Software Architecture Baseline **v1.6** specifies:
 - Boot: `0x00000000..0x00003FFF` (16 KiB).
 - FW1 config: `0x00004000..0x00004FFF` (4 KiB), preserved on app update.
-- FW2 config: `0x00005000..0x00005FFF` (4 KiB), preserved on app update.
+- **Reserved**: `0x00005000..0x00005FFF` (4 KiB); no active writer/reader; preserved on update.
 - **One** FW1 or FW2 installed in `0x00006000..0x0007FFFF` (488 KiB).
 - Exactly one boot-to-application entry/vector base at `0x00006000`.
 - No A/B, bank swap, rollback, or runtime FW selection.
@@ -108,3 +108,17 @@ reset/brownout behavior, actual PWM/BEMF/Audio function, gate/OC electrical
 polarity and thresholds, production release approval. Those remain in the
 separately scheduled final HW validation phase; they do **not** replace
 any firmware Source Porting task.
+
+## Rev1.4 design delta (pending Boot ABI decision)
+
+Original rel17 treats `Cfg.id=0x32EA` at the parameter region as
+its boot launch marker; target-specific M33 vector is now 0x6000.
+The retained v1.6 APP+0x400 signature/header/CRC is an added
+project-specific requirement, **not** the exact v1.4 design.
+No implicit format migration was performed.
+
+Original Boot commands 0..5 must remain functional. AM13E CMD_UPDATE
+and CMD_SETWRP currently reject requests, so **full Rev1.4 Boot
+conformance is NOT achieved**, notwithstanding Boot/Image Host PASS.
+Persistent, reversible NONMAIN write protection and verified SRAM
+Boot self-programming require explicit TI/device confirmation.

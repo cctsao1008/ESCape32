@@ -1,3 +1,13 @@
+> **Rev1.4 supersedes Rev1.1 as the design authority.**
+> This document maps the former Rev1.1 proposal and is retained for history.
+> Current v1.4 source/Boot parity must be checked against original ESCape32 rel17,
+> not against this earlier interface inventory. The previous statement that
+> 0x5000..0x5fff is FW2 configuration is obsolete; it is **Reserved**.
+> The previous 50ms PWM/DShot auto-unlock is also obsolete.
+> The v1.6 image CRC/signature contract is intentionally unchanged pending
+> an explicit Boot ABI migration decision. CMD_UPDATE and CMD_SETWRP remain
+> required but unimplemented on AM13E.
+>
 # ESCape32 Rel17 / AM13E23019 — Integration Architecture Alignment
 
 **Review basis:** the user-supplied `Integration_Design.md`,

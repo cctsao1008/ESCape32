@@ -9,7 +9,7 @@ Boot-v2-only audit; see `APP_LINK_CONTRACT.md` for exact firmware layout.
 | APP_BASE/vector | Both FW1 and common Boot use `0x6000` | Linked ELF sections/symbols, ARM startup, host validator |
 | Signature/header CRC | Signature `+0x400`; header `+0x500` | Image packer + actual Boot CRC checks |
 | Single APP allocation | `0x6000..0x7FFFF` (488 KiB) | `linker_app_v16.ld`, `flash_partition.h`, CMD_WINDOW0/1, 257KiB protocol and integrity host regression |
-| FW1/FW2 params | Dedicated `0x4000..0x4FFF` and `0x5000..0x5FFF` | Link assertions, separated FW1 Flash Writer |
+| FW1/FW2 params | Config `0x4000..0x4FFF` and Reserved `0x5000..0x5FFF` | Link assertions, separated FW1 Flash Writer |
 | Firmware update | APP-only erase/program/verify, signature-last | Boot Protocol and Flash Transaction Host Tests |
 | Boot handoff | VTOR `0x6000`, valid SP/PC, direct launch | `boot/mcu/AM13E/app.c`, actual Boot ELF |
 | Flash P/E | TI DriverLib Flash routines and SRAM RAMFUNC | ARM ELF/MAP; power-failure silicon behavior awaits HW |
@@ -32,3 +32,11 @@ FW1/FW2 selection and on-flash signature/metadata ABI are unchanged.
 
 See **APP_LINK_CONTRACT.md** and the CI logs before changing packaging,
 STM32 compatibility logic, or Boot/App startup. 
+
+## Rev1.4 compatibility limitations
+
+0x5000..0x5FFF is RESERVED, not FW2 parameters.
+The existing v1.6 image CRC/header requirement is a documented
+conflict with source-equivalent Rel17 Cfg.id-only launch semantics.
+CMD_UPDATE and CMD_SETWRP remain required source behaviors but
+are not implemented in this AM13E Boot backend.
