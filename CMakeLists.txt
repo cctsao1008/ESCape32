@@ -158,7 +158,7 @@ function(add_target_ti_am13e name)
             target_link_options(${name}.elf PRIVATE
                 -Wl,-Map,${CMAKE_CURRENT_BINARY_DIR}/${name}.map
                 -T${AM13E_BOOT_LINKER_SCRIPT}
-                -Wl,--no-undefined
+                -Wl,--no-undefined -Wl,--fatal-warnings
                 -specs=nosys.specs
                 -Wl,--require-defined=Reset_Handler
                 -Wl,--require-defined=main
@@ -214,9 +214,11 @@ function(add_target_ti_am13e name)
                 ${AM13E_E62_BOARD_DEFINITIONS})
         endif()
     endif()
+    # Genuine source corrections rather than warning suppression.
+    # Scope strict builds to E62 only, never legacy STM32 boards.
     target_compile_options(${am13e_binary} PRIVATE
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
-        -mfloat-abi=hard -fno-branch-count-reg)
+        -mfloat-abi=hard -fno-branch-count-reg -Werror)
     if(TARGET ${name}.elf)
         # Match linker multilib selection to the AM13E object ABI.
         target_link_options(${name}.elf PRIVATE
@@ -436,12 +438,12 @@ if(AM13E_BUILD_CLOCK_DIAGNOSTIC)
         __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
     target_compile_options(AM13E_CLOCK.elf PRIVATE
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
-        -mfloat-abi=hard -fno-branch-count-reg)
+        -mfloat-abi=hard -fno-branch-count-reg -Werror)
     target_link_options(AM13E_CLOCK.elf PRIVATE
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
         -mfloat-abi=hard -fno-branch-count-reg
         "-T${am13e_clock_diag_linker}"
-        -Wl,--no-undefined
+        -Wl,--no-undefined -Wl,--fatal-warnings
         -Wl,--require-defined=Reset_Handler
         -Wl,--require-defined=main
         "-Wl,-Map,${CMAKE_CURRENT_BINARY_DIR}/AM13E_CLOCK.map"
@@ -475,12 +477,12 @@ if(AM13E_ENABLE_FW1_LINK_GATE)
         __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
     target_compile_options(AM13E_FW1.elf PRIVATE
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
-        -mfloat-abi=hard -fno-branch-count-reg)
+        -mfloat-abi=hard -fno-branch-count-reg -Werror)
     target_link_options(AM13E_FW1.elf PRIVATE
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
         -mfloat-abi=hard -fno-branch-count-reg
         "-T${PROJECT_SOURCE_DIR}/mcu/AM13E/linker_app_reference.ld"
-        -Wl,--no-undefined
+        -Wl,--no-undefined -Wl,--fatal-warnings
         -Wl,--require-defined=Reset_Handler
         -Wl,--require-defined=main
         -Wl,--require-defined=SysTick_Handler
@@ -511,12 +513,12 @@ if(AM13E_ENABLE_FW1_V16_IMAGE)
         __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
     target_compile_options(AM13E_FW1_V16.elf PRIVATE
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
-        -mfloat-abi=hard -fno-branch-count-reg)
+        -mfloat-abi=hard -fno-branch-count-reg -Werror)
     target_link_options(AM13E_FW1_V16.elf PRIVATE
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
         -mfloat-abi=hard -fno-branch-count-reg
         "-T${PROJECT_SOURCE_DIR}/mcu/AM13E/linker_app_v16.ld"
-        -Wl,--no-undefined -specs=nosys.specs
+        -Wl,--no-undefined -Wl,--fatal-warnings -specs=nosys.specs
         -Wl,--require-defined=Reset_Handler
         -Wl,--require-defined=main
         -Wl,--require-defined=HardFault_Handler
