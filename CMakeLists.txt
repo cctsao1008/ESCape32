@@ -64,10 +64,11 @@ function(add_target_ti_am13e name)
         set(am13e_sources
             "${PROJECT_SOURCE_DIR}/src/main.c"
             "${PROJECT_SOURCE_DIR}/src/io.c"
-            "${PROJECT_SOURCE_DIR}/src/telem.c"
+            "${PROJECT_SOURCE_DIR}/src/telem.c" # Extended DShot scheduler stays on PB14
             "${PROJECT_SOURCE_DIR}/src/util.c"
             "${PROJECT_SOURCE_DIR}/src/prog.c"
-            # Real target-specific adapters; the five Rel17 sources stay.
+            # Keep the Rel17 five-source control structure, but PB14-only
+            # FW1 does not instantiate the optional UART telemetry hardware.
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/irq_vectors.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/reset_cause.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/gpio_runtime.c"
@@ -86,8 +87,6 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_frequency_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_duty_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/input_watchdog.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/telem_mode_plan.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/telem_uc2_preflight.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_event_timer.c"
             # Genuine TI DriverLib objects: delayCycles (common) and
             # Flash read wait-state RAMFUNC (FRI); no replacement stubs.
@@ -97,9 +96,7 @@ function(add_target_ti_am13e name)
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_ecap.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_timer.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_dma.c"
-            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_mcpwm.c"
-            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_unicomm.c"
-            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_unicommuart.c")
+            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_mcpwm.c")
         set(am13e_source_dir "${PROJECT_SOURCE_DIR}/src")
     endif()
     if(name MATCHES "^BOOT")
@@ -144,6 +141,12 @@ function(add_target_ti_am13e name)
         AM13E TARGET_NAME="${name}" ${ARGN}
         __DEVICE_SHORT__="am13e230x" __DEVICE_LONG__="AM13E230x"
         __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
+    if(NOT name MATCHES "^BOOT")
+        # The product FW1 communication interface is PB14 only. Legacy
+        # UART telemetry protocols are not part of this hardware target.
+        # Still compile src/telem.c for Extended DShot packet scheduling.
+        target_compile_definitions(${am13e_binary} PRIVATE AM13E_PB14_ONLY)
+    endif()
     target_compile_options(${am13e_binary} PRIVATE
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
         -mfloat-abi=hard -fno-branch-count-reg)

@@ -705,7 +705,9 @@ void main(void) {
 	/* No LED wiring is defined for the generic AM13E target. */
 	initled();
 #endif
+#if !defined(AM13E_PB14_ONLY)
 	inittelem();
+#endif
 #ifndef ANALOG
 	initio();
 #endif

@@ -17,6 +17,15 @@
 
 #include "common.h"
 
+#if defined(AM13E_PB14_ONLY) && !defined(AM13E)
+#error "PB14-only ESCape32 telemetry requires AM13E target"
+#endif
+
+/* Rel17 UART-backed telemetry and its protocol handlers are excluded
+ * only from the AM13E FW1 product. The shared Extended DShot scheduler
+ * below remains compiled and continues updating PB14 BiDShot payloads.
+ */
+#if !defined(AM13E_PB14_ONLY)
 #if defined(AM13E)
 #include "telem_backend.h"
 #else
@@ -422,7 +431,10 @@ static void sendcrsf(void) {
 	sendtelemdata(buf, a + 3);
 }
 
+#endif /* !AM13E_PB14_ONLY: legacy UART telemetry and transports */
+
 void sendtelem(void) {
+#if !defined(AM13E_PB14_ONLY)
 	if (telreq && !telmode) { // KISS
 		sendkiss();
 		telreq = 0;
@@ -450,6 +462,13 @@ void sendtelem(void) {
 			sendcrsf();
 			break;
 	}
+#else
+    /* Original sendtelem() schedule is tick[3:0]==0 and
+     * tick[8:4]==0: update Extended DShot every 512 SysTicks.
+     * This path deliberately has NO UART TX or RX dependency.
+     */
+    if (tick & 0x1ffU) return;
+#endif
 	if (!dshotext) return;
 	static char n;
 	int x = 0;
@@ -473,6 +492,7 @@ void sendtelem(void) {
 	__enable_irq();
 }
 
+#if !defined(AM13E_PB14_ONLY)
 void sendtelemdata(const char *buf, int len) {
 	__disable_irq();
 	char *pos = iopos;
@@ -491,3 +511,5 @@ void sendtelemdata(const char *buf, int len) {
 	DMA_CCR(USART1_DMA_BASE, USART1_TX_DMA) = DMA_CCR_EN | DMA_CCR_TCIE | DMA_CCR_DIR | DMA_CCR_MINC | DMA_CCR_PSIZE_8BIT | DMA_CCR_MSIZE_8BIT;
 #endif
 }
+
+#endif /* !AM13E_PB14_ONLY: UART sendtelemdata() */
