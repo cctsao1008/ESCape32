@@ -50,3 +50,18 @@ cmake --build build-am13e-v16 --target AM13E_PORTABLE_LOGIC --parallel 4
    exclusive ownership; neither is a standalone GPIO buzzer.
 
 This document is a porting boundary, not a hardware qualification.
+
+## MCU-side fault trip source separation
+
+- `fault_trip_backend.[ch]` is a **board-neutral TI DriverLib backend** with
+  explicit MCPWM/XBAR route parameters, route consistency checks and actual
+  register/status readback. It never selects pins, arms outputs or clears OST.
+- `motor_nfault_trip.c` is the **Reference Board adapter** choosing PB15,
+  INPUTXBAR2, PWMXBAR1, active-low and MCPWM0 OST1. Fault latching,
+  readback and fail-closed error handling remain mandatory.
+- `AM13E_MCU_FAULT_TRIP_BACKEND` is an independent board-free ARM object
+  compile gate. CI also compiles the full reference firmware, uses ESCape32
+  CMake + Unix Makefiles, and now treats host regression failures as fatal.
+- This is not a universal runnable firmware or physical safety qualification.
+  ADC/pinmux, clock, DShot, gate/pad mapping and Boot/image profile separation
+  remain open work.

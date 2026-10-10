@@ -111,6 +111,7 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_power_stage.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_audio.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_audio_plan.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/fault_trip_backend.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_nfault_trip.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_bemf.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_sine_table.c"
@@ -431,6 +432,19 @@ target_compile_options(AM13E_PORTABLE_LOGIC PRIVATE
     -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
     -mfloat-abi=hard -fno-branch-count-reg -Werror)
 
+
+# Board-neutral ARM compile gate for real TI XBAR/MCPWM fault routing.
+# No pins, output levels, or reference profile are selected here.
+add_library(AM13E_MCU_FAULT_TRIP_BACKEND OBJECT EXCLUDE_FROM_ALL
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/fault_trip_backend.c")
+target_include_directories(AM13E_MCU_FAULT_TRIP_BACKEND SYSTEM PRIVATE
+    "$<TARGET_PROPERTY:AM13E,INCLUDE_DIRECTORIES>")
+target_compile_definitions(AM13E_MCU_FAULT_TRIP_BACKEND PRIVATE
+    AM13E __DEVICE_SHORT__="am13e230x" __DEVICE_LONG__="AM13E230x"
+    __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
+target_compile_options(AM13E_MCU_FAULT_TRIP_BACKEND PRIVATE
+    -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
+    -mfloat-abi=hard -fno-branch-count-reg -Werror)
 
 # First real AM13E *diagnostic* ELF: startup + clock only, built from
 # the ESCape32 root CMake. This intentionally does not pull in the

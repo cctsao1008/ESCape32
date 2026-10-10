@@ -9,6 +9,7 @@
 #include <dl_mcpwm.h>
 #include "motor_backend.h"
 #include "motor_nfault_trip.h"
+#include "fault_trip_backend.h"
 
 #define AM13E_REF_NFAULT_GPIO_INDEX 47U
 #define AM13E_REF_NFAULT_INPUTXBAR DL_XBAR_INPUT2
@@ -21,39 +22,35 @@ _Static_assert(AM13E_REF_NFAULT_SOURCE == 0x15U &&
                IOMUX_PINCM_PB15 == 47U,
                "AM13E reference PB15 nFAULT hardware TZ routing changed");
 
+/* Reference routing is deliberately owned by this board adapter. */
+static const AM13E_FaultTripRoute reference_nfault_route = {
+    .mcpwm = MCPWM0,
+    .gpio_index = AM13E_REF_NFAULT_GPIO_INDEX,
+    .input_xbar = AM13E_REF_NFAULT_INPUTXBAR,
+    .pwm_trip = AM13E_REF_NFAULT_PWMXBAR,
+    .pwm_source = AM13E_REF_NFAULT_SOURCE,
+    .ost_signal = AM13E_REF_NFAULT_TZ_SIGNAL,
+    .ost_flag = DL_MCPWM_TZ_FLAG_OST_TZ1,
+    .active_low = true
+};
+
 static volatile uint32_t hardware_trip_installed;
 
 int am13e_app_motor_nfault_trip_ready(void)
 {
-    const uint32_t selected=PWMXBAR->PWM_XBAR_GXSEL[0].PWMXBARG0SEL;
-    const uint32_t tzflags=DL_MCPWM_getTripZoneFlagStatus(MCPWM0);
     return hardware_trip_installed &&
-           INPUTXBAR->INPUTSELECT[1] == AM13E_REF_NFAULT_GPIO_INDEX &&
-           (selected & (UINT32_C(1) << AM13E_REF_NFAULT_SOURCE)) != 0U &&
-           (PWMXBAR->PWMXBAROUTINVERT & UINT32_C(1)) != 0U &&
-           (MCPWM0->TZSEL & AM13E_REF_NFAULT_TZ_SIGNAL) != 0U &&
-           (tzflags & DL_MCPWM_TZ_FLAG_OST_TZ1) == 0U &&
-           (MCPWM0->TZCTL & (MCPWM_TZCTL_TZA_MASK | MCPWM_TZCTL_TZB_MASK)) == 0U;
+           am13e_mcu_fault_trip_ready(&reference_nfault_route);
 }
 
 void am13e_app_motor_nfault_trip_init(void)
 {
     if (__get_PRIMASK() == 0U || hardware_trip_installed)
         am13e_app_motor_fault_reset();
-    /* GPIO1/PB15 digital fault input must already be enabled by initgpio.
-     * A low nFAULT is deliberately ALLOWED to latch OST, not cleared.
+    /* A low nFAULT is allowed to latch OST, not cleared. Boot and
+     * GPIO1/PB15 ownership, motor gate fail-closed policy unchanged.
      */
-    DL_XBAR_enableRawInput(AM13E_REF_NFAULT_GPIO_INDEX);
-    DL_XBAR_setInputXBAR(AM13E_REF_NFAULT_INPUTXBAR,AM13E_REF_NFAULT_GPIO_INDEX);
-    DL_XBAR_clearPWMXBARSourceSelection(AM13E_REF_NFAULT_PWMXBAR);
-    DL_XBAR_selectPWMXBARSource(AM13E_REF_NFAULT_PWMXBAR,AM13E_REF_NFAULT_SOURCE);
-    DL_XBAR_invertPWMXBARSignal(AM13E_REF_NFAULT_PWMXBAR,true);
-    DL_MCPWM_setTripZoneAction(MCPWM0,DL_MCPWM_TZ_ACTION_EVENT_TZA,
-                               DL_MCPWM_TZ_ACTION_HIGH_Z);
-    DL_MCPWM_setTripZoneAction(MCPWM0,DL_MCPWM_TZ_ACTION_EVENT_TZB,
-                               DL_MCPWM_TZ_ACTION_HIGH_Z);
-    DL_MCPWM_enableTripZoneSignals(MCPWM0,AM13E_REF_NFAULT_TZ_SIGNAL);
-    hardware_trip_installed=1U;
+    am13e_mcu_fault_trip_install(&reference_nfault_route);
+    hardware_trip_installed = 1U;
     if (!am13e_app_motor_nfault_trip_ready())
         am13e_app_motor_fault_reset();
 }

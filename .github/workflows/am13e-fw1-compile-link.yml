@@ -36,7 +36,6 @@ jobs:
 
       - name: Run Flash, BEMF and motor host regressions
         id: host
-        continue-on-error: true
         shell: bash
         run: |
           mkdir -p am13e-ci-logs
@@ -71,7 +70,7 @@ jobs:
         run: |
           set +e
           mkdir -p am13e-ci-logs
-          cmake -S . -B am13e-ci-build -G Ninja \
+          cmake -S . -B am13e-ci-build -G "Unix Makefiles" \
             -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
             -DAM13E_ENABLE_FW1_LINK_GATE=ON \
             -DAM13E_ENABLE_APP_SMOKE=ON \
@@ -114,6 +113,9 @@ jobs:
           cmake --build am13e-ci-build --target AM13E_PORTABLE_LOGIC -j 2 \
             >am13e-ci-logs/portable-logic-build.log 2>&1
           cat am13e-ci-logs/portable-logic-build.log
+          cmake --build am13e-ci-build --target AM13E_MCU_FAULT_TRIP_BACKEND -j 2 \
+            >am13e-ci-logs/mcu-fault-trip-backend-build.log 2>&1
+          cat am13e-ci-logs/mcu-fault-trip-backend-build.log
 
       - name: Verify v1.6 vector-first ARM linker, packer and Boot Flash host transaction
         id: boot
@@ -124,7 +126,7 @@ jobs:
           set -o pipefail
           cmake --build am13e-ci-build --target AM13E_APP_SMOKE -j 2 \
             >am13e-ci-logs/boot-link-pack.log 2>&1
-          cmake -S boot/tests/am13e_host -B am13e-ci-boot-host -G Ninja \
+          cmake -S boot/tests/am13e_host -B am13e-ci-boot-host -G "Unix Makefiles" \
             -DAM13E_HOST_SANITIZERS=OFF \
             -DAM13E_HOST_PACKED_IMAGE="$(pwd)/am13e-ci-build/AM13E_APP_SMOKE.am13e-smoke.bin" \
             >am13e-ci-logs/boot-host-configure.log 2>&1
@@ -145,7 +147,7 @@ jobs:
             2>&1 | tee am13e-ci-logs/fw1-v16-size.log
           arm-none-eabi-objdump -h am13e-ci-build/AM13E_FW1_V16.elf \
             >am13e-ci-logs/fw1-v16-sections.log
-          cmake -S boot/tests/am13e_host -B am13e-ci-v16-host -G Ninja \
+          cmake -S boot/tests/am13e_host -B am13e-ci-v16-host -G "Unix Makefiles" \
             -DAM13E_HOST_SANITIZERS=OFF \
             -DAM13E_HOST_PACKED_IMAGE="$(pwd)/am13e-ci-build/AM13E_FW1_V16.am13e.bin" \
             >am13e-ci-logs/v16-host-configure.log 2>&1
@@ -236,10 +238,12 @@ jobs:
           echo "FW1 objects: ${{ steps.build.outputs.compile_rc }}"
           echo "Strict link: ${{ steps.build.outputs.link_rc }}"
           echo "Board-profile compile: ${{ steps.board_profile.outcome }}"
+          echo "Motor/ADC/Flash/BEMF host regression: ${{ steps.host.outcome }}"
           echo "v1.6 Boot/Link/Pack Host Tests: ${{ steps.boot.outcome }}"
           echo "Actual Rel17 FW1 v1.6 ELF/Pack/Flash transaction: ${{ steps.v16.outcome }}"
           echo "Common 16KiB AM13E Boot ELF: ${{ steps.boot_elf.outcome }}"
           echo "v1.6 linked-image static audit: ${{ steps.static_image.outcome }}"
+          test "${{ steps.host.outcome }}" = success &&
           test "${{ steps.build.outputs.configure_rc }}" = 0 &&
           test "${{ steps.build.outputs.compile_rc }}" = 0 &&
           test "${{ steps.build.outputs.link_rc }}" = 0 &&
