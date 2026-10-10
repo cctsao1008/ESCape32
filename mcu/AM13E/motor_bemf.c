@@ -4,6 +4,7 @@
  * External analog phase/neutral connections MUST be board-confirmed.
  */
 #include "motor_backend.h"
+#include "motor_bemf.h" /* Declarations for init, abort and ECAP1 IRQ */
 #include "clock_backend.h"
 #include "irq_vectors.h"
 #include <soc.h>
@@ -60,6 +61,11 @@ _Static_assert((AM13E_BEMF_PHASE1_CMPSS_IDX == 0 ||
                "BEMF logical phases must map bijectively to CMPSS0/1/3");
 #endif
 #endif
+
+/* Retain the original public Rel17 comparator-control signature without
+ * importing legacy STM32 GPIO/timer implementation into this backend.
+ */
+void compctl(int x);
 
 static volatile uint32_t initialized,selected_code,armed;
 static volatile uint32_t captured_events,rejected_events,interval_us;
