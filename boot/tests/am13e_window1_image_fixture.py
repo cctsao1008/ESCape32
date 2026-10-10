@@ -8,15 +8,15 @@ the ARM-linked firmware, only erased padding extends its image length.
 from pathlib import Path
 import sys
 
-if len(sys.argv)!=3:
-    raise SystemExit("usage: fixture.py ARM_LINKED_PACKED_BIN OUTPUT_PACKED_BIN")
+if len(sys.argv) not in (3,4) or (len(sys.argv)==4 and sys.argv[3]!="--full"):
+    raise SystemExit("usage: fixture.py ARM_LINKED_PACKED_BIN OUTPUT [--full]")
 real=Path(sys.argv[1]).read_bytes()
 out=Path(sys.argv[2])
 repo=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(repo/"boot/tools"))
 from pack_am13e_v2 import pack,verify,HEADER_OFFSET,HEADER_SIZE,SIGNATURE_OFFSET
 
-need=257*1024
+need=(488 if len(sys.argv)==4 else 257)*1024
 # The vector-first smoke ELF can be shorter than APP+0x900; its
 # minimum valid metadata/code extent is 0x800+16 as packer requires.
 if len(real)<0x810 or len(real)>=need:
