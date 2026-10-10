@@ -33,6 +33,7 @@ __boot_flash_end__ = ORIGIN(FLASH_IMAGE) + LENGTH(FLASH_IMAGE);
 /* Reference AM13E23019 512 KiB main Flash limit; board-qualified only. */
 __boot_storage_end__ = 0x00080000;
 /* Board reference: 8 KiB of parameter sectors precede the application. */
+__cfg_flash_start__ = 0x00004000;
 __app_flash_start__ = 0x00006000;
 /* AM13E reference v1.6 vector table is exactly at APP_BASE. */
 __app_vector_start__ = __app_flash_start__;
