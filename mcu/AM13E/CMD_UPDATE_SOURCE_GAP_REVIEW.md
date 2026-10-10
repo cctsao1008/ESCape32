@@ -93,6 +93,14 @@ Boot validity gate. The active FW1 launch remains
   basic M33 reset-vector plausibility (not authenticity/completeness).
 - `boot/mcu/AM13E/flash.c`: implements **APP-only CMD_WRITE**
   with 1 KiB logical / 2 KiB SRAM RMW, not Boot self-update.
+- `boot/mcu/AM13E/update_commit.c`: **quarantined** Boot-only
+  eight-sector (2 KiB each) Erase/Program/byte-Verify executor.
+  Firmware includes it in SRAM_C but the actual `CMD_UPDATE` parser
+  **does not call it**. Its non-returning SRAM wrapper resets only on
+  successful physical commit and never falls back into erased Bank0
+  Flash; that path is source-/link-tested, NOT authorized on silicon.
+  Unused staged bytes are padded to erased `0xff`, without adding
+  an APP or Boot image header.
 - `boot/tests/am13e_protocol_host_test.c`: tests original CRC
   per-block ACK for short-last/full 16KiB, corrupted CRC and count
   resynchronization, final NAK, three `CMD_SETWRP` modes still NAK,
@@ -100,6 +108,14 @@ Boot validity gate. The active FW1 launch remains
 - `boot/tests/am13e_update_staging_test.c`: tests 16KiB, 17th
   frame, misaligned/duplicate/out-of-order frames, 4B/1020B short
   tails, abort/clear and Cortex-M33 Boot vector plausibility.
+- `boot/tests/am13e_update_commit_test.c`: executes the *real*
+  sector algorithm against Host Flash mocks, checking full/short
+  image, all eight Boot sectors, Erase/Program failures, byte
+  corruption/readback and unmodified Cfg/Reserved/APP ranges.
+- `verify_rel17_image.py`: checks actual ARM ELF SRAM_C location
+  for the executor and non-returning wrapper, plus direct branch
+  targets in the RAM-resident command path. This does **not** prove
+  indirect/literal accesses or power-loss recovery.
 - `verify_v14_source_scope.py`: rejects unreviewed self-update
   activation while keeping the existing source gap explicit.
 - `verify_v14_docs.py`: requires this review and missing-operation
@@ -109,17 +125,23 @@ Boot validity gate. The active FW1 launch remains
 
 1. **DONE, source/Host only:** 16KiB bounded SRAM staging and
    original receive/ACK/short-last CRC wire framing.
-2. Produce real ELF-derived Boot BIN and negative fixtures:
-   empty/oversized/incomplete input, bad Frame CRC, bad Boot vectors,
-   overrun, power interruption at each sector, protected target.
-3. Inspect the real Boot ELF/map/disassembly to establish complete
-   SRAM-resident post-first-erase execution, with startup copy and
-   stack/interrupt/watchdog handling proven on silicon.
-4. Establish and physically test ROM BSL/SWD recovery under
-   target NONMAIN settings before enabling Bank0 erase.
-5. Only then integrate Boot-only Erase/Program/Verify/Reset and
-   validate host success/retry/recovery behavior on an AM13E board.
+2. **DONE, Host Flash mock only:** isolated Boot-sector erase,
+   program, verify and negative fault injection; no `CMD_UPDATE`
+   caller. Real linked Boot BIN staging/negative fixtures and
+   protected-device behavior still require dedicated acceptance.
+3. **PARTIAL, ARM ELF static evidence:** executor, direct call
+   targets and non-returning wrapper checked in SRAM_C. Inspect
+   disassembly, literal pools, indirect references, startup copy,
+   ISR/NMI, stack, watchdog and brown-out behavior; qualify on silicon.
+4. **BLOCKED ON HARDWARE:** establish and physically test ROM
+   BSL/SWD recovery under exact NONMAIN and board conditions,
+   including interruption after the first vector-sector erase.
+5. Only after recovery qualification, connect Boot-only
+   Erase/Program/Verify/Reset to original `CMD_UPDATE` and validate
+   the original success-reset/no-final-ACK semantics on AM13E.
 
-**Acceptance wording:** BOUNDED SRAM STAGING / frame ACK IMPLEMENTED;
-full `CMD_UPDATE` Boot Flash Commit still NOT IMPLEMENTED; NO BANK0
-ERASE. Host/ARM CI is NOT hardware qualification.
+**Acceptance wording:** BOUNDED SRAM STAGING and Host-mocked,
+SRAM-linked Boot-sector Flash Executor IMPLEMENTED; full live
+`CMD_UPDATE` Boot Flash Commit / Reset still NOT IMPLEMENTED;
+NO BANK0 ERASE FROM THE ACTIVE BOOT COMMAND. Host/ARM CI is NOT
+hardware qualification.

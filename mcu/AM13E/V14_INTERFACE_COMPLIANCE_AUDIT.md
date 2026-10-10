@@ -76,10 +76,12 @@ Rel17 conditional source capabilities.
 2. Reuse original source hooks for selected conditional analog,
    serial, Hall and GPIO feature branches. Validate the actual board
    wiring before claiming any mode physically supported.
-3. Implement `CMD_UPDATE` and `CMD_SETWRP` as original Rel17
-   operations, after Bank0 SRAM execution/recovery and static NONMAIN
-   reversible protection are qualified. Do not make unsupported
-   hardware operations report success.
+3. Complete `CMD_UPDATE` by qualifying the already implemented,
+   **quarantined** Boot-sector SRAM executor on actual Bank0, confirming
+   ROM BSL/SWD recovery, watchdog/IRQ/power-fail behavior and reset;
+   only then connect it to the original Boot command. `CMD_SETWRP`
+   requires independently verified reversible NONMAIN static policy.
+   Do not make unsupported hardware operations report success.
 4. Confirm target on-silicon before claiming physical motor/protection
    qualification.
 

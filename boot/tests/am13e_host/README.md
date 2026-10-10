@@ -106,7 +106,14 @@ reception; a bad CRC/count aborts without that frame's ACK. Complete
 receipt **always ends with `RES_ERROR`** and zeroizes staged bytes.
 No Boot Bank0 Erase/Program/Reset is enabled; `CMD_SETWRP` remains
 unsupported. Native Host CTest covers 16KiB/short/CRC/invalid frame
-and Boot/Cfg/Reserved preservation. This is NOT full self-update.
+and Boot/Cfg/Reserved preservation. The separate
+`am13e_update_commit` Host CTest executes the quarantined production
+sector algorithm on an 8-sector Flash mock (full/short images,
+injected Erase/Program failures, readback corruption, and
+Cfg/Reserved/APP preservation). ARM ELF audits the SRAM_C symbol
+placement and direct branch targets. Neither test activates
+Bank0 programming via `CMD_UPDATE` nor proves on-silicon recovery.
+This is NOT full self-update.
 
 ## Acceptance limits
 
