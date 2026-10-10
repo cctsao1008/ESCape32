@@ -34,8 +34,8 @@ __boot_flash_end__ = ORIGIN(FLASH_IMAGE) + LENGTH(FLASH_IMAGE);
 __boot_storage_end__ = 0x00080000;
 /* Board reference: 8 KiB of parameter sectors precede the application. */
 __app_flash_start__ = 0x00006000;
-/* ESCape32 image metadata occupies the first 2 KiB sector. */
-__app_vector_start__ = __app_flash_start__ + 0x800;
+/* E62 v1.6 vector table is exactly at APP_BASE. */
+__app_vector_start__ = __app_flash_start__;
 
 SECTIONS
 {
@@ -183,7 +183,7 @@ ASSERT(ADDR(.intvecs) == 0x00000000, "Boot vector table must start at 0x00000000
 ASSERT(__boot_flash_start__ == 0x00000000, "Boot start mismatch");
 ASSERT(__boot_flash_end__ == 0x00004000, "Boot end mismatch");
 ASSERT(__app_flash_start__ == 0x00006000, "Application base mismatch");
-ASSERT(__app_vector_start__ == 0x00006800, "Application vector base mismatch");
+ASSERT(__app_vector_start__ == 0x00006000, "Application vector base mismatch");
 ASSERT((__app_flash_start__ % 0x800) == 0, "Application must start on a Flash sector");
 ASSERT(__app_flash_start__ >= __boot_flash_end__, "Application overlaps bootloader");
 ASSERT(__boot_storage_end__ == 0x00080000, "Flash limit mismatch");

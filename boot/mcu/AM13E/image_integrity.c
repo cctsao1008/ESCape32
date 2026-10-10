@@ -31,7 +31,7 @@ boot_am13e_image_status_t boot_am13e_image_check(
     unsigned prefix_len, uint32_t *validated_length) {
     if (validated_length) *validated_length = 0U;
     if (end <= first || (end - first) <
-        AM13E_IMAGE_VECTOR_OFFSET + 8U ||
+        AM13E_IMAGE_METADATA_SECTOR + 16U ||
         (prefix_len != 0U && prefix_len != 16U) ||
         ((prefix_len == 0U) != (prefix == 0)))
         return AM13E_IMAGE_INVALID_ARGUMENT;
@@ -54,8 +54,10 @@ boot_am13e_image_status_t boot_am13e_image_check(
         len > end - first || (len & 15U) != 0U)
         return AM13E_IMAGE_INVALID_LENGTH;
 
-    const uint8_t signature0 = prefix_len ? prefix[0] : image[0];
-    const uint8_t signature1 = prefix_len ? prefix[1] : image[1];
+    const uint8_t signature0 = prefix_len ? prefix[0] :
+                               image[AM13E_IMAGE_SIGNATURE_OFFSET];
+    const uint8_t signature1 = prefix_len ? prefix[1] :
+                               image[AM13E_IMAGE_SIGNATURE_OFFSET + 1U];
     if (signature0 != UINT8_C(0xea) || signature1 != UINT8_C(0x32))
         return AM13E_IMAGE_INVALID_SIGNATURE;
 
@@ -67,7 +69,7 @@ boot_am13e_image_status_t boot_am13e_image_check(
         /* first is a *host pointer* in native tests. The M33 reset PC
          * must be checked against the device's PHYSICAL image address.
          */
-        entry < AM13E_IMAGE_APP_BASE + AM13E_IMAGE_VECTOR_OFFSET ||
+        entry < AM13E_IMAGE_APP_BASE + AM13E_IMAGE_METADATA_SECTOR ||
         entry >= AM13E_IMAGE_APP_BASE + len)
         return AM13E_IMAGE_INVALID_VECTOR;
 
@@ -77,7 +79,9 @@ boot_am13e_image_status_t boot_am13e_image_check(
             i < AM13E_IMAGE_HEADER_OFFSET + AM13E_IMAGE_HEADER_SIZE)
             continue;
         const uint8_t value =
-            (prefix_len && i < prefix_len) ? prefix[i] : image[i];
+            (prefix_len && i >= AM13E_IMAGE_SIGNATURE_OFFSET &&
+             i < AM13E_IMAGE_SIGNATURE_OFFSET + prefix_len) ?
+                prefix[i - AM13E_IMAGE_SIGNATURE_OFFSET] : image[i];
         crc = crc_update(crc, value);
     }
     if (~crc != le32(header + 16))

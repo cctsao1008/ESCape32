@@ -1,7 +1,7 @@
 /*
 ** AM13E application validation and reset handoff.
-** Reference image contract: ESCape32 signature at image base and
-** Cortex-M33 vector table one 2 KiB Flash sector after image base.
+** E62 v1.6: Cortex-M33 vector/entry at APP_BASE=0x6000.
+** Signature APP+0x400 and image header APP+0x500, both outside vectors.
 ** Application linker layout must match before hardware use.
 */
 #include "common.h"
@@ -17,11 +17,12 @@ static bool boot_app_vectors(uint32_t *sp, uint32_t *pc) {
     const uintptr_t image = (uintptr_t)__app_flash_start__;
     const uintptr_t vector = (uintptr_t)__app_vector_start__;
     const uintptr_t end = (uintptr_t)__boot_storage_end__;
-    if (image >= vector || vector > end || end - vector < 8U ||
+    if (image != vector || vector > end || end - vector < 8U ||
         (vector & 127U) != 0U)
         return false;
 
-    if (*(const volatile uint16_t *)image != UINT16_C(0x32ea))
+    if (*(const volatile uint16_t *)(image +
+            AM13E_IMAGE_SIGNATURE_OFFSET) != UINT16_C(0x32ea))
         return false;
 
     const volatile uint32_t *table = (const volatile uint32_t *)vector;
