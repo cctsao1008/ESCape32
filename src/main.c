@@ -944,6 +944,13 @@ void main(void) {
          */
         am13e_app_motor_pwm_apply(curduty, cfg.freq_min, cfg.freq_max,
                                    ertm, cfg.damp, lock, brushed, running);
+        /* Rel17 lock=0 Drag/Proportional Brake: start internal PWM
+         * timebase only when the idle three-phase brake AQ is staged
+         * and logical brake duty is nonzero. Physical gate pads remain
+         * isolated by the AM13E motor backend.
+         */
+        am13e_app_motor_drag_brake_counter_update(running,step,
+                                                   brushed,lock,curduty);
 #else
 #ifdef FULL_DUTY // Allow 100% duty cycle
 		ccr = scale(curduty, 0, 2000, lock || (running && cfg.damp) ? DEAD_TIME : 0, arr--);
