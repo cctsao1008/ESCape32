@@ -32,6 +32,29 @@ function(add_target_ti_am13e name)
     if(NOT EXISTS "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_mcpwm.h")
         message(FATAL_ERROR "TI AM13E SDK not found; set AM13E_SDK_ROOT")
     endif()
+
+    # Correct TI DriverLib and GCC startup source in the isolated CMake
+    # binary tree, never modifying the installed ~/ti SDK.
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    set(am13e_sdk_compat_dir "${PROJECT_BINARY_DIR}/am13e-sdk-compat")
+    set(am13e_sdk_compat_script
+        "${PROJECT_SOURCE_DIR}/mcu/AM13E/tools/prepare_sdk_sources.py")
+    set_property(DIRECTORY "${PROJECT_SOURCE_DIR}" APPEND PROPERTY
+        CMAKE_CONFIGURE_DEPENDS
+        "${am13e_sdk_compat_script}"
+        "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_timer.c"
+        "${AM13E_SDK_ROOT}/source/device/am13e230x/src/startup_gcc_arm.c")
+    execute_process(
+        COMMAND "${Python3_EXECUTABLE}" "${am13e_sdk_compat_script}"
+            --sdk-root "${AM13E_SDK_ROOT}"
+            --output "${am13e_sdk_compat_dir}"
+        RESULT_VARIABLE am13e_sdk_compat_rc
+        OUTPUT_VARIABLE am13e_sdk_compat_stdout
+        ERROR_VARIABLE am13e_sdk_compat_stderr)
+    if(NOT am13e_sdk_compat_rc EQUAL 0)
+        message(FATAL_ERROR "AM13E TI SDK source correction failed:\n"
+            "${am13e_sdk_compat_stdout}\n${am13e_sdk_compat_stderr}")
+    endif()
     # ESCape32 owns the AM13E build and product configuration.
     # TI SDK provides MCU headers / DriverLib / CMSIS, analogous to
     # libopencm3 on the existing STM32 targets. Do NOT inherit a TI
@@ -57,6 +80,7 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/app.c"
             "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/flash.c"
             "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/image_integrity.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/newlib_syscalls.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_flash.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_flashctl.c")
         set(am13e_source_dir "${PROJECT_SOURCE_DIR}/boot/src")
@@ -102,6 +126,7 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/cfg_flash_runtime.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/input_watchdog.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_event_timer.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/newlib_syscalls.c"
             # Genuine TI DriverLib objects: delayCycles (common) and
             # Flash read wait-state RAMFUNC (FRI); no replacement stubs.
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_common.c"
@@ -111,7 +136,7 @@ function(add_target_ti_am13e name)
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_adc.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_ecap.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_cmpss_lite.c"
-            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_timer.c"
+            "${am13e_sdk_compat_dir}/dl_timer.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_dma.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_mcpwm.c")
         set(am13e_source_dir "${PROJECT_SOURCE_DIR}/src")
@@ -121,7 +146,7 @@ function(add_target_ti_am13e name)
             "AM13E boot linker script selected for the target board")
         if(AM13E_BOOT_LINKER_SCRIPT)
             set(am13e_startup
-                "${AM13E_SDK_ROOT}/source/device/am13e230x/src/startup_gcc_arm.c")
+                "${am13e_sdk_compat_dir}/startup_gcc_arm.c")
             if(NOT EXISTS "${am13e_startup}")
                 message(FATAL_ERROR "TI AM13E GCC startup source not found")
             endif()
@@ -399,7 +424,7 @@ if(AM13E_BUILD_CLOCK_DIAGNOSTIC)
         "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_xtal25_pll200.c"
         "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_common.c"
         "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_fri.c"
-        "${AM13E_SDK_ROOT}/source/device/am13e230x/src/startup_gcc_arm.c")
+        "${PROJECT_BINARY_DIR}/am13e-sdk-compat/startup_gcc_arm.c")
 
     # Inherit the SAME TI MCU include/ABI environment as the real
     # ESCape32 AM13E target; do not adopt an SDK example build.
@@ -440,7 +465,7 @@ option(AM13E_ENABLE_FW1_LINK_GATE
     ON)
 if(AM13E_ENABLE_FW1_LINK_GATE)
     add_executable(AM13E_FW1.elf EXCLUDE_FROM_ALL
-        "${AM13E_SDK_ROOT}/source/device/am13e230x/src/startup_gcc_arm.c"
+        "${PROJECT_BINARY_DIR}/am13e-sdk-compat/startup_gcc_arm.c"
         $<TARGET_OBJECTS:AM13E>)
     target_include_directories(AM13E_FW1.elf SYSTEM PRIVATE
         "$<TARGET_PROPERTY:AM13E,INCLUDE_DIRECTORIES>")
@@ -476,7 +501,7 @@ if(AM13E_ENABLE_FW1_V16_IMAGE)
     find_program(AM13E_V16_OBJCOPY arm-none-eabi-objcopy REQUIRED)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
     add_executable(AM13E_FW1_V16.elf EXCLUDE_FROM_ALL
-        "${AM13E_SDK_ROOT}/source/device/am13e230x/src/startup_gcc_arm.c"
+        "${PROJECT_BINARY_DIR}/am13e-sdk-compat/startup_gcc_arm.c"
         $<TARGET_OBJECTS:AM13E>)
     target_include_directories(AM13E_FW1_V16.elf SYSTEM PRIVATE
         "$<TARGET_PROPERTY:AM13E,INCLUDE_DIRECTORIES>")
