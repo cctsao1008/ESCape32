@@ -1,42 +1,31 @@
-# AM13E v1.6 Boot / FW1 Integration Status
+# AM13E23019 — Boot / FW1 Integration Status (Rel17 Rev1.4)
 
-**Updated 2026-10-10: prior APP_BASE/vector and metadata mismatches are
-resolved in Source and Host CI.** This record supersedes the older
-Boot-v2-only audit; see `APP_LINK_CONTRACT.md` for exact firmware layout.
+**Selected:** original ESCape32 `Cfg.id=0x32EA` at 0x4000 plus
+plausible M33 vectors at `APP_BASE=0x6000`. The earlier v1.6
+APP signature/header/CRC and Signature-last requirements are
+**retired**. This is a software/CI milestone, not physical approval.
 
-| Integration topic | Implemented | Evidence / remaining boundary |
-|---|---|---|
-| APP_BASE/vector | Both FW1 and common Boot use `0x6000` | Linked ELF sections/symbols, ARM startup, host validator |
-| Signature/header CRC | Signature `+0x400`; header `+0x500` | Image packer + actual Boot CRC checks |
-| Single APP allocation | `0x6000..0x7FFFF` (488 KiB) | `linker_app_v16.ld`, `flash_partition.h`, CMD_WINDOW0/1, 257KiB protocol and integrity host regression |
-| FW1/FW2 params | Config `0x4000..0x4FFF` and Reserved `0x5000..0x5FFF` | Link assertions, separated FW1 Flash Writer |
-| Firmware update | APP-only erase/program/verify, signature-last | Boot Protocol and Flash Transaction Host Tests |
-| Boot handoff | VTOR `0x6000`, valid SP/PC, direct launch | `boot/mcu/AM13E/app.c`, actual Boot ELF |
-| Flash P/E | TI DriverLib Flash routines and SRAM RAMFUNC | ARM ELF/MAP; power-failure silicon behavior awaits HW |
-| FW1 and Boot build | Real `AM13E_FW1_V16.elf` and `BOOT5_PB14.elf` | GitHub Actions Run #38059589632 |
-| FW1 Packed Image | 33,968 bytes, full CRC | Real packed-image Boot Host tests, all 6 PASS |
-| FW2 source | Separate TI Sensorless FOC implementation | FW2 is **not** implemented by this FW1 port |
-| Hardware qualification | Not started | Deliberately deferred until software port complete |
+| Contract | Implemented evidence | Limit |
+| --- | --- | --- |
+| 16 KiB Boot `0x0000..0x3fff` | Linked `BOOT5_PB14.elf` | On-silicon Boot test pending |
+| Cfg `0x4000..0x4fff` | Rel17 first halfword `0x32EA` required to launch | Cfg write endurance/power-loss pending |
+| Reserved `0x5000..0x5fff` | Protected from APP writer | Review actual board memory setup |
+| APP `0x6000..0x7ffff` | **488 KiB maximum**; variable-length ARM-linked binary | No fixed 488 KiB image requirement |
+| Boot launch | `app_validity.c` and M33 vector/VTOR handoff | No full-image integrity marker |
+| Actual FW1 image | `AM13E_FW1_REL17.elf` → raw BIN → flat BIN + 0–3 byte alignment pad | Silicon startup pending |
+| Legacy block framing | Original `CMD_READ/WRITE` CRC, 1 KiB logical / 2 KiB RMW | 1KiB frame CRC is not image CRC |
+| Extended addressing | `CMD_WINDOW=6`; Host tests blocks 256–487 | Real WiFi-Link updater extension unverified |
+| Boot self-update `CMD_UPDATE` | **Not implemented; RES_ERROR** | Must be implemented/qualified |
+| Persistent `CMD_SETWRP` | **Not implemented; RES_ERROR** | TI NONMAIN and reversible WRP qualification |
+| Gate/Trip/UART/current | User-approved **five IO-only exclusions** | No physical motor enable |
 
-The legacy `mcu/AM13E/linker_app_reference.ld` and
-`boot/mcu/AM13E/linker_app_smoke.ld` retain their named roles as
-**historical diagnostic** and **vector-first smoke** respectively;
-do not mistake either for the actual FW1 linker.
+**Update risk:** Partial APP writes can leave the original Cfg ID
+and plausible vectors intact. Rel17's prescribed validity gate will
+then allow attempted launch even if later application bytes are
+corrupted or absent. No CRC-based final commit or automatic rollback
+is present. Treat end-to-end flashing/recovery as an open requirement,
+not an assurance of this Bootloader.
 
-The Baseline explicitly defers image marker/CRC **format** to detailed
-design. The new `+0x400/+0x500` metadata placement is that design choice,
-not a silent change to the architecture. The AM13E-only CMD_WINDOW=6 extension retains each original 1KiB
-READ/WRITE frame but extends its effective block number; WiFi-Link must
-be updated before using the upper Application region. The single-image
-FW1/FW2 selection and on-flash signature/metadata ABI are unchanged.
-
-See **APP_LINK_CONTRACT.md** and the CI logs before changing packaging,
-STM32 compatibility logic, or Boot/App startup. 
-
-## Rev1.4 compatibility limitations
-
-0x5000..0x5FFF is RESERVED, not FW2 parameters.
-The existing v1.6 image CRC/header requirement is a documented
-conflict with source-equivalent Rel17 Cfg.id-only launch semantics.
-CMD_UPDATE and CMD_SETWRP remain required source behaviors but
-are not implemented in this AM13E Boot backend.
+Refer to [APP_LINK_CONTRACT.md](APP_LINK_CONTRACT.md) for the selected
+link/transport ABI and [REL17_V14_SOURCE_GAP_AUDIT.md](REL17_V14_SOURCE_GAP_AUDIT.md)
+for original-source capability coverage and unresolved adapter work.

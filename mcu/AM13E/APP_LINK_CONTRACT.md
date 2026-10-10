@@ -1,124 +1,91 @@
-# E62 AM13E23019 — FW1 v1.6 Boot / Application Link Contract
+# AM13E23019 — ESCape32 Rel17 Rev1.4 Boot / Application Contract
 
-**Status: Software port integrated and CI/Host verified; physical HW validation
-and TI review remain outstanding.** Latest evidence:
-[Run #38059589632](https://github.com/cctsao1008/ESCape32/actions/runs/38059304224).
+**Status:** native Rel17 v1.4 Boot validity selected and implemented; ARM
+strict link / native Host CI validated. No on-silicon qualification or
+production release approval.
 
-## Authoritative rules
+This **supersedes** the former v1.6 requirement for APP+0x400
+signature, APP+0x500 image header, full-image CRC and Signature-last
+commit. They are **not active Boot/Image ABI requirements**.
 
-The E62 Software Architecture Baseline **v1.6** specifies:
-- Boot: `0x00000000..0x00003FFF` (16 KiB).
-- FW1 config: `0x00004000..0x00004FFF` (4 KiB), preserved on app update.
-- **Reserved**: `0x00005000..0x00005FFF` (4 KiB); no active writer/reader; preserved on update.
-- **One** FW1 or FW2 installed in `0x00006000..0x0007FFFF` (488 KiB).
-- Exactly one boot-to-application entry/vector base at `0x00006000`.
-- No A/B, bank swap, rollback, or runtime FW selection.
+## Memory map
 
-Those addresses are architectural. **Signature and metadata offsets below
-are E62 detailed design**, not literal requirements from the v1.6 baseline.
+| Physical Flash | Size | Owner |
+| --- | --- | --- |
+| `0x00000..0x03fff` | 16 KiB | Common Boot |
+| `0x04000..0x04fff` | 4 KiB | ESCape32 Cfg; `Cfg.id=0x32EA` begins at `0x4000` |
+| `0x05000..0x05fff` | 4 KiB | Reserved; no active writer |
+| `0x06000..0x7ffff` | **488 KiB maximum** | Exactly one Application |
 
-## Unified v1.6 image format
+`APP_BASE=0x6000`; APP physical region is `[0x6000,0x80000)`.
+**Actual firmware size is determined by the linked Application binary
+and must not exceed the allocated 488 KiB region.** Nothing requires
+a 488 KiB output for a smaller program.
 
-| Element | Address | Mechanism |
-|---|---|---|
-| Cortex-M33 MSP/Reset vector table | `0x6000` | Actual TI GCC startup `.intvecs` |
-| Signature ECC16 unit | `0x6400` | `0x32EA`, written LAST after verification |
-| CRC image header (32 bytes) | `0x6500` | Target/length/payload CRC/header CRC |
-| FW1 code and loadable ROM | `0x6800` onward | ARM ELF `.text`, load images |
-| Mutable `.cfg` | SRAM_S `0x20000000..` | Persistent source `_cfg=0x4000` |
-| Flash command `.TI.ramfunc` | SRAM_C `0x00C18000..` | Flash LMA + Startup copy |
+Boot accepts Application launch only when the first halfword of
+persistent Cfg equals `0x32EA` and the M33 initial MSP/Thumb Reset
+PC from `APP+0x000/0x004` are plausible. MSP alignment, RAM_S bounds,
+Thumb bit and APP physical PC bounds are checked. VTOR is set to
+`0x6000` before launch. There is **no** Boot-accessible linked-image
+length field, whole-image CRC or additional image signature.
 
-The first **2 KiB physical Flash sector** contains vectors and metadata;
-the deferred signature still prevents launch after a torn transaction.
-Boot's `boot_am13e_application_valid()` checks signature, target/length,
-CRC, MSP/Reset entry and image bounds; `boot_am13e_launch_application()`
-sets VTOR to **0x6000** and transfers MSP/PC directly to the app.
+## Build and delivery
 
-Use the same single-image layout for a future FW2 implementation.
+| Target / file | Role |
+| --- | --- |
+| `AM13E_FW1_REL17.elf` | Complete ARM application, `mcu/AM13E/linker_app_rel17.ld` |
+| `AM13E_FW1_REL17.bin` | Real `arm-none-eabi-objcopy` linked binary |
+| `AM13E_FW1_REL17.flat.bin` | Identical application bytes plus 0–3 erased `0xFF` bytes for 4-byte transport alignment |
+| `AM13E_FW1_REL17.json` | External descriptive sidecar: actual image length and SHA256; **Boot does not parse it** |
+| `BOOT5_PB14.elf` | 16 KiB Bootloader, common Rel17 parser plus TI Backend |
+| `AM13E_APP_SMOKE` | Linker/packer test fixture only, not motor firmware |
 
-## Firmware build targets
+The linked-image profile is `AM13E_IMAGE_PROFILE=REL17_V14`.
+Unknown profiles are rejected. For object-only work, `NONE` is
+allowed when `AM13E_ENABLE_FW1_REL17_IMAGE=OFF`. The superseded
+`REFERENCE_V16` profile must not be treated as supported.
 
-- `AM13E`: original Rel17 + complete AM13E Backend OBJECT library.
-- `AM13E_FW1_V16.elf`: **actual FW1 application ELF**, linker:
-  `mcu/AM13E/linker_app_v16.ld`.
-- `AM13E_FW1_V16_IMAGE`: objcopy BIN + CRC/metadata packed image + manifest.
-- `BOOT5_PB14.elf`: actual common Bootloader, linker:
-  `boot/mcu/AM13E/linker_boot_reference.ld` explicitly selected.
-- `AM13E_FW1.elf` / `mcu/AM13E/linker_app_reference.ld`:
-  **historical diagnostic ONLY**; not a v1.6 application artifact.
+Native source of truth:
+`boot/mcu/AM13E/app_validity.c`,
+`boot/mcu/AM13E/app.c`,
+`mcu/AM13E/linker_app_rel17.ld`,
+`boot/tools/pack_am13e_rel17.py`,
+`mcu/AM13E/tools/verify_rel17_image.py`.
 
-Image packer: `boot/tools/pack_am13e_v2.py` (its legacy file name is
-retained for tooling continuity; code/manifest implement v1.6).
+## Boot wire transport
 
-## Transport and update contract
+Original numeric commands remain:
+`CMD_PROBE=0`, `CMD_INFO=1`, `CMD_READ=2`,
+`CMD_WRITE=3`, `CMD_UPDATE=4`, `CMD_SETWRP=5`.
+AM13E adds `CMD_WINDOW=6` to select a 256-block address window.
+`effective_block = 256*window + block`; valid APP blocks are
+0–487. Block 488 is rejected. Reset starts in window 0; firmware
+over 256 KiB requires a matching host/updater implementation
+of `CMD_WINDOW=1`. No production updater acceptance is asserted.
 
-The Bootloader retains the original 1 KiB, 8-bit READ/WRITE frames,
-and adds the *AM13E-only* complement-framed `CMD_WINDOW=6` extension
-from Integration Design Rev1.1. Window 0 is selected at Boot entry;
-`CMD_WINDOW=1` addresses effective blocks 256..487 and rejects 488..511.
-The full **488 KiB** application partition is now addressable; existing
-hosts remain compatible for their original `<256 KiB` blocks but **cannot
-upload larger images without a corresponding WiFi-Link host update**.
+`CMD_WRITE` retains complement framing, per-command CRC and 1 KiB
+logical blocks, using TI 2 KiB erased-sector SRAM read-modify-write
+and byte verification. A short final block is allowed. Boot, Cfg
+and Reserved ranges are not writable by APP commands.
+There is no fixed full-image transfer length, no APP CRC
+and no Signature-last finalization sequence.
 
-The physical writer snapshots an entire 2 KiB sector into aligned SRAM,
-merges each 1 KiB logical block, then erases/programs/verifies the sector
-through SRAM-resident Flash command functions. The other sector half is
-preserved. Normal writes authorize APP only, never Boot or FW1/FW2 config.
+`CMD_UPDATE` (Boot self-update) and `CMD_SETWRP` (persistent
+reversible write-protection modes) currently **return RES_ERROR**.
+They remain **mandatory original functionality gaps**, not
+accepted implementations.
 
-Programming order remains `invalidate block 0, invalidate block 1,
-code/data blocks >=2, restore block 0, restore block 1`.
-Boot stages block 1's APP+0x400 signature ECC16 in RAM; it verifies
-the full image and received span against the CRC/header before writing
-that unit as the final committed data. Interrupted or stale updates
-stay invalid until a new complete transaction.
+## Failures and qualification boundary
 
-## Evidence — 2026-10-10
+Native Rel17 `Cfg.id` plus M33 vectors cannot prove completeness
+of later application code. A torn/incomplete firmware update may
+leave valid Cfg/vectors and still be booted; the original wire-frame
+CRC does not provide whole-image commit or atomic update safety.
+An external update, verification and recovery procedure requires
+hardware and host qualification. The superseded v1.6 packed format
+is **not silently migratable** to this flat binary contract.
 
-From linked ARM GNU objects and Image Packer/Host CI:
-- BOOT5_PB14.elf: **4,496 bytes** text+data+bss (not an on-chip test).
-- AM13E_FW1_V16.elf: text **31,672**, initialized data **552**,
-  BSS **5,336** bytes.
-- ARM objcopy raw BIN: **33,968 bytes**; verified packed image:
-  **33,968 bytes**, beneath the now-enforced 488 KiB APP transport bound
-  (this historical payload size does not prove a large on-chip update).
-- FW1 ELF symbols: `__app_vector_start__=0x6000`,
-  `_cfg=0x4000`, `__ramfunct_start__=0x00C18000`.
-- Boot ELF symbols: `__app_flash_start__=__app_vector_start__=0x6000`;
-  real `boot_am13e_image_check` and `boot_am13e_launch_application`
-  linked.
-- Both ARM image-smoke and actual FW1 packed-image Host suites:
-  **6/6 PASS each** (protocol, integrity, CRC, duplicate write,
-  interrupted write, signature-last, simulated reboot).
-- Real linked-image audit: **16 address, RAMFUNC, CRC, MSP/PC and
-  manifest checks PASS** via `tools/verify_v16_image.py`.
-- Existing Motor/BEMF/Audio/Flash FW1 Host/ARM GNU compile gates PASS.
-- CMD_WINDOW=6 Host test covers 256/487 valid and 488 invalid.
-- Dedicated 257 KiB real-ARM-prefix image fixture runs the actual
-  Boot protocol, dual-window write, deferred signature and CRC check.
-- 2 KiB SRAM-buffered RMW Host test preserves the adjacent 1 KiB half.
-
-**Hardware and service limits:** there is no proven production WiFi-Link
-implementation of CMD_WINDOW yet. Actual same-bank Flash execution,
-power-interruption endurance and protection granularity require MCU
-validation. Neither FW2 nor automatic Firmware Type/Version service
-wire encoding is supplied by this FW1 port.
-
-**Not established:** AM13E silicon execution, real Flash endurance or
-reset/brownout behavior, actual PWM/BEMF/Audio function, gate/OC electrical
-polarity and thresholds, production release approval. Those remain in the
-separately scheduled final HW validation phase; they do **not** replace
-any firmware Source Porting task.
-
-## Rev1.4 design delta (pending Boot ABI decision)
-
-Original rel17 treats `Cfg.id=0x32EA` at the parameter region as
-its boot launch marker; target-specific M33 vector is now 0x6000.
-The retained v1.6 APP+0x400 signature/header/CRC is an added
-project-specific requirement, **not** the exact v1.4 design.
-No implicit format migration was performed.
-
-Original Boot commands 0..5 must remain functional. AM13E CMD_UPDATE
-and CMD_SETWRP currently reject requests, so **full Rev1.4 Boot
-conformance is NOT achieved**, notwithstanding Boot/Image Host PASS.
-Persistent, reversible NONMAIN write protection and verified SRAM
-Boot self-programming require explicit TI/device confirmation.
+Evidence is limited to ARM ELF/linker/objcopy and host-test models;
+Flash same-bank behavior, power-fail recovery, transport electrical
+timing and real motor operation still need silicon testing.
+The separately agreed five IO-only features remain inactive.
