@@ -13,3 +13,8 @@ bool boot_am13e_stage_accept(unsigned index,unsigned length);
 unsigned boot_am13e_stage_length(void);
 bool boot_am13e_stage_complete(void);
 bool boot_am13e_stage_vector_plausible(void);
+/* Byte-level preparation only, prior to any Flash command. Returns
+ * NULL for incomplete / implausible staged Boot vectors. Pads unused
+ * 16KiB Boot bytes with 0xff; real transferred length stays unchanged.
+ */
+uint8_t *boot_am13e_stage_prepare_for_commit(void);

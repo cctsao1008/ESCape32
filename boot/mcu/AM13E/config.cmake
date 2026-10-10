@@ -11,6 +11,7 @@
             "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/app.c"
             "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/flash.c"
             "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/update_staging.c"
+            "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/update_commit.c"
             "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/app_validity.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/newlib_syscalls.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_flash.c"

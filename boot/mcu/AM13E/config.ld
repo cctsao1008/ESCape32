@@ -61,7 +61,9 @@ SECTIONS
         __ramfunct_start__ = .;
         *dl_flash.c.obj(.text .text.*)
         *dl_flashctl.c.obj(.text .text.*)
-        *(.TI.ramfunc .TI.ramfunc.*)
+        /* Preserve quarantined Boot-sector executor for symbol/link
+         * audit even though the active CMD_UPDATE never calls it. */
+        KEEP (*(.TI.ramfunc .TI.ramfunc.*))
         . = ALIGN(0x8);
         __ramfunct_end__ = .;
     } > REGION_TEXT_RAM AT> REGION_TEXT

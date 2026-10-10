@@ -35,6 +35,23 @@ target_compile_options(am13e_update_staging_test PRIVATE
     -O1 -g -Wall -Wextra -Werror)
 add_test(NAME am13e_update_staging COMMAND am13e_update_staging_test)
 
+# Commit is deliberately not wired to the Boot parser. This CTest
+# exercises the SAME bounded eight-sector executor with a Host Flash
+# mock, including mid-update failure and post-program corruption.
+add_executable(am13e_update_commit_test
+    "${REPO_ROOT}/boot/tests/am13e_update_commit_test.c"
+    "${REPO_ROOT}/boot/mcu/AM13E/update_commit.c"
+    "${REPO_ROOT}/boot/mcu/AM13E/update_staging.c")
+target_compile_features(am13e_update_commit_test PRIVATE c_std_11)
+target_compile_definitions(am13e_update_commit_test PRIVATE
+    AM13E_BOOT_COMMIT_HOST_TEST)
+target_include_directories(am13e_update_commit_test PRIVATE
+    "${REPO_ROOT}/boot/tests/am13e_mock"
+    "${REPO_ROOT}/boot/mcu/AM13E")
+target_compile_options(am13e_update_commit_test PRIVATE
+    -O1 -g -Wall -Wextra -Werror)
+add_test(NAME am13e_update_commit COMMAND am13e_update_commit_test)
+
 add_executable(am13e_app_validity_test
     "${REPO_ROOT}/boot/tests/am13e_app_validity_test.c"
     "${REPO_ROOT}/boot/mcu/AM13E/app_validity.c")

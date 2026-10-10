@@ -83,6 +83,11 @@ def main():
           ram[0]<=b.get("DL_Flash_program",0)<ram[0]+ram[1] and
           ram[0]<=b.get("DL_Flash_eraseSector",0)<ram[0]+ram[1],
           "Real Boot and APP Flash controller RAMFUNC physically in SRAM_C")
+    check(all(ram[0]<=b.get(fn,0)<ram[0]+ram[1] for fn in
+              ("boot_am13e_commit_sectors",
+               "boot_am13e_update_commit_quarantined")) and
+          "boot_am13e_update_commit_host_run" not in b,
+          "Quarantined Boot sector executor and nonreturning entry reside in SRAM_C")
     check(8<=len(raw)<=MAX and len(flat)<=MAX and
           len(flat)%4==0 and 0<=len(flat)-len(raw)<=3 and
           flat[:len(raw)]==raw and

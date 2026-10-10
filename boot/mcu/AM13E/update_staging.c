@@ -64,3 +64,15 @@ bool boot_am13e_stage_vector_plausible(void)
            pc<AM13E_FLASH_BOOT_END&&
            pc<length_bytes;
 }
+
+/* All received bytes remain in SRAM_S. Fill the unused Boot allocation
+ * with erased Flash pattern before entering an SRAM-only Flash executor.
+ * Never invoke this helper after the first Bank0 erase.
+ */
+uint8_t *boot_am13e_stage_prepare_for_commit(void)
+{
+    if (!boot_am13e_stage_vector_plausible()) return 0;
+    for (unsigned i=length_bytes;i<AM13E_BOOT_STAGE_BYTES;++i)
+        stage[i]=UINT8_C(0xff);
+    return stage;
+}

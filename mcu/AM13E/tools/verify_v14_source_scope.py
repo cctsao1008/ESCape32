@@ -79,6 +79,18 @@ def main():
           "int AM13E_WRITE_ENTRY(" in src("boot/mcu/AM13E/flash.c"),
           "AM13E CMD_WRITE must use original Rel17 write() entry")
 
+    commit=src("boot/mcu/AM13E/update_commit.c")
+    boot_linker=src("boot/mcu/AM13E/config.ld")
+    check("boot_am13e_commit_sectors(" in commit and
+          "DL_Flash_eraseSector(" in commit and
+          "DL_Flash_program(" in commit and
+          "boot_am13e_update_commit_quarantined(" in commit and
+          "NVIC_SystemReset();" in commit and
+          "KEEP (*(.TI.ramfunc .TI.ramfunc.*))" in boot_linker and
+          "boot_am13e_update_commit_quarantined" not in boot and
+          "boot_am13e_commit_sectors" not in boot and
+          "update_commit.c" in src("boot/mcu/AM13E/config.cmake"),
+          "Boot sector executor must be SRAM-resident and QUARANTINED")
     check("void am13e_rel17_boot_main(void)" in boot and
           "void main(void)" in boot and
           "void am13e_rel17_app_main(void)" in src("src/main.c") and
