@@ -83,6 +83,7 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/arming_window.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_xtal25_pll200.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_safety.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_power_stage.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_audio.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_audio_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_nfault_trip.c"
