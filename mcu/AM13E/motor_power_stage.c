@@ -17,6 +17,7 @@
  */
 #include "motor_power_stage.h"
 #include "board_reference_io.h"
+#include "board_configuration.h"
 #include "motor_output_backend.h"
 #include "board_motor_output_provider.h"
 #include "motor_fault_route.h"

@@ -12,7 +12,8 @@
 #include "motor_backend.h"
 #include "motor_audio_hw.h" /* Exclusive MCPWM Motor/Audio resource owner */
 #include "motor_output_backend.h"
-#include "board_motor_output_provider.h" /* Required physical pin selection */
+#include "board_motor_output_provider.h"
+#include "board_configuration.h" /* Required physical pin selection */
 #include "motor_event_timer.h"
 #include "motor_bemf.h"
 #include "motor_fault_route.h"

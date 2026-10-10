@@ -85,6 +85,15 @@ jobs:
             run_test motor_audio mcu/AM13E/motor_audio_plan.c mcu/AM13E/tests/motor_audio_plan_host_test.c
             run_test fault_trip_route mcu/AM13E/fault_trip_route_plan.c mcu/AM13E/tests/fault_trip_route_plan_host_test.c
             run_test motor_pad_route mcu/AM13E/motor_output_route_plan.c mcu/AM13E/tests/motor_output_route_plan_host_test.c
+            run_test board_configuration -DAM13E mcu/AM13E/tests/board_configuration_host_test.c
+            cc $flags -DAM13E -DAM13E_BOARD_DEFAULTS_OVERRIDE_TEST \
+              -DAM13E_BOARD_PB13_ACTIVE_LEVEL=1 \
+              -DAM13E_MOTOR_DB_RED_TICKS=43 \
+              -DAM13E_BOARD_ADC_VREF_MV=3100 \
+              -DAM13E_BOARD_OC_GPIO_PINCM=49 \
+              mcu/AM13E/tests/board_configuration_host_test.c -o /tmp/am13e_board_configuration_override
+            /tmp/am13e_board_configuration_override
+            echo "PASS: board_configuration_override"
             run_test bidir_codec mcu/AM13E/bidir_codec.c mcu/AM13E/tests/bidir_codec_host_test.c
             run_test bidir_timing mcu/AM13E/bidir_codec.c mcu/AM13E/bidir_timing.c mcu/AM13E/tests/bidir_timing_host_test.c
             run_test motor_duty mcu/AM13E/motor_duty_plan.c mcu/AM13E/tests/motor_duty_plan_host_test.c

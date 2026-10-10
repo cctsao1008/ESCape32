@@ -118,3 +118,7 @@ The new `fault_trip_route_plan.c` has no SDK or board dependency. The actual TI 
 - `board_motor_output_reference.c` is the required **Reference v1.6** provider for PA8/11/9/30/10/31. There is no implicit generic route or weak default. A different board must provide its own mapping and separate reviewed gate/Trip/RED/FED.
 - `motor_safety.c` no longer directly selects PA8/11/9/30/10/31; the same default Motor MCPWM0, exclusive audio ownership and safe-off readback remain. `motor_power_stage.c` keeps PB13 inactive-first/active-last, mandatory OST/OC/Dead-band checks, and fail-closed behavior. CI gates generic ARM backend, Reference firmware/link and dedicated native invalid-pad-route regression.
 - This is **not** a physical enable approval, and MCU GPIO input Hi-Z must not be equated with guaranteed external power-driver shutdown.
+
+## Editable Board Parameter defaults (no physical output)
+
+The `board_configuration.h` software defaults are explicit and overridable: gate polarity unknown, dead-band unconfigured, sensing uncalibrated and independent OC unassigned. Existing Reference pin routes remain unchanged and the three physical-output/verification opt-ins stay absent. See `BOARD_CONFIGURATION.md`. Host CI tests default and per-field override semantics.

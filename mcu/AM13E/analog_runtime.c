@@ -15,6 +15,7 @@
 #include "analog_calibration_plan.h"
 #include "analog_sampling_backend.h"
 #include "analog_reference.h"
+#include "board_configuration.h"
 /* Rel17 owns the public adctrig() declaration; include its canonical API. */
 #include "common.h"
 #include <soc.h>
