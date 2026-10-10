@@ -45,7 +45,7 @@ def main():
     require(archive.startswith("> **SUPERSEDED"),
             "Historical v1.6 host instructions not marked superseded")
     contains("mcu/AM13E/APP_LINK_CONTRACT.md",
-             "488 KiB maximum", "actual firmware size",
+             "488 KiB maximum", "Actual firmware size",
              "Cfg.id=0x32EA", "CMD_WINDOW=6",
              "CMD_UPDATE", "CMD_SETWRP", "RES_ERROR")
     board = contains("mcu/AM13E/BOARD_CONFIGURATION.md",
