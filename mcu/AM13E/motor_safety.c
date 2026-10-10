@@ -10,6 +10,7 @@
  * product arming barrier; do not provide a no-op to make FW1 link.
  */
 #include "motor_backend.h"
+#include "board_io_plan_v1.h" /* Pin/function assertions, no gate enable */
 #include "motor_event_timer.h"
 #include "motor_bemf.h" /* ECAP1 comparator IRQ lifecycle */
 #include "motor_safety.h"

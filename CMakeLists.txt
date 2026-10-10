@@ -153,7 +153,8 @@ function(add_target_ti_am13e name)
         # The product FW1 communication interface is PB14 only. Legacy
         # UART telemetry protocols are not part of this hardware target.
         # Still compile src/telem.c for Extended DShot packet scheduling.
-        target_compile_definitions(${am13e_binary} PRIVATE AM13E_PB14_ONLY)
+        target_compile_definitions(${am13e_binary} PRIVATE
+            AM13E_PB14_ONLY AM13E_E62_IO_PLAN_V1=1)
     endif()
     target_compile_options(${am13e_binary} PRIVATE
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16

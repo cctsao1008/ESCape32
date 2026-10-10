@@ -5,6 +5,7 @@
  */
 #include "motor_backend.h"
 #include "motor_bemf.h" /* Declarations for init, abort and ECAP1 IRQ */
+#include "board_io_plan_v1.h" /* Provisional E62 phase/BEMF pinmux */
 #include "motor_event_timer.h" /* Cancel obsolete TIMG12 on BEMF timeout */
 #include "clock_backend.h"
 #include "irq_vectors.h"
@@ -37,27 +38,9 @@ _Static_assert(DL_ECAP_INPUT_CMPSS0_CTRIPH == 45U &&
                DL_ECAP_INPUT_CMPSS3_CTRIPH == 48U,
                "TRM CMPSS/ECAP1 routing changed");
 
-/* Product must explicitly supply six verified analog pins and mux values.
- * This does not waive independent overcurrent trip and gate-off checks.
- */
-#ifdef AM13E_BEMF_BOARD_ANALOG_VERIFIED
-#if AM13E_BEMF_BOARD_ANALOG_VERIFIED != 1
-#error "BEMF_BOARD_ANALOG_VERIFIED must explicitly equal 1"
-#endif
-#if !defined(AM13E_BEMF_CMP0_HP_PINCM) || !defined(AM13E_BEMF_CMP0_HN_PINCM) || \
-    !defined(AM13E_BEMF_CMP1_HP_PINCM) || !defined(AM13E_BEMF_CMP1_HN_PINCM) || \
-    !defined(AM13E_BEMF_CMP3_HP_PINCM) || !defined(AM13E_BEMF_CMP3_HN_PINCM) || \
-    !defined(AM13E_BEMF_CMP0_HP_MUX) || !defined(AM13E_BEMF_CMP0_HN_MUX) || \
-    !defined(AM13E_BEMF_CMP1_HP_MUX) || !defined(AM13E_BEMF_CMP1_HN_MUX) || \
-    !defined(AM13E_BEMF_CMP3_HP_MUX) || !defined(AM13E_BEMF_CMP3_HN_MUX) || \
-    !defined(AM13E_BEMF_PHASE1_CMPSS_IDX) || \
-    !defined(AM13E_BEMF_PHASE2_CMPSS_IDX) || \
-    !defined(AM13E_BEMF_PHASE3_CMPSS_IDX)
-#error "BEMF requires schematic-verified CMPSS0/1/3 analog pin/mux assignments"
-#endif
-/* Rel17 logical COMP phase 1/2/3 must be explicitly mapped to three
- * independent physical CMPSS instances; the TRM does not define board
- * winding-to-comparator wiring or the E62 schematic.
+/* IO Plan v1.0 is proposed for TI review; it is not physical electrical
+ * verification. It DOES specify usable analog pad / CMPSS mux candidates.
+ * Gate outputs still remain isolated by motor_safety.c.
  */
 _Static_assert((AM13E_BEMF_PHASE1_CMPSS_IDX == 0 ||
                 AM13E_BEMF_PHASE1_CMPSS_IDX == 1 ||
@@ -71,9 +54,7 @@ _Static_assert((AM13E_BEMF_PHASE1_CMPSS_IDX == 0 ||
                 AM13E_BEMF_PHASE1_CMPSS_IDX != AM13E_BEMF_PHASE2_CMPSS_IDX &&
                 AM13E_BEMF_PHASE2_CMPSS_IDX != AM13E_BEMF_PHASE3_CMPSS_IDX &&
                 AM13E_BEMF_PHASE1_CMPSS_IDX != AM13E_BEMF_PHASE3_CMPSS_IDX,
-               "BEMF logical phases must map bijectively to CMPSS0/1/3");
-#endif
-#endif
+               "Rel17 logical BEMF phases require unique CMPSS0/1/3");
 
 /* Retain the original public Rel17 comparator-control signature without
  * importing legacy STM32 GPIO/timer implementation into this backend.
@@ -95,7 +76,7 @@ static void bemf_fault(void)
  * independently mapped protection hardware, not these sense outputs.
  * Match Rel17 compctl(0) which disables the sensing comparators.
  */
-#ifdef AM13E_BEMF_BOARD_ANALOG_VERIFIED
+#ifdef AM13E_E62_IO_PLAN_V1
 static void sense_comparators_off(void)
 {
     DL_CMPSSLITE_disableModule(CMPSS0);
@@ -120,7 +101,7 @@ void am13e_app_motor_bemf_abort(void)
     __disable_irq();
     if(initialized) {
         capture_stop();
-#ifdef AM13E_BEMF_BOARD_ANALOG_VERIFIED
+#ifdef AM13E_E62_IO_PLAN_V1
         sense_comparators_off();
 #endif
     }
@@ -129,7 +110,7 @@ void am13e_app_motor_bemf_abort(void)
     __set_PRIMASK(primask);
 }
 
-#ifdef AM13E_BEMF_BOARD_ANALOG_VERIFIED
+#ifdef AM13E_E62_IO_PLAN_V1
 static unsigned phase_cmp_instance(unsigned logical)
 {
     switch(logical) {
@@ -200,7 +181,7 @@ void am13e_app_motor_bemf_init(void)
     DL_ECAP_resetCounters(BEMF_ECAP);
     DL_ECAP_startCounter(BEMF_ECAP);
     calibration_start=0U; /* first SysTick provides phase-aligned origin */
-#ifdef AM13E_BEMF_BOARD_ANALOG_VERIFIED
+#ifdef AM13E_E62_IO_PLAN_V1
     configure_phase_cmp(CMPSS0,DL_SYSCTL_PWREN_CMPSS0,DL_SYSCTL_CMPSS0_MUX,
         AM13E_BEMF_CMP0_HP_PINCM,AM13E_BEMF_CMP0_HN_PINCM,
         (DL_SYSCTL_CMP_HP)AM13E_BEMF_CMP0_HP_MUX,
@@ -229,11 +210,11 @@ void compctl(int x)
     if(!initialized || x<0 || x>7)bemf_fault();
     capture_stop();
     selected_code=0U;
-#ifdef AM13E_BEMF_BOARD_ANALOG_VERIFIED
+#ifdef AM13E_E62_IO_PLAN_V1
     sense_comparators_off();
 #endif
     if((x&3)!=0) {
-#ifndef AM13E_BEMF_BOARD_ANALOG_VERIFIED
+#ifndef AM13E_E62_IO_PLAN_V1
         /* No invented analog net or comparator validity. */
         bemf_fault();
 #else
@@ -267,7 +248,7 @@ void am13e_app_motor_bemf_interval_select(int ertm_us)
     rejected_events=0U;
     if(selected_code) {
         if (!calibration_done || capture_ticks_per_us == 0U) bemf_fault();
-#ifdef AM13E_BEMF_BOARD_ANALOG_VERIFIED
+#ifdef AM13E_E62_IO_PLAN_V1
         const uint32_t prescale=ertm_us<100?0U:ertm_us<200?1U:
               ertm_us<1000?3U:ertm_us<2000?7U:15U;
         CMPSS_LITE_Regs *cmp=phase_cmp(selected_code&3U);
