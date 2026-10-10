@@ -49,6 +49,7 @@ jobs:
             }
             run_test flash_plan mcu/AM13E/cfg_flash_plan.c mcu/AM13E/tests/cfg_flash_plan_host_test.c
             run_test flash_writer mcu/AM13E/cfg_flash_plan.c mcu/AM13E/cfg_flash_writer.c mcu/AM13E/tests/cfg_flash_writer_host_test.c
+            run_test adc_scaling mcu/AM13E/adc_calibration_plan.c mcu/AM13E/tests/adc_calibration_plan_host_test.c
             run_test bemf_clock mcu/AM13E/tests/motor_bemf_clock_host_test.c
             run_test motor_aq mcu/AM13E/motor_phase_plan.c mcu/AM13E/motor_aq_plan.c mcu/AM13E/tests/motor_aq_plan_host_test.c
             run_test motor_brake mcu/AM13E/motor_phase_plan.c mcu/AM13E/motor_aq_plan.c mcu/AM13E/tests/motor_brake_aq_host_test.c

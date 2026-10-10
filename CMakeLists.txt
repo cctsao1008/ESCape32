@@ -73,6 +73,7 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/reset_cause.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/gpio_runtime.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/adc_runtime.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/adc_calibration_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/pb14_capture.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/pb14_decode.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_codec.c"
