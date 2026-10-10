@@ -70,6 +70,7 @@ jobs:
           cmake -S . -B e62-ci-build -G Ninja \
             -DAM13E_SDK_ROOT=/tmp/e62-ti-sdk \
             -DAM13E_ENABLE_FW1_LINK_GATE=ON \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             >e62-ci-logs/configure.log 2>&1
           config_rc=$?
           if [ "$config_rc" -eq 0 ]; then
@@ -99,6 +100,14 @@ jobs:
           echo "configure_rc=$config_rc" >> "$GITHUB_OUTPUT"
           echo "compile_rc=$compile_rc" >> "$GITHUB_OUTPUT"
           echo "link_rc=$link_rc" >> "$GITHUB_OUTPUT"
+
+      - name: Compile board-configured power stage (synthetic values, never flash)
+        id: board_profile
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 mcu/AM13E/tests/board_profile_compile_smoke.py e62-ci-build \
+            2>&1 | tee e62-ci-logs/board-profile-compile.log
 
       - name: Summarize actual undefined symbols
         if: always()
@@ -144,6 +153,8 @@ jobs:
           echo "Configure: ${{ steps.build.outputs.configure_rc }}"
           echo "FW1 objects: ${{ steps.build.outputs.compile_rc }}"
           echo "Strict link: ${{ steps.build.outputs.link_rc }}"
+          echo "Board-profile compile: ${{ steps.board_profile.outcome }}"
           test "${{ steps.build.outputs.configure_rc }}" = 0 &&
           test "${{ steps.build.outputs.compile_rc }}" = 0 &&
-          test "${{ steps.build.outputs.link_rc }}" = 0
+          test "${{ steps.build.outputs.link_rc }}" = 0 &&
+          test "${{ steps.board_profile.outcome }}" = success
