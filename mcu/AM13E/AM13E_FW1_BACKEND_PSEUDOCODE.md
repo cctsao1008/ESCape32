@@ -1,5 +1,8 @@
 # AM13E Rel17 FW1 — Missing Backend Implementation Pseudocode
 
+> **Corrected product I/O scope:** FW1 external command/telemetry is **PB14-only**: PWM/DShot receive, BiDShot and Extended DShot telemetry. No UART/UNICOMM2 is used by ESCape32 FW1. The historical UART symbols listed below are **not FW1 requirements**. See [FW1_PB14_ONLY_SCOPE.md](FW1_PB14_ONLY_SCOPE.md). Do not remove `src/telem.c::sendtelem()`: its Extended DShot scheduler remains active with UART transport excluded. `--no-undefined` stays mandatory for real remaining hardware backends.
+
+
 **Status:** Design / TODO; intentionally **NOT compiled**; no MCU callback stubs or fake return values.
 **Source of missing-symbol evidence:** E1-AK `e1ak-fw1-link.log` (27 distinct unresolved symbols / 38 references); E1-AK ARM GNU Object Compile PASS 0 warning. E1-AL corrects HDSEL/timeout hardware planning and requires revalidation.
 **Reference boundaries:** Original ESCape32 Rel17 `src/main.c`, `src/io.c`, `src/telem.c`, `src/util.c`, `src/prog.c`; AM13E target-specific contracts in `mcu/AM13E/*.h`; AM13E230x TI TRM/SDK; project SW/HW architecture baseline v1.6.
@@ -23,7 +26,9 @@
 | Real receiver-input WWDT0 | E1-AJ `input_watchdog.c`: WWDT0 powered during PB14 `initio()`; starts after first validated PWM/DShot command; zero closed window, 2^15 nominal LFCLK ticks; `BOOTWWDT0` maps to FORCE_ARM. | **ARM GNU PASS**; verify clock, actual reset latency, Boot ownership and command-loss behavior on hardware |
 | Telemetry mode mapping | E1-AK/E1-AL pure-C `telem_mode_plan.{c,h}` preserves baud/RX behavior, legacy **HDSEL single-wire on all modes**, iBUS/S.Port/MSB/HoTT RX→reply ownership, S.Port inversion and `RTOR=26`. E1-AL explicitly rejects 26 when mapping to TI UART RXTOSEL's **0–15** field; a separate frame-gap mechanism is required. | E1-AK ARM GNU PASS; E1-AL Host/ARM pending. Must qualify UC2 PA22/PA23 single-wire wiring, S.Port external inversion, UART RX gap timing and completion before claiming transport parity |
 
-**Still intentionally unresolved:** `am13e_app_motor_runtime_enable_interrupts` and `am13e_app_motor_commutation_enable` cannot legitimately release the inverter before the PB13 enable polarity, real hardware over-current source → PWMXBAR → MCPWM Trip Zone path, inactive fault action, timer/dead-time policy and relevant board protection checks are verified. This is a real firmware safety dependency, not removal of any Rel17 feature. `sine_write`, `sixstep_write`, `pwm_apply`, comparator/BEMF configuration, the watchdog, UART, audio and config-flash driver also remain unimplemented.
+**Updated FW1 build boundary (PB14-only):** E1-AN excludes legacy `inittelem()`, UART protocol handlers, `sendtelemdata()` and UC2 SDK DriverLib objects from the FW1 compile graph. It **keeps the original `sendtelem()` Extended DShot 32ms scheduler** and PB14 GCR/NRZI TX. The five historical `am13e_telem_hw_*` undefined symbols should no longer be required. The **last measured** count remains E1-AL's 27/38 until a new WSL compile/link run; an estimated improvement is not a measured linker result. Optional UART prototyping code remains in the tree but is not linked into FW1.
+
+**Still intentionally unresolved:** `am13e_app_motor_runtime_enable_interrupts` and `am13e_app_motor_commutation_enable` cannot legitimately release the inverter before the PB13 enable polarity, real hardware over-current source → PWMXBAR → MCPWM Trip Zone path, inactive fault action, timer/dead-time policy and relevant board protection checks are verified. This is a real firmware safety dependency, not removal of any Rel17 feature. `sine_write`, `sixstep_write`, `pwm_apply`, comparator/BEMF configuration, the watchdog, audio and config-flash driver also remain unimplemented. UART is outside FW1 scope.
 
 **Required build gates:** `cmake --build build-am13e --target AM13E -j"$(nproc)"`, and separately `cmake --build build-am13e --target AM13E_FW1.elf -j"$(nproc)"`. The latter must continue to use `-Wl,--no-undefined`. The known `linker_app_reference.ld` is a historical Boot-v2 linker smoke contract, **not** a qualified production image linker map. All motor outputs must remain inactive until production HW/Flash/vector contracts are reconciled.
 
@@ -38,7 +43,7 @@
 - BEMF uses CMPSS0 COMPH PA17/PA4, CMPSS1 COMPH PA3/PA2, CMPSS3 COMPH PA16/PA18 per HW v1.6. Do not assume these BEMF comparators are automatically the *over-current* trip source; select/qualify the actual protection comparator, threshold, XBAR source and shutdown polarity separately.
 - The 25MHz external crystal / nominal 200MHz MCLK is already handled by the existing clock backend. Use the actual peripheral clock and verified timer counts, not nominal CPU cycles guessed for individual modules.
 - FW1 configuration region is 0x00004000–0x00004fff, FW2 settings are 0x00005000–0x00005fff, and the application is 0x00006000–0x0007ffff. Boot is frozen; preserve image/flash contracts.
-- Do not remove DShot RX, BiDShot TX, music/audio, config persistence or telemetry from functional scope. Some items are source-integrated and others remain unverified; implementation and hardware qualification are distinct milestones.
+- Do not remove DShot RX, BiDShot TX, **Extended DShot telemetry over PB14**, music/audio or config persistence from FW1 functional scope. UART telemetry is explicitly out of FW1's product requirements. Some items are source-integrated and others remain unverified; implementation and hardware qualification are distinct milestones.
 - **No SDK board example wiring is authoritative for the product.** Confirm selected MCU peripheral mux, interrupts, DMA channels, output polarities and system-level protection on the board.
 
 ## Missing-symbol register (32 symbols / 44 references)
@@ -47,10 +52,10 @@
 |---|---:|---|
 | Motor / MCPWM / BEMF / Protection | 18 | MCPWM0, CMPSS, PWMXBAR, interrupts, gate driver and Trip Zone |
 | Command input watchdog | 1 | Valid-frame supervision / timeout reaction |
-| Telemetry / UART | 5 | Product UART pinmux, DMA, half duplex, protocol timing |
+| Historical UART telemetry (excluded from AM13E FW1) | 5 | PB14-only FW1 does not use UART; Rel17 UART sources retained for other targets |
 | Audio / motor-powered tones | 7 | Rel17 music/PCM timing, MCPWM ownership |
 | FW1 configuration flash | 1 | Flash sector/ECC, RAMFUNC, partition verification |
-| **Total** | **32** | Existing `--no-undefined` gate retained |
+| **Historical E1-Z total** | **32** | PB14-only FW1 scope correction pending next WSL Link; `--no-undefined` retained |
 
 ## Motor / MCPWM / BEMF / Protection (18)
 
@@ -174,7 +179,7 @@ Existing contract: `mcu/AM13E/io_backend.h`.
    only call for CRC-valid DShot or validated PWM pulse from original src/io.c; refresh actual input-loss supervision deadline and reset policy; on missing fresh input, force Rel17 neutral/fault transition and power-stage-safe state; do not equate SysTick arming timer or independent IWDG with this command watchdog
    ```
 
-## Telemetry / UART (5)
+## Historical UART telemetry (5) — not required for AM13E FW1
 
 Existing contract: `mcu/AM13E/telem_backend.h`.
 
@@ -274,7 +279,7 @@ Existing contract: `mcu/AM13E/util_backend.h`.
 
 ### Common porting method and TI SDK mapping
 
-1. Read the Rel17 call site and check *units, owner, trigger and return semantics* in `src/main.c`, `src/io.c`, `src/telem.c`, `src/util.c`. Preserve `src/{main,io,telem,util,prog}.c` application behavior.
+1. Read the Rel17 call site and check *units, owner, trigger and return semantics* in `src/main.c`, `src/io.c`, `src/telem.c`, `src/util.c`. For PB14-only FW1, preserve the `sendtelem()` DShot data producer while excluding UART protocol control only; preserve behavior on all other Rel17 targets.
 2. Check exact C signature in `mcu/AM13E/{motor,io,telem,util}_backend.h`; `compctl(int)` is declared in `src/common.h`. Do not invent new register-facing prototypes in application code.
 3. Check DriverLib's *header and signature*, relevant parameter struct, clock, IRQ flag/ACK and reset/Power Domain requirement. Verified SDK headers include `dl_mcpwm.h`, `dl_cmpss_lite.h`, `dl_xbar.h`, `dl_timer.h`, `dl_dma.h`, `dl_unicommuart.h`, `dl_unicomm.h`, `dl_flashctl.h`, `dl_flash.h`, `dl_wwdt.h`, `dl_gpio.h`, `dl_sysctl.h`. Names being present does **not** prove their configuration or physical route is correct.
 4. Construct a backend owner for each MCU resource: MCPWM0 + Trip Zone; comparator/filter and BEMF; commutation timer and IRQ; separate bidirectional command input; UART DMA + half-duplex; audio mode; Flash/ECC. Document ISR ownership, preemption and failure behavior.
