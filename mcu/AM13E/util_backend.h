@@ -1,9 +1,11 @@
 /*
  * AM13E ESCape32 Rel17 Application utility hardware contract.
  *
- * Stage E1-B: declarations ONLY. No no-op implementation, synthetic
- * STM32 registers, assumed clock values, flash partitions or gate polarity.
- * Actual firmware linking must fail until a board-qualified backend exists.
+ * Peripheral functions are ported in the AM13E backend; no synthetic
+ * STM32 registers, assumed gate polarity or link-only dummy callbacks.
+ * Flash persistence is implemented by cfg_flash_runtime.c using real
+ * TI DL_Flash, with the strict 4KiB FW1-only partition and RAMFUNC
+ * runtime/linker qualification still required.
  *
  * GPIO, LED and oscillator routines (initgpio/initled/ledctl/hsictl)
  * remain declared in common.h and require an AM13E board implementation.

@@ -95,12 +95,15 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_pwm_shadow_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/cfg_flash_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/cfg_flash_writer.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/cfg_flash_runtime.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/input_watchdog.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_event_timer.c"
             # Genuine TI DriverLib objects: delayCycles (common) and
             # Flash read wait-state RAMFUNC (FRI); no replacement stubs.
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_common.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_fri.c"
+            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_flash.c"
+            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_flashctl.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_adc.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_ecap.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_cmpss_lite.c"
