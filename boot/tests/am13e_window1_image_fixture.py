@@ -17,7 +17,9 @@ sys.path.insert(0,str(repo/"boot/tools"))
 from pack_am13e_v2 import pack,verify,HEADER_OFFSET,HEADER_SIZE,SIGNATURE_OFFSET
 
 need=257*1024
-if len(real)<0x900 or len(real)>=need:
+# The vector-first smoke ELF can be shorter than APP+0x900; its
+# minimum valid metadata/code extent is 0x800+16 as packer requires.
+if len(real)<0x810 or len(real)>=need:
     raise SystemExit("Expected actual ARM-linked image smaller than 257KiB")
 raw=bytearray(real)
 raw[SIGNATURE_OFFSET:SIGNATURE_OFFSET+16]=b"\xff"*16
