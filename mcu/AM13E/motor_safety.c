@@ -6,8 +6,8 @@
  * output waveforms have NOT been qualified; this code NEVER arms the bridge.
  *
  * This is genuine register/DriverLib work, not a link-only motor stub.
- * The unresolved am13e_app_motor_runtime_enable_interrupts() remains the
- * product arming barrier; do not provide a no-op to make FW1 link.
+ * Runtime IRQ release is in motor_runtime_irq.c, separately from
+ * the still-unqualified physical gate-enable and hardware Trip contract.
  */
 #include "motor_backend.h"
 #include "board_io_plan_v1.h" /* Pin/function assertions, no gate enable */

@@ -79,6 +79,7 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_timing.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/pb14_bidir_tx.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/system_runtime.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_runtime_irq.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/arming_window.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_xtal25_pll200.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_safety.c"
