@@ -17,6 +17,7 @@
 #include "motor_pwm_shadow_plan.h"
 #include "util_backend.h" /* real Rel17 resetcom() prototype */
 #include "clock_backend.h"
+#include "gpio_runtime.h" /* PB15 nFAULT input supervision */
 #include <soc.h>
 #include <dl_mcpwm.h>
 #include <dl_gpio.h>
@@ -41,6 +42,9 @@ _Static_assert(DL_MCPWM_COUNTER_MODE_STOP_FREEZE == 2U,
 
 static volatile uint32_t safety_initialized;
 static volatile uint32_t fault_latched;
+static volatile uint32_t motor_timebase_running; /* MCPWM0 internal counter ONLY */
+static volatile uint32_t motor_timebase_starts;
+static volatile uint32_t motor_timebase_stops;
 static volatile uint32_t last_trip_irq_flags;
 static volatile uint32_t last_trip_zone_flags;
 
@@ -128,6 +132,7 @@ void am13e_app_motor_init(void)
     }
     safety_initialized = 0U;
     fault_latched = 0U;
+    motor_timebase_running = 0U;
     disconnect_pwm_pads();
     DL_MCPWM_disableTBCLK();
 
@@ -578,6 +583,60 @@ void am13e_app_motor_commutation_commit(void)
     __set_PRIMASK(primask);
 }
 
+/* Rel17 run/stop counter lifecycle.  This starts/stops the REAL MCPWM0
+ * timebase and controls the shared MCPWM TBCLKSYNC (all MCPWMs share it).
+ * Do not equate a running counter with authorization to energize the motor:
+ * all six MCU pads deliberately remain GPIO inputs and AQ is forced LOW.
+ *
+ * Board-dependent gate enable, complement/dead-band, hardware OC trip and
+ * fault polarity routing remain unsatisfied. Never set PB13 or select the
+ * output pin mux here. Those require an independently verified board-owned
+ * arming path; internal timebase start is not power-stage enable.
+ */
+void am13e_app_motor_commutation_enable(int enable)
+{
+    const uint32_t irqmask=__get_PRIMASK();
+    __disable_irq();
+    if (!safety_initialized || fault_latched ||
+        (enable != 0 && enable != 1)) runtime_fault();
+    if (enable == 0) {
+        force_pwm_inactive();       /* Stops shared TBCLK and freezes MCPWM0. */
+        disconnect_pwm_pads();
+        motor_timebase_running=0U;
+        ++motor_timebase_stops;
+        if (!pwm_registers_inactive() || !pwm_pads_disconnected() ||
+            (SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
+            runtime_fault();
+    } else {
+        /* A start is safe to stage ONLY if the existing software force
+         * and all physical pad-mux readbacks still indicate isolation.
+         * A PB15 nFAULT assertion is treated as a non-recoverable fault.
+         */
+        if (am13e_app_nfault_asserted() || !pwm_pads_disconnected())
+            runtime_fault();
+        if (!motor_timebase_running) {
+            if (!pwm_registers_inactive() ||
+                (SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
+                runtime_fault();
+            DL_MCPWM_setTimeBaseCounter(MCPWM0,0U);
+            DL_MCPWM_setTimeBaseCounterMode(MCPWM0,
+                                            DL_MCPWM_COUNTER_MODE_UP);
+            DL_MCPWM_enableTBCLK();
+            if ((MCPWM0->TBCTL & MCPWM_TBCTL_CTRMODE_MASK) !=
+                   (uint32_t)DL_MCPWM_COUNTER_MODE_UP ||
+                !(SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
+                runtime_fault();
+            motor_timebase_running=1U;
+            ++motor_timebase_starts;
+        } else if ((MCPWM0->TBCTL & MCPWM_TBCTL_CTRMODE_MASK) !=
+                     (uint32_t)DL_MCPWM_COUNTER_MODE_UP ||
+                   !(SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
+            runtime_fault();
+        /* No GPIO output mux, no PB13 enable, no SW forced-LOW release. */
+    }
+    __set_PRIMASK(irqmask);
+}
+
 /* A real coast transition for Rel17 laststep(), not an empty callback.
  * Hold all six outputs LOW and return the six AQ shadow/active words
  * to zero. Never clear a hardware fault or energize a bridge here.
@@ -589,6 +648,7 @@ void am13e_app_motor_sixstep_idle(void)
     __disable_irq();
     force_pwm_inactive();
     disconnect_pwm_pads();
+    motor_timebase_running=0U;
     for(unsigned i=0U;i<6U;++i) {
         DL_MCPWM_setActionQualifierActionCompleteShadow(
             MCPWM0,runtime_aq_outputs[i],0U);
@@ -621,6 +681,7 @@ void am13e_app_commutation_reset(void)
     }
     force_pwm_inactive();
     disconnect_pwm_pads();
+    motor_timebase_running=0U;
     if (!pwm_registers_inactive() || !pwm_pads_disconnected()) {
         am13e_app_motor_fault_shutdown();
         am13e_app_motor_fault_reset();
@@ -639,6 +700,7 @@ void am13e_app_motor_fault_shutdown(void)
     fault_latched = 1U;
     force_pwm_inactive();
     disconnect_pwm_pads();
+    motor_timebase_running=0U;
 }
 
 /* Strong AM13E230x MCPWM0 startup vector. Only the actual hardware
