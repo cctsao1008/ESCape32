@@ -109,7 +109,7 @@ void main(void) {
 					sendval(RES_ERROR);
 					break;
 				}
-				sendval(boot_am13e_flash_write(write_addr, buf, len) ? RES_OK : RES_ERROR);
+				sendval(write(write_addr, buf, len) ? RES_OK : RES_ERROR);
 #else
 				sendval(write(_rom_end + (num << 10), buf, len) ? RES_OK : RES_ERROR);
 #endif

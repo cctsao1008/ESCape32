@@ -29,12 +29,11 @@ def check_current_contract():
     for name,digest in DIGESTS.items():
         require(name in authority and digest in authority,
                 "Original v1.4 source provenance changed: "+name)
-        # If verbatim v1.4 files are installed, they must match the
-        # exact original input, not silently edited copies.
+        # The user-supplied original files are mandatory and byte-identical.
         spec=ROOT/"mcu/AM13E/v1.4"/name
-        if spec.exists():
-            require(hashlib.sha256(spec.read_bytes()).hexdigest()==digest,
-                    "Canonical source checksum mismatch: "+name)
+        require(spec.is_file(),"Canonical Rev1.4 source absent: "+name)
+        require(hashlib.sha256(spec.read_bytes()).hexdigest()==digest,
+                "Original Rev1.4 source checksum mismatch: "+name)
     for word in ("26 proposed private function names","CMD_UPDATE",
                  "CMD_SETWRP","CMD_WINDOW=6","Cfg.id=0x32EA",
                  "488 KiB","linked binary","source-defined/conditional"):
@@ -95,7 +94,20 @@ def check_current_contract():
     script=read(".github/workflows/am13e-fw1-compile-link.yml")
     require("check_source_filenames.py" not in script,
             "Superseded naming checker still runs in CI")
-    print("PASS: Rev1.4 authority index and original source provenance")
+    require("int write(char *dst" in read("boot/src/common.h") and
+            "sendval(write(write_addr, buf, len)" in
+            read("boot/src/main.c"),
+            "Original Boot write() hook must be reused in AM13E parser")
+    flash=read("boot/mcu/AM13E/flash.c")
+    require("#define AM13E_WRITE_ENTRY write" in flash and
+            "int AM13E_WRITE_ENTRY(" in flash,
+            "AM13E must export original Boot write(), not a parallel public API")
+    require("Original Rel17 Boot write()" in
+            read("mcu/AM13E/V14_INTERFACE_COMPLIANCE_AUDIT.md"),
+            "Rev1.4 Interface audit missing restored Boot write()")
+
+    print("PASS: exact original Rev1.4 source docs SHA-256")
+    print("PASS: original Rel17 Boot write() hook restored in native ARM source")
     print("PASS: superseded naming/HAL/PB14-only/five-feature exclusion rules removed")
     print("PASS: missing original Boot and conditional MCU features still tracked")
     print("SCOPE: source/document evidence only; full feature parity/hardware pending")

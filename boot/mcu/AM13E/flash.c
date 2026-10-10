@@ -1,4 +1,4 @@
-/* Native AM13E23019 Boot APP write path — Rel17 v1.4.
+/* Native AM13E23019 original Boot write() for APP — Rel17 v1.4.
  * The original CMD_WRITE accepts a 1KiB logical block (or short tail)
  * and returns ACK/NAK; it DOES NOT enforce a whole-image transfer
  * sequence, flash-resident CRC, or signature-last commit.
@@ -48,7 +48,16 @@ static uint32_t flash_commit(uint32_t address,uint8_t *data)
     return status;
 }
 
-int boot_am13e_flash_write(char *dst,const char *source,int length)
+/* Host CTest must avoid collision with libc's POSIX write() symbol.
+ * Only the symbol name is substituted; the C function body is exactly
+ * the same as the original Rel17 write() entry linked into ARM Boot.
+ */
+#ifdef AM13E_FLASH_TEST
+#define AM13E_WRITE_ENTRY boot_am13e_flash_write
+#else
+#define AM13E_WRITE_ENTRY write
+#endif
+int AM13E_WRITE_ENTRY(char *dst,const char *source,int length)
 {
     const uintptr_t first=APP_FIRST,end=APP_END,addr=(uintptr_t)dst;
     if(!source || length<=0 || length>(int)AM13E_FLASH_LOGICAL_BLOCK ||

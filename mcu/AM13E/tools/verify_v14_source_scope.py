@@ -58,10 +58,17 @@ def main():
     am13e_update=update.split("#if defined(AM13E)",1)[1].split("#else",1)[0]
     check("sendval(RES_ERROR);" in am13e_update and
           "recvdata(" not in am13e_update and
-          "boot_am13e_flash_write(" not in am13e_update and
+          "write(" not in am13e_update and
           "DL_Flash_" not in am13e_update and
           "sendval(RES_ERROR);" in protection,
           "Unreviewed Boot self-update or protection behavior enabled")
+
+    am13e_write=boot.split("case CMD_WRITE:")[1].split(
+        "case CMD_WINDOW:")[0].split("#if defined(AM13E)",1)[1].split(
+        "#else",1)[0]
+    check("sendval(write(write_addr, buf, len)" in am13e_write and
+          "int AM13E_WRITE_ENTRY(" in src("boot/mcu/AM13E/flash.c"),
+          "AM13E CMD_WRITE must use original Rel17 write() entry")
 
     partition=src("mcu/AM13E/flash_partition.h")
     ld=src("mcu/AM13E/linker_app_rel17.ld")

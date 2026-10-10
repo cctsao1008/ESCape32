@@ -7,6 +7,9 @@ source SHA-256 hashes and authority precedence;
 original ESCape32 rel17 Commit
 `1d718c143380c3eb7e6581478990e1496632e5b8`.
 **Code branch:** `am13e-port-v2`.
+**Current interface compliance:** [V14_INTERFACE_COMPLIANCE_AUDIT.md](V14_INTERFACE_COMPLIANCE_AUDIT.md)
+maps the 26 proposed private design functions to actual native
+sources; it also records restoration of the original Boot write() hook.
 
 **A source branch preserved in legacy code is not evidence of an
 AM13E-executable backend.** Software CI is also not silicon acceptance.

@@ -8,8 +8,17 @@ coverage is implementation evidence, NOT hardware acceptance.
 
 ## Canonical source provenance
 
-Uploaded archive: `ESCape32_AM13E_Integration_Design_v1.4(2).zip`
-containing these exact original names:
+Uploaded archive: `ESCape32_AM13E_Integration_Design_v1.4(2).zip`.
+The **verbatim** original Rev1.4 files are now tracked under
+[`mcu/AM13E/v1.4/`](v1.4/Integration_Design.md), and CI checks
+their SHA-256. They are the design authority; downstream audits are
+implementation evidence, not replacement requirements.
+
+- [Integration_Design.md](v1.4/Integration_Design.md)
+- [Integration_Mapping.md](v1.4/Integration_Mapping.md)
+- [Interface_Contracts.md](v1.4/Interface_Contracts.md)
+
+Original names and hashes:
 
 | Original file | SHA-256 |
 | --- | --- |

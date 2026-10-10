@@ -71,8 +71,12 @@ int recvdata(char *buf);
 void senddata(const char *buf, int len);
 
 uint32_t crc32(const char *buf, int len);
+/* Keep the original Rel17 write() interface, including on AM13E.
+ * AM13E Flash authorization remains APP-only until a separately
+ * qualified original Boot self-update implementation is available.
+ */
 #if defined(AM13E)
-int boot_am13e_flash_write(char *dst, const char *src, int len);
+int write(char *dst, const char *src, int len);
 #else
 int write(char *dst, const char *src, int len) __attribute__((__long_call__));
 void update(char *dst, const char *src, int len) __attribute__((__long_call__));
