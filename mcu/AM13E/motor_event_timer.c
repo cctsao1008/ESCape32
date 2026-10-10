@@ -87,6 +87,16 @@ void am13e_app_motor_bemf_commutation_delay_us(int delay_us)
     schedule_us(delay_us);
 }
 
+/* Rel17 main.c calls this twice: for a computed sine->six-step phase
+ * offset, and with 0xffff us on initial six-step start. Both are real
+ * TIMG12 one-shot schedules, not a fake acknowledgement or motor poller.
+ * TIMG4 stays exclusively owned by PB14 BiDShot TX.
+ */
+void am13e_app_motor_bemf_sine_exit_us(int delay_us)
+{
+    schedule_us(delay_us);
+}
+
 void TIMG12_0_IRQHandler(void)
 {
     const uint32_t status = DL_Timer_getEnabledInterruptStatus(
