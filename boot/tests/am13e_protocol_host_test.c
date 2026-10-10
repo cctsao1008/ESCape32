@@ -285,7 +285,18 @@ int main(int argc, char **argv) {
 
     CHECK(read_position == incoming_length);
     CHECK(transmitted_length == expected_length);
-    CHECK(memcmp(transmitted, expected_reply, expected_length) == 0);
+    if(memcmp(transmitted,expected_reply,expected_length)!=0) {
+        for(size_t at=0U;at<expected_length;++at) {
+            if(transmitted[at]!=expected_reply[at]) {
+                fprintf(stderr,
+                    "FAIL protocol byte %zu/%zu actual=%02x expected=%02x, image_length=%zu\n",
+                    at,expected_length,transmitted[at],expected_reply[at],
+                    image_length);
+                break;
+            }
+        }
+        CHECK(false && "framed Boot reply mismatch");
+    }
     puts("PASS CMD_PROBE/INFO 32byte, complements and CRC32 wire framing");
     puts("PASS CMD_WINDOW0/1 and 488KiB APP physical bounds");
     puts("PASS original random/duplicate/short CMD_WRITE, no signature gate");
