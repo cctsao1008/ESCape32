@@ -480,6 +480,29 @@ void am13e_app_motor_pwm_apply(int duty,int freq_min_khz,int freq_max_khz,
     }
     if(DL_MCPWM_getTimeBasePeriodShadow(MCPWM0)!=plan.period)
         runtime_fault();
+    /* A counter-zero shadow load cannot be relied on while TBCLK is
+     * stopped. On the initial/restart path, seed the ACTIVE period and
+     * compare bank too, but ONLY while software-forced LOW and the six
+     * physical pads are still GPIO inputs. A live PWM update must use
+     * the normal ZERO-event shadow path instead of writing ACTIVE.
+     * This closes the first-cycle startup register-image gap without
+     * treating a prepared timebase as an authorized power-stage enable.
+     */
+    if ((MCPWM0->TBCTL & MCPWM_TBCTL_CTRMODE_MASK)==
+          (uint32_t)DL_MCPWM_COUNTER_MODE_STOP_FREEZE) {
+        if (!pwm_registers_inactive() || !pwm_pads_disconnected())
+            runtime_fault();
+        DL_MCPWM_setTimeBasePeriodActive(MCPWM0,plan.period);
+        for(unsigned i=0U;i<6U;++i) {
+            DL_MCPWM_setCounterCompareActiveValue(
+                MCPWM0,runtime_compare_modules[i],plan.compare[i]);
+            if (DL_MCPWM_getCounterCompareActiveValue(
+                    MCPWM0,runtime_compare_modules[i])!=plan.compare[i])
+                runtime_fault();
+        }
+        if (DL_MCPWM_getTimeBasePeriodActive(MCPWM0)!=plan.period)
+            runtime_fault();
+    }
     ++runtime_pwm_updates;
     __set_PRIMASK(primask);
 }
