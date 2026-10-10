@@ -127,7 +127,14 @@ int main(void)
         assert(b.decoded_bits==13U && b.good_dshot==0U);
         assert(am13e_pb14_decoder_bidir_reply_due(
                     &b,start+14U*period,start+15U*period));
-        feed(&b,frame,start+14U*period,period,2U);
+        /* Feed the actual FINAL bits (1,0), not the frame MSBs. */
+        for(unsigned i=14U;i<16U;++i) {
+            const unsigned bit=15U-i;
+            const uint32_t width=(frame&(1U<<bit))?
+                period*75U/100U:period*38U/100U;
+            const uint32_t at=start+i*period;
+            am13e_pb14_decoder_pulse(&b,at,at+width,on_pwm,on_dshot);
+        }
         assert(b.decoded_bits==0U);
         assert(dshot_delivered==prior+(invalid?1U:1U));
         assert(b.good_dshot==(invalid?0U:1U));
