@@ -408,6 +408,30 @@ add_target(VWING1 STM32G071 DEAD_TIME=35 COMP_MAP=123 SENS_MAP=0xA5A4 VOLT_MUL=1
 # TI AM13E23019 generic application target.
 add_target(AM13E AM13E)
 
+# Board-independent ESCape32 / AM13E algorithm port.
+# This is deliberately a separate object-only target: no GPIO pinmux,
+# gate enable, analog channel, board clock or Flash partition is selected.
+# It is NOT a runnable firmware or a motor-output qualification gate.
+add_library(AM13E_PORTABLE_LOGIC OBJECT EXCLUDE_FROM_ALL
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/adc_calibration_plan.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_codec.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_timing.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_phase_plan.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_aq_plan.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_audio_plan.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_duty_plan.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_frequency_plan.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_shadow_plan.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_pwm_shadow_plan.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_timer_math.c")
+target_include_directories(AM13E_PORTABLE_LOGIC PRIVATE
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E")
+target_compile_definitions(AM13E_PORTABLE_LOGIC PRIVATE AM13E)
+target_compile_options(AM13E_PORTABLE_LOGIC PRIVATE
+    -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
+    -mfloat-abi=hard -fno-branch-count-reg -Werror)
+
+
 # First real AM13E *diagnostic* ELF: startup + clock only, built from
 # the ESCape32 root CMake. This intentionally does not pull in the
 # incomplete Rel17 motor-control entry or invent link-only HAL stubs.
