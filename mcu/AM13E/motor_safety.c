@@ -197,7 +197,37 @@ static void configure_motor_deadband_isolated(void)
         MCPWM0,DL_MCPWM_RED_LOAD_FREEZE);
     DL_MCPWM_setFallingEdgeDelayCountShadowLoadMode(
         MCPWM0,DL_MCPWM_FED_LOAD_FREEZE);
-    if ((MCPWM0->DBCTL & MCPWM_DBCTL_OUT_MODE_MASK)!=3U ||
+    /* Validate ALL configured DBCTL topology bits, not only delay count.
+     * A wrong input selection, output swap, or polarity may otherwise
+     * defeat non-overlap even if DBRED/DBFED read back correctly.
+     */
+    const uint32_t dbctl=MCPWM0->DBCTL;
+    const uint32_t fed_input=AM13E_MOTOR_DB_FED_INPUT;
+    uint32_t mask=MCPWM_DBCTL_OUT_MODE_MASK |
+                  MCPWM_DBCTL_POLSEL_MASK |
+                  MCPWM_DBCTL_OUTSWAP_MASK |
+                  MCPWM_DBCTL_DEDB_MODE_MASK |
+                  MCPWM_DBCTL_LOADREDMODE_MASK |
+                  MCPWM_DBCTL_LOADFEDMODE_MASK |
+                  (UINT32_C(1)<<MCPWM_DBCTL_IN_MODE_OFS);
+    uint32_t expected=3U |
+          ((uint32_t)AM13E_MOTOR_DB_RED_POLARITY<<MCPWM_DBCTL_POLSEL_OFS) |
+          ((uint32_t)AM13E_MOTOR_DB_FED_POLARITY<<(MCPWM_DBCTL_POLSEL_OFS+1U)) |
+          ((uint32_t)AM13E_MOTOR_DB_RED_INPUT<<MCPWM_DBCTL_IN_MODE_OFS) |
+          ((uint32_t)AM13E_MOTOR_DB_SWAP_A<<MCPWM_DBCTL_OUTSWAP_OFS) |
+          ((uint32_t)AM13E_MOTOR_DB_SWAP_B<<(MCPWM_DBCTL_OUTSWAP_OFS+1U)) |
+          ((uint32_t)DL_MCPWM_RED_LOAD_FREEZE<<MCPWM_DBCTL_LOADREDMODE_OFS) |
+          ((uint32_t)DL_MCPWM_FED_LOAD_FREEZE<<MCPWM_DBCTL_LOADFEDMODE_OFS);
+    if (fed_input==DL_MCPWM_DB_INPUT_DB_RED) {
+        expected|=MCPWM_DBCTL_DEDB_MODE_MASK;
+        /* TI DriverLib only asserts DEDB_MODE for DB_RED input; it
+         * does not reset the other FED input select bit in this case.
+         */
+    } else {
+        mask|=(UINT32_C(1)<<(MCPWM_DBCTL_IN_MODE_OFS+1U));
+        expected|=fed_input<<(MCPWM_DBCTL_IN_MODE_OFS+1U);
+    }
+    if ((dbctl&mask)!=(expected&mask) ||
         (MCPWM0->DBRED & MCPWM_DBRED_DBRED_MASK)!=AM13E_MOTOR_DB_RED_TICKS ||
         (MCPWM0->DBFED & MCPWM_DBFED_DBFED_MASK)!=AM13E_MOTOR_DB_FED_TICKS ||
         (MCPWM0->DBREDS & MCPWM_DBREDS_DBREDS_MASK)!=AM13E_MOTOR_DB_RED_TICKS ||
