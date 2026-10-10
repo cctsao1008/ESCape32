@@ -53,6 +53,12 @@ static volatile uint32_t motor_timebase_running; /* MCPWM0 internal counter ONLY
 /* 0=Drive/idle, 1=Rel17 Music, 2=Rel17 AU/PCM. Audio never muxes pads. */
 static volatile uint32_t audio_owner;
 static volatile uint32_t audio_period_valid;
+
+uint32_t am13e_app_motor_audio_mode(void)
+{
+    return audio_owner;
+}
+
 static volatile uint32_t motor_timebase_starts;
 static volatile uint32_t motor_timebase_stops;
 static volatile uint32_t sine_entry_pending;
@@ -1020,6 +1026,7 @@ void am13e_app_motor_audio_begin(int mode)
                   DL_MCPWM_CLOCK_DIVIDER_1)<<MCPWM_TBCTL_CLKDIV_OFS)
         runtime_fault();
     audio_stage_compare_locked(0U,0U,1);
+    for (unsigned i=0U;i<6U;++i) runtime_aq_last[i]=0U;
     __set_PRIMASK(mask);
 }
 
@@ -1097,6 +1104,8 @@ void am13e_app_motor_audio_end(void)
     DL_MCPWM_setTimeBasePeriodShadow(MCPWM0,period);
     DL_MCPWM_setTimeBasePeriodActive(MCPWM0,period);
     audio_stage_compare_locked(0U,0U,1);
+    for(unsigned i=0U;i<6U;++i) runtime_aq_last[i]=0U;
+    runtime_phase_pending=0U;
     DL_MCPWM_setTimeBaseCounter(MCPWM0,0U);
     audio_period_valid=0U;
     audio_owner=0U;

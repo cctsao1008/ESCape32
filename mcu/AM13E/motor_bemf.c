@@ -4,6 +4,7 @@
  * External analog phase/neutral connections MUST be board-confirmed.
  */
 #include "motor_backend.h"
+#include "motor_audio_hw.h" /* Prevent COMP/ECAP1 rearming during sound */
 #include "motor_bemf.h" /* Declarations for init, abort and ECAP1 IRQ */
 #include "board_io_plan_v1.h" /* Provisional E62 phase/BEMF pinmux */
 #include "motor_event_timer.h" /* Cancel obsolete TIMG12 on BEMF timeout */
@@ -215,7 +216,8 @@ void compctl(int x)
 {
     const uint32_t primask=__get_PRIMASK();
     __disable_irq();
-    if(!initialized || x<0 || x>7)bemf_fault();
+    if(!initialized || x<0 || x>7 ||
+        (x!=0 && am13e_app_motor_audio_mode())) bemf_fault();
     capture_stop();
     selected_code=0U;
 #ifdef AM13E_E62_IO_PLAN_V1
@@ -250,7 +252,8 @@ void am13e_app_motor_bemf_interval_select(int ertm_us)
 {
     const uint32_t primask=__get_PRIMASK();
     __disable_irq();
-    if(!initialized) bemf_fault();
+    if(!initialized || (ertm_us>0 && am13e_app_motor_audio_mode()))
+        bemf_fault();
     capture_stop();
     /* Rel17 laststep() with lock may call nextstep() at rest, with
      * ertm==0. Do not claim BEMF availability or manufacture a timeout

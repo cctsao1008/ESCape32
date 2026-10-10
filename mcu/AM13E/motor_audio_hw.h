@@ -7,6 +7,8 @@
 #error "AM13E Audio shared boundary"
 #endif
 #include <stdint.h>
+/* Read-only ownership query used by TIMG12 and BEMF admission guards. */
+uint32_t am13e_app_motor_audio_mode(void);
 void am13e_app_motor_audio_begin(int mode);
 void am13e_app_motor_audio_period(uint16_t period);
 void am13e_app_motor_audio_compare(uint16_t phase_u,uint16_t phase_w);

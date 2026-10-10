@@ -6,6 +6,7 @@
 #include "motor_event_timer.h"
 #include "motor_timer_math.h"
 #include "motor_backend.h"
+#include "motor_audio_hw.h"
 #include "clock_backend.h"
 #include <limits.h>
 #include <soc.h>
@@ -64,7 +65,8 @@ void am13e_app_motor_timing_init(void)
 
 static void schedule_us(int delay_us)
 {
-    if (!initialized || delay_us <= 0 || audio_pcm_timer) timing_fault();
+    if (!initialized || delay_us <= 0 || audio_pcm_timer ||
+        am13e_app_motor_audio_mode()) timing_fault();
     const uint32_t ticks = am13e_motor_us_to_timer_ticks(
         (uint32_t)delay_us, MOTOR_TIMER_HZ);
     if (ticks < 2U) timing_fault();
@@ -159,6 +161,7 @@ void TIMG12_0_IRQHandler(void)
 void am13e_app_motor_audio_pcm_clock_begin(uint32_t rate)
 {
     if (!initialized || timer_armed || audio_pcm_timer ||
+        am13e_app_motor_audio_mode()!=2U ||
         rate<1000U || rate>48000U || __get_PRIMASK()!=0U)
         timing_fault();
     const uint32_t irqmask=__get_PRIMASK();
@@ -187,7 +190,8 @@ void am13e_app_motor_audio_pcm_clock_begin(uint32_t rate)
 
 void am13e_app_motor_audio_pcm_sample_wait(void)
 {
-    if (!audio_pcm_timer || !pcm_rate || __get_PRIMASK()!=0U)
+    if (!audio_pcm_timer || !pcm_rate ||
+        am13e_app_motor_audio_mode()!=2U || __get_PRIMASK()!=0U)
         timing_fault();
     uint32_t step=pcm_floor_ticks;
     pcm_accum+=pcm_remainder;
@@ -206,7 +210,8 @@ void am13e_app_motor_audio_pcm_sample_wait(void)
 
 void am13e_app_motor_audio_pcm_clock_end(void)
 {
-    if (!audio_pcm_timer) timing_fault();
+    if (!audio_pcm_timer || am13e_app_motor_audio_mode()!=2U)
+        timing_fault();
     const uint32_t mask=__get_PRIMASK();
     __disable_irq();
     DL_Timer_stopCounter(MOTOR_TIMER);
