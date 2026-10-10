@@ -27,7 +27,7 @@ The v1.4 documents are design rules, not completed implementation proof.
 | BiDShot and extended telemetry | **Host-tested** prepared reply before CRC, next frame prepared at TX DMA completion | Electrical bidirectional turnaround, scope waveforms |
 | Motor Sine/Brushed/Brake/Music/PCM | **Host-tested internal MCPWM0 ownership** | Power pads physically disconnected |
 | Analog input mode | **Conditional ADC0 SOC2 native adapter now implemented**; Board profile must define physical Pinmux/Channel/VREF/fullscale, delivered through original Rel17 `adcdata(...,a)` | Reference has no assigned third ADC; only Host conversion + conditional ARM syntax coverage, hardware pending |
-| Serial/iBUS/SBUS/SBUS2/CRSF/EXBUS/HoTT input | **Conditional native adapter missing** | Legacy `src/io.c` transport excluded under AM13E; pins/UART not assigned |
+| Serial/iBUS/SBUS/SBUS2/CRSF/EXBUS/HoTT input | **iBUS input_mode=3 frame decoder + original throttle/brake callback Host-tested**; other protocols pending | Actual UART RX, DMA, pinmux not configured on Reference |
 | KISS/iBUS/S.Port/CRSF/MSB/HoTT telemetry | **Conditional native transport missing** | Legacy `src/telem.c` formatters retained; Reference UART unconnected, not a waiver |
 | Hall/hybrid commutation | **Conditional native Hall adapter missing** | Original `HALL_MAP` branches retained in non-AM13E source |
 | BEC/LED/ERPM/PARK/Beacon | **Conditional board adapter missing** | Original guarded source remains; no fabricated pinout |

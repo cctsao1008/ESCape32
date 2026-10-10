@@ -46,6 +46,10 @@ void am13e_app_io_bidir_telemetry_levels(
 
 int am13e_app_io_dshot_packet(uint16_t frame, int bidirectional_invert);
 void am13e_app_io_servo_pulse(unsigned int pulse_us);
+/* Valid original 32-byte iBUS receiver frame; selected UART transport
+ * owns clock/pinmux, parity, frame acquisition and resynchronization.
+ */
+int am13e_app_io_ibus_frame(const uint8_t *frame,unsigned length);
 int am13e_app_io_cli_line(char *line);
 
 /* Must be implemented by the AM13E board backend. */

@@ -21,6 +21,7 @@
 #include "io_backend.h"
 #include "bidir_codec.h"
 #include "command_reply.h" /* DShot save waits for pending BiDShot reply */
+#include "ibus_receiver.h" /* Native frame inspection uses original iBUS semantics */
 #else
 #ifdef AT32F4
 #define USART2_TDR USART2_DR
@@ -62,7 +63,7 @@ static void setthrot(int x) {
 		x > cfg.throt_min + 50 ? scale(x, cfg.throt_min + 50, cfg.throt_max, 0, 2000): 0;
 }
 
-#if defined IO_PA2 || defined IO_AUX
+#if defined IO_PA2 || defined IO_AUX || defined(AM13E)
 static void setbrake(int x) {
 	if (x < 0) return;
 	brake = scale(x, 1100, 1900, 0, cfg.duty_drag);
@@ -556,6 +557,24 @@ void am13e_app_io_servo_pulse(unsigned int pulse_us) {
         am13e_app_io_watchdog_feed();
         setthrot((int)pulse_us);
     }
+}
+/* Native UART RX callback for complete original Rel17 iBUS packet.
+ * No UART pinmux is automatically selected by the PB14 Reference.
+ * Only a valid checksum in original input_mode=3 may refresh WWDT.
+ */
+int am13e_app_io_ibus_frame(const uint8_t *frame,unsigned length)
+{
+    int throttle_us=-1,brake_us=-1;
+    if(cfg.input_mode!=3 ||
+       !am13e_ibus_decode_channels(frame,length,
+          (unsigned)(uint8_t)cfg.input_ch1,
+          (unsigned)(uint8_t)cfg.input_ch2,
+          &throttle_us,&brake_us))
+        return 0;
+    am13e_app_io_watchdog_feed();
+    setthrot(throttle_us);
+    setbrake(brake_us);
+    return 1;
 }
 #else
 void iotim_dma_isr(void) { // DSHOT
