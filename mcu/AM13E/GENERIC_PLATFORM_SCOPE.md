@@ -11,7 +11,7 @@ the default or authoritative definition of an AM13E23019 board.
 | Portable control logic | Rel17 commutation/AQ/duty/clock arithmetic, motor-audio plans, DShot codec, ADC math | Hard-coded pinmux, divider, NTC, gate polarity |
 | AM13E MCU backend | Real TI DriverLib, M33 startup, MCPWM/ECAP/ADC/GPIO/Flash primitives | Assuming a particular ESC hardware schematic |
 | Board profile | MCU pad routes, comparator paths, gate driver, active levels, RED/FED, external fault, crystal, analog scaling | Guessed electrical values or auto-arming |
-| Image/update profile | Flash regions, boot entry/VTOR, CRC/signature protocol, delivery transport | Assuming every AM13E board shares a boot partition |
+| Image/update profile | Flash regions, boot entry/VTOR, Cfg.id/Vector Boot validity and per-frame wire CRC, delivery transport | Assuming every AM13E board shares a boot partition |
 | Application | ESCape32 Rel17 policy, input/arming, protection, telemetry and music | Claiming hardware-verified behavior from host tests |
 
 ## Current build targets
@@ -19,7 +19,7 @@ the default or authoritative definition of an AM13E23019 board.
 - `AM13E_PORTABLE_LOGIC`: a **board-neutral ARM object compile gate**.
   It compiles code that takes explicit values or produces control plans;
   no board I/O is configured. It is not an ELF to flash.
-- `AM13E_FW1_V16_IMAGE` and `BOOT5_PB14.elf`: **existing reference
+- `AM13E_FW1_REL17_IMAGE` and `BOOT5_PB14.elf`: **existing reference
   integration**. These are real linked images but they encode a fixed
   0x6000 APP location and fixed reference pin assignments. They must
   not be described as a generic AM13E board support package.
@@ -33,8 +33,8 @@ the default or authoritative definition of an AM13E23019 board.
 
 ```bash
 cd ~/github/ESCape32
-cmake -B build-am13e-v16 -D AM13E_SDK_ROOT="$HOME/ti/am13e230x_sdk_26_01_00_03"
-cmake --build build-am13e-v16 --target AM13E_PORTABLE_LOGIC --parallel 4
+cmake -B build-am13e-rel17 -D AM13E_SDK_ROOT="$HOME/ti/am13e230x_sdk_26_01_00_03"
+cmake --build build-am13e-rel17 --target AM13E_PORTABLE_LOGIC --parallel 4
 ```
 
 ### Next source refactoring work
@@ -45,8 +45,7 @@ cmake --build build-am13e-v16 --target AM13E_PORTABLE_LOGIC --parallel 4
 2. Decouple CPU/peripheral init from the reference crystal and timer
    topology, keeping concrete DriverLib register checks.
 3. Isolate the Boot/APP linker layout and image metadata behind an
-   explicit image profile; **do not change existing on-flash magic, CRC
-   or upgrade compatibility as a mere naming exercise**.
+   explicit image profile; **the approved original Rel17 Cfg.id/vector launch ABI replaces the retired v1.6 image CRC; host updater and recovery changes still require validation**.
 4. Move reference pin assignment behind an opt-in BSP and establish
    a board-free automated build/test gate.
 5. Keep Motor Drive and Motor Audio on the same MCPWM resource with
@@ -80,7 +79,7 @@ This document is a porting boundary, not a hardware qualification.
 - `AM13E_MCU_RUNTIME_TICK` compiles this reusable ARM object without a
   linked reference clock; missing a real provider must remain a linker
   error on any future complete generic firmware, never a fake stub.
-- Same reference MCLK, 16kHz SysTick, 16/16 static image validations
+- Same reference MCLK, 16kHz SysTick and Rel17 flat-image checks
   and Boot compatibility gates; no physical oscillator qualification.
 
 ## Generic ADC pair acquisition split
@@ -109,16 +108,16 @@ The new `fault_trip_route_plan.c` has no SDK or board dependency. The actual TI 
 
 ## Explicit Boot/Image Profile selection
 
-- `profiles/image_reference_v16.cmake` selects only the existing 0x6000 Application linker, matching Reference Boot linker and original packer. There are **no modified header bytes, CRC rules, signature or Flash regions**.
-- `AM13E_IMAGE_PROFILE=REFERENCE_V16` remains the compatible full Reference build default; any other profile fails when `AM13E_ENABLE_FW1_V16_IMAGE=ON`.
-- The **object-only** generic backend path can request `-DAM13E_IMAGE_PROFILE=NONE -DAM13E_ENABLE_FW1_V16_IMAGE=OFF`; this does not manufacture a generic runnable firmware.
+- `profiles/image_rel17_v14.cmake` selects the approved 0x6000 Flat-APP linker, matching the native Boot and Rel17 packer. Its Flat BIN has no application header/CRC/signature, using original Cfg.id and M33 vectors.
+- `AM13E_IMAGE_PROFILE=REL17_V14` is now the active full Reference build default; any other profile fails when `AM13E_ENABLE_FW1_REL17_IMAGE=ON`.
+- The **object-only** generic backend path can request `-DAM13E_IMAGE_PROFILE=NONE -DAM13E_ENABLE_FW1_REL17_IMAGE=OFF`; this does not manufacture a generic runnable firmware.
 - CI now verifies Reference selection succeeds and unknown image profiles are rejected, in addition to image integrity and Boot host tests.
 
 ## Six-MCPWM-pad route ownership refactor
 
 - `motor_output_route_plan.[ch]` enforces 6-entry unique GPIO bits/PINCM and exact combined mask in native host regressions.
 - `motor_output_backend.[ch]` is a TI DriverLib-based, board-neutral GPIO/PINCM implementation. It disconnects all six pads to digital input, validates actual GPIO input/peripheral-function readback, and applies/reads PWM alternate function and inversion only when called by existing qualified power-stage attach logic.
-- `board_motor_output_reference.c` is the required **Reference v1.6** provider for PA8/11/9/30/10/31. There is no implicit generic route or weak default. A different board must provide its own mapping and separate reviewed gate/Trip/RED/FED.
+- `board_motor_output_reference.c` is the required **Reference Rel17 v1.4** provider for PA8/11/9/30/10/31. There is no implicit generic route or weak default. A different board must provide its own mapping and separate reviewed gate/Trip/RED/FED.
 - `motor_safety.c` no longer directly selects PA8/11/9/30/10/31; the same default Motor MCPWM0, exclusive audio ownership and safe-off readback remain. `motor_power_stage.c` keeps PB13 inactive-first/active-last, mandatory OST/OC/Dead-band checks, and fail-closed behavior. CI gates generic ARM backend, Reference firmware/link and dedicated native invalid-pad-route regression.
 - This is **not** a physical enable approval, and MCU GPIO input Hi-Z must not be equated with guaranteed external power-driver shutdown.
 

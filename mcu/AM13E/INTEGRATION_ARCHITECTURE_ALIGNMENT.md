@@ -25,7 +25,7 @@ ESCape32/
   src/                 unchanged original Rel17 main/io/util/telem/prog
   mcu/AM13E/           native AM13E23019 MCU implementation; board providers,
                        tick, MCPWM0, ECAP0/1, ADC, config persistence
-    flash_partition.h  shared 16KiB Boot, 4KiB FW1, 4KiB FW2, 488KiB APP
+    flash_partition.h  shared 16KiB Boot, 4KiB Cfg, 4KiB Reserved, maximum 488KiB APP
   boot/src/            original ESCape32 Boot framing/commands + AM13E CMD_WINDOW
   boot/mcu/AM13E/      AM13E Boot transport, flash, image verification and launch
   future TI FW2        independent TI sensorless FOC source/build; NOT in FW1
@@ -62,7 +62,7 @@ diagram. The native source and exact linker/boot protocol are binding.
 | C05 | `am13e_app_io_servo_pulse` (Rel17 policy) | PWM mode locked independently of DShot |
 | B01–B02 | `boot_am13e_read_range/write_range`, `boot_am13e_flash_write` | `CMD_WINDOW=6` block0..487; 2KiB SRAM RMW |
 | B03 | `boot_am13e_device_id` | Native AM13E ID, no STM32 impersonation |
-| B04–B05 | `boot_am13e_application_valid`, `boot_am13e_image_check`, `boot_am13e_launch_application` | v1.6 M33 vector, 32-bit image CRC, signature-last |
+| B04–B05 | `boot_am13e_application_valid`, `boot_am13e_app_validity`, `boot_am13e_launch_application` | Rel17 Cfg.id=0x32EA + M33 APP vectors; no APP CRC |
 | B06 | `boot_am13e_take_reboot_ack` and independent Boot reset backend | No reliance on STM32 RCC flags |
 
 For actual function signatures and reviewed behavior, use those source
@@ -74,14 +74,13 @@ paths; the supplied design signatures are **not drop-in ABI typedefs**.
 | --- | --- | --- |
 | `0x00000000..0x00003fff` | 16 KiB | Common Boot |
 | `0x00004000..0x00004fff` | 4 KiB | FW1 settings only |
-| `0x00005000..0x00005fff` | 4 KiB | FW2 settings only |
+| `0x00005000..0x00005fff` | 4 KiB | Reserved (no active writer) |
 | `0x00006000..0x0007ffff` | 488 KiB | ONE installed FW1 or FW2 |
 
 `flash_partition.h` is consumed by actual FW1 parameter planner,
 Boot range checks and image validator. Linker assertions retain
-`APP_BASE=0x6000`; on-flash M33 vectors at `+0x000`, signature
-ECC16 at `+0x400`, metadata header `+0x500`, exact CRC and
-deferred signature commit semantics remain unchanged.
+`APP_BASE=0x6000`; on-flash M33 vectors at `+0x000`, no APP signature/header/CRC. Code follows linked vectors;
+the only Boot marker is persistent Cfg.id=0x32EA.
 
 Rel17 commands 0–5 retain original numeric identities. AM13E adds
 `CMD_WINDOW=6`, complement-framed selector `0/1`, default 0 at
@@ -90,12 +89,12 @@ valid blocks 0..487, invalid 488..511 rejected before Flash access.
 Existing 1KiB READ/WRITE payloads and CRC32 remain unchanged.
 A **257 KiB** packed fixture produced from the real ARM-linked FW1
 is transferred through the actual shared Boot command dispatcher and
-compared byte-for-byte in Host CTest. The image marker is committed
-only after full-image CRC and transfer-span verification.
+compared byte-for-byte in Host CTest. No whole-image CRC or Signature-last commit exists; interrupted
+writes may leave a bootable but incomplete APP.
 
 The code/data writer preserves the nonwritten 1KiB half of each
-2KiB erase sector using an aligned SRAM image; the first metadata
-sector retains its special invalidate/restore/signature-last policy.
+2KiB erase sector using an aligned SRAM image; the first APP sector is an ordinary RMW sector, with no metadata
+reservation or signature-last transition.
 Boot and both parameter regions are outside its authorized range.
 
 **Host compatibility warning:** installing an image larger than
@@ -109,8 +108,8 @@ RMW endurance validation is claimed by this repository.
   DShot150/300/600 RX and BiDShot TX. No dedicated UART telemetry
   path is activated.
 - `command_decode.c` locks an accepted PWM or DShot receiver mode;
-  only an explicit quiescent interval (current detailed design:
-  50ms max capture-gap policy) unlocks and clears partial frames.
+  mode selection persists across 50ms silence; decoder reset is
+  required to choose another protocol.
   Neither a bad CRC nor truncated bit group feeds WWDT or throttle.
 - Shared Rel17 DShot parser, comparator selection, BEMF timing and
   external `initio()`/service hooks are preserved.
@@ -155,7 +154,7 @@ not be described as physical motor-drive/safety specification compliance**.
    same-bank SRAM command execution/readback, protection granularity,
    CCM security/startup details, PWM output/deadtime/IO polarity,
    PB14 3.3/5V contention, analog CMPSS and ECAP/DMA IRQ budget.
-5. **Receiver mode policy**: 50ms quiescent gap is a declared
+5. **Receiver mode policy**: original persistent receiver mode supersedes the 50ms gap; a
    Detailed Design convention needing input/failsafe system tests,
    not an upstream-mandated time or physical validation result.
 6. **Reference board independence**: concrete oscillator, analog
