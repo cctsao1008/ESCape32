@@ -58,7 +58,7 @@ def main():
           "Boot self-update/WRP state changed; update the v1.4 conformance audit")
 
     partition=src("mcu/AM13E/flash_partition.h")
-    ld=src("mcu/AM13E/linker_app_v16.ld")
+    ld=src("mcu/AM13E/linker_app_rel17.ld")
     check("AM13E_FLASH_RESERVED_BASE" in partition and
           "AM13E_FLASH_FW2_PARAM_BASE" not in partition and
           "FLASH_RESERVED" in ld,"Rev1.4 Reserved partition missing")
@@ -77,9 +77,35 @@ def main():
           "rx_mode=AM13E_PB14_RX_UNDECIDED" not in
           decoder.split("void am13e_pb14_decoder_idle(")[1],
           "Missing Oneshot125/DShot1200 or upstream receiver mode semantics")
-    check("boot_am13e_app_validity(" in src("boot/mcu/AM13E/app.c") and
-          "AM13E_BOOT_CFG_ID" in src("boot/mcu/AM13E/app_validity.h"),
-          "Missing approved Rel17 Cfg.id/vector Boot gate")
+    gate=src("boot/mcu/AM13E/app.c")
+    gate_impl=src("boot/mcu/AM13E/app_validity.c")
+    flash=src("boot/mcu/AM13E/flash.c")
+    build=src("CMakeLists.txt")
+    profile=src("mcu/AM13E/profiles/image_rel17_v14.cmake")
+    packer=src("boot/tools/pack_am13e_rel17.py")
+    check("boot_am13e_app_validity(" in gate and
+          "AM13E_BOOT_CFG_ID" in gate_impl and
+          ".id = 0x32ea" in src("src/main.c"),
+          "Missing original Rel17 Cfg.id/APP vector boot gate")
+    check("boot_am13e_image_check(" not in gate and
+          "image_integrity.h" not in gate and
+          "AM13E_IMAGE_SIGNATURE_OFFSET" not in flash and
+          "boot_am13e_image_check(" not in flash,
+          "Retired v1.6 APP CRC/signature boot check reintroduced")
+    check(".signature" not in ld and ".image_header" not in ld and
+          "LENGTH = 0x0007A000" in ld,
+          "APP linker must expose maximum 488KiB with no metadata slots")
+    check('AM13E_IMAGE_PROFILE "REL17_V14"' in build and
+          "image_rel17_v14.cmake" in build and
+          "AM13E_FW1_REL17_IMAGE" in build and
+          "linker_app_rel17.ld" in profile and
+          "pack_am13e_rel17.py" in profile,
+          "Build must select approved flat Rel17 image profile")
+    check("MAX_LENGTH=APP_END-APP_BASE" in packer and
+          "TRANSPORT_ALIGN=4" in packer and
+          "image_crc32" not in packer and
+          "SIGNATURE_OFFSET" not in packer,
+          "Flat packer must use actual linked size, without embedded CRC")
     check("am13e_power_stage_attach(" not in
           src("mcu/AM13E/motor_power_stage.c"),
           "Five user-deferred IO-only features silently enabled")
@@ -95,7 +121,9 @@ def main():
             "input_mode_analog","input_mode_serial",
             "UART_telemetry","Hall_hybrid","LED_BEC_PARK_ERPM",
             "current_limit_board_io_only"],
-        "image_abi_conflict":"Original Cfg.id marker vs retained v1.6 CRC/header/signature-last",
+        "boot_abi":"RESOLVED_REL17_V14_CFG_ID_AND_APP_VECTOR",
+        "app_image":"FLAT_ELF_DERIVED_VARIABLE_SIZE_MAX_488KIB",
+        "torn_update_risk":"Valid Cfg plus vectors may boot incomplete later code",
         "io_only":["Gate Enable","nFAULT","Independent OC",
                    "Serial Telemetry TX","Current Limiting"],
         "physical_validation":"PENDING"
@@ -105,7 +133,8 @@ def main():
         json.dumps(result,indent=2)+"\n")
     print("PASS: Rev1.4 original Rel17 source scope audited (BLOCKERS documented)")
     print("NOT COMPLETE: CMD_UPDATE, CMD_SETWRP, conditional board adapters")
-    print("OPEN CONFLICT: Original Cfg.id vs v1.6 Image CRC/signature ABI")
+    print("ABI RESOLVED: Cfg.id=0x32EA + M33 APP vector; no APP CRC/header")
+    print("LIMIT: interrupted APP updates have no whole-image commit gate")
 
 if __name__=="__main__":
     try: main()

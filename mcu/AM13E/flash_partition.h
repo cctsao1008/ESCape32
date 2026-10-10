@@ -1,4 +1,4 @@
-/* Shared Boot/FW1 AM13E23019 v1.6 single-image Flash allocation.
+/* Shared Boot/FW1 AM13E23019 Rel17 v1.4 single-image Flash allocation.
  * Source constants, NOT a new image format or FW2 feature API.
  * Both Boot and FW1 include this file. Linker LD assertions independently
  * guard physical placement; TI protection granularity needs HW review.

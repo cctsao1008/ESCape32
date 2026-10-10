@@ -55,7 +55,7 @@ protection update/reload design. Runtime dynamic Flash protection
 alone does not satisfy `setwrp()`; do not change silicon security
 lifecycle or erase the Boot vector without qualified recovery.
 
-## Partition and image validity conflict
+## Partition and selected v1.4 Boot validity
 
 | Region | Selected current v1.4 address |
 | --- | --- |
@@ -64,15 +64,30 @@ lifecycle or erase the Boot vector without qualified recovery.
 | **Reserved, not FW2 config** | `0x05000–0x05FFF` |
 | Single Application | `0x06000–0x7FFFF` |
 
-The common `flash_partition.h` and APP Linker enforce Reserved.
-However, the **current v1.6 image contract** requires an extra marker
-at APP+0x400, a header at APP+0x500 and whole-image CRC with
-signature-last commit. **v1.4 instead requires the upstream `Cfg.id=0x32EA`
-at CFG+0 and a relocated M33 vector at APP_BASE**, without making a
-new image manifest mandatory. These are mutually different launch
-contracts. Existing ABI remains untouched until an explicit user
-choice and update/recovery migration design; therefore this difference
-is an **OPEN ARCHITECTURE CONFLICT**, not a compliance PASS.
+The approved and **now active** `AM13E_IMAGE_PROFILE=REL17_V14`
+build uses `Cfg.id=0x32EA` at the beginning of the `0x4000`
+configuration region and the M33 initial MSP/Thumb Reset PC at
+`APP_BASE=0x6000`. The active `boot/mcu/AM13E/app.c` and
+`app_validity.c` no longer validate an APP+0x400 signature, APP+0x500
+header, or embedded image CRC. Those are superseded v1.6 ABI artifacts,
+not v1.4 Boot acceptance rules.
+
+The active `linker_app_rel17.ld` places vectors first, followed by
+actual linked code and data, with an upper bound of **488 KiB** for
+`[0x6000,0x80000)`. `AM13E_FW1_REL17.bin` contains actual linked
+firmware bytes, not a fixed-capacity image; the flat transport image
+adds only 0–3 `0xff` bytes for 4-byte wire alignment. The external
+JSON sidecar is informational, not read by Boot. `CMD_WINDOW=6`
+makes all 488 addressable blocks reachable by an upgraded host.
+
+**Integrity limitation:** removing Signature-last / whole-image CRC
+also removes the former torn-update protection. If the `Cfg.id`
+and vectors remain valid but later code is incomplete, original
+Rel17 Boot validity can still succeed. Command-frame CRC validates
+each individual received WRITE, not overall firmware completeness.
+No power-loss-safe update claim is made without a separately qualified
+end-to-end update/recovery procedure. Existing v1.6 packaged updates
+have no implicit migration or compatibility guarantee.
 
 ## Explicit five-feature IO-only scope
 
@@ -94,4 +109,5 @@ and complete hardware compatibility remain outstanding.
 
 **Conformance status: PARTIAL — source-aligned improvements in place;
 Boot operations and multiple conditional MCU adapters missing;
-existing v1.6 Image ABI conflicts with v1.4 source-equivalent validity.**
+the former v1.6 Image ABI has been replaced, while Boot operations and
+conditional native adapters remain missing.**
