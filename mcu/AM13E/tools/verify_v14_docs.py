@@ -94,6 +94,10 @@ def check_current_contract():
     script=read(".github/workflows/am13e-fw1-compile-link.yml")
     require("check_source_filenames.py" not in script,
             "Superseded naming checker still runs in CI")
+    require("-Wl,--require-defined=write" in read("CMakeLists.txt") and
+            "-Wl,--require-defined=boot_am13e_flash_write" not in
+            read("CMakeLists.txt"),
+            "ARM Boot linker still requires legacy private Flash symbol")
     require("int write(char *dst" in read("boot/src/common.h") and
             "sendval(write(write_addr, buf, len)" in
             read("boot/src/main.c"),

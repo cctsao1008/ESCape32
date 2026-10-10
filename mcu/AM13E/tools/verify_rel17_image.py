@@ -62,6 +62,9 @@ def main():
           "ELF contains normal contiguous Rel17 vector/text without v1.6 slots")
     check(bs.get(".intvecs",(None,0))[0]==0 and
           bs[".intvecs"][1]>=64,"Native Boot vector remains at 0x0000")
+    check("write" in b and "boot_am13e_flash_write" not in b and
+          0<=b["write"]<0x4000,
+          "Native Boot exports upstream Rel17 write(), not old private alias")
     ram=bs.get(".TI.ramfunc",(0,0))
     fw_ram=fs.get(".TI.ramfunc",(0,0))
     check(0xC18000<=ram[0]<ram[0]+ram[1]<=0xC20000 and
