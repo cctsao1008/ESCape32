@@ -59,7 +59,7 @@ function/semantic path; it does not mean the exact proposed
 | Original Rel17 Boot `write()` | Production `boot/mcu/AM13E/flash.c` now exports `write`; parser calls it directly | FIXED; native Host only renames to avoid POSIX libc collision |
 | Original Boot `update()` / `setwrp()` | AM13E handlers still return `RES_ERROR` | **MISSING — mandatory source feature gap** |
 | Source-defined conditional input and telemetry | Analog receiver, serial receiver/telemetry, Hall and board-specific routes incomplete | PARTIAL — not excluded from v1.4 |
-| Native `add_target()` with MCU-local `config.c/h/cmake/ld` | Root uses `add_target_ti_am13e` helper; `config.h` present; `config.c/cmake/ld` not present | PARTIAL **source/build organization gap**, do not insert dummy files |
+| Native `add_target()` with MCU-local `config.c/h/cmake/ld` | Application/Boot `config.cmake` own separate source selection; their `config.c` implement real `init()` hooks; linker still uses legacy-named files | PARTIAL — config.c/cmake aligned; config.ld pending |
 | Native `entry.c` Startup bridge | Linked ARM vector/startup passes; standalone App/Boot `entry.c` absent | NEEDS actual startup ABI review, not automatically equivalent |
 | Additional HAL / parallel control stack | MCU responsibilities in source modules; original Rel17 motor policy retained | No full independent HAL detected |
 
@@ -70,8 +70,8 @@ Rel17 conditional source capabilities.
 
 ## Next implementation gates
 
-1. Integrate native App/Boot `config.c/h/cmake/ld` organization
-   in existing ESCape32 `add_target()` without duplicating startup,
+1. Finish App/Boot `config.ld` linker ownership
+   under the existing ESCape32 `add_target()` without duplicate startup,
    resetting legacy targets, or inserting meaningless wrapper files.
 2. Reuse original source hooks for selected conditional analog,
    serial, Hall and GPIO feature branches. Validate the actual board

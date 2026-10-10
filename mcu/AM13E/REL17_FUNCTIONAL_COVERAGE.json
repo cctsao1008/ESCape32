@@ -165,7 +165,7 @@
       "id": "runtime_clock_arming",
       "label": "SysTick, verified reference clock and arming window",
       "sources": [
-        "mcu/AM13E/system_runtime.c",
+        "mcu/AM13E/config.c",
         "mcu/AM13E/board_clock_reference.c",
         "mcu/AM13E/arming_window.c"
       ],

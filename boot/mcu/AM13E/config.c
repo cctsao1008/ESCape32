@@ -1,5 +1,5 @@
 /*
-** AM13E boot clock initialization.
+** AM13E native Boot config.c: original init() and verified SYSOSC.
 ** Preserve the reset-default internal 32 MHz SYSOSC clock.
 ** No board oscillator, PLL, or motor-control clocks are configured.
 */

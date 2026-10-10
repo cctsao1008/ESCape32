@@ -66,91 +66,11 @@ function(add_target_ti_am13e name)
         message(FATAL_ERROR
             "AM13E_PROJECT_SYSCFG_DIR is not an existing directory")
     endif()
-    # This target compiles the original rel17 sources. No board clock,
-    # dead time, comparator routing or output-enable values are fabricated.
+    # Delegate MCU source ownership through original add_target(name mcu ...).
     if(name MATCHES "^BOOT")
-        set(am13e_sources
-            "${PROJECT_SOURCE_DIR}/boot/src/main.c"
-            "${PROJECT_SOURCE_DIR}/boot/src/io.c"
-            "${PROJECT_SOURCE_DIR}/boot/src/util.c"
-            "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/flash_range.c"
-            "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/init.c"
-            "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/io.c"
-            "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/device.c"
-            "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/app.c"
-            "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/flash.c"
-            "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/app_validity.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/newlib_syscalls.c"
-            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_flash.c"
-            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_flashctl.c")
-        set(am13e_source_dir "${PROJECT_SOURCE_DIR}/boot/src")
+        include("${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/config.cmake")
     else()
-        set(am13e_sources
-            "${PROJECT_SOURCE_DIR}/src/main.c"
-            "${PROJECT_SOURCE_DIR}/src/io.c"
-            "${PROJECT_SOURCE_DIR}/src/telem.c" # Extended DShot scheduler stays on PB14
-            "${PROJECT_SOURCE_DIR}/src/util.c"
-            "${PROJECT_SOURCE_DIR}/src/prog.c"
-            # Keep the Rel17 five-source control structure, but PB14-only
-            # FW1 does not instantiate the optional UART telemetry hardware.
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/irq_vectors.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/reset_cause.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/fault_input.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/analog_sampling_backend.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/analog_runtime.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/analog_calibration_plan.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/command_input_route_backend.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/command_capture.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/command_decode.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_codec.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_timing.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/command_reply.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/system_runtime.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_runtime_irq.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/arming_window.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_source_reference.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/board_clock_reference.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_output_route_plan.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_output_backend.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/board_motor_output_reference.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_safety.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_power_stage.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_audio.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_audio_plan.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_ownership_plan.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/fault_trip_route_plan.c"
-            # fault_trip_backend.c / motor_fault_route.c are NOT part
-            # of the IO-only FW1. Keep their independent MCU object and
-            # host tests for the later board functional integration.
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_bemf.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_bemf_event_plan.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_sine_table.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_phase_plan.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_aq_plan.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_timer_math.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_frequency_plan.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_duty_plan.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_shadow_plan.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_pwm_shadow_plan.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/cfg_flash_plan.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/cfg_flash_writer.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/cfg_flash_runtime.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/input_watchdog.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_event_timer.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/newlib_syscalls.c"
-            # Genuine TI DriverLib objects: delayCycles (common) and
-            # Flash read wait-state RAMFUNC (FRI); no replacement stubs.
-            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_common.c"
-            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_fri.c"
-            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_flash.c"
-            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_flashctl.c"
-            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_adc.c"
-            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_ecap.c"
-            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_cmpss_lite.c"
-            "${am13e_sdk_compat_dir}/dl_timer.c"
-            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_dma.c"
-            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_mcpwm.c")
-        set(am13e_source_dir "${PROJECT_SOURCE_DIR}/src")
+        include("${PROJECT_SOURCE_DIR}/mcu/AM13E/config.cmake")
     endif()
     if(name MATCHES "^BOOT")
         set(AM13E_BOOT_LINKER_SCRIPT "" CACHE FILEPATH
@@ -195,46 +115,7 @@ function(add_target_ti_am13e name)
         __DEVICE_SHORT__="am13e230x" __DEVICE_LONG__="AM13E230x"
         __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
     if(NOT name MATCHES "^BOOT")
-        # The product FW1 communication interface is PB14 only. Legacy
-        # UART telemetry protocols are not part of this hardware target.
-        # Still compile src/telem.c for Extended DShot packet scheduling.
-        target_compile_definitions(${am13e_binary} PRIVATE
-            AM13E_PB14_ONLY AM13E_REF_IO_PLAN_V1=1)
-        # Firmware algorithms/IRQ/PWM timer/dead-band and real ADC
-        # model compile by default. Auxiliary features are IO-only:
-        # PB13 Gate Enable, PB15 nFAULT, optional OC pin, serial TX,
-        # optional current sense. No physical motor power-stage attach.
-        option(AM13E_MOTOR_RUNTIME_ENABLED
-            "Compile motor PWM/dead-band/sensing logic (IO-only aux)" ON)
-        if(AM13E_MOTOR_RUNTIME_ENABLED)
-            target_compile_definitions(${am13e_binary} PRIVATE
-                AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED=1
-                AM13E_BOARD_SENSORS_CONFIGURED=1)
-        endif()
-
-        # Production Board Electrical Configuration is supplied as an
-        # externally owned CMake file with an explicit definitions LIST:
-        #   set(AM13E_BOARD_BOARD_DEFINITIONS
-        #       AM13E_BOARD_PB13_ACTIVE_LEVEL=<board value>
-        #       ...RED/FED/OC pin/phase inversion/sensing...)
-        # The numeric G431-derived reference model is a DEVELOPMENT
-        # development values. AM13E_MOTOR_RUNTIME_ENABLED controls
-        # internal PWM/ADC logic, not external gate/OC functionality.
-        set(AM13E_BOARD_BOARD_PROFILE_FILE "" CACHE FILEPATH
-            "Reviewed AM13E reference gate driver/dead-band/independent OC definitions")
-        if(AM13E_BOARD_BOARD_PROFILE_FILE)
-            if(NOT EXISTS "${AM13E_BOARD_BOARD_PROFILE_FILE}")
-                message(FATAL_ERROR "Board profile file not found")
-            endif()
-            include("${AM13E_BOARD_BOARD_PROFILE_FILE}")
-            if(NOT DEFINED AM13E_BOARD_BOARD_DEFINITIONS OR
-               NOT AM13E_BOARD_BOARD_DEFINITIONS)
-                message(FATAL_ERROR
-                    "Board profile must provide AM13E_BOARD_BOARD_DEFINITIONS")
-            endif()
-            target_compile_definitions(${am13e_binary} PRIVATE
-                ${AM13E_BOARD_BOARD_DEFINITIONS})
-        endif()
+        am13e_configure_reference_board(${am13e_binary})
     endif()
     # Genuine source corrections rather than warning suppression.
     # Scope strict builds to AM13E reference only, never legacy STM32 boards.
@@ -472,7 +353,7 @@ target_compile_options(AM13E_MCU_FAULT_TRIP_BACKEND PRIVATE
 # provider is an external REQUIRED board implementation; this target
 # does not pull in the reference XTAL/PLL startup source.
 add_library(AM13E_MCU_RUNTIME_TICK OBJECT EXCLUDE_FROM_ALL
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/system_runtime.c")
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/config.c")
 target_include_directories(AM13E_MCU_RUNTIME_TICK PRIVATE
     "${PROJECT_SOURCE_DIR}/src" "${PROJECT_SOURCE_DIR}/mcu/AM13E")
 target_include_directories(AM13E_MCU_RUNTIME_TICK SYSTEM PRIVATE
@@ -546,7 +427,7 @@ if(AM13E_BUILD_CLOCK_DIAGNOSTIC)
     # an intentionally pre-production diagnostic ELF.
     add_executable(AM13E_CLOCK.elf EXCLUDE_FROM_ALL
         "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_diagnostic_entry.c"
-        "${PROJECT_SOURCE_DIR}/mcu/AM13E/system_runtime.c"
+        "${PROJECT_SOURCE_DIR}/mcu/AM13E/config.c"
         "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_source_reference.c"
         "${PROJECT_SOURCE_DIR}/mcu/AM13E/board_clock_reference.c"
         "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_common.c"

@@ -62,8 +62,8 @@ from the ESCape32 root CMake project.
 checks inherited SYSOSC, increases Flash RWAIT before changing
 MCLK, uses finite software polls for oscillator/PLL status,
 and returns the configured **nominal** 200 MHz only after
-clock-source/lock/readback checks. `system_runtime.c`
-configures 16 kHz SysTick from this agreed MCLK.
+clock-source/lock/readback checks. `config.c`
+implements native `init()` and the 16 kHz SysTick setup from this agreed MCLK.
 
 TI `DL_FRI_setReadWaitStates` is genuine `.TI.ramfunc`:
 the latest synthetic linker fixture verified its SRAM_C

@@ -1,5 +1,5 @@
 /*
- * Board-independent AM13E Rel17 runtime tick adapter.
+ * AM13E native Application config.c: original init() and 16kHz SysTick.
  *
  * The explicitly selected board clock provider owns ALL oscillator,
  * SYSPLL, MCLK, and Flash wait-state configuration and readback.

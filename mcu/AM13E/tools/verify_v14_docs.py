@@ -110,6 +110,26 @@ def check_current_contract():
             read("mcu/AM13E/V14_INTERFACE_COMPLIANCE_AUDIT.md"),
             "Rev1.4 Interface audit missing restored Boot write()")
 
+    application_source=read("mcu/AM13E/config.cmake")
+    boot_source=read("boot/mcu/AM13E/config.cmake")
+    root_build=read("CMakeLists.txt")
+    require("mcu/AM13E/config.cmake" in root_build and
+            "boot/mcu/AM13E/config.cmake" in root_build,
+            "Original add_target must select native AM13E config.cmake")
+    require("mcu/AM13E/config.c" in application_source and
+            "boot/mcu/AM13E/config.c" in boot_source and
+            "src/main.c" in application_source and
+            "boot/src/main.c" in boot_source,
+            "Application and Boot MCU source sets are not separated")
+    require("void init(void)" in read("mcu/AM13E/config.c") and
+            "void init(void)" in read("boot/mcu/AM13E/config.c") and
+            "DL_SYSTICK_init" in read("mcu/AM13E/config.c") and
+            "DL_SYSCTL_getMCLKSource" in read("boot/mcu/AM13E/config.c"),
+            "Native config.c does not implement the original init hook")
+    require(not (ROOT/"mcu/AM13E/system_runtime.c").exists() and
+            not (ROOT/"boot/mcu/AM13E/init.c").exists(),
+            "Duplicate older init source still present")
+    print("PASS: native Application/Boot config.c and config.cmake ownership")
     print("PASS: exact original Rev1.4 source docs SHA-256")
     print("PASS: original Rel17 Boot write() hook restored in native ARM source")
     print("PASS: superseded naming/HAL/PB14-only/five-feature exclusion rules removed")
