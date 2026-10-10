@@ -13,6 +13,7 @@
 #include "motor_event_timer.h"
 #include "motor_safety.h"
 #include "motor_shadow_plan.h"
+#include "motor_aq_plan.h"
 #include "motor_pwm_shadow_plan.h"
 #include "util_backend.h" /* real Rel17 resetcom() prototype */
 #include "clock_backend.h"
@@ -225,6 +226,81 @@ int am13e_app_motor_stage_inactive_pwm_shadow(
         return 0;
     if (snapshot != NULL) *snapshot=plan;
     return 1;
+}
+
+/* E1-AT: stage genuine TI MCPWM0 AQ shadows for a candidate six-step
+ * logical phase map, with all output paths still disconnected and the
+ * continuously-low SW AQ forces left IN PLACE. Do not transfer AQ shadow
+ * into active registers, release forced-low, start TBCLK or drive PB13.
+ */
+int am13e_app_motor_stage_inactive_aq_shadow(const AM13E_MotorAQShadowPlan *plan)
+{
+    if (!am13e_motor_aq_plan_validate(plan)) return 0;
+    const uint32_t saved_mask = __get_PRIMASK();
+    __disable_irq();
+    if (!safety_initialized || fault_latched) {
+        __set_PRIMASK(saved_mask);
+        return 0;
+    }
+    if (!pwm_pads_disconnected() || !pwm_registers_inactive()) {
+        am13e_app_motor_fault_shutdown();
+        am13e_app_motor_fault_reset();
+    }
+
+    static const DL_MCPWM_ACTION_QUALIFIER_MODULE modules[6] = {
+        DL_MCPWM_ACTION_QUALIFIER_1A, DL_MCPWM_ACTION_QUALIFIER_1B,
+        DL_MCPWM_ACTION_QUALIFIER_2A, DL_MCPWM_ACTION_QUALIFIER_2B,
+        DL_MCPWM_ACTION_QUALIFIER_3A, DL_MCPWM_ACTION_QUALIFIER_3B
+    };
+    static const DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE outputs[6] = {
+        DL_MCPWM_AQ_OUTPUT_1A, DL_MCPWM_AQ_OUTPUT_1B,
+        DL_MCPWM_AQ_OUTPUT_2A, DL_MCPWM_AQ_OUTPUT_2B,
+        DL_MCPWM_AQ_OUTPUT_3A, DL_MCPWM_AQ_OUTPUT_3B
+    };
+    for (unsigned i=0U;i<6U;++i) {
+        DL_MCPWM_setActionQualifierShadowLoadMode(
+            MCPWM0,modules[i],DL_MCPWM_AQ_LOAD_FREEZE);
+        DL_MCPWM_setActionQualifierActionCompleteShadow(
+            MCPWM0,outputs[i],plan->action[i]);
+    }
+    const uint32_t actual[6] = {
+        MCPWM0->PWM1_AQCTLAS, MCPWM0->PWM1_AQCTLBS,
+        MCPWM0->PWM2_AQCTLAS, MCPWM0->PWM2_AQCTLBS,
+        MCPWM0->PWM3_AQCTLAS, MCPWM0->PWM3_AQCTLBS
+    };
+    /* The six two-bit AQ load fields are at 0,2,8,10,16,18. */
+    const uint32_t freeze_fields = UINT32_C(0x000F0F0F);
+    if ((MCPWM0->AQCTL & freeze_fields)!=freeze_fields) {
+        am13e_app_motor_fault_shutdown();
+        am13e_app_motor_fault_reset();
+    }
+    for (unsigned i=0U;i<6U;++i)
+        if (actual[i]!=(uint32_t)plan->action[i]) {
+            am13e_app_motor_fault_shutdown();
+            am13e_app_motor_fault_reset();
+        }
+    if (!pwm_pads_disconnected() || !pwm_registers_inactive()) {
+        am13e_app_motor_fault_shutdown();
+        am13e_app_motor_fault_reset();
+    }
+    __set_PRIMASK(saved_mask);
+    return 1;
+}
+
+/* Verify the FULL (unmasked) Rel17 p/n/cc tuple before writing any AQ
+ * shadow. Unsupported active-freewheeling and unknown phase coding are
+ * explicitly rejected; no physical motor pins are enabled.
+ */
+int am13e_app_motor_stage_inactive_sixstep_aq(
+    int positive_mask,int negative_mask,int comp_code,int damp,int reverse)
+{
+    AM13E_SixstepPlan phase;
+    AM13E_MotorAQShadowPlan aq;
+    if (!am13e_motor_plan_sixstep(positive_mask,negative_mask,
+                                  comp_code,damp,reverse,&phase) ||
+        !am13e_motor_aq_plan_sixstep(&phase,&aq))
+        return 0;
+    return am13e_app_motor_stage_inactive_aq_shadow(&aq);
 }
 
 /* Rel17 util.c::resetcom(): restore *physical MCU-side inactive bridge*

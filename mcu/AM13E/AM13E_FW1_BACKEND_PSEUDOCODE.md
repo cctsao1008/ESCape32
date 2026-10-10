@@ -15,6 +15,14 @@
 - **Do not implement** `am13e_app_cfg_commit` as an ACK-only wrapper. Before any real erase/program, verify RAM execution of the entire FlashCTL call path (including interrupt/exception safety), FW1/FW2 partition boundaries, active-bank handling, ECC tail staging, read-back and power-loss recovery. The historical `linker_app_reference.ld` is not a production image map; retain `--no-undefined` until an actual Flash backend exists.
 - **Outstanding** (measured E1-AN): 14 Motor/Commutation/BEMF, 7 Audio, 1 Configuration Flash. The E1-AO planner is not itself a resolved backend symbol.
 
+## E1-AT — Six-step Action Qualifier SHADOW staging (still safely disconnected)
+
+- **Measured E1-AS:** ARM GNU incremental object compile **PASS / 0 warning** (`motor_pwm_shadow_plan.c` and `motor_safety.c`). FW1 strict link **FAIL: 21 distinct missing symbols / 27 references**. No new symbols vs E1-AR. Active work: Motor/BEMF **13 / 18**, Config Flash **1 / 1**; Audio **7 / 8** remains deferred.
+- E1-AT `motor_aq_plan.{c,h}` converts previously verified full Rel17 six-step `p/n/cc` roles into **six candidate MCPWM0 AQ event shadow words**. Positive phase uses candidate A `HIGH@ZERO,LOW@CMPA`; negative sink uses candidate B `HIGH@ZERO`; the floating phase is 0/0. These represent **unqualified candidate logical drive events**; A/B active level and actual High/Low gate mapping have **not** been validated against the E62 power stage.
+- The stage only accepts one positive, one negative and one floating phase, or all-floating coast. `damp=1` (active freewheel/complementary) is **explicitly REJECTED** until dead-band timing, AQ polarity and Hardware Trip have been proven; it is NOT silently approximated as an ordinary six-step waveform.
+- The stage calls real `DL_MCPWM_setActionQualifierActionCompleteShadow()` for 1A/1B/2A/2B/3A/3B, sets all six AQ load modes to `DL_MCPWM_AQ_LOAD_FREEZE`, reads back all six registers and their load freeze bits, preserves PRIMASK, **SW-force all outputs low**, six pads GPIO Hi-Z and MCPWM TBCLK Stop/Freeze. No main motor runtime callback is implemented/claimed.
+- E1-AT portable Host test: **12 directional six-step cases + 8 coast codes**, and explicit invalid/damp rejection, GCC `-O2 -Wall -Wextra -Werror -pedantic` PASS in a local copy. ARM GNU / hardware register readback pending next WSL logs; 21/27 remains last measured FW1 Link baseline.
+
 ## E1-AS — Rel17 PWM policy into inert MCPWM0 registers
 
 - **E1-AR measured:** ARM GNU Object Compile PASS with **one** application warning: `-Wmissing-prototypes` for `am13e_app_commutation_reset()`. E1-AS fixes this by including its existing declaration in `util_backend.h`. Strict FW1 Link still FAIL: **21 unique symbols / 27 references**, now broken down Motor/BEMF **13 / 18**, Audio (deferred) **7 / 8**, Config Flash **1 / 1**. The real commutation-reset backend eliminated one symbol / five references compared with E1-AP; no UART symbols reappeared.

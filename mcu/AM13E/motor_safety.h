@@ -7,8 +7,15 @@
 #endif
 #include <stdint.h>
 #include "motor_shadow_plan.h"
+#include "motor_aq_plan.h"
 #include "motor_pwm_shadow_plan.h"
 uint32_t am13e_app_motor_inactive_preflight_ok(void);
+/* Write and read back six candidate AQ shadow registers, with output Hi-Z,
+ * AQ shadow FREEZE and TBCLK stopped. Not a power-stage arming function.
+ */
+int am13e_app_motor_stage_inactive_aq_shadow(const AM13E_MotorAQShadowPlan *plan);
+int am13e_app_motor_stage_inactive_sixstep_aq(
+    int positive_mask,int negative_mask,int comp_code,int damp,int reverse);
 /* Shadow-only stage with real register readback; this never arms a motor. */
 int am13e_app_motor_stage_inactive_shadow(const AM13E_MotorShadowPlan *plan);
 /* Rel17 frequency and duty -> real inert PWM shadow registers, never arm. */
