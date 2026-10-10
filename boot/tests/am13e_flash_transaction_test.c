@@ -1,459 +1,187 @@
-/* Host tests compile the real AM13E flash.c, not a duplicate algorithm. */
+/* Host compiles production AM13E flash.c: 1KiB Rel17 CMD_WRITE,
+ * 2KiB physical RMW, arbitrary valid block order and true image length.
+ * Original Boot does NOT guarantee post-interruption image completeness.
+ */
 #define _GNU_SOURCE
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include "dl_flash.h"
-#include "image_integrity.h"
+#include "app_validity.h"
 
 uintptr_t boot_am13e_test_first;
 uintptr_t boot_am13e_test_end;
-extern int boot_am13e_flash_write(char *dst, const char *src, int len);
+extern int boot_am13e_flash_write(char *dst,const char *src,int len);
 extern void boot_am13e_test_reset_update_state(void);
 
-#define MAP_ADDRESS 0x10000000UL
-#define MAP_LENGTH  0x00080000UL
-#define APP_OFFSET  0x00006000UL
-#define CHECK(cond) do { if (!(cond)) { \
-    fprintf(stderr, "FAIL %s:%d: %s\\n", __FILE__, __LINE__, #cond); \
-    exit(1); } } while (0)
-
-static uint8_t *flash_memory;
-static unsigned erase_count;
-static unsigned program_count;
-static unsigned fail_next_erase;
-static unsigned fail_next_program;
-static unsigned fail_partial_program;
-
-uint32_t DL_Flash_eraseSector(uint32_t addr) {
+#define MAP_ADDRESS UINT32_C(0x10000000)
+#define MAP_LENGTH UINT32_C(0x00080000)
+#define APP_OFFSET UINT32_C(0x00006000)
+#define CHECK(c) do{if(!(c)){fprintf(stderr,"FAIL %s:%d: %s\n",                  __FILE__,__LINE__,#c);exit(1);}}while(0)
+static unsigned erase_count,prog_count,fail_erase,fail_program;
+static void reset_app(void){
+    memset((void *)boot_am13e_test_first,0xff,
+           (size_t)(boot_am13e_test_end-boot_am13e_test_first));
+    boot_am13e_test_reset_update_state();
+}
+uint32_t DL_Flash_eraseSector(uint32_t addr){
+    if(fail_erase){--fail_erase;return DL_FLASH_ERROR;}
+    if((addr&(DL_FLASH_SECTOR_SIZE-1U)) ||
+       (uintptr_t)addr<boot_am13e_test_first ||
+       (uintptr_t)addr>boot_am13e_test_end-DL_FLASH_SECTOR_SIZE)
+        return DL_FLASH_ERROR;
     ++erase_count;
-    if (fail_next_erase) { --fail_next_erase; return DL_FLASH_ERROR; }
-    if ((addr & (DL_FLASH_SECTOR_SIZE - 1U)) ||
-        (uintptr_t)addr < boot_am13e_test_first ||
-        (uintptr_t)addr > boot_am13e_test_end - DL_FLASH_SECTOR_SIZE)
-        return DL_FLASH_ERROR;
-    memset((void *)(uintptr_t)addr, 0xff, DL_FLASH_SECTOR_SIZE);
+    memset((void *)(uintptr_t)addr,0xff,DL_FLASH_SECTOR_SIZE);
     return DL_FLASH_SUCCESS;
 }
-
-uint32_t DL_Flash_program(uint32_t addr, uint8_t *src, uint32_t len) {
-    ++program_count;
-    if (fail_next_program) { --fail_next_program; return DL_FLASH_ERROR; }
-    if (fail_partial_program) {
-        --fail_partial_program;
-        if (len < 16U || (addr & 15U)) return DL_FLASH_ERROR;
-        uint8_t *partial = (uint8_t *)(uintptr_t)addr;
-        for (unsigned i = 0; i < 16U; ++i) {
-            if ((uint8_t)(partial[i] & src[i]) != src[i]) return DL_FLASH_ERROR;
-            partial[i] &= src[i];
-        }
+uint32_t DL_Flash_program(uint32_t addr,uint8_t *src,uint32_t bytes){
+    if(fail_program){--fail_program;return DL_FLASH_ERROR;}
+    if(!src || !bytes || (addr&15U) || (bytes&15U) ||
+       (uintptr_t)addr<boot_am13e_test_first ||
+       (uintptr_t)addr>boot_am13e_test_end-bytes)
         return DL_FLASH_ERROR;
-    }
-    if (!src || !len || (addr & 15U) || (len & 15U) ||
-        (uintptr_t)addr < boot_am13e_test_first ||
-        (uintptr_t)addr > boot_am13e_test_end - len)
-        return DL_FLASH_ERROR;
-    uint8_t *dst = (uint8_t *)(uintptr_t)addr;
-    for (unsigned i = 0; i < len; ++i)
-        if ((uint8_t)(dst[i] & src[i]) != src[i])
-            return DL_FLASH_ERROR;
-    for (unsigned i = 0; i < len; ++i)
-        dst[i] &= src[i];
+    uint8_t *p=(uint8_t *)(uintptr_t)addr;
+    for(uint32_t i=0;i<bytes;++i)
+        if((p[i]&src[i])!=src[i])return DL_FLASH_ERROR;
+    ++prog_count;
+    for(uint32_t i=0;i<bytes;++i)p[i]&=src[i];
     return DL_FLASH_SUCCESS;
 }
-
-#define IMAGE_BYTES 5120U
-static uint8_t firmware[IMAGE_BYTES];
-static uint8_t payload[1024];
-static uint8_t sig[1024];
-static const uint8_t invalid[8] = {
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
-};
-static unsigned tests;
-
-static int write_block(unsigned block, const uint8_t *data, int size) {
+static int write_block(unsigned n,const uint8_t *b,unsigned len){
     return boot_am13e_flash_write(
-        (char *)(boot_am13e_test_first + 1024U * block),
-        (const char *)data, size);
+      (char *)(uintptr_t)(boot_am13e_test_first+1024U*n),
+      (const char *)b,(int)len);
 }
-
-static void set16(uint8_t *p, uint16_t value) {
-    p[0] = (uint8_t)value;
-    p[1] = (uint8_t)(value >> 8);
-}
-static void set32(uint8_t *p, uint32_t value) {
-    for (unsigned i = 0; i < 4U; ++i)
-        p[i] = (uint8_t)(value >> (8U * i));
-}
-static uint32_t calculate_crc32(const uint8_t *p, uint32_t length,
-                                bool omit_header) {
-    uint32_t crc = UINT32_C(0xffffffff);
-    for (uint32_t i = 0; i < length; ++i) {
-        if (omit_header && i >= AM13E_IMAGE_HEADER_OFFSET &&
-            i < AM13E_IMAGE_HEADER_OFFSET+AM13E_IMAGE_HEADER_SIZE) continue;
-        crc ^= p[i];
-        for (unsigned bit = 0; bit < 8U; ++bit)
-            crc = (crc >> 1) ^
-                  (UINT32_C(0xedb88320) & (0U - (crc & 1U)));
-    }
-    return ~crc;
-}
-static void fill_blocks(void) {
-    /* Realistic metadata, CRC, vector and data for a v2 test image. */
-    for (unsigned i = 0; i < IMAGE_BYTES; ++i)
-        firmware[i] = (uint8_t)(i * 13U + 7U);
-    firmware[AM13E_IMAGE_SIGNATURE_OFFSET] = 0xea;
-    firmware[AM13E_IMAGE_SIGNATURE_OFFSET + 1U] = 0x32;
-    set32(firmware + AM13E_IMAGE_VECTOR_OFFSET, UINT32_C(0x20001000));
-    set32(firmware + AM13E_IMAGE_VECTOR_OFFSET + 4U,
-          AM13E_IMAGE_APP_BASE + AM13E_IMAGE_METADATA_SECTOR + 128U + 1U);
-    uint8_t *header = firmware + AM13E_IMAGE_HEADER_OFFSET;
-    set32(header, UINT32_C(0x49323645));
-    set16(header + 4U, 1U);
-    set16(header + 6U, 32U);
-    set32(header + 8U, UINT32_C(0x33314d41));
-    set32(header + 12U, IMAGE_BYTES);
-    set32(header + 16U, calculate_crc32(firmware, IMAGE_BYTES, true));
-    set32(header + 20U, 0U);
-    set32(header + 24U, 0U);
-    set32(header + 28U, calculate_crc32(header, 28U, false));
-    memcpy(sig, firmware, sizeof sig);
-    memcpy(payload, firmware + 1024U, sizeof payload);
-}
-
-static void check_signature_absent(void) {
-    const uint8_t *head = (const uint8_t *)boot_am13e_test_first;
-    CHECK(head[AM13E_IMAGE_SIGNATURE_OFFSET] == 0xff &&
-          head[AM13E_IMAGE_SIGNATURE_OFFSET + 1U] == 0xff);
-}
-
-static void test_invalidation_retry(void) {
-    CHECK(write_block(0, invalid, 8) == 1);
-    CHECK(write_block(0, invalid, 8) == 1);
-    CHECK(write_block(1, invalid, 8) == 1);
-    unsigned prior_erases = erase_count;
-    CHECK(write_block(1, invalid, 8) == 1);
-    CHECK(erase_count == prior_erases);
-    check_signature_absent();
-    puts("PASS invalidation retry");
-    ++tests;
-}
-
-static void test_sequential_retry(void) {
-    /* Existing companion half MUST survive writing the first half. */
-    memset((void *)(boot_am13e_test_first+3U*1024U),0xa5,1024U);
-    unsigned base = erase_count;
-    CHECK(write_block(2, payload, 1024) == 1);
-    CHECK(erase_count == base + 1);
-    for(unsigned i=0;i<1024U;++i)
-        CHECK(*((volatile uint8_t *)(boot_am13e_test_first+3U*1024U+i))==0xa5U);
-    unsigned prior_prog = program_count;
-    CHECK(write_block(2, payload, 1024) == 1);
-    CHECK(program_count == prior_prog);
-    CHECK(write_block(4, payload, 1024) == 0);
-    CHECK(write_block(3, payload, 1024) == 1);
-    CHECK(erase_count == base + 2);
-    CHECK(memcmp((const void *)(boot_am13e_test_first+2U*1024U),
-                 payload,1024U)==0);
-    puts("PASS 1KiB logical writes preserve the other 2KiB sector half");
-    puts("PASS sequential, duplicate and skip");
-    ++tests;
-}
-
-static void test_short_tail(void) {
-    unsigned prior = program_count;
-    CHECK(write_block(4, payload, 1004) == 1);
-    CHECK(program_count > prior);
-    const uint8_t *flash = (const uint8_t *)(boot_am13e_test_first + 4096);
-    CHECK(memcmp(flash, payload, 1004) == 0);
-    for (int i = 1004; i < 1008; ++i) CHECK(flash[i] == 0xff);
-    puts("PASS short final block");
-    ++tests;
-}
-
-static void test_restore_and_retry(void) {
-    /* Restart from the short-tail fixture and write a complete valid image. */
-    CHECK(write_block(0, invalid, 8) == 1);
-    CHECK(write_block(1, invalid, 8) == 1);
-    CHECK(write_block(2, firmware + 2048U, 1024) == 1);
-    CHECK(write_block(3, firmware + 3072U, 1024) == 1);
-    CHECK(write_block(4, firmware + 4096U, 1024) == 1);
-    CHECK(write_block(0, sig, 1024) == 1);
-    check_signature_absent();
-    CHECK(write_block(0, sig, 1024) == 1);
-    CHECK(write_block(1, payload, 1024) == 1);
-    const uint8_t *head = (const uint8_t *)boot_am13e_test_first;
-    CHECK(head[AM13E_IMAGE_SIGNATURE_OFFSET] == 0xea &&
-          head[AM13E_IMAGE_SIGNATURE_OFFSET + 1U] == 0x32);
-    CHECK(write_block(0, sig, 1024) == 1);
-    CHECK(write_block(1, payload, 1024) == 1);
-    CHECK(memcmp((const void *)boot_am13e_test_first,
-                 firmware, IMAGE_BYTES) == 0);
-    puts("PASS signature deferred and metadata retry");
-    ++tests;
-}
-
-static void test_restart(void) {
-    CHECK(write_block(0, invalid, 8) == 1);
-    check_signature_absent();
-    CHECK(write_block(1, invalid, 8) == 1);
-    puts("PASS explicit restart invalidates signature");
-    ++tests;
-}
-
-static void test_failed_program(void) {
-    fail_next_program = 1;
-    CHECK(write_block(2, payload, 1024) == 0);
-    check_signature_absent();
-    CHECK(write_block(2, payload, 1024) == 1);
-    puts("PASS injected program error / retry");
-    ++tests;
-}
-
-static void test_failed_erase(void) {
-    /* A rejected erase must not advance the protocol transaction. */
-    fail_next_erase = 1;
-    CHECK(write_block(0, invalid, 8) == 0);
-    CHECK(write_block(0, invalid, 8) == 1);
-    CHECK(write_block(1, invalid, 8) == 1);
-    check_signature_absent();
-    puts("PASS injected erase error / restart");
-    ++tests;
-}
-
-static void test_partial_program(void) {
-    /* Program first 16 bytes, report failure, retry the same 1 KiB block. */
-    unsigned prior_erases = erase_count;
-    fail_partial_program = 1;
-    CHECK(write_block(2, payload, 1024) == 0);
-    CHECK(erase_count == prior_erases + 1);
-    check_signature_absent();
-    CHECK(write_block(2, payload, 1024) == 1);
-    const uint8_t *flash = (const uint8_t *)(boot_am13e_test_first + 2048U);
-    CHECK(memcmp(flash, payload, 1024U) == 0);
-    check_signature_absent();
-    puts("PASS injected partial-program failure / retry");
-    ++tests;
-}
-
-
-static void test_powerloss_during_program(void) {
-    /* Reset erases SRAM state, not nonvolatile Flash content. */
-    CHECK(write_block(0, invalid, 8) == 1);
-    CHECK(write_block(1, invalid, 8) == 1);
-    CHECK(write_block(2, payload, 1024) == 1);
-    boot_am13e_test_reset_update_state();
-    check_signature_absent();
-    CHECK(write_block(3, payload, 1024) == 0);
-    CHECK(write_block(0, sig, 1024) == 0);
-    CHECK(write_block(1, payload, 1024) == 0);
-    /* Explicit invalidation is required before another update can start. */
-    CHECK(write_block(0, invalid, 8) == 1);
-    CHECK(write_block(1, invalid, 8) == 1);
-    CHECK(write_block(2, payload, 1024) == 1);
-    check_signature_absent();
-    puts("PASS reset during PROGRAM: no signature / stale session");
-    ++tests;
-}
-
-static void test_powerloss_during_metadata_restore(void) {
-    CHECK(write_block(0, invalid, 8) == 1);
-    CHECK(write_block(1, invalid, 8) == 1);
-    CHECK(write_block(2, payload, 1024) == 1);
-    CHECK(write_block(0, sig, 1024) == 1);
-    check_signature_absent();
-    boot_am13e_test_reset_update_state();
-    check_signature_absent();
-    CHECK(write_block(1, payload, 1024) == 0);
-    CHECK(write_block(0, sig, 1024) == 0);
-    /* A new invalidation must restart the transaction. */
-    CHECK(write_block(0, invalid, 8) == 1);
-    CHECK(write_block(1, invalid, 8) == 1);
-    check_signature_absent();
-    puts("PASS reset during RESTORE_1: signature remains invalid");
-    ++tests;
-}
-
-/* Regression for the previously RED case: reject early FINALIZE.
- * The host sends only data block 2 for a 5-block firmware image.
- */
-static int image_integrity_negative_gate(void) {
-    /* Case 1: missing blocks leave erased Flash; CRC must reject. */
-    CHECK(write_block(0, invalid, 8) == 1);
-    CHECK(write_block(1, invalid, 8) == 1);
-    CHECK(write_block(2, firmware + 2048U, 1024) == 1);
-    CHECK(write_block(0, sig, 1024) == 1);
-    CHECK(write_block(1, payload, 1024) == 0);
-    check_signature_absent();
-    puts("PASS early finalize rejected with missing data / invalid CRC");
-
-    /* Case 2: block 4 already contains matching data from a previous
-     * installation, but the current transfer only sends blocks 2 and 3.
-     * Block 4 lives in the NEXT 2 KiB sector; block 2 erases blocks 2/3,
-     * so preloading block 3 here would incorrectly lose the stale data.
-     * All image bytes + CRC are valid, but the received span is incomplete.
+static void base_tests(void){
+    uint8_t block2[1024],block3[1024],blank[8];
+    memset(block2,0x35,sizeof block2);
+    memset(block3,0x4e,sizeof block3);
+    memset(blank,0xff,sizeof blank);
+    reset_app();
+    /* Strict original CMD_WRITE is APP-only; 1KB index never refers
+     * to the Boot or 4KiB Config / Reserved partitions.
      */
-    boot_am13e_test_reset_update_state();
-    memset((void *)boot_am13e_test_first, 0xff,
-           (size_t)(boot_am13e_test_end - boot_am13e_test_first));
-    memcpy((void *)(boot_am13e_test_first + 4096U),
-           firmware + 4096U, IMAGE_BYTES - 4096U);
-    CHECK(write_block(0, invalid, 8) == 1);
-    CHECK(write_block(1, invalid, 8) == 1);
-    CHECK(write_block(2, firmware + 2048U, 1024) == 1);
-    CHECK(write_block(3, firmware + 3072U, 1024) == 1);
-    CHECK(write_block(0, sig, 1024) == 1);
-    CHECK(write_block(1, payload, 1024) == 0);
-    CHECK(boot_am13e_image_check(
-              boot_am13e_test_first, boot_am13e_test_end,
-              payload, 16U, NULL) == AM13E_IMAGE_VALID);
-    check_signature_absent();
-    puts("PASS early finalize rejected despite matching stale Flash / valid CRC");
+    CHECK(!boot_am13e_flash_write((char *)(uintptr_t)MAP_ADDRESS,
+                                   (const char *)block2,1024));
+    CHECK(!write_block(488U,block2,1024));
+    CHECK(!write_block(2U,block2,3U));
+    CHECK(!write_block(2U,block2,1025U));
+    CHECK(!write_block(2U,NULL,16U));
 
-    /* Case 3: every data block arrived but payload was corrupted. */
-    boot_am13e_test_reset_update_state();
-    memset((void *)boot_am13e_test_first, 0xff,
-           (size_t)(boot_am13e_test_end - boot_am13e_test_first));
-    uint8_t damaged[1024];
-    memcpy(damaged, firmware + 3072U, sizeof damaged);
-    damaged[128] ^= 0x01U;
-    CHECK(write_block(0, invalid, 8) == 1);
-    CHECK(write_block(1, invalid, 8) == 1);
-    CHECK(write_block(2, firmware + 2048U, 1024) == 1);
-    CHECK(write_block(3, damaged, 1024) == 1);
-    CHECK(write_block(4, firmware + 4096U, 1024) == 1);
-    CHECK(write_block(0, sig, 1024) == 1);
-    CHECK(write_block(1, payload, 1024) == 0);
-    check_signature_absent();
-    puts("PASS full-length corrupted image rejected by CRC");
-    return 0;
+    /* Arbitrary source order is now legal; no v1.6 all-image
+     * metadata state machine is required by CMD_WRITE.
+     */
+    CHECK(write_block(3U,block3,1024));
+    unsigned before=erase_count;
+    CHECK(write_block(2U,block2,1024));
+    CHECK(erase_count==before+1U);
+    CHECK(memcmp((void *)(boot_am13e_test_first+2U*1024U),
+                 block2,1024U)==0);
+    CHECK(memcmp((void *)(boot_am13e_test_first+3U*1024U),
+                 block3,1024U)==0);
+    before=erase_count;
+    CHECK(write_block(2U,block2,1024));
+    CHECK(erase_count==before); /* retried identical frame is a no-op */
+    puts("PASS 1KiB/2KiB RMW preserves neighbor, arbitrary order, retry");
+
+    uint8_t small[20];
+    memset(small,0xa7,sizeof small);
+    CHECK(write_block(4U,small,sizeof small));
+    CHECK(memcmp((void *)(boot_am13e_test_first+4096U),
+                 small,sizeof small)==0);
+    puts("PASS real linked firmware tail may be <1KiB");
+
+    reset_app();
+    fail_erase=1U;
+    CHECK(!write_block(2U,block2,1024));
+    CHECK(write_block(2U,block2,1024));
+    fail_program=1U;
+    CHECK(!write_block(3U,block3,1024));
+    CHECK(write_block(3U,block3,1024));
+    puts("PASS injected erase/program failure allows retry");
+
+    /* Old host's 8-byte FF invalidation remains an ordinary
+     * complementary/CRC-framed flash write, no hidden signature.
+     */
+    uint8_t vec[1024];
+    memset(vec,0x11,sizeof vec);
+    CHECK(write_block(0U,vec,1024));
+    CHECK(write_block(1U,block2,1024));
+    CHECK(write_block(0U,blank,8U));
+    CHECK(memcmp((void *)boot_am13e_test_first,blank,8U)==0);
+    CHECK(memcmp((void *)(boot_am13e_test_first+1024U),
+                 block2,1024U)==0);
+    CHECK(write_block(1U,blank,8U));
+    puts("PASS original 8-byte FF update invalidation, no signature");
 }
-
-
-/*
- * Stage C3: feed the ACTUAL ARM-linked, Python-packed .am13e-smoke.bin into
- * production flash.c's original 1 KiB / signature-last write transaction.
- * No test-side metadata rewriting: the image bytes must match exactly.
- * The Linux mmap address differs from the physical M33 Reset_Handler;
- * image_integrity.c validates that handler against AM13E_IMAGE_APP_BASE.
- */
-static int test_packed_image_transaction(const char *filename) {
-    FILE *file = fopen(filename, "rb");
-    if (!file) { perror(filename); return 2; }
-    if (fseek(file, 0, SEEK_END) != 0) { fclose(file); return 2; }
-    long file_size = ftell(file);
-    if (file_size < 0 ||
-        file_size < (long)(AM13E_IMAGE_VECTOR_OFFSET + 16U) ||
-        file_size > (long)AM13E_IMAGE_MAX_TRANSPORT_BYTES ||
-        (file_size & 15L) != 0L) {
-        fprintf(stderr, "FAIL packed image length/alignment: %ld bytes\n",
-                file_size);
-        fclose(file);
-        return 2;
-    }
-    if (fseek(file, 0, SEEK_SET) != 0) { fclose(file); return 2; }
-    uint8_t *packed = malloc((size_t)file_size);
-    if (!packed) { fclose(file); return 2; }
-    const size_t got = fread(packed, 1U, (size_t)file_size, file);
-    fclose(file);
-    if (got != (size_t)file_size) {
-        fprintf(stderr, "FAIL cannot read complete packed image\n");
-        free(packed);
-        return 2;
-    }
-    CHECK(packed[AM13E_IMAGE_SIGNATURE_OFFSET] == 0xea &&
-          packed[AM13E_IMAGE_SIGNATURE_OFFSET + 1U] == 0x32);
-    CHECK(boot_am13e_test_first != AM13E_IMAGE_APP_BASE);
-    const uint32_t declared_length =
-        (uint32_t)packed[AM13E_IMAGE_HEADER_OFFSET + 12U] |
-        ((uint32_t)packed[AM13E_IMAGE_HEADER_OFFSET + 13U] << 8) |
-        ((uint32_t)packed[AM13E_IMAGE_HEADER_OFFSET + 14U] << 16) |
-        ((uint32_t)packed[AM13E_IMAGE_HEADER_OFFSET + 15U] << 24);
-    CHECK(declared_length == (uint32_t)file_size);
-
-    memset((void *)boot_am13e_test_first, 0xff,
-           (size_t)(boot_am13e_test_end - boot_am13e_test_first));
-    boot_am13e_test_reset_update_state();
-
-    CHECK(write_block(0, invalid, 8) == 1);
-    CHECK(write_block(1, invalid, 8) == 1);
-    check_signature_absent();
-
-    for (size_t offset = 2048U; offset < (size_t)file_size;
-         offset += 1024U) {
-        const int n = (int)(((size_t)file_size - offset > 1024U)
-                            ? 1024U : (size_t)file_size - offset);
-        CHECK(write_block((unsigned)(offset / 1024U),
-                          packed + offset, n) == 1);
-        check_signature_absent();
-    }
-    puts("PASS ARM-linked packed data blocks accepted by production Flash state machine");
-
-    CHECK(write_block(0, packed, 1024) == 1);
-    CHECK(write_block(0, packed, 1024) == 1);
-    check_signature_absent();
-    CHECK(write_block(1, packed + 1024U, 1024) == 1);
-    puts("PASS production metadata restore / signature-last commit");
-
-    CHECK(memcmp((const void *)boot_am13e_test_first,
-                 packed, (size_t)file_size) == 0);
-    puts("PASS programmed Flash matches ARM-linked packed BIN byte-for-byte");
-
-    uint32_t verified_length = 0U;
-    CHECK(boot_am13e_image_check(
-              boot_am13e_test_first, boot_am13e_test_end,
-              NULL, 0U, &verified_length) == AM13E_IMAGE_VALID);
-    CHECK(verified_length == (uint32_t)file_size);
-    puts("PASS committed real-image M33 vector, metadata length and CRC verified");
-
-    boot_am13e_test_reset_update_state();
-    CHECK(boot_am13e_image_check(
-              boot_am13e_test_first, boot_am13e_test_end,
-              NULL, 0U, &verified_length) == AM13E_IMAGE_VALID);
-    puts("PASS packed firmware survives simulated cold-boot state loss");
-
-    free(packed);
-    puts("PASS Stage C3 actual ARM-linked packed image transaction");
-    return 0;
+static uint8_t *read_image(const char *filename,size_t *size){
+    FILE *f=fopen(filename,"rb");
+    if(!f){perror(filename);exit(2);}
+    CHECK(!fseek(f,0,SEEK_END));
+    const long n=ftell(f);
+    CHECK(n>=8 && (unsigned long)n<=AM13E_FLASH_APP_BYTES &&
+          !(n&3L));
+    CHECK(!fseek(f,0,SEEK_SET));
+    uint8_t *data=malloc((size_t)n);
+    CHECK(data && fread(data,1U,(size_t)n,f)==(size_t)n);
+    CHECK(!fclose(f));
+    *size=(size_t)n;return data;
 }
-
-int main(int argc, char **argv) {
-    void *region = mmap((void *)MAP_ADDRESS, MAP_LENGTH,
-                        PROT_READ | PROT_WRITE,
-                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE,
-                        -1, 0);
-    if (region == MAP_FAILED) {
-        perror("mmap");
-        return 2;
+static void transfer_image(const char *filename){
+    size_t size=0U;
+    uint8_t *binary=read_image(filename,&size);
+    reset_app();
+    /* Preserve all three disjoint regions during APP-only writes. */
+    memset((void *)(uintptr_t)MAP_ADDRESS,0x42,0x4000U);
+    memset((void *)(uintptr_t)(MAP_ADDRESS+0x4000U),0xff,0x1000U);
+    *(uint16_t *)(uintptr_t)(MAP_ADDRESS+0x4000U)=AM13E_BOOT_CFG_ID;
+    memset((void *)(uintptr_t)(MAP_ADDRESS+0x5000U),0x44,0x1000U);
+    /* No signed image header or CRC is needed; real binary size is
+     * the number of CMD_WRITE data bytes, <=488KiB.
+     */
+    for(size_t off=0;off<size;off+=1024U) {
+        size_t len=size-off;
+        if(len>1024U)len=1024U;
+        CHECK(write_block((unsigned)(off/1024U),binary+off,(unsigned)len));
     }
-    flash_memory = region;
-    memset(flash_memory, 0xff, MAP_LENGTH);
-    boot_am13e_test_first = MAP_ADDRESS + APP_OFFSET;
-    boot_am13e_test_end = MAP_ADDRESS + MAP_LENGTH;
-    fill_blocks();
-
-    if (argc == 2 && strcmp(argv[1], "--image-integrity") == 0)
-        return image_integrity_negative_gate();
-    if (argc == 3 && strcmp(argv[1], "--flash-image") == 0)
-        return test_packed_image_transaction(argv[2]);
-    if (argc != 1) {
-        fprintf(stderr, "Usage: %s [--image-integrity | --flash-image path]\n", argv[0]);
-        return 2;
+    CHECK(memcmp((void *)boot_am13e_test_first,binary,size)==0);
+    uint32_t sp=0,pc=0;
+    CHECK(boot_am13e_app_validity(
+          (void *)(uintptr_t)(MAP_ADDRESS+0x4000U),
+          (void *)boot_am13e_test_first,&sp,&pc));
+    /* A later program data byte can be corrupted without changing
+     * Rel17 Cfg+vector validity. This is a KNOWN limitation, not CRC.
+     */
+    if(size>64U){
+        *((uint8_t *)boot_am13e_test_first+size-1U)^=1U;
+        CHECK(boot_am13e_app_validity(
+              (void *)(uintptr_t)(MAP_ADDRESS+0x4000U),
+              (void *)boot_am13e_test_first,&sp,&pc));
     }
-
-    test_invalidation_retry();
-    test_sequential_retry();
-    test_short_tail();
-    test_restore_and_retry();
-    test_restart();
-    test_failed_program();
-    test_failed_erase();
-    test_partial_program();
-    test_powerloss_during_program();
-    test_powerloss_during_metadata_restore();
-    printf("PASS %u host transaction tests\n", tests);
+    for(unsigned i=0;i<0x4000U;++i)
+        CHECK(*((uint8_t *)(uintptr_t)(MAP_ADDRESS+i))==0x42U);
+    for(unsigned i=0;i<0x1000U;++i)
+        CHECK(*((uint8_t *)(uintptr_t)(MAP_ADDRESS+0x5000U+i))==0x44U);
+    puts("PASS variable-length ARM-linked flat BIN across full APP bounds");
+    puts("PASS Cfg.id/APP vector boot after update; Boot+Cfg+Reserved preserved");
+    puts("LIMIT: no full-image CRC or interruption-completeness guarantee");
+    free(binary);
+}
+int main(int argc,char **argv){
+    void *map=mmap((void *)(uintptr_t)MAP_ADDRESS,MAP_LENGTH,
+                   PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS|
+                   MAP_FIXED_NOREPLACE,-1,0);
+    CHECK(map!=MAP_FAILED);
+    boot_am13e_test_first=MAP_ADDRESS+APP_OFFSET;
+    boot_am13e_test_end=MAP_ADDRESS+MAP_LENGTH;
+    memset(map,0xff,MAP_LENGTH);
+    if(argc==3 && strcmp(argv[1],"--flash-image")==0){
+        transfer_image(argv[2]);return 0;
+    }
+    if(argc!=1){fprintf(stderr,"Usage: %s [--flash-image file]\n",argv[0]);return 2;}
+    base_tests();
     return 0;
 }
