@@ -718,15 +718,34 @@ void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
         (start && (sine_mode_active || sine_entry_pending)) ||
         (!start && !sine_mode_active))
         runtime_fault();
-    enum { SINE_CARRIER_HZ = 24000 };
-    const uint32_t ticks = (AM13E_APP_MCLK_HZ/2U)/SINE_CARRIER_HZ;
+    /* Rel17 STM32G431: 168MHz TIM1, carrier 24kHz, period 7000
+     * timer counts. Its sine LUT * power >> 7 is a RAW TIMER COUNT,
+     * not a normalized 0..2000 duty. Retaining that count on 100MHz
+     * AM13E would increase modulation duty by ~1.68x.
+     */
+    enum { SINE_CARRIER_HZ = 24000, REL17_TIM1_HZ = 168000000 };
+    const uint32_t old_ticks=REL17_TIM1_HZ/SINE_CARRIER_HZ;
+    const uint32_t ticks=(AM13E_APP_MCLK_HZ/2U)/SINE_CARRIER_HZ;
+    _Static_assert(REL17_TIM1_HZ/SINE_CARRIER_HZ==7000U,
+                   "Rel17 STM32G431 sine carrier contract changed");
     if (ticks<=2U || ticks>UINT16_MAX) runtime_fault();
     const uint16_t period=(uint16_t)(ticks-1U);
     const int idx[3]={a,b,c};
     uint16_t wave[3];
     for(unsigned i=0U;i<3U;++i) {
-        const uint32_t compare=((uint32_t)sinedata[idx[i]]*
-                                (uint32_t)power)>>7U;
+        const uint32_t rel17_count=((uint32_t)sinedata[idx[i]]*
+                                     (uint32_t)power)>>7U;
+        /* Scale the fraction of the original carrier period, with
+         * one-tick rounding and no floating point in the motor IRQ.
+         */
+        uint32_t compare=(uint32_t)(((uint64_t)rel17_count*ticks+
+                                      old_ticks/2U)/old_ticks);
+#ifdef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
+        /* Only a verified board can supply the original DEAD_TIME-like
+         * compare offset. Never infer it from a legacy MCU register.
+         */
+        compare+=AM13E_MOTOR_DB_COMPARE_OFFSET_TICKS;
+#endif
         if (compare>=ticks) runtime_fault();
         wave[i]=(uint16_t)compare;
     }
