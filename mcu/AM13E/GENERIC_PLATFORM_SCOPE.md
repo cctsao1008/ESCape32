@@ -121,4 +121,4 @@ The new `fault_trip_route_plan.c` has no SDK or board dependency. The actual TI 
 
 ## Editable Board Parameter defaults (no physical output)
 
-The `board_configuration.h` software defaults are explicit and overridable: gate polarity unknown, dead-band unconfigured, sensing uncalibrated and independent OC unassigned. Existing Reference pin routes remain unchanged and the three physical-output/verification opt-ins stay absent. See `BOARD_CONFIGURATION.md`. Host CI tests default and per-field override semantics.
+The `board_configuration.h` software defaults are explicit and overridable: G431-derived numeric gate/dead-band/sensing modelling, with independent OC explicitly disabled; hardware qualification is still absent. Existing Reference pin routes remain unchanged and the three physical-output/verification opt-ins stay absent. See `BOARD_CONFIGURATION.md`. Host CI tests default and per-field override semantics.

@@ -87,9 +87,9 @@ jobs:
             run_test motor_pad_route mcu/AM13E/motor_output_route_plan.c mcu/AM13E/tests/motor_output_route_plan_host_test.c
             run_test board_configuration -DAM13E mcu/AM13E/tests/board_configuration_host_test.c
             cc $flags -DAM13E -DAM13E_BOARD_DEFAULTS_OVERRIDE_TEST \
-              -DAM13E_BOARD_PB13_ACTIVE_LEVEL=1 \
-              -DAM13E_MOTOR_DB_RED_TICKS=43 \
-              -DAM13E_BOARD_ADC_VREF_MV=3100 \
+              -DAM13E_BOARD_PB13_ACTIVE_LEVEL=0 \
+              -DAM13E_MOTOR_DB_RED_TICKS=64 \
+              -DAM13E_BOARD_ADC_VREF_MV=3000 \
               -DAM13E_BOARD_OC_GPIO_PINCM=49 \
               mcu/AM13E/tests/board_configuration_host_test.c -o /tmp/am13e_board_configuration_override
             /tmp/am13e_board_configuration_override

@@ -79,4 +79,36 @@ for obj in commands:
     if result.returncode: raise SystemExit(result.returncode)
 if observed!=targets:
     raise SystemExit(f"Missing source(s) from compile database: {targets-observed}")
+# The G431-derived numeric development defaults MUST NOT qualify the
+# actual motor gate merely by setting high-level opt-in flags.
+safety=next((cmd for cmd in commands if
+             pathlib.Path(cmd["file"]).name=="motor_power_stage.c" and
+             "CMakeFiles/AM13E.dir/" in cmd["command"]), None)
+if safety is None:
+    raise SystemExit("Missing AM13E power-stage compile command")
+args=shlex.split(safety["command"])
+stripped=[]
+skip=False
+for word in args:
+    if skip:
+        skip=False
+        continue
+    if word=="-o":
+        skip=True
+        continue
+    if word=="-c":
+        continue
+    stripped.append(word)
+result=subprocess.run(stripped+[
+    "-DAM13E_BOARD_POWER_STAGE_PROFILE=1",
+    "-DAM13E_MOTOR_BOARD_DEADBAND_VERIFIED=1",
+    "-DAM13E_BOARD_SENSORS_CALIBRATED=1",
+    "-Werror","-fsyntax-only"],
+    cwd=safety["directory"],capture_output=True,text=True,check=False)
+if result.returncode==0 or (
+   "Unqualified/conflicting AM13E reference power stage configuration"
+   not in result.stderr):
+    print(result.stdout+result.stderr)
+    raise SystemExit("Unreviewed G431-derived defaults wrongly enabled physical output")
+print("PASS: numeric development defaults cannot authorize power stage")
 print("PASS: 6 board-configured compilation fixtures; NO physical qualification")
