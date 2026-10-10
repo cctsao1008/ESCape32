@@ -18,6 +18,8 @@ typedef struct {
     uint32_t invalid_capture_groups; /* physical ordering/width rejected */
     uint32_t good_pwm;
     uint32_t good_dshot_rx;
+    uint32_t watchdog_armed; /* WWDT0 started after first valid receiver frame */
+    uint32_t watchdog_valid_feeds; /* Valid PWM/DShot feed callback count */
     uint32_t tx_dma_completed; /* Software DMA completion IRQ count */
     uint32_t tx_rejected; /* Unsupported rate or missed TX deadline */
     uint32_t rejected;

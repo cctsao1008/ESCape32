@@ -278,6 +278,8 @@ void am13e_app_pb14_status(AM13E_PB14_Status *out)
     out->invalid_capture_groups = invalid_capture_groups;
     out->good_pwm = decoder.good_pwm;
     out->good_dshot_rx = decoder.good_dshot;
+    am13e_app_io_watchdog_status(&out->watchdog_armed,
+                                &out->watchdog_valid_feeds);
     am13e_pb14_bidir_tx_status(&out->tx_dma_completed, &out->tx_rejected);
     out->rejected = decoder.rejected;
     out->unexpected_gpio1_irqs = unexpected_gpio1_irqs;
