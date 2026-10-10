@@ -71,7 +71,11 @@ def main():
           "AM13E CMD_WRITE must use original Rel17 write() entry")
 
     partition=src("mcu/AM13E/flash_partition.h")
-    ld=src("mcu/AM13E/linker_app_rel17.ld")
+    ld=src("mcu/AM13E/config.ld")
+    boot_ld=src("boot/mcu/AM13E/config.ld")
+    check("ASSERT(__boot_flash_end__ == 0x00004000" in boot_ld and
+          "__app_flash_start__ = 0x00006000" in boot_ld,
+          "Native Boot config.ld partition contract mismatch")
     check("AM13E_FLASH_RESERVED_BASE" in partition and
           "AM13E_FLASH_FW2_PARAM_BASE" not in partition and
           "FLASH_RESERVED" in ld,"Rev1.4 Reserved partition missing")
@@ -111,7 +115,8 @@ def main():
     check('AM13E_IMAGE_PROFILE "REL17_V14"' in build and
           "image_rel17_v14.cmake" in build and
           "AM13E_FW1_REL17_IMAGE" in build and
-          "linker_app_rel17.ld" in profile and
+          "mcu/AM13E/config.ld" in profile and
+          "boot/mcu/AM13E/config.ld" in profile and
           "pack_am13e_rel17.py" in profile,
           "Build must select approved flat Rel17 image profile")
     check("MAX_LENGTH=APP_END-APP_BASE" in packer and

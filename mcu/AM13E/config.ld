@@ -1,5 +1,5 @@
 /*
- * ESCape32 Rel17 v1.4 AM13E23019 Application linker.
+ * ESCape32 Rel17 v1.4 native AM13E23019 Application config.ld.
  * FLASH APP is 0x6000..0x7ffff (488KiB MAXIMUM, NOT fixed image size).
  * Cortex-M33 vectors begin at APP_BASE. Code follows the actual linked
  * vector table; no v1.6 APP+0x400 signature or APP+0x500 CRC header.

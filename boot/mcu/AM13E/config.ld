@@ -1,5 +1,5 @@
 /*
- * AM13E reference boot memory layout, derived from the prior port.
+ * ESCape32 Rel17 v1.4 native AM13E Boot config.ld.
  * The 16 KiB boot region is a board integration decision, NOT a generic
  * AM13E MCU assumption. Select this file explicitly with
  * -DAM13E_BOOT_LINKER_SCRIPT=... only after confirming flash partitioning.
@@ -35,7 +35,7 @@ __boot_storage_end__ = 0x00080000;
 /* Board reference: 8 KiB of parameter sectors precede the application. */
 __cfg_flash_start__ = 0x00004000;
 __app_flash_start__ = 0x00006000;
-/* AM13E reference v1.6 vector table is exactly at APP_BASE. */
+/* Rel17 v1.4 native M33 APP vectors begin at APP_BASE. */
 __app_vector_start__ = __app_flash_start__;
 
 SECTIONS

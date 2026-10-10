@@ -59,7 +59,7 @@ function/semantic path; it does not mean the exact proposed
 | Original Rel17 Boot `write()` | Production `boot/mcu/AM13E/flash.c` now exports `write`; parser calls it directly | FIXED; native Host only renames to avoid POSIX libc collision |
 | Original Boot `update()` / `setwrp()` | AM13E handlers still return `RES_ERROR` | **MISSING — mandatory source feature gap** |
 | Source-defined conditional input and telemetry | Analog receiver, serial receiver/telemetry, Hall and board-specific routes incomplete | PARTIAL — not excluded from v1.4 |
-| Native `add_target()` with MCU-local `config.c/h/cmake/ld` | Application/Boot `config.cmake` own separate source selection; their `config.c` implement real `init()` hooks; linker still uses legacy-named files | PARTIAL — config.c/cmake aligned; config.ld pending |
+| Native `add_target()` with MCU-local `config.c/h/cmake/ld` | App/Boot `config.cmake` own real Source lists; `config.c` implement native `init()`; active Rel17 image profile selects their `config.ld` | ALIGNED for selected Reference source/linker; hardware still pending |
 | Native `entry.c` Startup bridge | Linked ARM vector/startup passes; standalone App/Boot `entry.c` absent | NEEDS actual startup ABI review, not automatically equivalent |
 | Additional HAL / parallel control stack | MCU responsibilities in source modules; original Rel17 motor policy retained | No full independent HAL detected |
 
@@ -70,9 +70,9 @@ Rel17 conditional source capabilities.
 
 ## Next implementation gates
 
-1. Finish App/Boot `config.ld` linker ownership
-   under the existing ESCape32 `add_target()` without duplicate startup,
-   resetting legacy targets, or inserting meaningless wrapper files.
+1. Review Cortex-M33 Startup ABI. The Application already supplies
+   `int main(void)` in AM13E; the Boot parser uses upstream
+   `void main(void)`. Avoid duplicate vectors/entry and legacy changes.
 2. Reuse original source hooks for selected conditional analog,
    serial, Hall and GPIO feature branches. Validate the actual board
    wiring before claiming any mode physically supported.

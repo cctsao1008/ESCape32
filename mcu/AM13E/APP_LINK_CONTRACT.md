@@ -33,7 +33,7 @@ length field, whole-image CRC or additional image signature.
 
 | Target / file | Role |
 | --- | --- |
-| `AM13E_FW1_REL17.elf` | Complete ARM application, `mcu/AM13E/linker_app_rel17.ld` |
+| `AM13E_FW1_REL17.elf` | Complete ARM application, `mcu/AM13E/config.ld` |
 | `AM13E_FW1_REL17.bin` | Real `arm-none-eabi-objcopy` linked binary |
 | `AM13E_FW1_REL17.flat.bin` | Identical application bytes plus 0–3 erased `0xFF` bytes for 4-byte transport alignment |
 | `AM13E_FW1_REL17.json` | External descriptive sidecar: actual image length and SHA256; **Boot does not parse it** |
@@ -48,7 +48,7 @@ allowed when `AM13E_ENABLE_FW1_REL17_IMAGE=OFF`. The superseded
 Native source of truth:
 `boot/mcu/AM13E/app_validity.c`,
 `boot/mcu/AM13E/app.c`,
-`mcu/AM13E/linker_app_rel17.ld`,
+`mcu/AM13E/config.ld`,
 `boot/tools/pack_am13e_rel17.py`,
 `mcu/AM13E/tools/verify_rel17_image.py`.
 

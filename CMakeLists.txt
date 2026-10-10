@@ -500,11 +500,11 @@ if(AM13E_ENABLE_FW1_LINK_GATE)
         OUTPUT_NAME "AM13E_FW1" SUFFIX ".elf")
 endif()
 
-# AM13E reference v1.4 real FW1 source linker/CRC packer, never flash from CI.
-# APP_BASE 0x6000; independent FW1/FW2 configs 0x4000/0x5000.
-# Full 488KiB application allocation; 256KiB transport kept until changed.
-# Image ABI must be selected separately from the AM13E MCU backend.
-# NONE is valid for object-only source port work with FW1 v16 disabled.
+# Rev1.4 active single APP + Boot config.ld linkers and flat BIN packer.
+# APP_BASE 0x6000; Cfg 0x4000, Reserved 0x5000, APP allocation MAX 488KiB.
+# Actual firmware length is determined by the linked ELF-derived BIN.
+# Original wire CRC remains; no APP header, whole-image CRC, signature-last.
+# NONE remains available only for object-only source-port compilation.
 set(AM13E_IMAGE_PROFILE "REL17_V14" CACHE STRING
     "AM13E linked image profile (REL17_V14 or NONE)")
 set_property(CACHE AM13E_IMAGE_PROFILE PROPERTY STRINGS REL17_V14 NONE)

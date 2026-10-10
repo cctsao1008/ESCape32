@@ -1,9 +1,9 @@
 # Active ESCape32 Rel17 v1.4 flat image profile.
 # 488KiB is a region LIMIT, not an image size. No image header/CRC.
 set(AM13E_PROFILE_APP_LINKER_SCRIPT
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/linker_app_rel17.ld")
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/config.ld")
 set(AM13E_PROFILE_BOOT_LINKER_SCRIPT
-    "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/linker_boot_reference.ld")
+    "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/config.ld")
 set(AM13E_PROFILE_PACKER_SCRIPT
     "${PROJECT_SOURCE_DIR}/boot/tools/pack_am13e_rel17.py")
 foreach(required IN ITEMS

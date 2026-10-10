@@ -84,7 +84,7 @@ configuration region and the M33 initial MSP/Thumb Reset PC at
 header, or embedded image CRC. Those are superseded v1.6 ABI artifacts,
 not v1.4 Boot acceptance rules.
 
-The active `linker_app_rel17.ld` places vectors first, followed by
+The active `mcu/AM13E/config.ld` places vectors first, followed by
 actual linked code and data, with an upper bound of **488 KiB** for
 `[0x6000,0x80000)`. `AM13E_FW1_REL17.bin` contains actual linked
 firmware bytes, not a fixed-capacity image; the flat transport image

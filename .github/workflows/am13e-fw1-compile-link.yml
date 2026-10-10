@@ -42,7 +42,7 @@ jobs:
           cmake -S . -B am13e-ci-image-profile -G "Unix Makefiles" \
             -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
             -DAM13E_IMAGE_PROFILE=REL17_V14 \
-            -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/linker_boot_reference.ld" \
+            -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/config.ld" \
             >am13e-ci-logs/image-profile-positive.log 2>&1
           grep -q 'AM13E_IMAGE_PROFILE:STRING=REL17_V14' \
             am13e-ci-image-profile/CMakeCache.txt
@@ -125,7 +125,7 @@ jobs:
             -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
             -DAM13E_ENABLE_FW1_LINK_GATE=ON \
             -DAM13E_ENABLE_APP_SMOKE=ON \
-            -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/linker_boot_reference.ld" \
+            -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/config.ld" \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             >am13e-ci-logs/configure.log 2>&1
           config_rc=$?

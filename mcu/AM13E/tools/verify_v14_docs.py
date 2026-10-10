@@ -129,6 +129,23 @@ def check_current_contract():
     require(not (ROOT/"mcu/AM13E/system_runtime.c").exists() and
             not (ROOT/"boot/mcu/AM13E/init.c").exists(),
             "Duplicate older init source still present")
+    profile=read("mcu/AM13E/profiles/image_rel17_v14.cmake")
+    app_ld=read("mcu/AM13E/config.ld")
+    boot_ld=read("boot/mcu/AM13E/config.ld")
+    require("mcu/AM13E/config.ld" in profile and
+            "boot/mcu/AM13E/config.ld" in profile and
+            "boot/mcu/AM13E/config.ld" in
+            read(".github/workflows/am13e-fw1-compile-link.yml"),
+            "Native App/Boot config.ld not selected by active profile/CI")
+    require("LENGTH = 0x0007A000" in app_ld and
+            "ASSERT(ADDR(.intvecs)==0x6000" in app_ld and
+            "FLASH_RESERVED" in app_ld and
+            "ASSERT(__boot_flash_end__ == 0x00004000" in boot_ld,
+            "Rev1.4 active config.ld lost vector/partition constraints")
+    require(not (ROOT/"mcu/AM13E/linker_app_rel17.ld").exists() and
+            not (ROOT/"boot/mcu/AM13E/linker_boot_reference.ld").exists(),
+            "Duplicate linker paths remain")
+    print("PASS: native Application/Boot config.ld linker ownership")
     print("PASS: native Application/Boot config.c and config.cmake ownership")
     print("PASS: exact original Rev1.4 source docs SHA-256")
     print("PASS: original Rel17 Boot write() hook restored in native ARM source")

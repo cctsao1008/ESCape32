@@ -11,7 +11,7 @@ is enabled by this review.
 1. Original ESCape32 Rel17 `boot/src/main.c`, `boot/src/io.c` and
    `boot/src/util.c` (upstream source is functional authority).
 2. Current `boot/src/main.c`, `boot/mcu/AM13E/flash.c`,
-   `boot/mcu/AM13E/linker_boot_reference.ld`, `boot/src/common.h`,
+   `boot/mcu/AM13E/config.ld`, `boot/src/common.h`,
    `boot/mcu/AM13E/device.c`, `boot/tests/am13e_protocol_host_test.c`.
 3. TI AM13E230x TRM SPRUJF2B (August 2026 revision):
    §13.2 Flash banks, §13.3 Flash Controller (especially §13.3.1),
