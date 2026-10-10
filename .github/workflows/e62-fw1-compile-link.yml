@@ -160,6 +160,14 @@ jobs:
           arm-none-eabi-objdump -h e62-ci-build/boot/BOOT5_PB14.elf \
             >e62-ci-logs/boot-elf-sections.log
 
+      - name: Audit v1.6 linked Boot/FW1 addresses and ELF-to-BIN integrity
+        id: static_image
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 mcu/AM13E/tools/verify_v16_image.py --build e62-ci-build \
+            2>&1 | tee e62-ci-logs/fw1-v16-static-audit.log
+
       - name: Compile board-configured power stage (synthetic values, never flash)
         id: board_profile
         shell: bash
@@ -223,10 +231,12 @@ jobs:
           echo "v1.6 Boot/Link/Pack Host Tests: ${{ steps.boot.outcome }}"
           echo "Actual Rel17 FW1 v1.6 ELF/Pack/Flash transaction: ${{ steps.v16.outcome }}"
           echo "Common 16KiB AM13E Boot ELF: ${{ steps.boot_elf.outcome }}"
+          echo "v1.6 linked-image static audit: ${{ steps.static_image.outcome }}"
           test "${{ steps.build.outputs.configure_rc }}" = 0 &&
           test "${{ steps.build.outputs.compile_rc }}" = 0 &&
           test "${{ steps.build.outputs.link_rc }}" = 0 &&
           test "${{ steps.board_profile.outcome }}" = success &&
           test "${{ steps.boot.outcome }}" = success &&
           test "${{ steps.v16.outcome }}" = success &&
-          test "${{ steps.boot_elf.outcome }}" = success
+          test "${{ steps.boot_elf.outcome }}" = success &&
+          test "${{ steps.static_image.outcome }}" = success
