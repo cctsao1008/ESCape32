@@ -10,6 +10,7 @@
  */
 #include "util_backend.h"
 #include "motor_audio_hw.h"
+#include "motor_backend.h" /* Real latched fault shutdown, never a stub */
 #include "motor_audio_plan.h"
 #include "motor_event_timer.h"
 #include <stdint.h>
