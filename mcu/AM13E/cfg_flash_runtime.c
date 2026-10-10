@@ -56,8 +56,13 @@ static int flash_ready(void)
     return ram_start>=RAM_C_START && ram_end>ram_start &&
            ram_end<=RAM_C_END && !am13e_app_nfault_asserted() &&
            am13e_app_motor_nfault_trip_ready() &&
-           am13e_app_motor_inactive_preflight_ok() &&
-           !am13e_pb14_bidir_tx_busy();
+           am13e_app_motor_inactive_preflight_ok();
+    /* PB14 TX is checked once BEFORE reserving the transaction.
+     * A later valid DShot command can schedule a TX between individual
+     * ECC writes. It must not spontaneously abort a partly-erased FW1
+     * config merely because that independent peripheral became busy.
+     * Hardware Flash command execution itself still masks CPU IRQs.
+     */
 }
 
 /* Only the device driverlib command-polling function executes during
