@@ -111,7 +111,19 @@ int am13e_app_cfg_commit(const void *destination,const void *source,
         byte_count>FW1_CFG_MAX) return 0;
     const uint32_t ps=__get_PRIMASK();
     __disable_irq();
-    if (committing || !flash_ready()) {
+    /* Rel17 only calls savecfg() with ertm==0 and busy==0. Drag/Lock
+     * Brake may nevertheless have left MCPWM0's internal counter active.
+     * Move to the already-implemented safe Stop state BEFORE Flash
+     * erase; this never activates PB13 or a physical PWM pad.
+     */
+    if (committing || am13e_app_nfault_asserted() ||
+        !am13e_app_motor_nfault_trip_ready() ||
+        am13e_pb14_bidir_tx_busy()) {
+        __set_PRIMASK(ps);
+        return 0;
+    }
+    am13e_app_motor_commutation_enable(0);
+    if (!flash_ready()) {
         __set_PRIMASK(ps);
         return 0;
     }
