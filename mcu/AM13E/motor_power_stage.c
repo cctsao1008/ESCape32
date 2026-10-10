@@ -17,6 +17,8 @@
  */
 #include "motor_power_stage.h"
 #include "board_io_plan_v1.h"
+#include "motor_pad_backend.h"
+#include "board_motor_pad_provider.h"
 #include "motor_nfault_trip.h"
 #include "gpio_runtime.h"
 #include <soc.h>
@@ -26,8 +28,6 @@
 #include <stdint.h>
 
 #define GATE_EN_PIN DL_GPIO_PIN(13U)
-#define PWM_PADS (DL_GPIO_PIN(8U)|DL_GPIO_PIN(11U)|DL_GPIO_PIN(9U)| \
-                  DL_GPIO_PIN(30U)|DL_GPIO_PIN(10U)|DL_GPIO_PIN(31U))
 #define OC_SOURCE DL_XBAR_PWM_INPUTXBAR3
 #define OC_TRIP    DL_XBAR_TRIP2
 #define OC_SIGNAL  DL_MCPWM_TZ_SIGNAL_OST2
@@ -98,46 +98,10 @@ static void driver_enable_level(int active)
     if(high) DL_GPIO_setPins(GPIO1,GATE_EN_PIN);
     else DL_GPIO_clearPins(GPIO1,GATE_EN_PIN);
 }
-static void output_pin(uint32_t pincm,uint32_t function,unsigned bit)
-{
-    const DL_GPIO_INVERSION inv=
-       (AM13E_BOARD_GATE_PWM_INVERT_MASK&(1U<<bit)) ?
-           DL_GPIO_INVERSION_ENABLE:DL_GPIO_INVERSION_DISABLE;
-    DL_GPIO_initPeripheralOutputFunctionFeatures(pincm,function,inv,
-        DL_GPIO_RESISTOR_NONE,DL_GPIO_DRIVE_STRENGTH_LOW,
-        DL_GPIO_HIZ_DISABLE);
-}
-static int pad_inv_matches(uint32_t pincm,unsigned bit)
-{
-    const uint32_t actual=IOMUX->SECCFG.PINCM[pincm]&IOMUX_PINCM_INV_MASK;
-    const uint32_t desired=(AM13E_BOARD_GATE_PWM_INVERT_MASK&(1U<<bit))?
-                            IOMUX_PINCM_INV_ENABLE:IOMUX_PINCM_INV_DISABLE;
-    return actual==desired && DL_GPIO_isPeripheralConnected(pincm);
-}
-
 static int pwm_function_readback(void)
 {
-    return DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PA8)==
-                 IOMUX_PA8_MCPWM0_1A &&
-           DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PA11)==
-                 IOMUX_PA11_MCPWM0_1B &&
-           DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PA9)==
-                 IOMUX_PA9_MCPWM0_2A &&
-           DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PA30)==
-                 IOMUX_PA30_MCPWM0_2B &&
-           DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PA10)==
-                 IOMUX_PA10_MCPWM0_3A &&
-           DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PA31)==
-                 IOMUX_PA31_MCPWM0_3B &&
-           /* Inversion is part of the electrical contract, not merely
-            * the peripheral function select field.
-            */
-           pad_inv_matches(IOMUX_PINCM_PA8,0U) &&
-           pad_inv_matches(IOMUX_PINCM_PA11,1U) &&
-           pad_inv_matches(IOMUX_PINCM_PA9,2U) &&
-           pad_inv_matches(IOMUX_PINCM_PA30,3U) &&
-           pad_inv_matches(IOMUX_PINCM_PA10,4U) &&
-           pad_inv_matches(IOMUX_PINCM_PA31,5U);
+    return am13e_mcu_motor_pads_pwm_matches(
+        am13e_board_motor_pad_route(), AM13E_BOARD_GATE_PWM_INVERT_MASK);
 }
 static int driver_level_matches(int active)
 {
@@ -214,13 +178,8 @@ void am13e_power_stage_force_off(void)
         driver_enable_level(0);
         __DSB();
         set_pwm_force(DL_MCPWM_AQ_SW_CONTINUOUS_LOW);
-        DL_GPIO_disableOutput(GPIO0,PWM_PADS);
-        DL_GPIO_initDigitalInput(IOMUX_PINCM_PA8);
-        DL_GPIO_initDigitalInput(IOMUX_PINCM_PA11);
-        DL_GPIO_initDigitalInput(IOMUX_PINCM_PA9);
-        DL_GPIO_initDigitalInput(IOMUX_PINCM_PA30);
-        DL_GPIO_initDigitalInput(IOMUX_PINCM_PA10);
-        DL_GPIO_initDigitalInput(IOMUX_PINCM_PA31);
+        if (!am13e_mcu_motor_pads_disconnect(am13e_board_motor_pad_route()))
+            for (;;) { __NOP(); } /* Never ignore a failed safe disconnect. */
     }
 #endif
     attached=0U;
@@ -230,7 +189,7 @@ int am13e_power_stage_attached(void)
 {
 #ifdef AM13E_BOARD_POWER_STAGE_PROFILE
     return initialized && attached && driver_level_matches(1) &&
-           (GPIO0->DOE31_0&PWM_PADS)==0U &&
+           am13e_mcu_motor_pads_gpio_oe_off(am13e_board_motor_pad_route()) &&
            pwm_function_readback() && !am13e_app_nfault_asserted() &&
            am13e_power_stage_oc_trip_ready() &&
            am13e_app_motor_nfault_trip_ready();
@@ -254,12 +213,11 @@ int am13e_power_stage_attach(void)
         (MCPWM0->PWM3_AQSFRC & 0x33U)!=0x11U)
         return 0;
     /* External driver still disabled; only now change all six IOMUXes. */
-    output_pin(IOMUX_PINCM_PA8,IOMUX_PA8_MCPWM0_1A,0U);
-    output_pin(IOMUX_PINCM_PA11,IOMUX_PA11_MCPWM0_1B,1U);
-    output_pin(IOMUX_PINCM_PA9,IOMUX_PA9_MCPWM0_2A,2U);
-    output_pin(IOMUX_PINCM_PA30,IOMUX_PA30_MCPWM0_2B,3U);
-    output_pin(IOMUX_PINCM_PA10,IOMUX_PA10_MCPWM0_3A,4U);
-    output_pin(IOMUX_PINCM_PA31,IOMUX_PA31_MCPWM0_3B,5U);
+    if (!am13e_mcu_motor_pads_connect_pwm(am13e_board_motor_pad_route(),
+                                           AM13E_BOARD_GATE_PWM_INVERT_MASK)) {
+        am13e_power_stage_force_off();
+        return 0;
+    }
     if(!pwm_function_readback()) {am13e_power_stage_force_off();return 0;}
     set_pwm_force(DL_MCPWM_AQ_SW_FORCE_DISABLED);
     __DSB();

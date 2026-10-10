@@ -81,6 +81,7 @@ jobs:
             run_test motor_lock mcu/AM13E/motor_phase_plan.c mcu/AM13E/motor_aq_plan.c mcu/AM13E/tests/motor_lock_aq_host_test.c
             run_test motor_audio mcu/AM13E/motor_audio_plan.c mcu/AM13E/tests/motor_audio_plan_host_test.c
             run_test fault_trip_route mcu/AM13E/fault_trip_route_plan.c mcu/AM13E/tests/fault_trip_route_plan_host_test.c
+            run_test motor_pad_route mcu/AM13E/motor_pad_route_plan.c mcu/AM13E/tests/motor_pad_route_plan_host_test.c
             run_test bidir_codec mcu/AM13E/bidir_codec.c mcu/AM13E/tests/bidir_codec_host_test.c
             run_test bidir_timing mcu/AM13E/bidir_codec.c mcu/AM13E/bidir_timing.c mcu/AM13E/tests/bidir_timing_host_test.c
             run_test motor_duty mcu/AM13E/motor_duty_plan.c mcu/AM13E/tests/motor_duty_plan_host_test.c
@@ -160,6 +161,9 @@ jobs:
           cmake --build am13e-ci-build --target AM13E_MCU_COMMAND_INPUT_ROUTE -j 2 \
             >am13e-ci-logs/mcu-command-input-route-build.log 2>&1
           cat am13e-ci-logs/mcu-command-input-route-build.log
+          cmake --build am13e-ci-build --target AM13E_MCU_MOTOR_PAD_BACKEND -j 2 \
+            >am13e-ci-logs/mcu-motor-pad-backend-build.log 2>&1
+          cat am13e-ci-logs/mcu-motor-pad-backend-build.log
           # Catch Reference clock-provider/diagnostic linker regressions too.
           cmake --build am13e-ci-build --target AM13E_CLOCK.elf -j 2 \
             >am13e-ci-logs/reference-clock-diag-build.log 2>&1

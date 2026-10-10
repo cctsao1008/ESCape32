@@ -110,3 +110,11 @@ The new `fault_trip_route_plan.c` has no SDK or board dependency. The actual TI 
 - `AM13E_IMAGE_PROFILE=REFERENCE_V16` remains the compatible full Reference build default; any other profile fails when `AM13E_ENABLE_FW1_V16_IMAGE=ON`.
 - The **object-only** generic backend path can request `-DAM13E_IMAGE_PROFILE=NONE -DAM13E_ENABLE_FW1_V16_IMAGE=OFF`; this does not manufacture a generic runnable firmware.
 - CI now verifies Reference selection succeeds and unknown image profiles are rejected, in addition to image integrity and Boot host tests.
+
+## Six-MCPWM-pad route ownership refactor
+
+- `motor_pad_route_plan.[ch]` enforces 6-entry unique GPIO bits/PINCM and exact combined mask in native host regressions.
+- `motor_pad_backend.[ch]` is a TI DriverLib-based, board-neutral GPIO/PINCM implementation. It disconnects all six pads to digital input, validates actual GPIO input/peripheral-function readback, and applies/reads PWM alternate function and inversion only when called by existing qualified power-stage attach logic.
+- `board_motor_pad_reference.c` is the required **Reference v1.6** provider for PA8/11/9/30/10/31. There is no implicit generic route or weak default. A different board must provide its own mapping and separate reviewed gate/Trip/RED/FED.
+- `motor_safety.c` no longer directly selects PA8/11/9/30/10/31; the same default Motor MCPWM0, exclusive audio ownership and safe-off readback remain. `motor_power_stage.c` keeps PB13 inactive-first/active-last, mandatory OST/OC/Dead-band checks, and fail-closed behavior. CI gates generic ARM backend, Reference firmware/link and dedicated native invalid-pad-route regression.
+- This is **not** a physical enable approval, and MCU GPIO input Hi-Z must not be equated with guaranteed external power-driver shutdown.

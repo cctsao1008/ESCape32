@@ -110,6 +110,9 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/arming_window.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_xtal25_pll200.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/board_clock_reference.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_pad_route_plan.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_pad_backend.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/board_motor_pad_reference.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_safety.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_power_stage.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_audio.c"
@@ -496,6 +499,22 @@ target_compile_definitions(AM13E_MCU_COMMAND_INPUT_ROUTE PRIVATE
     AM13E __DEVICE_SHORT__="am13e230x" __DEVICE_LONG__="AM13E230x"
     __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
 target_compile_options(AM13E_MCU_COMMAND_INPUT_ROUTE PRIVATE
+    -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
+    -mfloat-abi=hard -fno-branch-count-reg -Werror)
+
+# Real TI board-neutral six-MCPWM-pad GPIO/PINCM backend; no gate enable.
+# Source-only object, never a qualified ESC output executable.
+add_library(AM13E_MCU_MOTOR_PAD_BACKEND OBJECT EXCLUDE_FROM_ALL
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_pad_route_plan.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_pad_backend.c")
+target_include_directories(AM13E_MCU_MOTOR_PAD_BACKEND PRIVATE
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E")
+target_include_directories(AM13E_MCU_MOTOR_PAD_BACKEND SYSTEM PRIVATE
+    "$<TARGET_PROPERTY:AM13E,INCLUDE_DIRECTORIES>")
+target_compile_definitions(AM13E_MCU_MOTOR_PAD_BACKEND PRIVATE
+    AM13E __DEVICE_SHORT__="am13e230x" __DEVICE_LONG__="AM13E230x"
+    __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
+target_compile_options(AM13E_MCU_MOTOR_PAD_BACKEND PRIVATE
     -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
     -mfloat-abi=hard -fno-branch-count-reg -Werror)
 

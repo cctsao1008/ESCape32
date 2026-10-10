@@ -31,7 +31,7 @@
 | ADC raw monitoring / optional scaling | `adc_pair_backend.c`; Reference pin/channels in `adc_board_reference.h` and ISR in `adc_runtime.c` | Native scaling host + independent ARM object + FW1 link | Board VREF, divider, thermistor and channel route, current sensing not assumed |
 | Clock / Rel17 tick / neutral arming window | `system_runtime.c`, `runtime_tick_contract.h`; `board_clock_reference.c` for 25 MHz/200 MHz only | ARM generic runtime object, linked Reference Clock Diagnostic, 250 ms arming host test | Alternative real clock providers with documented physical oscillator |
 | Flash config persistence / WWDT / update transaction | `cfg_flash_*.c`, Boot sources, image tool | Flash planning/writer host, 6 Boot host tests and 16 image checks | Distinct target-specific Boot/Image Profile selection and transport capacity |
-| Resource ownership / safety | `motor_safety.c`, `motor_runtime_irq.c`, `motor_power_stage.c` | Strict link and physical-output compile branch; source review | Dedicated negative-path ownership and runtime integration tests; physical qualification last |
+| Resource ownership / safety | Generic `motor_pad_backend.c` and `motor_pad_route_plan.c`; Reference `board_motor_pad_reference.c`; `motor_safety.c` / `motor_power_stage.c` | Independent ARM object, pad-route negative Host Test, Reference strict link and physical-output compile | Additional runtime ownership/fault integration tests; qualified hardware only last |
 
 ## Constraints that must remain invariant
 

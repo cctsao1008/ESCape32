@@ -11,7 +11,8 @@
  */
 #include "motor_backend.h"
 #include "motor_audio_hw.h" /* Exclusive MCPWM Motor/Audio resource owner */
-#include "board_io_plan_v1.h" /* Pin/function assertions, no gate enable */
+#include "motor_pad_backend.h"
+#include "board_motor_pad_provider.h" /* Required physical pin selection */
 #include "motor_event_timer.h"
 #include "motor_bemf.h"
 #include "motor_nfault_trip.h"
@@ -32,19 +33,6 @@
 /* Unmodified Rel17 360-sample waveform, linked from motor_sine_table.c. */
 extern const uint16_t sinedata[];
 
-/* Baseline v1.6: U=PA8/PA11, V=PA9/PA30, W=PA10/PA31. */
-#define PWM_PADS (DL_GPIO_PIN(8U) | DL_GPIO_PIN(11U) | \
-                  DL_GPIO_PIN(9U) | DL_GPIO_PIN(30U) | \
-                  DL_GPIO_PIN(10U) | DL_GPIO_PIN(31U))
-
-_Static_assert(IOMUX_PINCM_PA8 == 8 && IOMUX_PINCM_PA11 == 11 &&
-               IOMUX_PINCM_PA9 == 9 && IOMUX_PINCM_PA30 == 30 &&
-               IOMUX_PINCM_PA10 == 10 && IOMUX_PINCM_PA31 == 31,
-               "AM13E MCPWM0 pin assignment changed");
-_Static_assert(IOMUX_PA8_MCPWM0_1A == 7U && IOMUX_PA11_MCPWM0_1B == 7U &&
-               IOMUX_PA9_MCPWM0_2A == 7U && IOMUX_PA30_MCPWM0_2B == 7U &&
-               IOMUX_PA10_MCPWM0_3A == 7U && IOMUX_PA31_MCPWM0_3B == 5U,
-               "AM13E MCPWM0 alternate function map changed");
 _Static_assert(DL_MCPWM_COUNTER_MODE_STOP_FREEZE == 2U,
                "MCPWM Stop/Freeze register encoding changed");
 
@@ -70,40 +58,20 @@ static volatile uint32_t sine_write_count;
 static volatile uint32_t last_trip_irq_flags;
 static volatile uint32_t last_trip_zone_flags;
 
-/* MCU pad ownership: never change PB13 power enable or PB15 nFAULT.
- * Hi-Z is only an MCU-side staging state; gate-driver input bias and
- * actual inverter shutdown must still be verified on the final board.
+/* Board provider determines six pins; this logic remains a shared
+ * fail-closed MOTOR MCPWM0 owner (including music and AU/PCM audio).
+ * Disconnect must remain callable from the fault path even with IRQs.
  */
 static void disconnect_pwm_pads(void)
 {
-    DL_GPIO_enablePower(GPIO0);
-    if (!DL_GPIO_isPowerEnabled(GPIO0)) {
+    if (!am13e_mcu_motor_pads_disconnect(am13e_board_motor_pad_route()))
         for (;;) { __NOP(); }
-    }
-    DL_GPIO_disableOutput(GPIO0, PWM_PADS);
-    DL_GPIO_initDigitalInput(IOMUX_PINCM_PA8);
-    DL_GPIO_initDigitalInput(IOMUX_PINCM_PA11);
-    DL_GPIO_initDigitalInput(IOMUX_PINCM_PA9);
-    DL_GPIO_initDigitalInput(IOMUX_PINCM_PA30);
-    DL_GPIO_initDigitalInput(IOMUX_PINCM_PA10);
-    DL_GPIO_initDigitalInput(IOMUX_PINCM_PA31);
 }
 
 static int pwm_pads_disconnected(void)
 {
-    return (GPIO0->DOE31_0 & PWM_PADS) == 0U &&
-           DL_GPIO_isInputEnabled(IOMUX_PINCM_PA8) &&
-           DL_GPIO_isInputEnabled(IOMUX_PINCM_PA11) &&
-           DL_GPIO_isInputEnabled(IOMUX_PINCM_PA9) &&
-           DL_GPIO_isInputEnabled(IOMUX_PINCM_PA30) &&
-           DL_GPIO_isInputEnabled(IOMUX_PINCM_PA10) &&
-           DL_GPIO_isInputEnabled(IOMUX_PINCM_PA31) &&
-           DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PA8) == IOMUX_PA8_GPIO08 &&
-           DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PA11) == IOMUX_PA11_GPIO11 &&
-           DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PA9) == IOMUX_PA9_GPIO09 &&
-           DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PA30) == IOMUX_PA30_GPIO30 &&
-           DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PA10) == IOMUX_PA10_GPIO10 &&
-           DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PA31) == IOMUX_PA31_GPIO31;
+    return am13e_mcu_motor_pads_disconnected(
+        am13e_board_motor_pad_route());
 }
 
 static void force_pwm_inactive(void)
