@@ -35,28 +35,29 @@ def main():
         raw = bytearray(b"\xff" * IMAGE_SIZE)
         for offset in range(0x800, IMAGE_SIZE):
             raw[offset] = (offset * 13 + 7) & 0xFF
-        # GCC-linked M33 vectors at APP+0x800; NOT at APP+0.
-        struct.pack_into("<II", raw, 0x800, 0x20001000, APP_BASE + 0x900 + 1)
+        # E62 v1.6 vectors begin at APP+0.
+        struct.pack_into("<II", raw, 0, 0x20001000, APP_BASE + 0x900 + 1)
         raw_path.write_bytes(raw)
         run("pack", raw_path, packed_path, "--manifest", manifest_path)
         packed = packed_path.read_bytes()
-        assert len(packed) == 5136 and packed[:2] == b"\xea\x32"
-        assert packed[0x100:0x104] == b"E62I"
+        assert len(packed) == 5136 and packed[0x400:0x402] == b"\xea\x32"
+        assert packed[0x500:0x504] == b"E62I"
         assert packed[IMAGE_SIZE:] == b"\xff" * (len(packed) - IMAGE_SIZE)
-        assert packed[0x800:0x808] == raw[0x800:0x808]
+        assert packed[:8] == raw[:8]
         print("PASS v2 image packed with metadata/vector and 16-byte alignment")
         count += 1
 
         details = json.loads(run("verify", packed_path).stdout)
         manifest = json.loads(manifest_path.read_text())
         assert details == manifest and details["image_length"] == len(packed)
-        assert details["vector_address"] == APP_BASE + 0x800
+        assert details["vector_address"] == APP_BASE
+        assert details["signature_address"] == APP_BASE + 0x400
         print("PASS independent pack / verify CLI and manifest roundtrip")
         count += 1
 
-        expected_payload_crc = zlib.crc32(packed[:0x100] + packed[0x120:])
-        assert struct.unpack_from("<I", packed, 0x110)[0] == expected_payload_crc
-        assert struct.unpack_from("<I", packed, 0x11c)[0] == zlib.crc32(packed[0x100:0x11c])
+        expected_payload_crc = zlib.crc32(packed[:0x500] + packed[0x520:])
+        assert struct.unpack_from("<I", packed, 0x510)[0] == expected_payload_crc
+        assert struct.unpack_from("<I", packed, 0x51c)[0] == zlib.crc32(packed[0x500:0x51c])
         print("PASS v1 CRC-32/ISO-HDLC byte-span compatibility")
         count += 1
 
@@ -68,7 +69,7 @@ def main():
         count += 1
 
         corrupt = bytearray(packed)
-        corrupt[0x11c] ^= 0x01
+        corrupt[0x51c] ^= 0x01
         (root / "header_bad.bin").write_bytes(corrupt)
         run("verify", root / "header_bad.bin", success=False)
         print("PASS corrupted metadata CRC rejected")
@@ -80,14 +81,16 @@ def main():
         count += 1
 
         legacy = bytearray(raw)
-        struct.pack_into("<II", legacy, 0, 0x20001000, APP_BASE + 0x901)
+        legacy[:8] = b"\xff" * 8
+        struct.pack_into("<II", legacy, 0x800, 0x20001000, APP_BASE + 0x901)
+        legacy[:2] = b"\xea\x32"
         (root / "legacy.bin").write_bytes(legacy)
         run("pack", root / "legacy.bin", root / "legacy-out.bin", success=False)
-        print("PASS vector-first E62 v1 raw image rejected")
+        print("PASS old APP+0 signature / +0x800 vectors rejected")
         count += 1
 
         wrong_vector = bytearray(raw)
-        struct.pack_into("<I", wrong_vector, 0x804, APP_BASE + 0xFFFF + 1)
+        struct.pack_into("<I", wrong_vector, 4, APP_BASE + 0xFFFF + 1)
         (root / "wrong-vector.bin").write_bytes(wrong_vector)
         run("pack", root / "wrong-vector.bin", root / "wrong-out.bin", success=False)
         print("PASS out-of-range M33 Reset Handler rejected")
@@ -98,7 +101,7 @@ def main():
         print("PASS 256 KiB CMD_WRITE address limit enforced")
         count += 1
 
-        (root / "nonempty-header.bin").write_bytes(raw[:0x100] + b"\x01" + raw[0x101:])
+        (root / "nonempty-header.bin").write_bytes(raw[:0x500] + b"\x01" + raw[0x501:])
         run("pack", root / "nonempty-header.bin", root / "bad-header.bin", success=False)
         print("PASS occupied metadata window rejected")
         count += 1

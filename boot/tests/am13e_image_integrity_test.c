@@ -63,11 +63,11 @@ static void fixture(void) {
     memset(image, 0xff, (size_t)(end - first));
     for (unsigned i = 0; i < IMAGE_LEN; ++i)
         image[i] = (uint8_t)(i * 13U + 7U);
-    image[0] = 0xea;
-    image[1] = 0x32;
+    image[AM13E_IMAGE_SIGNATURE_OFFSET] = 0xea;
+    image[AM13E_IMAGE_SIGNATURE_OFFSET + 1U] = 0x32;
     put32(image + AM13E_IMAGE_VECTOR_OFFSET, UINT32_C(0x20001000));
     put32(image + AM13E_IMAGE_VECTOR_OFFSET + 4U,
-          AM13E_IMAGE_APP_BASE + AM13E_IMAGE_VECTOR_OFFSET + 0x80U + 1U);
+          AM13E_IMAGE_APP_BASE + AM13E_IMAGE_METADATA_SECTOR + 0x80U + 1U);
     uint8_t *h = image + AM13E_IMAGE_HEADER_OFFSET;
     put32(h + 0U, AM13E_IMAGE_MAGIC);
     put16(h + 4U, AM13E_IMAGE_HEADER_VERSION);
@@ -121,8 +121,8 @@ static void run_tests(void) {
 
     fixture();
     uint8_t staged[16];
-    memcpy(staged, image, sizeof staged);
-    memset(image, 0xff, sizeof staged);
+    memcpy(staged,image + AM13E_IMAGE_SIGNATURE_OFFSET,sizeof staged);
+    memset(image + AM13E_IMAGE_SIGNATURE_OFFSET,0xff,sizeof staged);
     CHECK(check() == AM13E_IMAGE_INVALID_SIGNATURE);
     CHECK(boot_am13e_image_check(first, end, staged, sizeof staged, &length)
           == AM13E_IMAGE_VALID);

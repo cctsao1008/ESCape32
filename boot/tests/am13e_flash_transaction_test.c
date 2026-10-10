@@ -92,7 +92,8 @@ static uint32_t calculate_crc32(const uint8_t *p, uint32_t length,
                                 bool omit_header) {
     uint32_t crc = UINT32_C(0xffffffff);
     for (uint32_t i = 0; i < length; ++i) {
-        if (omit_header && i >= 256U && i < 288U) continue;
+        if (omit_header && i >= AM13E_IMAGE_HEADER_OFFSET &&
+            i < AM13E_IMAGE_HEADER_OFFSET+AM13E_IMAGE_HEADER_SIZE) continue;
         crc ^= p[i];
         for (unsigned bit = 0; bit < 8U; ++bit)
             crc = (crc >> 1) ^
@@ -104,12 +105,12 @@ static void fill_blocks(void) {
     /* Realistic metadata, CRC, vector and data for a v2 test image. */
     for (unsigned i = 0; i < IMAGE_BYTES; ++i)
         firmware[i] = (uint8_t)(i * 13U + 7U);
-    firmware[0] = 0xea;
-    firmware[1] = 0x32;
-    set32(firmware + 2048U, UINT32_C(0x20001000));
-    set32(firmware + 2052U,
-          AM13E_IMAGE_APP_BASE + 2048U + 128U + 1U);
-    uint8_t *header = firmware + 256U;
+    firmware[AM13E_IMAGE_SIGNATURE_OFFSET] = 0xea;
+    firmware[AM13E_IMAGE_SIGNATURE_OFFSET + 1U] = 0x32;
+    set32(firmware + AM13E_IMAGE_VECTOR_OFFSET, UINT32_C(0x20001000));
+    set32(firmware + AM13E_IMAGE_VECTOR_OFFSET + 4U,
+          AM13E_IMAGE_APP_BASE + AM13E_IMAGE_METADATA_SECTOR + 128U + 1U);
+    uint8_t *header = firmware + AM13E_IMAGE_HEADER_OFFSET;
     set32(header, UINT32_C(0x49323645));
     set16(header + 4U, 1U);
     set16(header + 6U, 32U);
@@ -125,7 +126,8 @@ static void fill_blocks(void) {
 
 static void check_signature_absent(void) {
     const uint8_t *head = (const uint8_t *)boot_am13e_test_first;
-    CHECK(head[0] == 0xff && head[1] == 0xff);
+    CHECK(head[AM13E_IMAGE_SIGNATURE_OFFSET] == 0xff &&
+          head[AM13E_IMAGE_SIGNATURE_OFFSET + 1U] == 0xff);
 }
 
 static void test_invalidation_retry(void) {
@@ -177,7 +179,8 @@ static void test_restore_and_retry(void) {
     CHECK(write_block(0, sig, 1024) == 1);
     CHECK(write_block(1, payload, 1024) == 1);
     const uint8_t *head = (const uint8_t *)boot_am13e_test_first;
-    CHECK(head[0] == 0xea && head[1] == 0x32);
+    CHECK(head[AM13E_IMAGE_SIGNATURE_OFFSET] == 0xea &&
+          head[AM13E_IMAGE_SIGNATURE_OFFSET + 1U] == 0x32);
     CHECK(write_block(0, sig, 1024) == 1);
     CHECK(write_block(1, payload, 1024) == 1);
     CHECK(memcmp((const void *)boot_am13e_test_first,
@@ -299,7 +302,7 @@ static int image_integrity_negative_gate(void) {
     CHECK(write_block(1, payload, 1024) == 0);
     CHECK(boot_am13e_image_check(
               boot_am13e_test_first, boot_am13e_test_end,
-              sig, 16U, NULL) == AM13E_IMAGE_VALID);
+              payload, 16U, NULL) == AM13E_IMAGE_VALID);
     check_signature_absent();
     puts("PASS early finalize rejected despite matching stale Flash / valid CRC");
 
@@ -354,7 +357,8 @@ static int test_packed_image_transaction(const char *filename) {
         free(packed);
         return 2;
     }
-    CHECK(packed[0] == 0xea && packed[1] == 0x32);
+    CHECK(packed[AM13E_IMAGE_SIGNATURE_OFFSET] == 0xea &&
+          packed[AM13E_IMAGE_SIGNATURE_OFFSET + 1U] == 0x32);
     CHECK(boot_am13e_test_first != AM13E_IMAGE_APP_BASE);
     const uint32_t declared_length =
         (uint32_t)packed[AM13E_IMAGE_HEADER_OFFSET + 12U] |
