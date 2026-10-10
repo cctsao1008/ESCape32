@@ -15,6 +15,14 @@
 - **Do not implement** `am13e_app_cfg_commit` as an ACK-only wrapper. Before any real erase/program, verify RAM execution of the entire FlashCTL call path (including interrupt/exception safety), FW1/FW2 partition boundaries, active-bank handling, ECC tail staging, read-back and power-loss recovery. The historical `linker_app_reference.ld` is not a production image map; retain `--no-undefined` until an actual Flash backend exists.
 - **Outstanding** (measured E1-AN): 14 Motor/Commutation/BEMF, 7 Audio, 1 Configuration Flash. The E1-AO planner is not itself a resolved backend symbol.
 
+## E1-AP — Real Flash transaction sequence, *without* unsafe erase enable
+
+- **E1-AO measured:** ARM GNU incremental object compile PASS, 0 warnings in `cfg_flash_plan.c`; FW1 strict link still FAIL with **22 unique Undefined Symbols / 32 references**. A single-object incremental build does not re-evaluate TI `dl_timer.c` warnings.
+- E1-AP introduces `cfg_flash_writer.{c,h}`: executable, hardware-independent erase / 16-byte ECC word program / read-back sequence, explicit failure propagation, SRAM word alignment and 0xFF pad. Test fixture simulates the two FW1 sectors and verifies **FW2 0x5000–0x5fff is never modified**; injected erase, program and read/compare failures return failure.
+- **Not yet integrated into physical Flash:** `am13e_app_cfg_commit` intentionally remains an unresolved symbol. TI `DL_Flash_eraseSector`, `DL_Flash_program` and `DL_FlashCTL_executeCommand` are identified as hardware adapter candidates; only the command polling is declared `RAMFUNC` in the SDK. Before any irreversible erase, prove CPU/IRQ/NMI Flash-bank execution safety, WWDT timing (a valid DShot input has already armed WWDT), actual linker RAMFUNC copy, and power-interruption behavior.
+- Existing `main()` reads the live configuration from fixed Flash `0x4000`. Therefore this writer **does not guarantee power-fail atomicity** even though every completed write is read-verified. Require a versioned 2-sector journal/validity selection or explicit agreed loss-of-settings recovery policy before production activation.
+- PB14-only configuration is unchanged. No UART SDK, no no-op link workaround, no relaxation of `-Wl,--no-undefined`.
+
 ## Current implementation ledger — after E1-AB through E1-AE
 
 **Build evidence:** E1-Z had 32 symbols / 44 references. E1-AJ ARM GNU Object Build passed with zero warnings; the strict FW1 Link reports **27 unique Undefined Symbols / 38 references**, one symbol/two references fewer than E1-AI. This is measured Link evidence, not WWDT0/Motor silicon validation.
