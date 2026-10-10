@@ -96,6 +96,7 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/irq_vectors.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/reset_cause.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/gpio_runtime.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/adc_pair_backend.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/adc_runtime.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/adc_calibration_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/pb14_capture.c"
@@ -461,6 +462,22 @@ target_compile_definitions(AM13E_MCU_RUNTIME_TICK PRIVATE
     __DEVICE_LONG__="AM13E230x" __CPU_SHORT__="m33"
     __CGT_SHORT__="gcc_arm")
 target_compile_options(AM13E_MCU_RUNTIME_TICK PRIVATE
+    -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
+    -mfloat-abi=hard -fno-branch-count-reg -Werror)
+
+# Compile real TI ADC0/1/2 pair initialization without choosing
+# a sensor pin or external calibration; object-only, not executable.
+add_library(AM13E_MCU_ADC_PAIR_BACKEND OBJECT EXCLUDE_FROM_ALL
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/adc_pair_backend.c")
+target_include_directories(AM13E_MCU_ADC_PAIR_BACKEND PRIVATE
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E")
+target_include_directories(AM13E_MCU_ADC_PAIR_BACKEND SYSTEM PRIVATE
+    "$<TARGET_PROPERTY:AM13E,INCLUDE_DIRECTORIES>")
+target_compile_definitions(AM13E_MCU_ADC_PAIR_BACKEND PRIVATE
+    AM13E __DEVICE_SHORT__="am13e230x"
+    __DEVICE_LONG__="AM13E230x" __CPU_SHORT__="m33"
+    __CGT_SHORT__="gcc_arm")
+target_compile_options(AM13E_MCU_ADC_PAIR_BACKEND PRIVATE
     -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
     -mfloat-abi=hard -fno-branch-count-reg -Werror)
 

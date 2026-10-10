@@ -79,3 +79,17 @@ This document is a porting boundary, not a hardware qualification.
   error on any future complete generic firmware, never a fake stub.
 - Same reference MCLK, 16kHz SysTick, 16/16 static image validations
   and Boot compatibility gates; no physical oscillator qualification.
+
+## Generic ADC pair acquisition split
+
+- `adc_pair_backend.[ch]` owns the real TI ADC reset/power, SOC pair,
+  sequencer, IRQ-source setup and analog stabilization delay. All
+  pinmux/physical-channel selections are explicit `AM13E_AdcPairRoute`
+  values, not board defaults. The backend rejects nonconsecutive SOC
+  pairs and inconsistent initialization preconditions.
+- `adc_board_reference.h` owns only the reference ADC0 PA6/PA28 and
+  ADCIN17/11 wiring. `adc_runtime.c` remains the Rel17 ISR/housekeeping
+  adapter and does not invent VREF, divider or NTC curves.
+- The board-neutral object compile gate is `AM13E_MCU_ADC_PAIR_BACKEND`.
+  Existing calibrated/uncalibrated Rel17 firmware behavior is unchanged;
+  pin/channel physical validation still requires a reviewed board.

@@ -13,6 +13,8 @@
 #include "adc_runtime.h"
 #include "clock_backend.h"
 #include "adc_calibration_plan.h"
+#include "adc_pair_backend.h"
+#include "adc_board_reference.h"
 /* Rel17 owns the public adctrig() declaration; include its canonical API. */
 #include "common.h"
 #include <soc.h>
@@ -20,22 +22,6 @@
 #include <dl_gpio.h>
 #include <dl_common.h>
 #include <stddef.h>
-
-#define AM13E_ADC                     ADC0
-#define AM13E_ADC_RESULTS             ADC0RESULT
-#define AM13E_ADC_NTC_PINCM           IOMUX_PINCM_PA6
-#define AM13E_ADC_VBUS_PINCM          IOMUX_PINCM_PA28
-#define AM13E_ADC_NTC_SOC             DL_ADC_SOC_NUMBER0
-#define AM13E_ADC_VBUS_SOC            DL_ADC_SOC_NUMBER1
-#define AM13E_ADC_SEQUENCE           DL_ADC_SEQ_NUMBER1
-#define AM13E_ADC_IRQ                DL_ADC_INT_NUMBER1
-#define AM13E_ADC_ACQ_WINDOW_CYCLES   UINT32_C(640)
-
-_Static_assert(IOMUX_PINCM_PA6 == 6 && IOMUX_PINCM_PA28 == 28,
-               "AM13E ADC inputs changed unexpectedly");
-_Static_assert(AM13E_ADC_ACQ_WINDOW_CYCLES >= DL_SAMPLEWINDOW_MIN &&
-               AM13E_ADC_ACQ_WINDOW_CYCLES <= DL_SAMPLEWINDOW_MAX,
-               "ADC acquisition window exceeds SDK limits");
 
 /* Volatile because the hardware ISR produces both samples and PendSV
  * (original Rel17) initiates conversions. No fake or default samples.
@@ -51,48 +37,35 @@ static void adc_fail_closed(void)
     for (;;) { __NOP(); }
 }
 
+/* Reference ADC0 ISR and Rel17 housekeeping adapter; MCU sequencer
+ * register programming belongs to the reusable adc_pair_backend.
+ */
 void am13e_app_adc_init(void)
 {
-    DL_ADC_Config config;
+    const AM13E_AdcPairRoute reference_route = {
+        .adc = AM13E_ADC,
+        .first_pincm = AM13E_ADC_NTC_PINCM,
+        .second_pincm = AM13E_ADC_VBUS_PINCM,
+        .first_channel = AM13E_ADC_NTC_CHANNEL,
+        .second_channel = AM13E_ADC_VBUS_CHANNEL,
+        .first_soc = AM13E_ADC_NTC_SOC,
+        .second_soc = AM13E_ADC_VBUS_SOC,
+        .sequencer = AM13E_ADC_SEQUENCE,
+        .interrupt = AM13E_ADC_IRQ,
+        .clock_prescale = DL_ADC_CLOCK_DIVIDE_8_0,
+        .acquisition_cycles = AM13E_ADC_ACQ_WINDOW_CYCLES
+    };
 
-    /* ADC0 is exclusively reserved for FW1 PA6/PA28 slow monitoring.
-     * Preserve GPIO1/PB14, GPIO1/PB15 and power-stage pin ownership.
+    /* ADC0 is reserved for this reference PA6/PA28 slow monitoring.
+     * Never disturb GPIO1/PB14 input, PB15 fault, or gate output pads.
      */
-    DL_GPIO_initPeripheralAnalogFunction(AM13E_ADC_NTC_PINCM);
-    DL_GPIO_initPeripheralAnalogFunction(AM13E_ADC_VBUS_PINCM);
+    if (!am13e_mcu_adc_pair_initialize(&reference_route, AM13E_APP_MCLK_HZ))
+        adc_fail_closed();
 
-    DL_ADC_reset(AM13E_ADC);
-    DL_ADC_enablePower(AM13E_ADC);
-    if (!DL_ADC_isPowerEnabled(AM13E_ADC)) adc_fail_closed();
-
-    DL_ADC_initParamsSetDefault(&config);
-    /* Input clock must be qualified with board clocks. Nominal 200MHz
-     * MCLK / 8 = 25MHz ADC clock; this is NOT a VREF/calibration choice.
-     */
-    config.coreConfig.clkPrescale = DL_ADC_CLOCK_DIVIDE_8_0;
-    config.socConfig[AM13E_ADC_NTC_SOC].channel = DL_ADC_CH_ADCIN17;
-    config.socConfig[AM13E_ADC_VBUS_SOC].channel = DL_ADC_CH_ADCIN11;
-    config.seqConfig.endSocNumber = AM13E_ADC_VBUS_SOC;
-    config.seqConfig.seqNConfig[AM13E_ADC_SEQUENCE].enableSequencer = true;
-    config.seqConfig.seqNConfig[AM13E_ADC_SEQUENCE].sampleWindow =
-        AM13E_ADC_ACQ_WINDOW_CYCLES;
-    config.seqConfig.seqNConfig[AM13E_ADC_SEQUENCE].trigger =
-        DL_ADC_TRIGGER_SOFTWARE;
-    config.seqConfig.seqNConfig[AM13E_ADC_SEQUENCE].socStartNumber =
-        AM13E_ADC_NTC_SOC;
-    config.intConfig.pulseMode = DL_ADC_PULSE_END_OF_CONV;
-    config.intConfig.intNConfig[AM13E_ADC_IRQ].enableInterrupt = true;
-    config.intConfig.intNConfig[AM13E_ADC_IRQ].trigger = AM13E_ADC_VBUS_SOC;
-    DL_ADC_init(AM13E_ADC, &config);
-
-    /* TI DL_ADC_powerUp() requires >=500us analog stabilization. */
-    DL_Common_delayCycles(AM13E_APP_MCLK_HZ / UINT32_C(2000));
-
-    DL_ADC_clearInterruptStatus(AM13E_ADC, AM13E_ADC_IRQ);
     adc_initialized = 1U;
     NVIC_SetPriority(ADC0_INT1_INT_IRQn, 1U);
     NVIC_EnableIRQ(ADC0_INT1_INT_IRQn);
-    /* Boot PRIMASK remains set until the real safe-enable barrier. */
+    /* Boot PRIMASK remains set until the motor safe-enable barrier. */
 }
 
 /* Invoked at Rel17's original 1kHz PendSV housekeeping point. */
