@@ -17,7 +17,7 @@
 #include <sys/mman.h>
 
 #include "dl_flash.h"
-#include "image_integrity.h"
+#include "app_validity.h"
 
 #define MAP_ADDRESS UINT32_C(0x10000000)
 #define MAP_LENGTH  UINT32_C(0x00080000)
@@ -32,7 +32,7 @@
 #define CMD_WINDOW 6U
 #define RES_OK 0U
 #define RES_ERROR 1U
-#define RX_CAPACITY (AM13E_IMAGE_MAX_TRANSPORT_BYTES + 32768U)
+#define RX_CAPACITY (AM13E_FLASH_APP_BYTES + 32768U)
 #define TX_CAPACITY 8192U
 #define CHECK(cond) do { if (!(cond)) { \
     fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); \
@@ -182,116 +182,71 @@ static uint8_t *load_image(const char *filename, size_t *size_out) {
     if (!fp) { perror(filename); exit(2); }
     CHECK(fseek(fp, 0, SEEK_END) == 0);
     const long n = ftell(fp);
-    CHECK(n >= (long)(AM13E_IMAGE_METADATA_SECTOR + 16U) &&
-          n <= (long)AM13E_IMAGE_MAX_TRANSPORT_BYTES &&
-          (n & 15L) == 0L);
+    CHECK(n >= 8L && n <= (long)AM13E_FLASH_APP_BYTES &&
+          (n & 3L) == 0L);
     CHECK(fseek(fp, 0, SEEK_SET) == 0);
     uint8_t *image = malloc((size_t)n);
     CHECK(image != NULL);
     CHECK(fread(image, 1U, (size_t)n, fp) == (size_t)n);
     CHECK(fclose(fp) == 0);
-    CHECK(image[AM13E_IMAGE_SIGNATURE_OFFSET] == 0xea &&
-          image[AM13E_IMAGE_SIGNATURE_OFFSET + 1U] == 0x32);
     *size_out = (size_t)n;
     return image;
 }
-static void queue_protocol(size_t image_bytes, const uint8_t *image) {
-    const uint8_t erased[8] = {
-        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
-    };
-    /* Malformed command complement must be discarded without ACK.
-     * It contains no payload, so the next valid frame is unambiguous.
-     */
-    const uint8_t wrong_complement[2] = {CMD_PROBE, CMD_PROBE};
-    input_bytes(wrong_complement, sizeof wrong_complement);
-    input_val(CMD_PROBE);
-    expected_val(RES_OK);
-
-    input_val(CMD_INFO);
-    uint8_t info[32] = {4U, 4U, 0x78U, 0x56U, 0x34U, 0x12U};
-    expected_data(info, sizeof info);
-
-    /* CMD_WINDOW is a complementary-coded command, not an extra
-     * field in the original READ/WRITE frames. Exercise both windows.
-     */
-    uint8_t probe_upper[16],erased_16[16];
+static void queue_protocol(size_t image_bytes,const uint8_t *image){
+    const uint8_t erased[8]={0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff};
+    uint8_t erased16[16],probe_upper[16],synthetic[16];
+    memset(erased16,0xff,sizeof erased16);
     memset(probe_upper,0xa5,sizeof probe_upper);
-    memset(erased_16,0xff,sizeof erased_16);
-    queue_window(1U,RES_OK);
-    queue_read(0U,16U,probe_upper);   /* block 256 */
-    queue_read(231U,16U,erased_16);   /* block 487 */
-    queue_window(2U,RES_ERROR);       /* previous window stays 1 */
-    queue_read(0U,16U,probe_upper);
-    queue_write(232U,image+2048U,16U,false,RES_ERROR); /* block488 */
-    /* Invalid READ aborts current command without forging data/CRC. */
-    input_val(CMD_READ);
-    input_val(232U);
-    input_val(3U); /* 16 bytes */
-    input_val(CMD_PROBE);
-    expected_val(RES_OK);
-    queue_window(0U,RES_OK);
-    queue_read(0U,16U,erased_16);
-    /* A data block before invalidation must return an explicit NAK. */
-    queue_write(2U, image + 2048U, 32U, false, RES_ERROR);
-
-    queue_write(0U, erased, sizeof erased, false, RES_OK);
-    queue_write(1U, erased, sizeof erased, false, RES_OK);
-
-    /* Valid framing but incorrect transaction block order -> NAK. */
-    queue_write(4U, image + 2048U, 32U, false, RES_ERROR);
-
-    /* A bad payload CRC is handled by the shared protocol's goto done:
-     * no ACK is emitted, and the write never reaches flash.c.
-     * The next command must still be decoded successfully.
-     */
-    queue_write(2U, image + 2048U, 32U, true, -1);
-    queue_read(2U, sizeof erased_16, erased_16);
-
-    /* Full 1024-byte frames test signed-char count=0xff AND
-     * cross the 256KiB window boundary without changing packet shape.
-     */
-    unsigned current_window=0U;
-    for (size_t offset = 2048U; offset < image_bytes; offset += BLOCK_BYTES) {
-        const unsigned effective=(unsigned)(offset/BLOCK_BYTES);
-        if((effective>>8U)!=current_window) {
-            current_window=effective>>8U;
-            CHECK(current_window<=1U);
-            queue_window(current_window,RES_OK);
-        }
-        unsigned count = (unsigned)((image_bytes - offset > BLOCK_BYTES)
-                               ? BLOCK_BYTES : image_bytes - offset);
-        queue_write(effective&255U, image + offset,
-                    count, false, RES_OK);
-        /* Retry the last successfully programmed data block. */
-        if (offset == 2048U)
-            queue_write(effective&255U, image + offset,
-                        count, false, RES_OK);
-    }
-
-    /* The metadata restore is always in window0 even when code/data
-     * extended into the second 256KiB window.
-     */
-    if(current_window)queue_window(0U,RES_OK);
-    /* Block 0 now contains the REAL M33 vectors at APP+0; these must
-     * already match the linked image. The signature is in block 1,
-     * which remains all-FF until the LAST ECC16 commit.
-     */
-    queue_write(0U, image, BLOCK_BYTES, false, RES_OK);
-    queue_read(0U, 32U, image);
-    uint8_t blank_signature[32];
-    memset(blank_signature,0xff,sizeof blank_signature);
-    queue_read(1U,32U,blank_signature);
-
-    /* Final metadata block commits signature only after complete CRC. */
-    queue_write(1U, image + BLOCK_BYTES, BLOCK_BYTES, false, RES_OK);
-    queue_write(0U, image, BLOCK_BYTES, false, RES_OK);
-    queue_write(1U, image + BLOCK_BYTES, BLOCK_BYTES, false, RES_OK);
-
-    queue_read(0U, 32U, image);
-    queue_read(1U, 32U, image + BLOCK_BYTES);
-    input_val(CMD_UPDATE); expected_val(RES_ERROR);
-    input_val(CMD_SETWRP); input_val(0x33U); expected_val(RES_ERROR);
+    memset(synthetic,0x3b,sizeof synthetic);
+    const uint8_t bad_pair[2]={CMD_PROBE,CMD_PROBE};
+    input_bytes(bad_pair,sizeof bad_pair); /* Bad complement, no ACK */
     input_val(CMD_PROBE); expected_val(RES_OK);
+    input_val(CMD_INFO);
+    const uint8_t info[32]={4U,4U,0x78U,0x56U,0x34U,0x12U};
+    expected_data(info,32U);
+
+    queue_window(1U,RES_OK);
+    queue_read(0U,16U,probe_upper); /* Effective block256 */
+    queue_read(231U,16U,erased16); /* Last valid block487 */
+    queue_window(2U,RES_ERROR);    /* Remain window1 */
+    queue_read(0U,16U,probe_upper);
+    queue_write(232U,synthetic,16U,false,RES_ERROR);
+    input_val(CMD_READ);input_val(232U);input_val(3U);
+    input_val(CMD_PROBE);expected_val(RES_OK);
+    queue_window(0U,RES_OK);
+    queue_read(0U,16U,erased16);
+
+    /* Original Rel17 CMD_WRITE is not a new all-image state machine:
+     * arbitrary APP 1KiB blocks are legal, independent of prior
+     * CMD_WINDOW selection and of firmware linked size.
+     */
+    queue_write(2U,synthetic,16U,false,RES_OK);
+    queue_write(2U,synthetic,16U,false,RES_OK);
+    queue_read(2U,16U,synthetic);
+    queue_write(2U,synthetic,16U,true,-1); /* Bad wire CRC: no Flash */
+    queue_read(2U,16U,synthetic);
+
+    /* Old host's invalidation frames are still ordinary FF writes. */
+    queue_write(0U,erased,8U,false,RES_OK);
+    queue_write(1U,erased,8U,false,RES_OK);
+
+    unsigned window=0U;
+    for(size_t offset=0U;offset<image_bytes;offset+=BLOCK_BYTES){
+        const unsigned absolute=(unsigned)(offset/BLOCK_BYTES);
+        if((absolute>>8U)!=window){
+            window=absolute>>8U;
+            queue_window(window,RES_OK);
+        }
+        unsigned n=(unsigned)((image_bytes-offset>BLOCK_BYTES)?
+                               BLOCK_BYTES:image_bytes-offset);
+        queue_write(absolute&255U,image+offset,n,false,RES_OK);
+        if(absolute==0U)queue_write(0U,image,n,false,RES_OK);
+    }
+    if(window)queue_window(0U,RES_OK);
+    queue_read(0U,32U,image); /* Flat first 32 bytes unchanged. */
+    input_val(CMD_UPDATE);expected_val(RES_ERROR); /* Known v1.4 gap */
+    input_val(CMD_SETWRP);input_val(0x33U);expected_val(RES_ERROR);
+    input_val(CMD_PROBE);expected_val(RES_OK);
 }
 int main(int argc, char **argv) {
     if (argc != 2) {
@@ -312,11 +267,12 @@ int main(int argc, char **argv) {
     boot_am13e_test_end = MAP_ADDRESS + MAP_LENGTH;
     memset((void *)(uintptr_t)boot_am13e_test_first, 0xff,
            (size_t)(boot_am13e_test_end - boot_am13e_test_first));
-    /* Distinct Boot/FW1/FW2 bytes must survive all APP commands.
-     * The high-window marker proves the effective block is 256.
+    /* Boot, original ESCape32 Cfg and the Reserved 4KiB must
+     * survive arbitrary APP writes. Upper marker probes CMD_WINDOW.
      */
     memset((void *)(uintptr_t)MAP_ADDRESS,0x42,0x4000U);
     memset((void *)(uintptr_t)(MAP_ADDRESS+0x4000U),0x43,0x1000U);
+    *(uint16_t *)(uintptr_t)(MAP_ADDRESS+0x4000U)=AM13E_BOOT_CFG_ID;
     memset((void *)(uintptr_t)(MAP_ADDRESS+0x5000U),0x44,0x1000U);
     memset((void *)(uintptr_t)(boot_am13e_test_first+256U*1024U),0xa5,16U);
     boot_am13e_test_reset_update_state();
@@ -330,29 +286,24 @@ int main(int argc, char **argv) {
     CHECK(read_position == incoming_length);
     CHECK(transmitted_length == expected_length);
     CHECK(memcmp(transmitted, expected_reply, expected_length) == 0);
-    puts("PASS CMD_PROBE/CMD_INFO/CRC32 framing, complement encoding and ACK/NAK");
-    puts("PASS malformed payload CRC discarded without Flash programming");
-    puts("PASS CMD_WINDOW 0/1, blocks 256/487, invalid window and block 488");
-    puts("PASS actual CMD_WRITE ordering, duplicate block and 1024-byte count=0xff");
-    puts("PASS signature held erased until final metadata CRC verification");
-    CHECK(erases >= 2U && programs >= 4U);
-
-    CHECK(memcmp((const void *)boot_am13e_test_first, image,
-                 image_length) == 0);
-    uint32_t validated_length = 0U;
-    CHECK(boot_am13e_image_check(boot_am13e_test_first, boot_am13e_test_end,
-                                 NULL, 0U, &validated_length) ==
-          AM13E_IMAGE_VALID);
-    CHECK(validated_length == (uint32_t)image_length);
+    puts("PASS CMD_PROBE/INFO 32byte, complements and CRC32 wire framing");
+    puts("PASS CMD_WINDOW0/1 and 488KiB APP physical bounds");
+    puts("PASS original random/duplicate/short CMD_WRITE, no signature gate");
+    CHECK(erases>=1U && programs>=1U);
+    CHECK(memcmp((const void *)boot_am13e_test_first,image,
+                 image_length)==0);
+    uint32_t sp=0U,pc=0U;
+    CHECK(boot_am13e_app_validity(
+        (void *)(uintptr_t)(MAP_ADDRESS+0x4000U),
+        (void *)boot_am13e_test_first,&sp,&pc));
     for(unsigned i=0;i<0x4000U;++i)
-        CHECK(*((volatile uint8_t *)(uintptr_t)(MAP_ADDRESS+i))==0x42U);
-    for(unsigned i=0;i<0x1000U;++i) {
-        CHECK(*((volatile uint8_t *)(uintptr_t)(MAP_ADDRESS+0x4000U+i))==0x43U);
-        CHECK(*((volatile uint8_t *)(uintptr_t)(MAP_ADDRESS+0x5000U+i))==0x44U);
-    }
-    puts("PASS protected Boot/FW1/FW2 regions preserved across APP update");
-    puts("PASS framed protocol programs ARM-linked packed image byte-for-byte");
-
+        CHECK(*((uint8_t *)(uintptr_t)(MAP_ADDRESS+i))==0x42U);
+    for(unsigned i=2U;i<0x1000U;++i)
+        CHECK(*((uint8_t *)(uintptr_t)(MAP_ADDRESS+0x4000U+i))==0x43U);
+    for(unsigned i=0;i<0x1000U;++i)
+        CHECK(*((uint8_t *)(uintptr_t)(MAP_ADDRESS+0x5000U+i))==0x44U);
+    puts("PASS original Cfg.id + M33 vector enables launch, no image CRC");
+    puts("PASS Boot/Config/Reserved preserved, linked-sized flat image");
     free(image);
     puts("PASS Stage D1 common ESCape32 Boot Protocol integration");
     return 0;
