@@ -380,8 +380,12 @@ static void laststep(void) {
 	}
 	sine = 0;
 	prep = 0;
-	if (lock) nextstep();
-	else {
+	if (lock) {
+		nextstep();
+#if defined(AM13E)
+        am13e_app_motor_lock_brake_stage(lock,step);
+#endif
+    } else {
 #if defined(AM13E)
         am13e_app_motor_drag_brake_write();
 #else
@@ -949,7 +953,7 @@ void main(void) {
          * and logical brake duty is nonzero. Physical gate pads remain
          * isolated by the AM13E motor backend.
          */
-        am13e_app_motor_drag_brake_counter_update(running,step,
+        am13e_app_motor_brake_counter_update(running,step,
                                                    brushed,lock,curduty);
 #else
 #ifdef FULL_DUTY // Allow 100% duty cycle

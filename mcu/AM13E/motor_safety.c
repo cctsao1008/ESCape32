@@ -53,6 +53,7 @@ static volatile uint32_t motor_timebase_stops;
 static volatile uint32_t sine_entry_pending;
 static volatile uint32_t sine_mode_active;
 static volatile uint32_t drag_brake_aq_staged; /* brake AQ, never physical enable */
+static volatile uint32_t lock_brake_aq_staged; /* stopped Rel17 hold image */
 static volatile uint32_t sine_write_count;
 static volatile uint32_t last_trip_irq_flags;
 static volatile uint32_t last_trip_zone_flags;
@@ -265,6 +266,7 @@ void am13e_app_motor_init(void)
     sine_entry_pending = 0U;
     sine_mode_active = 0U;
     drag_brake_aq_staged = 0U;
+    lock_brake_aq_staged = 0U;
     disconnect_pwm_pads();
     DL_MCPWM_disableTBCLK();
 
@@ -569,6 +571,7 @@ void am13e_app_motor_sixstep_write(int positive_mask,int negative_mask,
     sine_entry_pending=0U;
     sine_mode_active=0U;
     drag_brake_aq_staged=0U;
+    lock_brake_aq_staged=0U;
     ++runtime_aq_updates;
     __set_PRIMASK(primask);
 }
@@ -709,6 +712,7 @@ void am13e_app_motor_brushed_write(int reverse,int damp)
     sine_entry_pending=0U;
     sine_mode_active=0U;
     drag_brake_aq_staged=0U;
+    lock_brake_aq_staged=0U;
     ++runtime_aq_updates;
     __set_PRIMASK(primask);
     am13e_app_motor_commutation_commit();
@@ -819,6 +823,7 @@ void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
         runtime_fault();
     /* Sine image supersedes any prior six-step COM pending flag. */
     drag_brake_aq_staged=0U;
+    lock_brake_aq_staged=0U;
     runtime_phase_pending=0U;
     ++sine_write_count;
     if (start) sine_entry_pending=1U;
@@ -962,38 +967,65 @@ void am13e_app_motor_drag_brake_write(void)
         if(readback[i]!=(uint32_t)aq.action[i]) runtime_fault();
     runtime_phase_pending=1U;
     drag_brake_aq_staged=1U;
+    lock_brake_aq_staged=0U;
     ++runtime_aq_updates;
     __set_PRIMASK(primask);
 }
 
-/* The original main.c neutral/proportional brake reaches setduty once
- * per control loop; laststep() has already staged the three-phase AQ.
- * Start MCPWM0 TBCLK only for NONZERO logical brake duty. When duty
- * returns to zero, freeze the timebase again. All six pads stay GPIO
- * INPUT and every AQ SW Force remains LOW: this is not gate arming.
- *
- * Do not start in laststep(): it also runs at boot and while switching
- * modes, independently of real braking demand.
+/* Rel17 laststep() selects the lock-hold six-step image through its own
+ * nextstep() before clearing the shared step to zero. Retain that
+ * ownership explicitly; a stationary motor is not a normal commutation.
+ * cfg.throt_ztc may intentionally make a zero-drive AQ image.
  */
-void am13e_app_motor_drag_brake_counter_update(int running,int step,
-                                                int brushed,int lock,
-                                                int logical_duty)
+void am13e_app_motor_lock_brake_stage(int lock,int phase_step)
 {
-    if (!safety_initialized || fault_latched || logical_duty<0 ||
-        logical_duty>2000 || lock<0 || lock>2 ||
-        (brushed!=0 && brushed!=1) || (running!=0 && running!=1))
+    if (!safety_initialized || fault_latched || lock<1 || lock>2 ||
+        phase_step<1 || phase_step>6 || !runtime_phase_pending ||
+        !pwm_registers_inactive() || !pwm_pads_disconnected())
         runtime_fault();
-    /* Running sixstep, pending motor stop, lock hold, and brushed motor
-     * have separate lifecycle ownership.
-     */
-    if (running || step || lock || brushed) return;
-    if (!drag_brake_aq_staged || !pwm_pads_disconnected()) runtime_fault();
-    const uint16_t expected_b=(uint16_t)(
-        DL_MCPWM_AQ_OUTPUT_LOW_ZERO|DL_MCPWM_AQ_OUTPUT_HIGH_UP_CMPB);
-    for (unsigned i=0U;i<6U;++i)
-        if (runtime_aq_last[i] != ((i&1U) ? expected_b : 0U))
-            runtime_fault();
-    if (logical_duty>0)
+    AM13E_MotorAQShadowPlan aq;
+    unsigned active=0U;
+    for(unsigned i=0U;i<6U;++i) {
+        aq.action[i]=runtime_aq_last[i];
+        active+=aq.action[i]!=0U;
+    }
+    if (!am13e_motor_aq_plan_validate(&aq)) runtime_fault();
+    drag_brake_aq_staged=0U;
+    lock_brake_aq_staged=(active!=0U); /* ZTC coast never starts hold. */
+}
+
+/* Original Rel17 setduty stage: control MCPWM0 internal counter for
+ * Drag/Proportional (lock=0) and Lock Hold (lock=1/2). All six physical
+ * pads remain GPIO INPUT, software-forced LOW; PB13 is untouched.
+ * Motor-running and brushed startup retain their own counter owner.
+ */
+void am13e_app_motor_brake_counter_update(int running,int step,
+                                           int brushed,int lock,int duty)
+{
+    if (!safety_initialized || fault_latched || duty<0 || duty>2000 ||
+        lock<0 || lock>2 || (running!=0 && running!=1) ||
+        (brushed!=0 && brushed!=1))
+        runtime_fault();
+    if (running || step || brushed) return;
+    if (!pwm_pads_disconnected()) runtime_fault();
+    if (lock) {
+        if (!lock_brake_aq_staged) {
+            /* Rel17 zero-throttle coast instead of lock drive. */
+            if (motor_timebase_running) am13e_app_motor_commutation_enable(0);
+            return;
+        }
+        if (drag_brake_aq_staged) runtime_fault();
+#ifndef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
+        runtime_fault(); /* Lock compare offset has no verified dead-time. */
+#endif
+    } else {
+        if (!drag_brake_aq_staged || lock_brake_aq_staged) runtime_fault();
+        const uint16_t expected=(uint16_t)(
+            DL_MCPWM_AQ_OUTPUT_LOW_ZERO|DL_MCPWM_AQ_OUTPUT_HIGH_UP_CMPB);
+        for(unsigned i=0U;i<6U;++i)
+            if(runtime_aq_last[i]!=((i&1U)?expected:0U))runtime_fault();
+    }
+    if (duty>0)
         am13e_app_motor_commutation_enable(1);
     else if (motor_timebase_running)
         am13e_app_motor_commutation_enable(0);
@@ -1028,6 +1060,7 @@ void am13e_app_motor_sixstep_idle(void)
     }
     runtime_phase_pending=0U;
     drag_brake_aq_staged=0U;
+    lock_brake_aq_staged=0U;
     if(!pwm_registers_inactive() || !pwm_pads_disconnected())
         runtime_fault();
     __set_PRIMASK(primask);
@@ -1058,6 +1091,7 @@ void am13e_app_commutation_reset(void)
     sine_entry_pending=0U;
     sine_mode_active=0U;
     drag_brake_aq_staged=0U;
+    lock_brake_aq_staged=0U;
     if (!pwm_registers_inactive() || !pwm_pads_disconnected()) {
         am13e_app_motor_fault_shutdown();
         am13e_app_motor_fault_reset();
@@ -1077,6 +1111,7 @@ void am13e_app_motor_fault_shutdown(void)
     sine_entry_pending=0U;
     sine_mode_active=0U;
     drag_brake_aq_staged=0U;
+    lock_brake_aq_staged=0U;
     am13e_app_motor_timing_cancel();
     am13e_app_motor_bemf_abort();
     force_pwm_inactive();
