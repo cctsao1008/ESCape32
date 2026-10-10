@@ -102,6 +102,12 @@ int main(void)
         reply_wiring_check(final_edge,periods[i]);
         assert(rates[i]>=150000U); /* all three speed selections */
     }
+    /* Capture snapshot race must abort before reaching the decoder.
+     * Valid complete groups still forward all DShot150/300/600 bits.
+     */
+    assert(am13e_pb14_capture_snapshot_valid(15U,0U,15U,1U,1U,1U));
+    assert(!am13e_pb14_capture_snapshot_valid(15U,1U,15U,1U,1U,1U));
+    assert(!am13e_pb14_capture_snapshot_valid(7U,0U,15U,1U,1U,1U));
     assert(pwm_delivered==0U);
     const unsigned before_bad=dshot_delivered;
     AM13E_PB14_Decoder d;

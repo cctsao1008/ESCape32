@@ -69,6 +69,29 @@ int main(void)
     assert(seen_dshot==2);
     feed_frame(&d,valid,3000000U,333U,0);
     assert(seen_dshot==3 && d.good_dshot==1U);
+    /* CEVT4 groups are accepted only if all four capture flags
+     * belonged to the pre-ACK epoch and none reappeared while copying.
+     * This rejects a four-event wrap AFTER ACK even if the phase is
+     * back at CAP1. Overflow bit is independent of group events.
+     */
+    const uint32_t required=0x0fU;
+    assert(am13e_pb14_capture_snapshot_valid(required,0U,
+                                              required,1U,1U,1U));
+    assert(am13e_pb14_capture_snapshot_valid(required|0x10U,0x10U,
+                                              required,1U,1U,1U));
+    for(unsigned miss=1U;miss<=8U;miss<<=1U)
+        assert(!am13e_pb14_capture_snapshot_valid(required&~miss,
+                                                   0U,required,1U,1U,1U));
+    for(unsigned slip=1U;slip<=8U;slip<<=1U)
+        assert(!am13e_pb14_capture_snapshot_valid(required,slip,
+                                                   required,1U,1U,1U));
+    assert(!am13e_pb14_capture_snapshot_valid(required,0U,
+                                              required,2U,1U,1U));
+    assert(!am13e_pb14_capture_snapshot_valid(required,0U,
+                                              required,1U,3U,1U));
+    assert(!am13e_pb14_capture_snapshot_valid(required,0U,
+                                              0U,1U,1U,1U));
+
     /* Non-DSHOT accepted cases: servo width/period and 32-bit wrap. */
     assert(am13e_pb14_capture_group_valid(
         100000U, 100150U, 100333U, 100580U, 200000000U));

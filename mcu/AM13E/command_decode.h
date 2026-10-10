@@ -24,6 +24,21 @@ typedef struct {
  * Recognizes rollover; rejects impossible pulse widths or edge ordering.
  * Returns 0 on uncalibrated clock or invalid group.
  */
+/* A CEVT4 batch is only coherent when all four event flags were
+ * latched, CAP slot wraps to the first event before AND after copying
+ * CAP1..4, and no new capture event occurred after clearing the old
+ * flags. Values/bitmasks are supplied by the real ECAP DriverLib
+ * adapter; this function owns no TI registers or board pins.
+ *
+ * A physical complete 4-edge overwrite cannot be proved absent by
+ * one ECAP register snapshot; measuring DShot600 ISR/DMA latency on
+ * silicon remains a separate requirement.
+ */
+int am13e_pb14_capture_snapshot_valid(
+    uint32_t flags_before, uint32_t flags_after,
+    uint32_t required_events, unsigned phase_before,
+    unsigned phase_after, unsigned next_expected_phase);
+
 int am13e_pb14_capture_group_valid(uint32_t start1, uint32_t end1,
                                    uint32_t start2, uint32_t end2,
                                    uint32_t tick_hz);

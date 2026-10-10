@@ -11,6 +11,18 @@
  * This guard cannot detect a COMPLETE four-event register overwrite:
  * only the hardware latency / DMA measurement can establish that.
  */
+int am13e_pb14_capture_snapshot_valid(
+    uint32_t flags_before,uint32_t flags_after,
+    uint32_t required_events,unsigned phase_before,
+    unsigned phase_after,unsigned next_expected_phase)
+{
+    return required_events!=0U &&
+           (flags_before&required_events)==required_events &&
+           (flags_after&required_events)==0U &&
+           phase_before==next_expected_phase &&
+           phase_after==next_expected_phase;
+}
+
 int am13e_pb14_capture_group_valid(uint32_t start1, uint32_t end1,
                                    uint32_t start2, uint32_t end2,
                                    uint32_t tick_hz)

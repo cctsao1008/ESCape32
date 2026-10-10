@@ -51,10 +51,11 @@ _Static_assert((unsigned)DL_DMA_TRIGGER_SOURCE_ECAP2DMA == 40U,
  * interrupt enabled; 32-bit TSCTR wrap is a normal counter event.
  * The group contains two pulses: CAP1->CAP2 and CAP3->CAP4.
  */
-#define PB14_ECAP_EXPECTED_FLAGS (DL_ECAP_ISR_SOURCE_CEVT1 | \
+#define PB14_CAPTURE_GROUP_FLAGS (DL_ECAP_ISR_SOURCE_CEVT1 | \
                                   DL_ECAP_ISR_SOURCE_CEVT2 | \
                                   DL_ECAP_ISR_SOURCE_CEVT3 | \
-                                  DL_ECAP_ISR_SOURCE_CEVT4 | \
+                                  DL_ECAP_ISR_SOURCE_CEVT4)
+#define PB14_ECAP_EXPECTED_FLAGS (PB14_CAPTURE_GROUP_FLAGS | \
                                   DL_ECAP_ISR_SOURCE_CTROVF)
 
 /* Route is a board choice, not an AM13E silicon default. */
@@ -147,28 +148,35 @@ void ECAP0_IRQHandler(void)
         (flags & DL_ECAP_ISR_SOURCE_CEVT4) == 0U) {
         input_fail_closed();
     }
-    /* ECCTL2 MODCNTRSTS is the NEXT capture slot. Immediately after
-     * CEVT4 a clean group must point at CAP1. If this phase has already
-     * advanced, at least one new edge may have overwritten old data.
-     * Check before AND after copying CAP1..CAP4. This detects some,
-     * but not all, overruns (a whole 4-edge wrap is indistinguishable).
-     * ECAP0 DMA routing is documented; RX still uses an IRQ.
+    /* Acknowledge OLD latched flags BEFORE reading CAP1..4. If any
+     * CEVT1..4 event reappears during our snapshot it belongs to the
+     * NEXT group and proves a racing capture/overwrite. Do not clear
+     * those newly latched flags: the hardware must still complete the
+     * next CEVT4 group and request its own IRQ.
+     *
+     * Unlike the earlier snapshot, checking phase alone could miss
+     * a complete four-event wrap while registers were copied. The
+     * new flag epoch catches events arriving after this ACK boundary.
+     * A wrap entirely BEFORE the first ISR read is still unprovable
+     * without DMA/oscilloscope timing evidence.
      */
     const DL_ECAP_EVENT phase_before =
         DL_ECAP_getModuloCounterStatus(PB14_ECAP);
-    const uint32_t start1 = DL_ECAP_getEventTimeStamp(PB14_ECAP, DL_ECAP_EVENT_1);
-    const uint32_t end1 = DL_ECAP_getEventTimeStamp(PB14_ECAP, DL_ECAP_EVENT_2);
-    const uint32_t start2 = DL_ECAP_getEventTimeStamp(PB14_ECAP, DL_ECAP_EVENT_3);
-    const uint32_t end2 = DL_ECAP_getEventTimeStamp(PB14_ECAP, DL_ECAP_EVENT_4);
-    const DL_ECAP_EVENT phase_after =
-        DL_ECAP_getModuloCounterStatus(PB14_ECAP);
-    DL_ECAP_clearInterrupt(PB14_ECAP, flags & PB14_ECAP_EXPECTED_FLAGS);
+    DL_ECAP_clearInterrupt(PB14_ECAP,flags & PB14_ECAP_EXPECTED_FLAGS);
     DL_ECAP_clearGlobalInterrupt(PB14_ECAP);
-    if (phase_before != DL_ECAP_EVENT_1 ||
-        phase_after != DL_ECAP_EVENT_1) {
-        /* Never forward a mixed-period group to Rel17 throttle.
-         * Count the observed slip and invalidate the partial frame.
-         * This does not prove an absence of full-wrap data loss.
+    const uint32_t start1=DL_ECAP_getEventTimeStamp(PB14_ECAP,DL_ECAP_EVENT_1);
+    const uint32_t end1=DL_ECAP_getEventTimeStamp(PB14_ECAP,DL_ECAP_EVENT_2);
+    const uint32_t start2=DL_ECAP_getEventTimeStamp(PB14_ECAP,DL_ECAP_EVENT_3);
+    const uint32_t end2=DL_ECAP_getEventTimeStamp(PB14_ECAP,DL_ECAP_EVENT_4);
+    const DL_ECAP_EVENT phase_after=
+        DL_ECAP_getModuloCounterStatus(PB14_ECAP);
+    const uint32_t flags_after=DL_ECAP_getInterruptSource(PB14_ECAP);
+    if (!am13e_pb14_capture_snapshot_valid(
+            flags,flags_after,PB14_CAPTURE_GROUP_FLAGS,
+            (unsigned)phase_before,(unsigned)phase_after,
+            (unsigned)DL_ECAP_EVENT_1)) {
+        /* Quarantine partial/mixed groups and recover at the NEXT
+         * complete CEVT4 event; never forward suspect throttle data.
          */
         ++capture_overruns;
         am13e_pb14_decoder_abort(&decoder);
