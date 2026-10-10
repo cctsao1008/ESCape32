@@ -35,7 +35,7 @@ _Static_assert((AM13E_FLASH_BOOT_END & 15U)==0U,
  * bank-conflict/recovery tests are still required.
  */
 __attribute__((section(".TI.ramfunc"),noinline,used))
-AM13E_BootCommitStatus boot_am13e_commit_sectors(
+static AM13E_BootCommitStatus boot_am13e_commit_sectors(
     uint32_t boot_base,uint8_t *image)
 {
     if(image==0 || (boot_base & (AM13E_FLASH_ERASE_SECTOR-1U))!=0U)
