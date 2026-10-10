@@ -1,127 +1,79 @@
 #!/usr/bin/env python3
-"""End-to-end Python CLI contract checks for the AM13E reference v2 flat image packer."""
-
+"""Rel17 v1.4 flat app packer: no embedded CRC/signature or fixed size."""
 import json
 from pathlib import Path
 import struct
 import subprocess
 import sys
 import tempfile
-import zlib
 
-REPO = Path(__file__).resolve().parents[2]
-PACKER = REPO / "boot" / "tools" / "pack_am13e_v2.py"
-APP_BASE = 0x6000
-IMAGE_SIZE = 5123
-
-
-def run(*args, success=True):
-    cp = subprocess.run([sys.executable, str(PACKER), *map(str, args)],
-                        capture_output=True, text=True, check=False)
-    if success and cp.returncode != 0:
-        raise AssertionError(f"Unexpected failure: {cp.stdout}\n{cp.stderr}")
-    if not success and cp.returncode == 0:
-        raise AssertionError(f"Unexpected acceptance: {' '.join(map(str, args))}")
-    return cp
-
-
+ROOT=Path(__file__).resolve().parents[2]
+PACK=ROOT/"boot/tools/pack_am13e_rel17.py"
+APP=0x6000
+MAX=488*1024
+def run(*args,success=True):
+    p=subprocess.run([sys.executable,str(PACK),*map(str,args)],
+                     text=True,capture_output=True)
+    if success and p.returncode:
+        raise AssertionError(p.stderr)
+    if not success and not p.returncode:
+        raise AssertionError("Unexpectedly accepted: "+str(args))
+    return p
+def vector(data,pc=None):
+    struct.pack_into("<II",data,0,0x20001000,
+                     pc if pc is not None else APP+0x101)
 def main():
-    count = 0
-    with tempfile.TemporaryDirectory(prefix="am13e-pack-test-") as d:
-        root = Path(d)
-        raw_path = root / "raw.bin"
-        packed_path = root / "packed.am13e-smoke.bin"
-        manifest_path = root / "packed.json"
-        raw = bytearray(b"\xff" * IMAGE_SIZE)
-        for offset in range(0x800, IMAGE_SIZE):
-            raw[offset] = (offset * 13 + 7) & 0xFF
-        # AM13E reference v1.6 vectors begin at APP+0.
-        struct.pack_into("<II", raw, 0, 0x20001000, APP_BASE + 0x900 + 1)
-        raw_path.write_bytes(raw)
-        run("pack", raw_path, packed_path, "--manifest", manifest_path)
-        packed = packed_path.read_bytes()
-        assert len(packed) == 5136 and packed[0x400:0x402] == b"\xea\x32"
-        assert packed[0x500:0x504] == b"E62I"
-        assert packed[IMAGE_SIZE:] == b"\xff" * (len(packed) - IMAGE_SIZE)
-        assert packed[:8] == raw[:8]
-        print("PASS v2 image packed with metadata/vector and 16-byte alignment")
-        count += 1
+    with tempfile.TemporaryDirectory() as temp:
+        d=Path(temp)
+        raw=bytearray((i*13+7)&255 for i in range(5123))
+        vector(raw)
+        raw[0x400:0x410]=bytes(range(16))
+        raw[0x500:0x520]=bytes(range(32))
+        src=d/"raw.bin";out=d/"out.flat.bin";meta=d/"sidecar.json"
+        src.write_bytes(raw)
+        run("pack",src,out,"--manifest",meta)
+        packed=out.read_bytes()
+        assert packed[:len(raw)]==raw
+        assert packed[len(raw):]==b"\xff"
+        assert len(packed)==5124
+        info=json.loads(meta.read_text())
+        assert info["linked_raw_bytes"]==len(raw)
+        assert info["image_length"]==len(packed)
+        assert info["app_allocation_max_bytes"]==MAX
+        assert info["cfg_marker_address"]==0x4000
+        assert info["padding_bytes"]==1
+        assert "image_crc32" not in info and "signature_address" not in info
+        print("PASS unmodified ELF bytes including old +0x400/+0x500 offsets")
+        assert json.loads(run("verify",out).stdout)["image_length"]==5124
 
-        details = json.loads(run("verify", packed_path).stdout)
-        manifest = json.loads(manifest_path.read_text())
-        assert details == manifest and details["image_length"] == len(packed)
-        assert details["vector_address"] == APP_BASE
-        assert details["signature_address"] == APP_BASE + 0x400
-        print("PASS independent pack / verify CLI and manifest roundtrip")
-        count += 1
+        altered=bytearray(packed)
+        altered[0x800]^=1
+        (d/"altered.bin").write_bytes(altered)
+        run("verify",d/"altered.bin") # v1.4 has NO image data CRC.
+        print("PASS v1.4 intentionally has no payload CRC guarantee")
 
-        expected_payload_crc = zlib.crc32(packed[:0x500] + packed[0x520:])
-        assert struct.unpack_from("<I", packed, 0x510)[0] == expected_payload_crc
-        assert struct.unpack_from("<I", packed, 0x51c)[0] == zlib.crc32(packed[0x500:0x51c])
-        print("PASS v1 CRC-32/ISO-HDLC byte-span compatibility")
-        count += 1
+        for label,pc in [("bad_thumb",APP+0x100),
+                         ("bad_low",APP-1),
+                         ("bad_high",APP+0x100000+1)]:
+            candidate=bytearray(raw);vector(candidate,pc)
+            f=d/(label+".bin");f.write_bytes(candidate)
+            run("pack",f,d/(label+".flat.bin"),success=False)
+        print("PASS invalid M33 Reset PC rejected at packing time")
 
-        corrupt = bytearray(packed)
-        corrupt[0x1000] ^= 0x01
-        (root / "corrupt.bin").write_bytes(corrupt)
-        run("verify", root / "corrupt.bin", success=False)
-        print("PASS corrupted application data rejected")
-        count += 1
+        for length in (257*1024,MAX):
+            candidate=bytearray(b"\xff"*length)
+            vector(candidate)
+            src=d/f"{length}.bin";out=d/f"{length}.flat.bin"
+            src.write_bytes(candidate)
+            run("pack",src,out)
+            assert len(out.read_bytes())==length
+            run("verify",out)
+        print("PASS actual variable size 257KiB and full 488KiB limit")
 
-        corrupt = bytearray(packed)
-        corrupt[0x51c] ^= 0x01
-        (root / "header_bad.bin").write_bytes(corrupt)
-        run("verify", root / "header_bad.bin", success=False)
-        print("PASS corrupted metadata CRC rejected")
-        count += 1
-
-        (root / "truncated.bin").write_bytes(packed[:-16])
-        run("verify", root / "truncated.bin", success=False)
-        print("PASS truncated packed image rejected")
-        count += 1
-
-        legacy = bytearray(raw)
-        legacy[:8] = b"\xff" * 8
-        struct.pack_into("<II", legacy, 0x800, 0x20001000, APP_BASE + 0x901)
-        legacy[:2] = b"\xea\x32"
-        (root / "legacy.bin").write_bytes(legacy)
-        run("pack", root / "legacy.bin", root / "legacy-out.bin", success=False)
-        print("PASS old APP+0 signature / +0x800 vectors rejected")
-        count += 1
-
-        wrong_vector = bytearray(raw)
-        struct.pack_into("<I", wrong_vector, 4, APP_BASE + 0xFFFF + 1)
-        (root / "wrong-vector.bin").write_bytes(wrong_vector)
-        run("pack", root / "wrong-vector.bin", root / "wrong-out.bin", success=False)
-        print("PASS out-of-range M33 Reset Handler rejected")
-        count += 1
-
-        large = bytearray(b"\xff" * (256 * 1024 + 16))
-        large[:0x800] = raw[:0x800]
-        (root / "window1-raw.bin").write_bytes(large)
-        run("pack", root / "window1-raw.bin", root / "window1-packed.bin")
-        window1 = (root / "window1-packed.bin").read_bytes()
-        assert len(window1) > 256 * 1024
-        run("verify", root / "window1-packed.bin")
-        print("PASS >256KiB image pack/verify with CMD_WINDOW")
-        count += 1
-
-        (root / "oversize.bin").write_bytes(b"\xff" * (488 * 1024 + 16))
-        run("pack", root / "oversize.bin", root / "too-large.bin", success=False)
-        print("PASS 488 KiB APP partition limit enforced")
-        count += 1
-
-        (root / "nonempty-header.bin").write_bytes(raw[:0x500] + b"\x01" + raw[0x501:])
-        run("pack", root / "nonempty-header.bin", root / "bad-header.bin", success=False)
-        print("PASS occupied metadata window rejected")
-        count += 1
-
-        run("pack", raw_path, raw_path, success=False)
-        print("PASS input overwrite blocked")
-        count += 1
-
-    print(f"PASS {count} AM13E reference v2 image packer tests")
-
-
-if __name__ == "__main__":
-    main()
+        oversized=bytearray(b"\xff"*(MAX+4))
+        vector(oversized)
+        src=d/"over.bin";src.write_bytes(oversized)
+        run("pack",src,d/"bad.bin",success=False)
+        run("pack",d/"raw.bin",d/"raw.bin",success=False)
+        print("PASS 488KiB MAX allocation and self-overwrite rejected")
+if __name__=="__main__":main()
