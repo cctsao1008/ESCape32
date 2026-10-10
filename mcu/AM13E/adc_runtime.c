@@ -1,4 +1,4 @@
-/* E62 AM13E23019 ESCape32 Rel17: nonblocking ADC raw acquisition.
+/* AM13E reference AM13E23019 ESCape32 Rel17: nonblocking ADC raw acquisition.
  *
  * HW Architecture Baseline v1.6: PA6 -> NTC_MAIN (A0_17),
  * PA28 -> VBUS_SENSE (A0_11). Physical ADC mux mapping verified against
@@ -109,35 +109,35 @@ void adctrig(void)
 
 /* TI startup_gcc_arm.c actual ADC0/INT1 vector. */
 
-/* The E62 IO plan identifies PA6/PA28 channels but NOT the board's
+/* The AM13E reference IO plan identifies PA6/PA28 channels but NOT the board's
  * Vref, voltage divider, NTC supply/pull-up or temperature curve.
  * No fabricated physical measurements may feed Rel17 adcdata().
  * A reviewed board profile must provide all six independent values.
  */
-#ifdef AM13E_E62_SENSORS_CALIBRATED
-#if AM13E_E62_SENSORS_CALIBRATED != 1
-#error "AM13E_E62_SENSORS_CALIBRATED must be 1"
+#ifdef AM13E_BOARD_SENSORS_CALIBRATED
+#if AM13E_BOARD_SENSORS_CALIBRATED != 1
+#error "AM13E_BOARD_SENSORS_CALIBRATED must be 1"
 #endif
-#if !defined(AM13E_E62_ADC_FULLSCALE) || \
-    !defined(AM13E_E62_ADC_VREF_MV) || \
-    !defined(AM13E_E62_NTC_SUPPLY_MV) || \
-    !defined(AM13E_E62_VBUS_TOP_OHMS) || \
-    !defined(AM13E_E62_VBUS_BOTTOM_OHMS) || \
-    !defined(AM13E_E62_NTC_MODEL)
-#error "E62 calibrated ADC requires Vref, fullscale, VBUS divider and NTC model"
+#if !defined(AM13E_BOARD_ADC_FULLSCALE) || \
+    !defined(AM13E_BOARD_ADC_VREF_MV) || \
+    !defined(AM13E_BOARD_NTC_SUPPLY_MV) || \
+    !defined(AM13E_BOARD_VBUS_TOP_OHMS) || \
+    !defined(AM13E_BOARD_VBUS_BOTTOM_OHMS) || \
+    !defined(AM13E_BOARD_NTC_MODEL)
+#error "AM13E reference calibrated ADC requires Vref, fullscale, VBUS divider and NTC model"
 #endif
-_Static_assert(AM13E_E62_NTC_MODEL>=1 && AM13E_E62_NTC_MODEL<=4,
+_Static_assert(AM13E_BOARD_NTC_MODEL>=1 && AM13E_BOARD_NTC_MODEL<=4,
                "Unsupported Rel17 NTC10K3455 curve selection");
 static const AM13E_AdcCalibration adc_board_cal={
-    AM13E_E62_ADC_FULLSCALE,
-    AM13E_E62_ADC_VREF_MV,
-    AM13E_E62_NTC_SUPPLY_MV,
-    AM13E_E62_VBUS_TOP_OHMS,
-    AM13E_E62_VBUS_BOTTOM_OHMS
+    AM13E_BOARD_ADC_FULLSCALE,
+    AM13E_BOARD_ADC_VREF_MV,
+    AM13E_BOARD_NTC_SUPPLY_MV,
+    AM13E_BOARD_VBUS_TOP_OHMS,
+    AM13E_BOARD_VBUS_BOTTOM_OHMS
 };
 static int32_t board_ntc_qc(uint16_t ntc_mv)
 {
-    switch(AM13E_E62_NTC_MODEL) {
+    switch(AM13E_BOARD_NTC_MODEL) {
         case 1:return NTC10K3455UP2K((int)ntc_mv);
         case 2:return NTC10K3455LO2K((int)ntc_mv);
         case 3:return NTC10K3455UP10K((int)ntc_mv);
@@ -165,7 +165,7 @@ void ADC0_INT1_IRQHandler(void)
         DL_ADC_readResult(AM13E_ADC_RESULTS, AM13E_ADC_VBUS_SOC);
     ++adc_latest.sample_count;
     ++adc_sample_seq;
-#ifdef AM13E_E62_SENSORS_CALIBRATED
+#ifdef AM13E_BOARD_SENSORS_CALIBRATED
     /* Feed the ACTUAL Rel17 smoothing/temperature/voltage protection
      * only after one coherent two-channel ADC sequence has completed.
      * The board's physical NTC and VBUS calibration values are required.

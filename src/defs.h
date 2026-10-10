@@ -71,11 +71,11 @@
 #define SENS_CNT 3
 #endif
 
-#if defined(AM13E) && defined(AM13E_E62_SENSORS_CALIBRATED)
-#if AM13E_E62_SENSORS_CALIBRATED != 1
-#error "AM13E_E62_SENSORS_CALIBRATED must equal 1"
+#if defined(AM13E) && defined(AM13E_BOARD_SENSORS_CALIBRATED)
+#if AM13E_BOARD_SENSORS_CALIBRATED != 1
+#error "AM13E_BOARD_SENSORS_CALIBRATED must equal 1"
 #endif
-/* The E62 IO Plan currently has VBUS and NTC, but no physical current
+/* The AM13E reference IO Plan currently has VBUS and NTC, but no physical current
  * measurement input. Use the original Rel17 voltage protection branch
  * without fabricating a legacy SENS_MAP ADC pin or current channel.
  */

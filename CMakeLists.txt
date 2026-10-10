@@ -188,34 +188,34 @@ function(add_target_ti_am13e name)
         # UART telemetry protocols are not part of this hardware target.
         # Still compile src/telem.c for Extended DShot packet scheduling.
         target_compile_definitions(${am13e_binary} PRIVATE
-            AM13E_PB14_ONLY AM13E_E62_IO_PLAN_V1=1)
+            AM13E_PB14_ONLY AM13E_REF_IO_PLAN_V1=1)
 
         # Production Board Electrical Configuration is supplied as an
         # externally owned CMake file with an explicit definitions LIST:
-        #   set(AM13E_E62_BOARD_DEFINITIONS
-        #       AM13E_E62_POWER_STAGE_PROFILE=1
-        #       AM13E_E62_PB13_ACTIVE_LEVEL=<verified active level>
+        #   set(AM13E_BOARD_BOARD_DEFINITIONS
+        #       AM13E_BOARD_POWER_STAGE_PROFILE=1
+        #       AM13E_BOARD_PB13_ACTIVE_LEVEL=<verified active level>
         #       ...red/fed/OC pin/phase inversions...)
         # There is intentionally no fallback to an EVM or guessed
         # values. The default build keeps PB13 untouched and six pads Hi-Z.
-        set(AM13E_E62_BOARD_PROFILE_FILE "" CACHE FILEPATH
-            "Reviewed E62 gate driver/dead-band/independent OC definitions")
-        if(AM13E_E62_BOARD_PROFILE_FILE)
-            if(NOT EXISTS "${AM13E_E62_BOARD_PROFILE_FILE}")
+        set(AM13E_BOARD_BOARD_PROFILE_FILE "" CACHE FILEPATH
+            "Reviewed AM13E reference gate driver/dead-band/independent OC definitions")
+        if(AM13E_BOARD_BOARD_PROFILE_FILE)
+            if(NOT EXISTS "${AM13E_BOARD_BOARD_PROFILE_FILE}")
                 message(FATAL_ERROR "Board profile file not found")
             endif()
-            include("${AM13E_E62_BOARD_PROFILE_FILE}")
-            if(NOT DEFINED AM13E_E62_BOARD_DEFINITIONS OR
-               NOT AM13E_E62_BOARD_DEFINITIONS)
+            include("${AM13E_BOARD_BOARD_PROFILE_FILE}")
+            if(NOT DEFINED AM13E_BOARD_BOARD_DEFINITIONS OR
+               NOT AM13E_BOARD_BOARD_DEFINITIONS)
                 message(FATAL_ERROR
-                    "Board profile must provide AM13E_E62_BOARD_DEFINITIONS")
+                    "Board profile must provide AM13E_BOARD_BOARD_DEFINITIONS")
             endif()
             target_compile_definitions(${am13e_binary} PRIVATE
-                ${AM13E_E62_BOARD_DEFINITIONS})
+                ${AM13E_BOARD_BOARD_DEFINITIONS})
         endif()
     endif()
     # Genuine source corrections rather than warning suppression.
-    # Scope strict builds to E62 only, never legacy STM32 boards.
+    # Scope strict builds to AM13E reference only, never legacy STM32 boards.
     target_compile_options(${am13e_binary} PRIVATE
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
         -mfloat-abi=hard -fno-branch-count-reg -Werror)
@@ -292,7 +292,7 @@ endfunction()
 # Uses the same ESCape32 root CMake toolchain and existing SDK installation.
 # The application code remains an OBJECT library until full rel17 porting.
 option(AM13E_ENABLE_APP_SMOKE
-    "Enable E62 v2 ARM app-link / packer smoke validation" OFF)
+    "Enable AM13E reference v2 ARM app-link / packer smoke validation" OFF)
 if(AM13E_ENABLE_APP_SMOKE)
     set(am13e_smoke_script
         "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/linker_app_smoke.ld")
@@ -518,11 +518,11 @@ if(AM13E_ENABLE_FW1_LINK_GATE)
         OUTPUT_NAME "AM13E_FW1" SUFFIX ".elf")
 endif()
 
-# E62 v1.6 real FW1 source linker/CRC packer, never flash from CI.
+# AM13E reference v1.6 real FW1 source linker/CRC packer, never flash from CI.
 # APP_BASE 0x6000; independent FW1/FW2 configs 0x4000/0x5000.
 # Full 488KiB application allocation; 256KiB transport kept until changed.
 option(AM13E_ENABLE_FW1_V16_IMAGE
-    "Enable E62 v1.6 Rel17 application linked ELF and packed image" ON)
+    "Enable AM13E reference v1.6 Rel17 application linked ELF and packed image" ON)
 if(AM13E_ENABLE_FW1_V16_IMAGE)
     find_program(AM13E_V16_OBJCOPY arm-none-eabi-objcopy REQUIRED)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)

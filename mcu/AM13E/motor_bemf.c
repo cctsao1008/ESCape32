@@ -6,7 +6,7 @@
 #include "motor_backend.h"
 #include "motor_audio_hw.h" /* Prevent COMP/ECAP1 rearming during sound */
 #include "motor_bemf.h" /* Declarations for init, abort and ECAP1 IRQ */
-#include "board_io_plan_v1.h" /* Provisional E62 phase/BEMF pinmux */
+#include "board_io_plan_v1.h" /* Provisional AM13E reference phase/BEMF pinmux */
 #include "motor_event_timer.h" /* Cancel obsolete TIMG12 on BEMF timeout */
 #include "clock_backend.h"
 #include "irq_vectors.h"
@@ -80,7 +80,7 @@ static void bemf_fault(void)
  * independently mapped protection hardware, not these sense outputs.
  * Match Rel17 compctl(0) which disables the sensing comparators.
  */
-#ifdef AM13E_E62_IO_PLAN_V1
+#ifdef AM13E_REF_IO_PLAN_V1
 static void sense_comparators_off(void)
 {
     DL_CMPSSLITE_disableModule(CMPSS0);
@@ -105,7 +105,7 @@ void am13e_app_motor_bemf_abort(void)
     __disable_irq();
     if(initialized) {
         capture_stop();
-#ifdef AM13E_E62_IO_PLAN_V1
+#ifdef AM13E_REF_IO_PLAN_V1
         sense_comparators_off();
 #endif
     }
@@ -114,7 +114,7 @@ void am13e_app_motor_bemf_abort(void)
     __set_PRIMASK(primask);
 }
 
-#ifdef AM13E_E62_IO_PLAN_V1
+#ifdef AM13E_REF_IO_PLAN_V1
 static unsigned phase_cmp_instance(unsigned logical)
 {
     switch(logical) {
@@ -190,7 +190,7 @@ void am13e_app_motor_bemf_init(void)
     DL_ECAP_resetCounters(BEMF_ECAP);
     DL_ECAP_startCounter(BEMF_ECAP);
     calibration_start=0U; /* first SysTick provides phase-aligned origin */
-#ifdef AM13E_E62_IO_PLAN_V1
+#ifdef AM13E_REF_IO_PLAN_V1
     configure_phase_cmp(CMPSS0,DL_SYSCTL_PWREN_CMPSS0,DL_SYSCTL_CMPSS0_MUX,
         AM13E_BEMF_CMP0_HP_PINCM,AM13E_BEMF_CMP0_HN_PINCM,
         (DL_SYSCTL_CMP_HP)AM13E_BEMF_CMP0_HP_MUX,
@@ -220,11 +220,11 @@ void compctl(int x)
         (x!=0 && am13e_app_motor_audio_mode())) bemf_fault();
     capture_stop();
     selected_code=0U;
-#ifdef AM13E_E62_IO_PLAN_V1
+#ifdef AM13E_REF_IO_PLAN_V1
     sense_comparators_off();
 #endif
     if((x&3)!=0) {
-#ifndef AM13E_E62_IO_PLAN_V1
+#ifndef AM13E_REF_IO_PLAN_V1
         /* No invented analog net or comparator validity. */
         bemf_fault();
 #else
@@ -269,7 +269,7 @@ void am13e_app_motor_bemf_interval_select(int ertm_us)
     if(selected_code) {
         if (!calibration_done || capture_ticks_per_ms == 0U ||
             capture_timeout_ticks == 0U) bemf_fault();
-#ifdef AM13E_E62_IO_PLAN_V1
+#ifdef AM13E_REF_IO_PLAN_V1
         const uint32_t prescale=ertm_us<100?0U:ertm_us<200?1U:
               ertm_us<1000?3U:ertm_us<2000?7U:15U;
         CMPSS_LITE_Regs *cmp=phase_cmp(selected_code&3U);

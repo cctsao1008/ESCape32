@@ -1,6 +1,6 @@
 /*
- * E62 AM13E23019 IO Plan for TI Review v1.0 — PROVISIONAL pin mapping.
- * Source: E62_AM13E23019_IO_Plan_for_TI_Review_v1.0.xlsx, rows 9–25.
+ * AM13E reference AM13E23019 IO Plan for TI Review v1.0 — PROVISIONAL pin mapping.
+ * Source: initial provisional IO mapping, rows 9–25.
  * Pin mapping is user-selected for FW1 porting, NOT electrical sign-off.
  *
  * This file identifies real MCU pad/PINCM and analog comparator selections.
@@ -9,12 +9,12 @@
  */
 #pragma once
 #ifndef AM13E
-#error "E62 IO Plan is only applicable to AM13E FW1"
+#error "AM13E reference IO Plan is only applicable to AM13E FW1"
 #endif
-#ifndef AM13E_E62_IO_PLAN_V1
-#error "Provisional E62 IO Plan must be explicitly selected by the build"
-#elif AM13E_E62_IO_PLAN_V1 != 1
-#error "E62 IO Plan selection must equal 1; 0 is not an enabled plan"
+#ifndef AM13E_REF_IO_PLAN_V1
+#error "Provisional AM13E reference IO Plan must be explicitly selected by the build"
+#elif AM13E_REF_IO_PLAN_V1 != 1
+#error "AM13E reference IO Plan selection must equal 1; 0 is not an enabled plan"
 #endif
 #include <soc.h>
 #include <dl_sysctl.h>
@@ -41,7 +41,7 @@ _Static_assert(AM13E_IO_PWM_UH_PINCM == 8U &&
                IOMUX_PA30_MCPWM0_2B == 7U &&
                IOMUX_PA10_MCPWM0_3A == 7U &&
                IOMUX_PA31_MCPWM0_3B == 5U,
-               "E62 IO Plan Six-step MCPWM0 pin/function drift");
+               "AM13E reference IO Plan Six-step MCPWM0 pin/function drift");
 
 /* Rel17 logical phase 1=U / 2=V / 3=W.
  * BEMF phase -> comparator: U=0, V=1, W=3 (distinct and fixed).
@@ -79,7 +79,7 @@ _Static_assert(AM13E_BEMF_CMP0_HP_PINCM==17U &&
                AM13E_BEMF_CMP1_HN_MUX==DL_SYSCTL_CMP_HN0 &&
                AM13E_BEMF_CMP3_HP_MUX==DL_SYSCTL_CMP_HP1 &&
                AM13E_BEMF_CMP3_HN_MUX==DL_SYSCTL_CMP_HN0,
-               "E62 IO Plan BEMF analog pin/mux drift");
+               "AM13E reference IO Plan BEMF analog pin/mux drift");
 
 /* The PB14-only FW1 interface and PB15 nFAULT remain unchanged.
  * PB13 is RESERVED (polarity/driver not yet qualified), never driven.
@@ -87,4 +87,4 @@ _Static_assert(AM13E_BEMF_CMP0_HP_PINCM==17U &&
 _Static_assert(IOMUX_PINCM_PB13==45U &&
                IOMUX_PINCM_PB14==46U &&
                IOMUX_PINCM_PB15==47U,
-               "E62 IO Plan Power Stage/DShot pins changed");
+               "AM13E reference IO Plan Power Stage/DShot pins changed");

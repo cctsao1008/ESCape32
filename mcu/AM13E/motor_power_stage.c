@@ -1,7 +1,7 @@
 /* TI AM13E23019 MCPWM0 six-pad/power-stage hardware owner.
  *
  * Full MCU-side lifecycle is implemented, but *not enabled* on an
- * unqualified E62 board. All compile-time values below must come from
+ * unqualified AM13E reference board. All compile-time values below must come from
  * a reviewed electrical design, NEVER a TI EVM or guessed schematic.
  *
  * PB15 nFAULT already owns OST1 via INPUTXBAR2/PWMXBAR1. Independent
@@ -32,50 +32,50 @@
 #define OC_TRIP    DL_XBAR_TRIP2
 #define OC_SIGNAL  DL_MCPWM_TZ_SIGNAL_OST2
 
-#ifdef AM13E_E62_POWER_STAGE_PROFILE
-#if AM13E_E62_POWER_STAGE_PROFILE != 1
-#error "AM13E_E62_POWER_STAGE_PROFILE must equal 1"
+#ifdef AM13E_BOARD_POWER_STAGE_PROFILE
+#if AM13E_BOARD_POWER_STAGE_PROFILE != 1
+#error "AM13E_BOARD_POWER_STAGE_PROFILE must equal 1"
 #endif
 #ifndef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
 #error "Qualified power stage requires hardware RED/FED and polarity"
 #endif
-#ifndef AM13E_E62_SENSORS_CALIBRATED
+#ifndef AM13E_BOARD_SENSORS_CALIBRATED
 #error "Physical output requires calibrated VBUS/NTC, not raw ADC-only firmware"
 #endif
-#if !defined(AM13E_E62_PB13_ACTIVE_LEVEL) || \
-    !defined(AM13E_E62_GATE_PWM_INVERT_MASK) || \
-    !defined(AM13E_E62_OC_GPIO_PINCM) || \
-    !defined(AM13E_E62_OC_ACTIVE_LOW) || \
-    !defined(AM13E_E62_GATE_INPUTS_HIZ_SAFE) || \
-    !defined(AM13E_E62_GATE_DRIVER_HAS_HW_SHUTDOWN)
+#if !defined(AM13E_BOARD_PB13_ACTIVE_LEVEL) || \
+    !defined(AM13E_BOARD_GATE_PWM_INVERT_MASK) || \
+    !defined(AM13E_BOARD_OC_GPIO_PINCM) || \
+    !defined(AM13E_BOARD_OC_ACTIVE_LOW) || \
+    !defined(AM13E_BOARD_GATE_INPUTS_HIZ_SAFE) || \
+    !defined(AM13E_BOARD_GATE_DRIVER_HAS_HW_SHUTDOWN)
 #error "No guessed gate/OC configuration: all six board fields required"
 #endif
-_Static_assert((AM13E_E62_PB13_ACTIVE_LEVEL==0 ||
-                AM13E_E62_PB13_ACTIVE_LEVEL==1) &&
-               AM13E_E62_GATE_PWM_INVERT_MASK>=0 &&
-               AM13E_E62_GATE_PWM_INVERT_MASK<=63 &&
-               (AM13E_E62_OC_ACTIVE_LOW==0 ||
-                AM13E_E62_OC_ACTIVE_LOW==1) &&
-               AM13E_E62_GATE_INPUTS_HIZ_SAFE==1 &&
-               AM13E_E62_GATE_DRIVER_HAS_HW_SHUTDOWN==1 &&
-               AM13E_E62_OC_GPIO_PINCM>0 &&
-               AM13E_E62_OC_GPIO_PINCM<64 &&
-               AM13E_E62_OC_GPIO_PINCM!=IOMUX_PINCM_PB13 &&
-               AM13E_E62_OC_GPIO_PINCM!=IOMUX_PINCM_PB14 &&
-               AM13E_E62_OC_GPIO_PINCM!=IOMUX_PINCM_PB15 &&
-               AM13E_E62_OC_GPIO_PINCM!=IOMUX_PINCM_PA8 &&
-               AM13E_E62_OC_GPIO_PINCM!=IOMUX_PINCM_PA11 &&
-               AM13E_E62_OC_GPIO_PINCM!=IOMUX_PINCM_PA9 &&
-               AM13E_E62_OC_GPIO_PINCM!=IOMUX_PINCM_PA30 &&
-               AM13E_E62_OC_GPIO_PINCM!=IOMUX_PINCM_PA10 &&
-               AM13E_E62_OC_GPIO_PINCM!=IOMUX_PINCM_PA31 &&
-               AM13E_E62_OC_GPIO_PINCM!=IOMUX_PINCM_PA17 &&
-               AM13E_E62_OC_GPIO_PINCM!=IOMUX_PINCM_PA4 &&
-               AM13E_E62_OC_GPIO_PINCM!=IOMUX_PINCM_PA3 &&
-               AM13E_E62_OC_GPIO_PINCM!=IOMUX_PINCM_PA2 &&
-               AM13E_E62_OC_GPIO_PINCM!=IOMUX_PINCM_PA16 &&
-               AM13E_E62_OC_GPIO_PINCM!=IOMUX_PINCM_PA18,
-               "Unqualified/conflicting E62 power stage configuration");
+_Static_assert((AM13E_BOARD_PB13_ACTIVE_LEVEL==0 ||
+                AM13E_BOARD_PB13_ACTIVE_LEVEL==1) &&
+               AM13E_BOARD_GATE_PWM_INVERT_MASK>=0 &&
+               AM13E_BOARD_GATE_PWM_INVERT_MASK<=63 &&
+               (AM13E_BOARD_OC_ACTIVE_LOW==0 ||
+                AM13E_BOARD_OC_ACTIVE_LOW==1) &&
+               AM13E_BOARD_GATE_INPUTS_HIZ_SAFE==1 &&
+               AM13E_BOARD_GATE_DRIVER_HAS_HW_SHUTDOWN==1 &&
+               AM13E_BOARD_OC_GPIO_PINCM>0 &&
+               AM13E_BOARD_OC_GPIO_PINCM<64 &&
+               AM13E_BOARD_OC_GPIO_PINCM!=IOMUX_PINCM_PB13 &&
+               AM13E_BOARD_OC_GPIO_PINCM!=IOMUX_PINCM_PB14 &&
+               AM13E_BOARD_OC_GPIO_PINCM!=IOMUX_PINCM_PB15 &&
+               AM13E_BOARD_OC_GPIO_PINCM!=IOMUX_PINCM_PA8 &&
+               AM13E_BOARD_OC_GPIO_PINCM!=IOMUX_PINCM_PA11 &&
+               AM13E_BOARD_OC_GPIO_PINCM!=IOMUX_PINCM_PA9 &&
+               AM13E_BOARD_OC_GPIO_PINCM!=IOMUX_PINCM_PA30 &&
+               AM13E_BOARD_OC_GPIO_PINCM!=IOMUX_PINCM_PA10 &&
+               AM13E_BOARD_OC_GPIO_PINCM!=IOMUX_PINCM_PA31 &&
+               AM13E_BOARD_OC_GPIO_PINCM!=IOMUX_PINCM_PA17 &&
+               AM13E_BOARD_OC_GPIO_PINCM!=IOMUX_PINCM_PA4 &&
+               AM13E_BOARD_OC_GPIO_PINCM!=IOMUX_PINCM_PA3 &&
+               AM13E_BOARD_OC_GPIO_PINCM!=IOMUX_PINCM_PA2 &&
+               AM13E_BOARD_OC_GPIO_PINCM!=IOMUX_PINCM_PA16 &&
+               AM13E_BOARD_OC_GPIO_PINCM!=IOMUX_PINCM_PA18,
+               "Unqualified/conflicting AM13E reference power stage configuration");
 #endif
 
 static volatile uint32_t initialized;
@@ -83,25 +83,25 @@ static volatile uint32_t attached;
 
 int am13e_power_stage_board_profile_present(void)
 {
-#ifdef AM13E_E62_POWER_STAGE_PROFILE
+#ifdef AM13E_BOARD_POWER_STAGE_PROFILE
     return 1;
 #else
     return 0;
 #endif
 }
 
-#ifdef AM13E_E62_POWER_STAGE_PROFILE
+#ifdef AM13E_BOARD_POWER_STAGE_PROFILE
 static void driver_enable_level(int active)
 {
-    const int high=active ? AM13E_E62_PB13_ACTIVE_LEVEL :
-                            !AM13E_E62_PB13_ACTIVE_LEVEL;
+    const int high=active ? AM13E_BOARD_PB13_ACTIVE_LEVEL :
+                            !AM13E_BOARD_PB13_ACTIVE_LEVEL;
     if(high) DL_GPIO_setPins(GPIO1,GATE_EN_PIN);
     else DL_GPIO_clearPins(GPIO1,GATE_EN_PIN);
 }
 static void output_pin(uint32_t pincm,uint32_t function,unsigned bit)
 {
     const DL_GPIO_INVERSION inv=
-       (AM13E_E62_GATE_PWM_INVERT_MASK&(1U<<bit)) ?
+       (AM13E_BOARD_GATE_PWM_INVERT_MASK&(1U<<bit)) ?
            DL_GPIO_INVERSION_ENABLE:DL_GPIO_INVERSION_DISABLE;
     DL_GPIO_initPeripheralOutputFunctionFeatures(pincm,function,inv,
         DL_GPIO_RESISTOR_NONE,DL_GPIO_DRIVE_STRENGTH_LOW,
@@ -110,7 +110,7 @@ static void output_pin(uint32_t pincm,uint32_t function,unsigned bit)
 static int pad_inv_matches(uint32_t pincm,unsigned bit)
 {
     const uint32_t actual=IOMUX->SECCFG.PINCM[pincm]&IOMUX_PINCM_INV_MASK;
-    const uint32_t desired=(AM13E_E62_GATE_PWM_INVERT_MASK&(1U<<bit))?
+    const uint32_t desired=(AM13E_BOARD_GATE_PWM_INVERT_MASK&(1U<<bit))?
                             IOMUX_PINCM_INV_ENABLE:IOMUX_PINCM_INV_DISABLE;
     return actual==desired && DL_GPIO_isPeripheralConnected(pincm);
 }
@@ -141,8 +141,8 @@ static int pwm_function_readback(void)
 }
 static int driver_level_matches(int active)
 {
-    const int high=active ? AM13E_E62_PB13_ACTIVE_LEVEL :
-                            !AM13E_E62_PB13_ACTIVE_LEVEL;
+    const int high=active ? AM13E_BOARD_PB13_ACTIVE_LEVEL :
+                            !AM13E_BOARD_PB13_ACTIVE_LEVEL;
     return (GPIO1->DOE31_0&GATE_EN_PIN)!=0U &&
            (((GPIO1->DOUT31_0&GATE_EN_PIN)!=0U)==(high!=0));
 }
@@ -156,14 +156,14 @@ static void set_pwm_force(DL_MCPWM_ACTION_QUALIFIER_SW_FORCE_OUTPUT force)
 
 int am13e_power_stage_oc_trip_ready(void)
 {
-#ifdef AM13E_E62_POWER_STAGE_PROFILE
+#ifdef AM13E_BOARD_POWER_STAGE_PROFILE
     const uint32_t selected=PWMXBAR->PWM_XBAR_GXSEL[1].PWMXBARG0SEL;
     const uint32_t tzflag=DL_MCPWM_getTripZoneFlagStatus(MCPWM0);
     const uint32_t inverted=PWMXBAR->PWMXBAROUTINVERT & (1U<<1U);
     return initialized &&
-           INPUTXBAR->INPUTSELECT[2]==AM13E_E62_OC_GPIO_PINCM &&
+           INPUTXBAR->INPUTSELECT[2]==AM13E_BOARD_OC_GPIO_PINCM &&
            (selected & (1U<<(unsigned)OC_SOURCE))!=0U &&
-           (inverted!=0U)==(AM13E_E62_OC_ACTIVE_LOW!=0) &&
+           (inverted!=0U)==(AM13E_BOARD_OC_ACTIVE_LOW!=0) &&
            (MCPWM0->TZSEL & OC_SIGNAL)!=0U &&
            (tzflag & DL_MCPWM_TZ_FLAG_OST_TZ2)==0U;
 #else
@@ -176,7 +176,7 @@ void am13e_power_stage_init(void)
     if (__get_PRIMASK()!=1U || initialized) {
         for(;;){ __NOP(); } /* Programmer/ownership fault: fail closed */
     }
-#ifdef AM13E_E62_POWER_STAGE_PROFILE
+#ifdef AM13E_BOARD_POWER_STAGE_PROFILE
     /* Set inactive PB13 data BEFORE enabling its digital output.
      * Never connect PWM pins until independent OST1 and OST2 exist.
      */
@@ -185,12 +185,12 @@ void am13e_power_stage_init(void)
     driver_enable_level(0);
     DL_GPIO_initDigitalOutput(IOMUX_PINCM_PB13);
     DL_GPIO_enableOutput(GPIO1,GATE_EN_PIN);
-    DL_GPIO_initDigitalInput(AM13E_E62_OC_GPIO_PINCM);
-    DL_XBAR_enableRawInput(AM13E_E62_OC_GPIO_PINCM);
-    DL_XBAR_setInputXBAR(DL_XBAR_INPUT3,AM13E_E62_OC_GPIO_PINCM);
+    DL_GPIO_initDigitalInput(AM13E_BOARD_OC_GPIO_PINCM);
+    DL_XBAR_enableRawInput(AM13E_BOARD_OC_GPIO_PINCM);
+    DL_XBAR_setInputXBAR(DL_XBAR_INPUT3,AM13E_BOARD_OC_GPIO_PINCM);
     DL_XBAR_clearPWMXBARSourceSelection(OC_TRIP);
     DL_XBAR_selectPWMXBARSource(OC_TRIP,OC_SOURCE);
-    DL_XBAR_invertPWMXBARSignal(OC_TRIP,AM13E_E62_OC_ACTIVE_LOW!=0);
+    DL_XBAR_invertPWMXBARSignal(OC_TRIP,AM13E_BOARD_OC_ACTIVE_LOW!=0);
     DL_MCPWM_setTripZoneAction(MCPWM0,DL_MCPWM_TZ_ACTION_EVENT_TZA,
                                DL_MCPWM_TZ_ACTION_HIGH_Z);
     DL_MCPWM_setTripZoneAction(MCPWM0,DL_MCPWM_TZ_ACTION_EVENT_TZB,
@@ -199,7 +199,7 @@ void am13e_power_stage_init(void)
 #endif
     attached=0U;
     initialized=1U;
-#ifdef AM13E_E62_POWER_STAGE_PROFILE
+#ifdef AM13E_BOARD_POWER_STAGE_PROFILE
     if (!driver_level_matches(0) ||
         !am13e_power_stage_oc_trip_ready() ||
         !am13e_app_motor_nfault_trip_ready())
@@ -209,7 +209,7 @@ void am13e_power_stage_init(void)
 
 void am13e_power_stage_force_off(void)
 {
-#ifdef AM13E_E62_POWER_STAGE_PROFILE
+#ifdef AM13E_BOARD_POWER_STAGE_PROFILE
     if(initialized) {
         driver_enable_level(0);
         __DSB();
@@ -228,7 +228,7 @@ void am13e_power_stage_force_off(void)
 
 int am13e_power_stage_attached(void)
 {
-#ifdef AM13E_E62_POWER_STAGE_PROFILE
+#ifdef AM13E_BOARD_POWER_STAGE_PROFILE
     return initialized && attached && driver_level_matches(1) &&
            (GPIO0->DOE31_0&PWM_PADS)==0U &&
            pwm_function_readback() && !am13e_app_nfault_asserted() &&
@@ -241,7 +241,7 @@ int am13e_power_stage_attached(void)
 
 int am13e_power_stage_attach(void)
 {
-#ifdef AM13E_E62_POWER_STAGE_PROFILE
+#ifdef AM13E_BOARD_POWER_STAGE_PROFILE
     if (!initialized || attached ||
         __get_PRIMASK()!=1U || !driver_level_matches(0) ||
         !am13e_power_stage_oc_trip_ready() ||
