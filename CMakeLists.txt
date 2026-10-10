@@ -87,6 +87,7 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_duty_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/input_watchdog.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/telem_mode_plan.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/telem_uc2_preflight.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_event_timer.c"
             # Genuine TI DriverLib objects: delayCycles (common) and
             # Flash read wait-state RAMFUNC (FRI); no replacement stubs.
@@ -96,7 +97,9 @@ function(add_target_ti_am13e name)
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_ecap.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_timer.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_dma.c"
-            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_mcpwm.c")
+            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_mcpwm.c"
+            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_unicomm.c"
+            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_unicommuart.c")
         set(am13e_source_dir "${PROJECT_SOURCE_DIR}/src")
     endif()
     if(name MATCHES "^BOOT")

@@ -619,6 +619,14 @@ cmake --build build-am13e --target AM13E_FW1.elf -j"$(nproc)"
 
 Review order for each real implementation: Rel17 equivalent behavior → verified SDK signature/register mapping → own ISR/DMA resource and failure path → ARM GNU compile → strict FW1 link → oscilloscope/electrical acceptance. **Never add empty C bodies or fake success returns to make a missing symbol disappear.**
 
+### E1-AM UC2 UART hardware staging (source integration only)
+
+- `telem_uc2_preflight.{c,h}` adds real DriverLib UC2 power-on, UART clock at nominal BUSCLK 100MHz, baud configuration and 8N1, disabled UART TX/RX direction, and readback. Both PA22/PA23 remain GPIO INPUT / MCU Hi-Z. It **must not** be called as full telemetry initialization, nor treated as resolved `am13e_telem_hw_init`.
+- SDK PinMux: `PA22=IOMUX_PA22_UC2_TX_SDA (4)`, `PA23=IOMUX_PA23_UC2_RX_SCL (4)`. UC2 is a two-pin UART peripheral; the product Rel17 single-wire line needs a qualified external coupling/bidirectional circuit, potentially pad inversion and drive ownership. **No external schematic-qualified PHY has yet been demonstrated.**
+- The SDK does expose IOMUX pin inversion (`DL_GPIO_setDataInversion()`, `DL_GPIO_initPeripheral...Features()`) but pin-level inverted serial correctness is unverified; there is no direct `HDSEL` UART setting equivalent proven on UC2. RS485 mode must not be assumed equivalent.
+- `DL_UART_INTERRUPT_EOT_DONE` exists; future byte/DMA scheduler must defer `am13e_telem_on_tx_done()` until the actual last stop bit, not only the FIFO/DMA write. For received packets, hardware `RXTOSEL` is a 0..15 field and Rel17 S.Port `RTOR=26` requires independent qualified gap timing.
+- **E1-AM ARM GNU result: pending**. This module does not implement any of the five Telemetry callback symbols, does not request a live UC2 IRQ, and changes no physical TX pin state.
+
 ## Implementation order and acceptance gates
 
 1. **Compiler regression fixed in E1-Z.** The E1-Y SDK macro `DL_DMA_INTERRUPT_DATA_ERROR` expands to `DMA_IMASK_DATAERR_SET`, absent from AM13E230x `hw_dma.h`. The corrected Channel Completion / Address Error masks compile cleanly; retain this mismatch as a SDK caveat.
