@@ -1,7 +1,7 @@
 # AM13E Rel17 FW1 — Missing Backend Implementation Pseudocode
 
 **Status:** Design / TODO; intentionally **NOT compiled**; no MCU callback stubs or fake return values.
-**Source of missing-symbol evidence:** E1-AJ `e1aj-fw1-link.log` (27 distinct unresolved symbols / 38 references, down from E1-AI 28/40 and E1-Z 32/44). E1-AJ ARM GNU Object Compile passed with zero warnings; WWDT0 hardware behavior remains untested.
+**Source of missing-symbol evidence:** E1-AK `e1ak-fw1-link.log` (27 distinct unresolved symbols / 38 references); E1-AK ARM GNU Object Compile PASS 0 warning. E1-AL corrects HDSEL/timeout hardware planning and requires revalidation.
 **Reference boundaries:** Original ESCape32 Rel17 `src/main.c`, `src/io.c`, `src/telem.c`, `src/util.c`, `src/prog.c`; AM13E target-specific contracts in `mcu/AM13E/*.h`; AM13E230x TI TRM/SDK; project SW/HW architecture baseline v1.6.
 
 ## Current implementation ledger — after E1-AB through E1-AE
@@ -21,7 +21,7 @@
 | Rel17 PWM frequency interpolation | E1-AH pure-C `motor_frequency_plan.{c,h}`: 1000–2000us **period** interpolation; `ertm_us=0` uses minimum frequency. ARM GNU PASS. E1-AI corrected its Host Test's 1GHz/16kHz valid 62500-tick boundary | Host Test and motor scope; final MCPWM driver remains unresolved |
 | Rel17 duty compare policy | E1-AI pure-C `motor_duty_plan.{c,h}` models `scale()` with `running`, `lock`, `damp`, `brushed`, `FULL_DUTY`, and supplied board dead-time ticks; the AM13E-only call interface now includes `running` | Host Test, ARM GNU; actual dead-time and PWM compare hardware still unresolved |
 | Real receiver-input WWDT0 | E1-AJ `input_watchdog.c`: WWDT0 powered during PB14 `initio()`; starts after first validated PWM/DShot command; zero closed window, 2^15 nominal LFCLK ticks; `BOOTWWDT0` maps to FORCE_ARM. | **ARM GNU PASS**; verify clock, actual reset latency, Boot ownership and command-loss behavior on hardware |
-| Telemetry mode mapping | E1-AK pure-C `telem_mode_plan.{c,h}` preserves KISS/KISS auto/iBUS/S.Port/CRSF/MSB/HoTT baud (incl. CRSF 416666), RX protocol selection, S.Port inversion, HoTT turnaround and original UART timeout fields | Host GCC PASS (7 modes); ARM GNU pending; UC2 PA22/PA23 UART, S.Port physical inversion, RX/DMA/IRQ still need implementation and validation |
+| Telemetry mode mapping | E1-AK/E1-AL pure-C `telem_mode_plan.{c,h}` preserves baud/RX behavior, legacy **HDSEL single-wire on all modes**, iBUS/S.Port/MSB/HoTT RX→reply ownership, S.Port inversion and `RTOR=26`. E1-AL explicitly rejects 26 when mapping to TI UART RXTOSEL's **0–15** field; a separate frame-gap mechanism is required. | E1-AK ARM GNU PASS; E1-AL Host/ARM pending. Must qualify UC2 PA22/PA23 single-wire wiring, S.Port external inversion, UART RX gap timing and completion before claiming transport parity |
 
 **Still intentionally unresolved:** `am13e_app_motor_runtime_enable_interrupts` and `am13e_app_motor_commutation_enable` cannot legitimately release the inverter before the PB13 enable polarity, real hardware over-current source → PWMXBAR → MCPWM Trip Zone path, inactive fault action, timer/dead-time policy and relevant board protection checks are verified. This is a real firmware safety dependency, not removal of any Rel17 feature. `sine_write`, `sixstep_write`, `pwm_apply`, comparator/BEMF configuration, the watchdog, UART, audio and config-flash driver also remain unimplemented.
 
@@ -270,7 +270,7 @@ Existing contract: `mcu/AM13E/util_backend.h`.
 
 **Evidence labels**: [REL17] = call site grounded in current FW1 linker/source; [SDK DECLARED] = name confirmed in the uploaded `am13e2x_sdk-main.zip` under `source/driverlib/am13e230x/`; [PORTING PROPOSED] = engineering plan, not implemented; [HW VALIDATION] = a required silicon/board demonstration.
 
-**Build state (2026-10-10):** E1-AJ ARM GNU Object Build PASS, zero warnings; FW1 strict link still FAIL at **27 unique symbols / 38 references**. E1-AK adds UART mode planner (Host GCC PASS; ARM GNU pending), which does not yet implement the five UART driver symbols.
+**Build state (2026-10-10):** E1-AK ARM GNU Object Build PASS, zero warning; FW1 strict link remains **27 unique symbols / 38 references**. E1-AL updates parity/field-range checks; Host/ARM regression results pending. Five actual UART Backend symbols remain unresolved.
 
 ### Common porting method and TI SDK mapping
 
