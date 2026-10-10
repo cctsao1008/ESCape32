@@ -969,6 +969,11 @@ void am13e_app_motor_sixstep_idle(void)
     if (!safety_initialized || fault_latched)runtime_fault();
     const uint32_t primask=__get_PRIMASK();
     __disable_irq();
+    /* Direct and indirect transitions into Coast/Drag Brake must both
+     * invalidate any previously scheduled TIMG12 commutation IRQ.
+     * Do not rely on every caller having passed through resetcom().
+     */
+    am13e_app_motor_timing_cancel();
     am13e_app_motor_bemf_abort();
     force_pwm_inactive();
     disconnect_pwm_pads();
