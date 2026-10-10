@@ -24,8 +24,6 @@
 #include "cfg_flash_writer.h"
 #include "motor_backend.h"
 #include "motor_safety.h"
-#include "motor_fault_route.h"
-#include "fault_input.h"
 #include "command_reply.h"
 #include <dl_flash.h>
 #include <stdint.h>
@@ -54,9 +52,7 @@ static int flash_ready(void)
     const uintptr_t ram_start=(uintptr_t)__ramfunct_start__;
     const uintptr_t ram_end=(uintptr_t)__ramfunct_end__;
     return ram_start>=RAM_C_START && ram_end>ram_start &&
-           ram_end<=RAM_C_END && !am13e_app_nfault_asserted() &&
-           am13e_app_motor_nfault_trip_ready() &&
-           am13e_app_motor_inactive_preflight_ok();
+           ram_end<=RAM_C_END && am13e_app_motor_inactive_preflight_ok();
     /* PB14 TX is checked once BEFORE reserving the transaction.
      * A later valid DShot command can schedule a TX between individual
      * ECC writes. It must not spontaneously abort a partly-erased FW1
@@ -121,9 +117,7 @@ int am13e_app_cfg_commit(const void *destination,const void *source,
      * Move to the already-implemented safe Stop state BEFORE Flash
      * erase; this never activates PB13 or a physical PWM pad.
      */
-    if (committing || am13e_app_nfault_asserted() ||
-        !am13e_app_motor_nfault_trip_ready() ||
-        am13e_pb14_bidir_tx_busy()) {
+    if (committing || am13e_pb14_bidir_tx_busy()) {
         __set_PRIMASK(ps);
         return 0;
     }
