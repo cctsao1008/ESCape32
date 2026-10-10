@@ -4,9 +4,7 @@ int am13e_motor_owner_next(AM13E_MotorOwner current,
                            AM13E_OwnerEvent action,
                            AM13E_MotorOwner *next)
 {
-    if(next==NULL || current<AM13E_OWNER_IDLE ||
-       current>AM13E_OWNER_PCM ||
-       action<AM13E_OWNER_EVENT_SIXSTEP ||
+    if(next==NULL || current>AM13E_OWNER_PCM ||
        action>AM13E_OWNER_EVENT_AUDIO_END) return 0;
     AM13E_MotorOwner output=current;
     const int audio=(current==AM13E_OWNER_MUSIC ||
