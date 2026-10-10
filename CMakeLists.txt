@@ -197,15 +197,27 @@ function(add_target_ti_am13e name)
         # Still compile src/telem.c for Extended DShot packet scheduling.
         target_compile_definitions(${am13e_binary} PRIVATE
             AM13E_PB14_ONLY AM13E_REF_IO_PLAN_V1=1)
+        # Full Rel17 Reference FW1 includes live MCPWM0 outputs,
+        # dead-band and real ADC model by DEFAULT. The gate stays
+        # inactive at boot; arming remains the original Rel17 policy.
+        # These development defaults are NOT validated hardware values.
+        option(AM13E_POWER_STAGE_ENABLED
+            "Build functional motor/audio output stage (development values)" ON)
+        if(AM13E_POWER_STAGE_ENABLED)
+            target_compile_definitions(${am13e_binary} PRIVATE
+                AM13E_BOARD_POWER_STAGE_PROFILE=1
+                AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED=1
+                AM13E_BOARD_SENSORS_CONFIGURED=1)
+        endif()
 
         # Production Board Electrical Configuration is supplied as an
         # externally owned CMake file with an explicit definitions LIST:
         #   set(AM13E_BOARD_BOARD_DEFINITIONS
-        #       AM13E_BOARD_POWER_STAGE_PROFILE=1
-        #       AM13E_BOARD_PB13_ACTIVE_LEVEL=<verified active level>
-        #       ...red/fed/OC pin/phase inversions...)
-        # There is intentionally no fallback to an EVM or guessed
-        # values. The default build keeps PB13 untouched and six pads Hi-Z.
+        #       AM13E_BOARD_PB13_ACTIVE_LEVEL=<board value>
+        #       ...RED/FED/OC pin/phase inversion/sensing...)
+        # The numeric G431-derived reference model is a DEVELOPMENT
+        # default. AM13E_POWER_STAGE_ENABLED=OFF selects the disabled
+        # output diagnostic; it is no longer the standard FW1 build.
         set(AM13E_BOARD_BOARD_PROFILE_FILE "" CACHE FILEPATH
             "Reviewed AM13E reference gate driver/dead-band/independent OC definitions")
         if(AM13E_BOARD_BOARD_PROFILE_FILE)

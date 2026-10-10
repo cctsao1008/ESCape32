@@ -1,9 +1,9 @@
 /* AM13E reference MCPWM0 power-stage lifecycle (no motor algorithm).
  *
- * Default firmware: PB13 untouched, six PWM pads GPIO INPUT, force LOW.
- * Optional board profile: explicit PB13 polarity, six pad inversions,
- * independent OC input and proven gate-input/Trip behavior. No defaults
- * may be used to infer unknown electrical parameters.
+ * Default FW1: six PWM pads and PB13 connect when Rel17 requests motor
+ * or audio, after mandatory PB15 OST1 check. STOP/fault restores gate
+ * inactive and pads isolated. Independent OC/OST2 is optional when wired.
+ * Numeric G431-derived settings are not electrical qualification.
  *
  * This module is shared by Six-step, Sine, Brushed, Braking and Motor Audio.
  * It does not test hardware or authorize an unreviewed board.

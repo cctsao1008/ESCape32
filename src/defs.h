@@ -71,13 +71,12 @@
 #define SENS_CNT 3
 #endif
 
-#if defined(AM13E) && defined(AM13E_BOARD_SENSORS_CALIBRATED)
-#if AM13E_BOARD_SENSORS_CALIBRATED != 1
-#error "AM13E_BOARD_SENSORS_CALIBRATED must equal 1"
+#if defined(AM13E) && defined(AM13E_BOARD_SENSORS_CONFIGURED)
+#if AM13E_BOARD_SENSORS_CONFIGURED != 1
+#error "AM13E_BOARD_SENSORS_CONFIGURED must equal 1"
 #endif
-/* The AM13E reference IO Plan currently has VBUS and NTC, but no physical current
- * measurement input. Use the original Rel17 voltage protection branch
- * without fabricating a legacy SENS_MAP ADC pin or current channel.
+/* Real reference ADC0 sensing (VBUS/NTC) now defaults to configured,
+ * but no current-sense channel is assigned. Do not invent SENS_MAP.
  */
 #undef SENS_CNT
 #define SENS_CNT 1

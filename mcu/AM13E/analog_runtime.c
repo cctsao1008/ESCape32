@@ -4,11 +4,10 @@
  * PA28 -> VBUS_SENSE (A0_11). Physical ADC mux mapping verified against
  * TI AM13E23019 datasheet Table 5-2; driver calls are SDK 26.01.
  *
- * This file does NOT invent an NTC beta/pull-up, voltage-divider ratio,
- * ADC reference voltage, or current sensor. Those require board data.
- * It does NOT feed uncalibrated values into Rel17 adcdata() or assert
- * that temperature/voltage protection is functional.
- * No MCPWM/PB13 outputs are configured or enabled here.
+ * The G431-derived editable numeric model feeds REAL ADC pair samples
+ * into Rel17 voltage/NTC functions by default. Values are DEVELOPMENT
+ * assumptions, NOT electrical calibration of an AM13E power board.
+ * No reference current-sense channel is assigned.
  */
 #include "analog_runtime.h"
 #include "clock_backend.h"
@@ -83,14 +82,12 @@ void adctrig(void)
 
 /* TI startup_gcc_arm.c actual ADC0/INT1 vector. */
 
-/* The AM13E reference IO plan identifies PA6/PA28 channels but NOT the board's
- * Vref, voltage divider, NTC supply/pull-up or temperature curve.
- * No fabricated physical measurements may feed Rel17 adcdata().
- * A reviewed board profile must provide all six independent values.
+/* G431-derived values provide a numeric transfer model for Rel17
+ * ADC policy, not verified VREF, voltage divider or thermistor wiring.
  */
-#ifdef AM13E_BOARD_SENSORS_CALIBRATED
-#if AM13E_BOARD_SENSORS_CALIBRATED != 1
-#error "AM13E_BOARD_SENSORS_CALIBRATED must be 1"
+#ifdef AM13E_BOARD_SENSORS_CONFIGURED
+#if AM13E_BOARD_SENSORS_CONFIGURED != 1
+#error "AM13E_BOARD_SENSORS_CONFIGURED must be 1"
 #endif
 #if !defined(AM13E_BOARD_ADC_FULLSCALE) || \
     !defined(AM13E_BOARD_ADC_VREF_MV) || \
@@ -139,7 +136,7 @@ void ADC0_INT1_IRQHandler(void)
         DL_ADC_readResult(AM13E_ADC_RESULTS, AM13E_ADC_VBUS_SOC);
     ++adc_latest.sample_count;
     ++adc_sample_seq;
-#ifdef AM13E_BOARD_SENSORS_CALIBRATED
+#ifdef AM13E_BOARD_SENSORS_CONFIGURED
     /* Feed the ACTUAL Rel17 smoothing/temperature/voltage protection
      * only after one coherent two-channel ADC sequence has completed.
      * The board's physical NTC and VBUS calibration values are required.

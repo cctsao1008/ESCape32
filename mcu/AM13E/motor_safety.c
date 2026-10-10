@@ -1,13 +1,9 @@
 /* ESCape32 Rel17 on AM13E23019: first physical MCPWM0 foundation.
  *
- * PURPOSE: configure an INACTIVE MCPWM0 and keep all six product pads
- * as digital high-impedance inputs. A hardware comparator->PWMXBAR->MCPWM
- * overcurrent trip, deadtime, PB13 driver-enable polarity and power-stage
- * output waveforms have NOT been qualified; this code NEVER arms the bridge.
- *
- * This is genuine register/DriverLib work, not a link-only motor stub.
- * Runtime IRQ release is in motor_runtime_irq.c, separately from
- * the still-unqualified physical gate-enable and hardware Trip contract.
+ * PURPOSE: initialize inactive MCPWM0 and mandatory PB15 OST1, then
+ * attach six actual motor pads and assert PB13 only on a Rel17 request.
+ * RED/FED and ADC use editable numeric DEVELOPMENT models; physical
+ * driver/power-stage behavior must be verified before real energization.
  */
 #include "motor_backend.h"
 #include "motor_audio_hw.h" /* Exclusive MCPWM Motor/Audio resource owner */
@@ -124,14 +120,12 @@ static int pwm_registers_inactive(void)
 }
 
 
-/* Motor Dead-band is a real MCPWM DBCTL/DBRED/DBFED runtime setting.
- * No board values are inferred from STM32 DEAD_TIME or an EVM example.
- * AM13E reference product integration must explicitly verify the actual gate polarity,
- * input routing, output swaps and both edge delays before opting in.
+/* Real MCPWM DBCTL/DBRED/DBFED: G431-derived numeric default is
+ * configured for runtime, NOT proof of electrically safe non-overlap.
  */
-#ifdef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
-#if AM13E_MOTOR_BOARD_DEADBAND_VERIFIED != 1
-#error "AM13E_MOTOR_BOARD_DEADBAND_VERIFIED must be 1"
+#ifdef AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED
+#if AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED != 1
+#error "AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED must be 1"
 #endif
 #if !defined(AM13E_MOTOR_DB_RED_TICKS) || \
     !defined(AM13E_MOTOR_DB_FED_TICKS) || \
@@ -170,7 +164,7 @@ static void configure_motor_deadband_isolated(void)
      * actions are forced LOW and all six physical pads are GPIO inputs.
      * Configuring these device registers does not energize a half-bridge.
      */
-#ifdef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
+#ifdef AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED
     DL_MCPWM_DeadBandConfig db = {
         .enableRisingEdgeDelayOnPathA=true,
         .enableFallingEdgeDelayOnPathB=true,
@@ -548,7 +542,7 @@ void am13e_app_motor_sixstep_write(int positive_mask,int negative_mask,
      * hardware dead-band. Without it remain fail-closed, not downgraded.
      * No power-stage output is connected even in a qualified DB build.
      */
-#ifndef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
+#ifndef AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED
     if (phase.damp && (positive_mask || negative_mask)) runtime_fault();
 #endif
     if (!am13e_motor_aq_plan_sixstep(&phase,&aq)) runtime_fault();
@@ -595,7 +589,7 @@ void am13e_app_motor_pwm_apply(int duty,int freq_min_khz,int freq_max_khz,
         .freq_max_khz=freq_max_khz,
         .ertm_us=ertm_us,
         .logical_duty=duty,
-#ifdef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
+#ifdef AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED
         .board_dead_ticks=AM13E_MOTOR_DB_COMPARE_OFFSET_TICKS,
 #else
         .board_dead_ticks=0, /* Unqualified: lock/damp remain fail-closed. */
@@ -612,7 +606,7 @@ void am13e_app_motor_pwm_apply(int duty,int freq_min_khz,int freq_max_khz,
      * The proper complementary/dead-band runtime remains to be ported.
      */
     if (lock<0 || lock>2) runtime_fault();
-#ifndef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
+#ifndef AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED
     /* Only board-qualified dead-band may be used for lock=1/2 or
      * active complementary freewheel. Never silently use 0ns.
      */
@@ -683,7 +677,7 @@ void am13e_app_motor_brushed_write(int reverse,int damp)
     if (!safety_initialized || fault_latched ||
         (reverse != 0 && reverse != 1) || (damp != 0 && damp != 1))
         runtime_fault();
-#ifndef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
+#ifndef AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED
     if (damp) runtime_fault();
 #endif
     const uint16_t pwm = (uint16_t)(DL_MCPWM_AQ_OUTPUT_HIGH_ZERO |
@@ -765,7 +759,7 @@ void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
          */
         uint32_t compare=(uint32_t)(((uint64_t)rel17_count*ticks+
                                       old_ticks/2U)/old_ticks);
-#ifdef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
+#ifdef AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED
         /* Only a verified board can supply the original DEAD_TIME-like
          * compare offset. Never infer it from a legacy MCU register.
          */
@@ -1197,7 +1191,7 @@ void am13e_app_motor_brake_counter_update(int running,int step,
             return;
         }
         if (drag_brake_aq_staged) runtime_fault();
-#ifndef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
+#ifndef AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED
         runtime_fault(); /* Lock compare offset has no verified dead-time. */
 #endif
     } else {

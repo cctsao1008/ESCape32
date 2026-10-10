@@ -13,9 +13,10 @@
  * Independent OC is explicitly disabled (PINCM=0), rather than assigned
  * a fabricated pin; the known PB15 nFAULT -> OST1 stays unchanged.
  *
- * 0 for Hi-Z safety and hardware-shutdown proof means NOT QUALIFIED.
- * No macros enabling motor outputs or calibrated sensor forwarding
- * are defined here. All entries remain overridable via -D or CMake.
+ * 0 for Hi-Z safety and shutdown proof means NOT HARDWARE VERIFIED.
+ * By default Reference FW1 now compiles live motor/ADC paths via CMake;
+ * numeric values are development settings, not real PCB sign-off.
+ * All entries remain overridable via -D or CMake.
  */
 #pragma once
 #ifndef AM13E
@@ -94,9 +95,9 @@
 #define AM13E_BOARD_NTC_MODEL 3
 #endif
 
-/* Existing PB15 nFAULT -> OST1 remains unchanged. G431 COMP_MAP=132
- * describes BEMF, NOT independent OC. Choose OST2 OC disabled (pin0).
- * OC active-low=1 is inert while the OC pin is disabled.
+/* PB15 nFAULT -> OST1 is always installed/checked at runtime.
+ * Independent OC -> OST2 is an OPTIONAL board path (PINCM=0 disables
+ * only the second trip). COMP_MAP=132 is G431 BEMF, not actual OC.
  */
 #ifndef AM13E_BOARD_OC_GPIO_PINCM
 #define AM13E_BOARD_OC_GPIO_PINCM 0

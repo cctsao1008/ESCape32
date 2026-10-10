@@ -1,13 +1,14 @@
 /* AM13E reference ESCape32 Rel17 AM13E FW1 interrupt release barrier.
  * Release PRIMASK for real PB14 DShot, 16 kHz SysTick, BEMF and motor
- * commutation IRQs, never release bridge gate drive here.
+ * commutation IRQs; the Rel17 motor/audio runtime alone requests gate
+ * drive later, not the IRQ release barrier.
  *
  * Require the installed TI startup vectors, enabled NVIC sources,
  * actual SysTick, initialized PB14 receiver, deasserted PB15 nFAULT,
  * and all six MCPWM pads forced LOW and isolated as GPIO inputs.
  *
- * This is NOT power-stage arming: external gate-driver polarity,
- * dead-time and independent overcurrent Trip remain unqualified.
+ * IRQ release is not a power-stage arming operation. Default numeric
+ * gate/dead-band model is not a claim of physical qualification.
  */
 #include "motor_backend.h"
 #include "motor_safety.h"
@@ -101,8 +102,8 @@ void am13e_app_motor_runtime_enable_interrupts(void)
         (SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK) != 0U)
         irq_barrier_fault();
 
-    /* Real input/telemetry/motor timing IRQs can now execute, while
-     * physical power-stage output remains isolated. PB13 is untouched.
+    /* Runtime IRQs can now execute. PB13 is inactive and physical PWM
+     * pins are isolated until Rel17 issues an actual drive/audio request.
      */
     __DSB();
     __ISB();

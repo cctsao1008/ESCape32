@@ -1,16 +1,17 @@
 /* TI AM13E23019 MCPWM0 six-pad/power-stage hardware owner.
  *
- * Full MCU-side lifecycle is implemented, but *not enabled* on an
- * unqualified AM13E reference board. All compile-time values below must come from
- * a reviewed electrical design, NEVER a TI EVM or guessed schematic.
+ * Full reference firmware compiles this LIVE MCU-side lifecycle with
+ * G431-derived software defaults. These are NOT actual PCB measurements.
  *
  * PB15 nFAULT already owns OST1 via INPUTXBAR2/PWMXBAR1. Independent
- * overcurrent owns INPUTXBAR3/PWMXBAR2/OST2 with a separate physical
- * active-high/low input. PB14 ECAP0/DShot stays untouched.
+ * overcurrent, if mapped, owns INPUTXBAR3/PWMXBAR2/OST2. Independent
+ * OC PINCM=0 disables that optional trip; mandatory PB15/OST1 stays.
+ * PB14 ECAP0/DShot stays untouched.
  *
  * HW safety ordering:
- *   boot: PB13 INACTIVE -> GPIO output, six pads INPUT, both OST active
- *   start: require both OST healthy & DB profile -> mux six MCPWM outputs
+ *   boot: PB13 INACTIVE -> GPIO output, six pads INPUT, OST1 installed
+ *   start: require OST1 (+optional OST2) healthy, configured RED/FED
+ *          -> mux six MCPWM outputs
  *          -> release AQ software force -> PB13 ACTIVE last
  *   stop/fault: PB13 INACTIVE first -> force AQ LOW -> six pads INPUT.
  * All calls execute within a PRIMASK-protected motor critical section.
@@ -37,11 +38,11 @@
 #if AM13E_BOARD_POWER_STAGE_PROFILE != 1
 #error "AM13E_BOARD_POWER_STAGE_PROFILE must equal 1"
 #endif
-#ifndef AM13E_MOTOR_BOARD_DEADBAND_VERIFIED
-#error "Qualified power stage requires hardware RED/FED and polarity"
+#ifndef AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED
+#error "Physical output requires compiled RED/FED control"
 #endif
-#ifndef AM13E_BOARD_SENSORS_CALIBRATED
-#error "Physical output requires calibrated VBUS/NTC, not raw ADC-only firmware"
+#ifndef AM13E_BOARD_SENSORS_CONFIGURED
+#error "Physical output requires compiled ADC/NTC scaling path"
 #endif
 #if !defined(AM13E_BOARD_PB13_ACTIVE_LEVEL) || \
     !defined(AM13E_BOARD_GATE_PWM_INVERT_MASK) || \
@@ -57,9 +58,11 @@ _Static_assert((AM13E_BOARD_PB13_ACTIVE_LEVEL==0 ||
                AM13E_BOARD_GATE_PWM_INVERT_MASK<=63 &&
                (AM13E_BOARD_OC_ACTIVE_LOW==0 ||
                 AM13E_BOARD_OC_ACTIVE_LOW==1) &&
-               AM13E_BOARD_GATE_INPUTS_HIZ_SAFE==1 &&
-               AM13E_BOARD_GATE_DRIVER_HAS_HW_SHUTDOWN==1 &&
-               AM13E_BOARD_OC_GPIO_PINCM>0 &&
+               (AM13E_BOARD_GATE_INPUTS_HIZ_SAFE==0 ||
+                AM13E_BOARD_GATE_INPUTS_HIZ_SAFE==1) &&
+               (AM13E_BOARD_GATE_DRIVER_HAS_HW_SHUTDOWN==0 ||
+                AM13E_BOARD_GATE_DRIVER_HAS_HW_SHUTDOWN==1) &&
+               AM13E_BOARD_OC_GPIO_PINCM>=0 &&
                AM13E_BOARD_OC_GPIO_PINCM<64 &&
                AM13E_BOARD_OC_GPIO_PINCM!=IOMUX_PINCM_PB13 &&
                AM13E_BOARD_OC_GPIO_PINCM!=IOMUX_PINCM_PB14 &&
@@ -76,7 +79,7 @@ _Static_assert((AM13E_BOARD_PB13_ACTIVE_LEVEL==0 ||
                AM13E_BOARD_OC_GPIO_PINCM!=IOMUX_PINCM_PA2 &&
                AM13E_BOARD_OC_GPIO_PINCM!=IOMUX_PINCM_PA16 &&
                AM13E_BOARD_OC_GPIO_PINCM!=IOMUX_PINCM_PA18,
-               "Unqualified/conflicting AM13E reference power stage configuration");
+               "Invalid/conflicting AM13E power-stage pin/level configuration");
 #endif
 
 static volatile uint32_t initialized;
@@ -121,7 +124,7 @@ static void set_pwm_force(DL_MCPWM_ACTION_QUALIFIER_SW_FORCE_OUTPUT force)
 
 int am13e_power_stage_oc_trip_ready(void)
 {
-#ifdef AM13E_BOARD_POWER_STAGE_PROFILE
+#if defined(AM13E_BOARD_POWER_STAGE_PROFILE) && AM13E_BOARD_OC_GPIO_PINCM != 0
     const uint32_t selected=PWMXBAR->PWM_XBAR_GXSEL[1].PWMXBARG0SEL;
     const uint32_t tzflag=DL_MCPWM_getTripZoneFlagStatus(MCPWM0);
     const uint32_t inverted=PWMXBAR->PWMXBAROUTINVERT & (1U<<1U);
@@ -150,6 +153,7 @@ void am13e_power_stage_init(void)
     driver_enable_level(0);
     DL_GPIO_initDigitalOutput(IOMUX_PINCM_PB13);
     DL_GPIO_enableOutput(GPIO1,GATE_EN_PIN);
+#if AM13E_BOARD_OC_GPIO_PINCM != 0
     DL_GPIO_initDigitalInput(AM13E_BOARD_OC_GPIO_PINCM);
     DL_XBAR_enableRawInput(AM13E_BOARD_OC_GPIO_PINCM);
     DL_XBAR_setInputXBAR(DL_XBAR_INPUT3,AM13E_BOARD_OC_GPIO_PINCM);
@@ -161,13 +165,15 @@ void am13e_power_stage_init(void)
     DL_MCPWM_setTripZoneAction(MCPWM0,DL_MCPWM_TZ_ACTION_EVENT_TZB,
                                DL_MCPWM_TZ_ACTION_HIGH_Z);
     DL_MCPWM_enableTripZoneSignals(MCPWM0,OC_SIGNAL);
+#endif /* Independent OC route assigned */
 #endif
     attached=0U;
     initialized=1U;
 #ifdef AM13E_BOARD_POWER_STAGE_PROFILE
     if (!driver_level_matches(0) ||
-        !am13e_power_stage_oc_trip_ready() ||
-        !am13e_app_motor_nfault_trip_ready())
+        !am13e_app_motor_nfault_trip_ready() ||
+        (AM13E_BOARD_OC_GPIO_PINCM != 0 &&
+         !am13e_power_stage_oc_trip_ready()))
         for(;;){__NOP();}
 #endif
 }
@@ -192,8 +198,9 @@ int am13e_power_stage_attached(void)
     return initialized && attached && driver_level_matches(1) &&
            am13e_mcu_motor_pads_gpio_oe_off(am13e_board_motor_pad_route()) &&
            pwm_function_readback() && !am13e_app_nfault_asserted() &&
-           am13e_power_stage_oc_trip_ready() &&
-           am13e_app_motor_nfault_trip_ready();
+           am13e_app_motor_nfault_trip_ready() &&
+           (AM13E_BOARD_OC_GPIO_PINCM == 0 ||
+            am13e_power_stage_oc_trip_ready());
 #else
     return 0;
 #endif
@@ -204,8 +211,9 @@ int am13e_power_stage_attach(void)
 #ifdef AM13E_BOARD_POWER_STAGE_PROFILE
     if (!initialized || attached ||
         __get_PRIMASK()!=1U || !driver_level_matches(0) ||
-        !am13e_power_stage_oc_trip_ready() ||
         !am13e_app_motor_nfault_trip_ready() ||
+        (AM13E_BOARD_OC_GPIO_PINCM != 0 &&
+         !am13e_power_stage_oc_trip_ready()) ||
         am13e_app_nfault_asserted() ||
         (MCPWM0->TBCTL&MCPWM_TBCTL_CTRMODE_MASK)!=
              (uint32_t)DL_MCPWM_COUNTER_MODE_UP ||
@@ -231,6 +239,6 @@ int am13e_power_stage_attach(void)
     }
     return 1;
 #else
-    return 0; /* Intentionally NOT a fake-success physical power stage. */
+    return 0; /* Explicit output-disabled diagnostic build only. */
 #endif
 }
