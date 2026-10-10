@@ -4,8 +4,8 @@
  * drive later, not the IRQ release barrier.
  *
  * Require the installed TI startup vectors, enabled NVIC sources,
- * actual SysTick, initialized PB14 receiver, deasserted PB15 nFAULT,
- * and all six MCPWM pads forced LOW and isolated as GPIO inputs.
+ * actual SysTick and initialized PB14 receiver. PB15 is IO-only;
+ * no nFAULT, OC or Gate Enable functionality is consulted here.
  *
  * IRQ release is not a power-stage arming operation. Default numeric
  * gate/dead-band model is not a claim of physical qualification.
@@ -14,7 +14,6 @@
 #include "motor_safety.h"
 #include "motor_bemf.h"
 #include "motor_event_timer.h"
-#include "motor_fault_route.h"
 #include "analog_runtime.h" /* ADC0 monitoring must have a live IRQ handler */
 #include "irq_vectors.h"
 #include "fault_input.h"
@@ -85,8 +84,7 @@ void am13e_app_motor_runtime_enable_interrupts(void)
         NVIC_GetPriority(ADC0_INT1_INT_IRQn)!=1U)
         irq_barrier_fault();
 
-    if (!NVIC_GetEnableIRQ(GPIO1_INT_IRQn) ||
-        !NVIC_GetEnableIRQ(ECAP0_INT_IRQn) ||
+    if (!NVIC_GetEnableIRQ(ECAP0_INT_IRQn) ||
         !NVIC_GetEnableIRQ(ECAP1_INT_IRQn) ||
         !NVIC_GetEnableIRQ(TIMG12_0_INT_IRQn) ||
         !NVIC_GetEnableIRQ(TIMG4_0_INT_IRQn) ||
@@ -96,8 +94,9 @@ void am13e_app_motor_runtime_enable_interrupts(void)
 
     AM13E_PB14_Status rx={0};
     am13e_app_pb14_status(&rx);
-    if (!rx.initialized || am13e_app_nfault_asserted() ||
-        !am13e_app_motor_nfault_trip_ready() ||
+    if (!rx.initialized ||
+        DL_GPIO_getEnabledInterrupts(GPIO1,
+                                      AM13E_APP_NFAULT_PIN_MASK)!=0U ||
         !am13e_app_motor_inactive_preflight_ok() ||
         (SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK) != 0U)
         irq_barrier_fault();

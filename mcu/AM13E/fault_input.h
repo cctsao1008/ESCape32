@@ -1,16 +1,10 @@
-/* AM13E reference AM13E23019 PB15/GPIO47 nFAULT input-only service. */
+/* AM13E reference auxiliary IO-only pin initialization.
+ * The active-low PB15 nFAULT net is configured as a bare GPIO input.
+ * No nFAULT interrupt, software fault supervision, or MCPWM trip.
+ */
 #pragma once
-#if !defined(AM13E)
-#error "AM13E GPIO runtime service is not for legacy MCUs"
+#ifndef AM13E
+#error "AM13E auxiliary IO initialization only"
 #endif
-
-/* PB15 nFAULT uses GPIO1 pin 15, distinct from PB14 command input.
- * The GPIO1 vector is shared: never acknowledge other pins here.
- */
-#define AM13E_APP_NFAULT_PIN_MASK (1UL << 15)
-
-/* Returns nonzero for an asserted or unavailable nFAULT input.
- * Must not be used as proof of hardware fault protection until board tested.
- */
+#define AM13E_APP_NFAULT_PIN_MASK (1UL<<15)
 void initgpio(void);
-int am13e_app_nfault_asserted(void);

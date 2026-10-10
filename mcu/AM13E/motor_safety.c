@@ -1,9 +1,9 @@
 /* ESCape32 Rel17 on AM13E23019: first physical MCPWM0 foundation.
  *
- * PURPOSE: initialize inactive MCPWM0 and mandatory PB15 OST1, then
- * attach six actual motor pads and assert PB13 only on a Rel17 request.
- * RED/FED and ADC use editable numeric DEVELOPMENT models; physical
- * driver/power-stage behavior must be verified before real energization.
+ * PURPOSE: provide full Rel17 MCU PWM/RED/FED scheduling and Motor Audio
+ * while physical phase pins and PB13 gate remain inactive and isolated.
+ * PB15 nFAULT, independent OC Trip and Gate Enable are IO ONLY; they
+ * are not integrated into the motor control/IRQ/fault path.
  */
 #include "motor_backend.h"
 #include "motor_audio_hw.h" /* Exclusive MCPWM Motor/Audio resource owner */
@@ -12,8 +12,7 @@
 #include "board_configuration.h" /* Required physical pin selection */
 #include "motor_event_timer.h"
 #include "motor_bemf.h"
-#include "motor_fault_route.h"
-#include "motor_power_stage.h" /* Board-profiled PB13 / OC OST2 / gate mux */ /* PB15 -> asynchronous MCPWM Trip */ /* ECAP1 comparator IRQ lifecycle */
+#include "motor_power_stage.h" /* PB13 GPIO inactive-only initializer */
 #include "motor_safety.h"
 #include "motor_shadow_plan.h"
 #include "motor_aq_plan.h"
@@ -102,7 +101,7 @@ static int pwm_io_for_runtime(void)
     /* Supports live Motor/Audio AQ and Compare updates on a qualified
      * bridge. Default IO Plan still accepts GPIO INPUT/Hi-Z only.
      */
-    return pwm_pads_disconnected() || am13e_power_stage_attached();
+    return pwm_pads_disconnected(); /* No physical output attachment. */
 }
 
 static int pwm_registers_inactive(void)
@@ -282,12 +281,10 @@ void am13e_app_motor_init(void)
     config.tripZoneConfig.actionOnB = DL_MCPWM_TZ_ACTION_HIGH_Z;
     DL_MCPWM_init(MCPWM0, &config);
     force_pwm_inactive();
-    /* Configure a real PB15 nFAULT one-shot HARDWARE trip before any
-     * internal PWM counter or CPU interrupt can run. Independent OC is
-     * still a distinct board-level requirement.
+    /* PB13 is initialized INACTIVE. PB15/OC GPIO inputs are prepared
+     * by initgpio(); neither is installed as an MCPWM Trip source.
      */
-    am13e_app_motor_nfault_trip_init();
-    am13e_power_stage_init(); /* Board-profiled independent OC OST2 */
+    am13e_power_stage_init();
     configure_motor_deadband_isolated();
     if (!pwm_pads_disconnected() || !pwm_registers_inactive()) {
         am13e_app_motor_fault_shutdown();
@@ -903,13 +900,11 @@ void am13e_app_motor_commutation_enable(int enable)
             (SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
             runtime_fault();
     } else {
-        /* A start is safe to stage ONLY if the existing software force
-         * and all physical pad-mux readbacks still indicate isolation.
-         * A PB15 nFAULT assertion is treated as a non-recoverable fault.
+        /* Functional MCPWM timebase is allowed to run internally;
+         * the IO-only profile NEVER connects six physical phase pins
+         * or changes PB13 to the ACTIVE gate level.
          */
-        if (am13e_app_nfault_asserted() ||
-            !am13e_app_motor_nfault_trip_ready() ||
-            !pwm_io_for_runtime())
+        if (!pwm_io_for_runtime())
             runtime_fault();
         if (!motor_timebase_running) {
             if (!pwm_registers_inactive() ||
@@ -929,14 +924,7 @@ void am13e_app_motor_commutation_enable(int enable)
                      (uint32_t)DL_MCPWM_COUNTER_MODE_UP ||
                    !(SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
             runtime_fault();
-        /* A fully specified board profile alone may connect six PWM
-         * functions and release software AQ force, then assert PB13
-         * as the LAST step. An unspecified board remains isolated.
-         */
-        if (am13e_power_stage_board_profile_present() &&
-            !am13e_power_stage_attached() &&
-            !am13e_power_stage_attach())
-            runtime_fault();
+        /* Motor algorithms run; external power stage stays inactive. */
     }
     __set_PRIMASK(irqmask);
 }
@@ -990,8 +978,6 @@ void am13e_app_motor_audio_begin(int mode)
     if (!safety_initialized || fault_latched || audio_owner ||
         motor_timebase_running || !pwm_registers_inactive() ||
         !pwm_pads_disconnected() ||
-        !am13e_app_motor_nfault_trip_ready() ||
-        am13e_app_nfault_asserted() ||
         (SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
         runtime_fault();
     am13e_app_motor_timing_cancel();
@@ -1059,10 +1045,7 @@ void am13e_app_motor_audio_compare(uint16_t u,uint16_t w)
             !(SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
             runtime_fault();
     }
-    if (am13e_power_stage_board_profile_present() &&
-        !am13e_power_stage_attached() &&
-        !am13e_power_stage_attach())
-        runtime_fault();
+    /* Motor music/PCM runs on MCPWM0, without gate enable/output pins. */
     __set_PRIMASK(mask);
 }
 

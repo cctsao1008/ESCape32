@@ -8,14 +8,15 @@
  * as divider 26820:1000. These are software estimates, not actual
  * AM13E VREF, external resistor values, gate polarity, or measurements.
  *
- * PB13 high=enable is a provisional active-high convention; G431 has
- * no equivalent verified PB13 gate pin on its PHOTONDRIVE1 target.
- * Independent OC is explicitly disabled (PINCM=0), rather than assigned
- * a fabricated pin; the known PB15 nFAULT -> OST1 stays unchanged.
+ * PB13 high=enable is a provisional active-high convention; the
+ * reference software always holds it INACTIVE. No functional enable
+ * output is implemented, regardless of the MCU PWM runtime.
+ * Independent OC is unassigned (PINCM=0). PB15 nFAULT is configured
+ * as GPIO Input only: NO OST1, IRQ or fault service in this profile.
  *
  * 0 for Hi-Z safety and shutdown proof means NOT HARDWARE VERIFIED.
- * By default Reference FW1 now compiles live motor/ADC paths via CMake;
- * numeric values are development settings, not real PCB sign-off.
+ * Reference FW1 compiles motor PWM/ADC algorithms but keeps these five
+ * auxiliary features IO-only. Numeric values are development settings.
  * All entries remain overridable via -D or CMake.
  */
 #pragma once
@@ -105,3 +106,14 @@
 #ifndef AM13E_BOARD_OC_ACTIVE_LOW
 #define AM13E_BOARD_OC_ACTIVE_LOW 1
 #endif
+/* Unassigned auxiliary pins: 0 = no pin, NO peripheral traffic.
+ * When explicitly assigned: only GPIO Input or analog pinmux is set.
+ * No Serial protocol, hardware OC Trip or current-limit algorithm.
+ */
+#ifndef AM13E_BOARD_SERIAL_TX_PINCM
+#define AM13E_BOARD_SERIAL_TX_PINCM 0
+#endif
+#ifndef AM13E_BOARD_CURRENT_SENSE_PINCM
+#define AM13E_BOARD_CURRENT_SENSE_PINCM 0
+#endif
+

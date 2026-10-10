@@ -118,8 +118,9 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_audio.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_audio_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/fault_trip_route_plan.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/fault_trip_backend.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_fault_route.c"
+            # fault_trip_backend.c / motor_fault_route.c are NOT part
+            # of the IO-only FW1. Keep their independent MCU object and
+            # host tests for the later board functional integration.
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_bemf.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_sine_table.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_phase_plan.c"
@@ -197,15 +198,14 @@ function(add_target_ti_am13e name)
         # Still compile src/telem.c for Extended DShot packet scheduling.
         target_compile_definitions(${am13e_binary} PRIVATE
             AM13E_PB14_ONLY AM13E_REF_IO_PLAN_V1=1)
-        # Full Rel17 Reference FW1 includes live MCPWM0 outputs,
-        # dead-band and real ADC model by DEFAULT. The gate stays
-        # inactive at boot; arming remains the original Rel17 policy.
-        # These development defaults are NOT validated hardware values.
-        option(AM13E_POWER_STAGE_ENABLED
-            "Build functional motor/audio output stage (development values)" ON)
-        if(AM13E_POWER_STAGE_ENABLED)
+        # Firmware algorithms/IRQ/PWM timer/dead-band and real ADC
+        # model compile by default. Auxiliary features are IO-only:
+        # PB13 Gate Enable, PB15 nFAULT, optional OC pin, serial TX,
+        # optional current sense. No physical motor power-stage attach.
+        option(AM13E_MOTOR_RUNTIME_ENABLED
+            "Compile motor PWM/dead-band/sensing logic (IO-only aux)" ON)
+        if(AM13E_MOTOR_RUNTIME_ENABLED)
             target_compile_definitions(${am13e_binary} PRIVATE
-                AM13E_BOARD_POWER_STAGE_PROFILE=1
                 AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED=1
                 AM13E_BOARD_SENSORS_CONFIGURED=1)
         endif()
@@ -216,8 +216,8 @@ function(add_target_ti_am13e name)
         #       AM13E_BOARD_PB13_ACTIVE_LEVEL=<board value>
         #       ...RED/FED/OC pin/phase inversion/sensing...)
         # The numeric G431-derived reference model is a DEVELOPMENT
-        # default. AM13E_POWER_STAGE_ENABLED=OFF selects the disabled
-        # output diagnostic; it is no longer the standard FW1 build.
+        # development values. AM13E_MOTOR_RUNTIME_ENABLED controls
+        # internal PWM/ADC logic, not external gate/OC functionality.
         set(AM13E_BOARD_BOARD_PROFILE_FILE "" CACHE FILEPATH
             "Reviewed AM13E reference gate driver/dead-band/independent OC definitions")
         if(AM13E_BOARD_BOARD_PROFILE_FILE)
