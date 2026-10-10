@@ -41,10 +41,10 @@ jobs:
           mkdir -p am13e-ci-logs
           cmake -S . -B am13e-ci-image-profile -G "Unix Makefiles" \
             -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
-            -DAM13E_IMAGE_PROFILE=REFERENCE_V16 \
+            -DAM13E_IMAGE_PROFILE=REL17_V14 \
             -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/linker_boot_reference.ld" \
             >am13e-ci-logs/image-profile-positive.log 2>&1
-          grep -q 'AM13E_IMAGE_PROFILE:STRING=REFERENCE_V16' \
+          grep -q 'AM13E_IMAGE_PROFILE:STRING=REL17_V14' \
             am13e-ci-image-profile/CMakeCache.txt
           if cmake -S . -B am13e-ci-image-profile-negative -G "Unix Makefiles" \
             -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
@@ -187,7 +187,7 @@ jobs:
             >am13e-ci-logs/reference-clock-diag-build.log 2>&1
           cat am13e-ci-logs/reference-clock-diag-build.log
 
-      - name: Verify v1.6 vector-first ARM linker, packer and Boot Flash host transaction
+      - name: Verify Rel17-v1.4 vector-first ARM linker, packer and Boot Flash host transaction
         id: boot
         continue-on-error: true
         shell: bash
@@ -198,33 +198,33 @@ jobs:
             >am13e-ci-logs/boot-link-pack.log 2>&1
           cmake -S boot/tests/am13e_host -B am13e-ci-boot-host -G "Unix Makefiles" \
             -DAM13E_HOST_SANITIZERS=OFF \
-            -DAM13E_HOST_PACKED_IMAGE="$(pwd)/am13e-ci-build/AM13E_APP_SMOKE.am13e-smoke.bin" \
+            -DAM13E_HOST_PACKED_IMAGE="$(pwd)/am13e-ci-build/AM13E_APP_SMOKE.flat-smoke.bin" \
             >am13e-ci-logs/boot-host-configure.log 2>&1
           cmake --build am13e-ci-boot-host -j 2 >am13e-ci-logs/boot-host-build.log 2>&1
           ctest --test-dir am13e-ci-boot-host --output-on-failure \
             2>&1 | tee am13e-ci-logs/boot-host-test.log
 
-      - name: Link and pack FULL FW1 v1.6, verify Boot Flash transaction in host memory
-        id: v16
+      - name: Link and pack FULL FW1 Rel17-v1.4, verify Boot Flash transaction in host memory
+        id: rel17
         continue-on-error: true
         shell: bash
         run: |
           set -e
           set -o pipefail
-          cmake --build am13e-ci-build --target AM13E_FW1_V16_IMAGE -j 2 \
-            >am13e-ci-logs/fw1-v16-build.log 2>&1
-          arm-none-eabi-size am13e-ci-build/AM13E_FW1_V16.elf \
-            2>&1 | tee am13e-ci-logs/fw1-v16-size.log
-          arm-none-eabi-objdump -h am13e-ci-build/AM13E_FW1_V16.elf \
-            >am13e-ci-logs/fw1-v16-sections.log
-          cmake -S boot/tests/am13e_host -B am13e-ci-v16-host -G "Unix Makefiles" \
+          cmake --build am13e-ci-build --target AM13E_FW1_REL17_IMAGE -j 2 \
+            >am13e-ci-logs/fw1-rel17-build.log 2>&1
+          arm-none-eabi-size am13e-ci-build/AM13E_FW1_REL17.elf \
+            2>&1 | tee am13e-ci-logs/fw1-rel17-size.log
+          arm-none-eabi-objdump -h am13e-ci-build/AM13E_FW1_REL17.elf \
+            >am13e-ci-logs/fw1-rel17-sections.log
+          cmake -S boot/tests/am13e_host -B am13e-ci-rel17-host -G "Unix Makefiles" \
             -DAM13E_HOST_SANITIZERS=OFF \
-            -DAM13E_HOST_PACKED_IMAGE="$(pwd)/am13e-ci-build/AM13E_FW1_V16.am13e.bin" \
-            >am13e-ci-logs/v16-host-configure.log 2>&1
-          cmake --build am13e-ci-v16-host -j 2 \
-            >am13e-ci-logs/v16-host-build.log 2>&1
-          ctest --test-dir am13e-ci-v16-host --output-on-failure \
-            2>&1 | tee am13e-ci-logs/v16-host-test.log
+            -DAM13E_HOST_PACKED_IMAGE="$(pwd)/am13e-ci-build/AM13E_FW1_REL17.flat.bin" \
+            >am13e-ci-logs/rel17-host-configure.log 2>&1
+          cmake --build am13e-ci-rel17-host -j 2 \
+            >am13e-ci-logs/rel17-host-build.log 2>&1
+          ctest --test-dir am13e-ci-rel17-host --output-on-failure \
+            2>&1 | tee am13e-ci-logs/rel17-host-test.log
 
       - name: Link complete ESCape32-derived 16KiB Bootloader for AM13E
         id: boot_elf
@@ -240,13 +240,13 @@ jobs:
           arm-none-eabi-objdump -h am13e-ci-build/boot/BOOT5_PB14.elf \
             >am13e-ci-logs/boot-elf-sections.log
 
-      - name: Audit v1.6 linked Boot/FW1 addresses and ELF-to-BIN integrity
+      - name: Audit Rel17-v1.4 linked Boot/FW1 addresses and ELF-to-BIN integrity
         id: static_image
         shell: bash
         run: |
           set -o pipefail
-          python3 mcu/AM13E/tools/verify_v16_image.py --build am13e-ci-build \
-            2>&1 | tee am13e-ci-logs/fw1-v16-static-audit.log
+          python3 mcu/AM13E/tools/verify_rel17_image.py --build am13e-ci-build \
+            2>&1 | tee am13e-ci-logs/fw1-rel17-static-audit.log
 
       - name: Compile auxiliary IO-only profile and reject pin conflicts
         id: board_profile
@@ -307,11 +307,11 @@ jobs:
             am13e-ci-build/AM13E_FW1.map
             am13e-ci-build/boot/BOOT5_PB14.map
             am13e-ci-build/boot/BOOT5_PB14.elf
-            am13e-ci-build/AM13E_FW1_V16.map
-            am13e-ci-build/AM13E_FW1_V16.elf
-            am13e-ci-build/AM13E_FW1_V16.bin
-            am13e-ci-build/AM13E_FW1_V16.am13e.bin
-            am13e-ci-build/AM13E_FW1_V16.json
+            am13e-ci-build/AM13E_FW1_REL17.map
+            am13e-ci-build/AM13E_FW1_REL17.elf
+            am13e-ci-build/AM13E_FW1_REL17.bin
+            am13e-ci-build/AM13E_FW1_REL17.flat.bin
+            am13e-ci-build/AM13E_FW1_REL17.json
           retention-days: 14
           if-no-files-found: warn
 
@@ -326,10 +326,10 @@ jobs:
           echo "Rel17 functional coverage evidence: ${{ steps.coverage.outcome }}"
           echo "Rev1.4 scope audit (open blockers tracked): ${{ steps.v14_scope.outcome }}"
           echo "Motor/ADC/Flash/BEMF host regression: ${{ steps.host.outcome }}"
-          echo "v1.6 Boot/Link/Pack Host Tests: ${{ steps.boot.outcome }}"
-          echo "Actual Rel17 FW1 v1.6 ELF/Pack/Flash transaction: ${{ steps.v16.outcome }}"
+          echo "Rel17-v1.4 Boot/Link/Pack Host Tests: ${{ steps.boot.outcome }}"
+          echo "Actual Rel17 FW1 Rel17-v1.4 ELF/Pack/Flash transaction: ${{ steps.rel17.outcome }}"
           echo "Common 16KiB AM13E Boot ELF: ${{ steps.boot_elf.outcome }}"
-          echo "v1.6 linked-image static audit: ${{ steps.static_image.outcome }}"
+          echo "Rel17-v1.4 linked-image static audit: ${{ steps.static_image.outcome }}"
           test "${{ steps.host.outcome }}" = success &&
           test "${{ steps.build.outputs.configure_rc }}" = 0 &&
           test "${{ steps.build.outputs.compile_rc }}" = 0 &&
@@ -338,6 +338,6 @@ jobs:
           test "${{ steps.coverage.outcome }}" = success &&
           test "${{ steps.v14_scope.outcome }}" = success &&
           test "${{ steps.boot.outcome }}" = success &&
-          test "${{ steps.v16.outcome }}" = success &&
+          test "${{ steps.rel17.outcome }}" = success &&
           test "${{ steps.boot_elf.outcome }}" = success &&
           test "${{ steps.static_image.outcome }}" = success

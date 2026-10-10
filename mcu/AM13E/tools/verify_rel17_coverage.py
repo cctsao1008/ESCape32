@@ -48,13 +48,13 @@ def main():
     summary=(args.logs/"summary.txt").read_text()
     for key in ("CONFIGURE_RC=0","OBJECT_COMPILE_RC=0","STRICT_LINK_RC=0"):
         require(key in summary,"ARM FW1 build/link gate failed: "+key)
-    for path in ("AM13E_FW1_V16.elf","AM13E_FW1_V16.am13e.bin",
+    for path in ("AM13E_FW1_REL17.elf","AM13E_FW1_REL17.flat.bin",
                  "boot/BOOT5_PB14.elf"):
         require((args.build/path).stat().st_size>0,
-                "Real v1.6 image/boot artifact missing: "+path)
-    for log in ("v16-host-test.log","boot-host-test.log"):
+                "Real Rel17 v1.4 image/boot artifact missing: "+path)
+    for log in ("rel17-host-test.log","boot-host-test.log"):
         require("100% tests passed" in (args.logs/log).read_text(),
-                "v1.6 pack/Boot transaction host test failed: "+log)
+                "Rel17 v1.4 pack/Boot transaction host test failed: "+log)
 
     host=(args.logs/"host-tests.log").read_text()
     report=[]
@@ -140,7 +140,7 @@ def main():
         "profile":data["branch"],
         "status":"PASS_SOFTWARE_EVIDENCE_ONLY",
         "firmware_arm_strict_link":"PASS",
-        "boot_v16_image_contract":"PASS",
+        "boot_rel17_image_contract":"PASS",
         "feature_records":report,
         "ported_software_count":len(data["ported_software"]),
         "io_only_count":len(data["io_only"]),
@@ -154,7 +154,7 @@ def main():
         json.dumps(result,indent=2,ensure_ascii=False)+"\n")
     lines=["# Rel17 / AM13E FW1 — Executable Software Evidence",
            "",
-           "ARM FW1 strict link: **PASS**; Boot/Image v1.6: **PASS**.",
+           "ARM FW1 strict link: **PASS**; Boot/Image Rel17 v1.4: **PASS**.",
            "",
            "| Feature | Scope | ARM linked | Host regression |",
            "| --- | --- | --- | --- |"]
@@ -167,7 +167,7 @@ def main():
         "\n".join(lines)+"\n")
     print(f"PASS: {len(data['ported_software'])} ported-software features, "+
           f"{len(data['io_only'])} IO-only, "+
-          f"{len(all_tests)} distinct native cases, FW1/Boot v1.6 link")
+          f"{len(all_tests)} distinct native cases, FW1/Boot Rel17 v1.4 link")
     print("SCOPE: physical hardware timing, ADC, gate and motor spin NOT verified")
     return 0
 

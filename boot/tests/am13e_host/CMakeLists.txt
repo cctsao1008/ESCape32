@@ -7,7 +7,7 @@ set(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../..")
 add_executable(am13e_flash_transaction_test
     "${REPO_ROOT}/boot/tests/am13e_flash_transaction_test.c"
     "${REPO_ROOT}/boot/mcu/AM13E/flash.c"
-    "${REPO_ROOT}/boot/mcu/AM13E/image_integrity.c")
+    "${REPO_ROOT}/boot/mcu/AM13E/app_validity.c")
 target_compile_features(am13e_flash_transaction_test PRIVATE c_std_11)
 target_compile_definitions(am13e_flash_transaction_test PRIVATE AM13E_FLASH_TEST)
 target_include_directories(am13e_flash_transaction_test PRIVATE
@@ -24,26 +24,22 @@ if(AM13E_HOST_SANITIZERS AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 add_test(NAME am13e_flash_transaction COMMAND am13e_flash_transaction_test)
 
-add_executable(am13e_image_integrity_test
-    "${REPO_ROOT}/boot/tests/am13e_image_integrity_test.c"
-    "${REPO_ROOT}/boot/mcu/AM13E/image_integrity.c")
-target_compile_features(am13e_image_integrity_test PRIVATE c_std_11)
-target_include_directories(am13e_image_integrity_test PRIVATE
+add_executable(am13e_app_validity_test
+    "${REPO_ROOT}/boot/tests/am13e_app_validity_test.c"
+    "${REPO_ROOT}/boot/mcu/AM13E/app_validity.c")
+target_compile_features(am13e_app_validity_test PRIVATE c_std_11)
+target_include_directories(am13e_app_validity_test PRIVATE
     "${REPO_ROOT}/boot/mcu/AM13E")
-target_compile_options(am13e_image_integrity_test PRIVATE
+target_compile_options(am13e_app_validity_test PRIVATE
     -O1 -g -Wall -Wextra -Werror)
 if(AM13E_HOST_SANITIZERS AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(am13e_image_integrity_test PRIVATE
+    target_compile_options(am13e_app_validity_test PRIVATE
         -fsanitize=address,undefined -fno-omit-frame-pointer)
-    target_link_options(am13e_image_integrity_test PRIVATE
+    target_link_options(am13e_app_validity_test PRIVATE
         -fsanitize=address,undefined)
 endif()
-add_test(NAME am13e_image_validator COMMAND am13e_image_integrity_test)
-# The previously RED early-finalize gate is now a mandatory regression.
-# Never mark the test WILL_FAIL: real rejection is required.
-add_test(NAME am13e_image_integrity_gate
-    COMMAND am13e_flash_transaction_test --image-integrity)
-
+add_test(NAME am13e_app_validity COMMAND am13e_app_validity_test)
+# Rel17 v1.4 has no image CRC or signature-last early-finalize gate.
 # Stage C: packer CLI uses Python's stdlib and a separate temporary image.
 # Keep it under CTest alongside the ARM-independent firmware integrity tests.
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
@@ -54,7 +50,7 @@ add_test(NAME am13e_image_packer
 # separate CMake build directory, not in this native-GCC CTest tree.
 # Pass the actual absolute path. Never silently regenerate a synthetic image.
 set(AM13E_HOST_PACKED_IMAGE "" CACHE FILEPATH
-    "Real ARM ELF-derived AM13E reference v2 packed image for transaction verification")
+    "Real ARM ELF-derived Rel17 flat application image")
 if(AM13E_HOST_PACKED_IMAGE)
     if(NOT EXISTS "${AM13E_HOST_PACKED_IMAGE}")
         message(FATAL_ERROR
@@ -72,7 +68,7 @@ if(AM13E_HOST_PACKED_IMAGE)
         "${REPO_ROOT}/boot/src/io.c"
         "${REPO_ROOT}/boot/mcu/AM13E/flash_range.c"
         "${REPO_ROOT}/boot/mcu/AM13E/flash.c"
-        "${REPO_ROOT}/boot/mcu/AM13E/image_integrity.c")
+        "${REPO_ROOT}/boot/mcu/AM13E/app_validity.c")
     target_compile_features(am13e_boot_protocol_test PRIVATE c_std_11)
     target_compile_definitions(am13e_boot_protocol_test PRIVATE
         AM13E AM13E_FLASH_TEST IO_PB14)

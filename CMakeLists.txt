@@ -79,7 +79,7 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/device.c"
             "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/app.c"
             "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/flash.c"
-            "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/image_integrity.c"
+            "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/app_validity.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/newlib_syscalls.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_flash.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_flashctl.c")
@@ -345,9 +345,9 @@ if(AM13E_ENABLE_APP_SMOKE)
     set(am13e_smoke_raw
         "${CMAKE_CURRENT_BINARY_DIR}/AM13E_APP_SMOKE.bin")
     set(am13e_smoke_packed
-        "${CMAKE_CURRENT_BINARY_DIR}/AM13E_APP_SMOKE.am13e-smoke.bin")
+        "${CMAKE_CURRENT_BINARY_DIR}/AM13E_APP_SMOKE.flat-smoke.bin")
     set(am13e_smoke_manifest
-        "${CMAKE_CURRENT_BINARY_DIR}/AM13E_APP_SMOKE.am13e-smoke.json")
+        "${CMAKE_CURRENT_BINARY_DIR}/AM13E_APP_SMOKE.flat-smoke.json")
 
     add_custom_command(
         OUTPUT "${am13e_smoke_raw}"
@@ -619,44 +619,44 @@ if(AM13E_ENABLE_FW1_LINK_GATE)
         OUTPUT_NAME "AM13E_FW1" SUFFIX ".elf")
 endif()
 
-# AM13E reference v1.6 real FW1 source linker/CRC packer, never flash from CI.
+# AM13E reference v1.4 real FW1 source linker/CRC packer, never flash from CI.
 # APP_BASE 0x6000; independent FW1/FW2 configs 0x4000/0x5000.
 # Full 488KiB application allocation; 256KiB transport kept until changed.
 # Image ABI must be selected separately from the AM13E MCU backend.
 # NONE is valid for object-only source port work with FW1 v16 disabled.
-set(AM13E_IMAGE_PROFILE "REFERENCE_V16" CACHE STRING
-    "AM13E linked image profile (REFERENCE_V16 or NONE)")
-set_property(CACHE AM13E_IMAGE_PROFILE PROPERTY STRINGS REFERENCE_V16 NONE)
-option(AM13E_ENABLE_FW1_V16_IMAGE
-    "Enable AM13E reference v1.6 Rel17 application linked ELF and packed image" ON)
-if(AM13E_ENABLE_FW1_V16_IMAGE)
-    if(NOT AM13E_IMAGE_PROFILE STREQUAL "REFERENCE_V16")
+set(AM13E_IMAGE_PROFILE "REL17_V14" CACHE STRING
+    "AM13E linked image profile (REL17_V14 or NONE)")
+set_property(CACHE AM13E_IMAGE_PROFILE PROPERTY STRINGS REL17_V14 NONE)
+option(AM13E_ENABLE_FW1_REL17_IMAGE
+    "Enable AM13E reference v1.4 Rel17 application linked ELF and packed image" ON)
+if(AM13E_ENABLE_FW1_REL17_IMAGE)
+    if(NOT AM13E_IMAGE_PROFILE STREQUAL "REL17_V14")
         message(FATAL_ERROR
             "Unsupported AM13E_IMAGE_PROFILE for linked FW1; "
-            "only REFERENCE_V16 ABI exists. Disable FW1_V16_IMAGE "
+            "only REL17_V14 ABI exists. Disable FW1_REL17_IMAGE "
             "and select NONE for generic source-only port work.")
     endif()
-    include("${PROJECT_SOURCE_DIR}/mcu/AM13E/profiles/image_reference_v16.cmake")
+    include("${PROJECT_SOURCE_DIR}/mcu/AM13E/profiles/image_rel17_v14.cmake")
     if(AM13E_BOOT_LINKER_SCRIPT AND NOT
        AM13E_BOOT_LINKER_SCRIPT STREQUAL AM13E_PROFILE_BOOT_LINKER_SCRIPT)
         message(FATAL_ERROR
-            "REFERENCE_V16 image cannot pair with an incompatible Boot linker")
+            "REL17_V14 image cannot pair with an incompatible Boot linker")
     endif()
-    find_program(AM13E_V16_OBJCOPY arm-none-eabi-objcopy REQUIRED)
+    find_program(AM13E_REL17_OBJCOPY arm-none-eabi-objcopy REQUIRED)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
-    add_executable(AM13E_FW1_V16.elf EXCLUDE_FROM_ALL
+    add_executable(AM13E_FW1_REL17.elf EXCLUDE_FROM_ALL
         "${PROJECT_BINARY_DIR}/am13e-sdk-compat/startup_gcc_arm.c"
         $<TARGET_OBJECTS:AM13E>)
-    target_include_directories(AM13E_FW1_V16.elf SYSTEM PRIVATE
+    target_include_directories(AM13E_FW1_REL17.elf SYSTEM PRIVATE
         "$<TARGET_PROPERTY:AM13E,INCLUDE_DIRECTORIES>")
-    target_compile_definitions(AM13E_FW1_V16.elf PRIVATE
+    target_compile_definitions(AM13E_FW1_REL17.elf PRIVATE
         AM13E TARGET_NAME="AM13E"
         __DEVICE_SHORT__="am13e230x" __DEVICE_LONG__="AM13E230x"
         __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
-    target_compile_options(AM13E_FW1_V16.elf PRIVATE
+    target_compile_options(AM13E_FW1_REL17.elf PRIVATE
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
         -mfloat-abi=hard -fno-branch-count-reg -Werror)
-    target_link_options(AM13E_FW1_V16.elf PRIVATE
+    target_link_options(AM13E_FW1_REL17.elf PRIVATE
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
         -mfloat-abi=hard -fno-branch-count-reg
         "-T${AM13E_PROFILE_APP_LINKER_SCRIPT}"
@@ -666,29 +666,29 @@ if(AM13E_ENABLE_FW1_V16_IMAGE)
         -Wl,--require-defined=HardFault_Handler
         -Wl,--require-defined=PendSV_Handler
         -Wl,--require-defined=SysTick_Handler
-        "-Wl,-Map,${CMAKE_CURRENT_BINARY_DIR}/AM13E_FW1_V16.map")
-    set_target_properties(AM13E_FW1_V16.elf PROPERTIES
-        OUTPUT_NAME "AM13E_FW1_V16" SUFFIX ".elf")
-    set(am13e_v16_raw "${CMAKE_CURRENT_BINARY_DIR}/AM13E_FW1_V16.bin")
-    set(am13e_v16_packed "${CMAKE_CURRENT_BINARY_DIR}/AM13E_FW1_V16.am13e.bin")
-    set(am13e_v16_manifest "${CMAKE_CURRENT_BINARY_DIR}/AM13E_FW1_V16.json")
-    add_custom_command(OUTPUT "${am13e_v16_raw}"
-        COMMAND "${AM13E_V16_OBJCOPY}" -O binary --gap-fill=0xff
-            "$<TARGET_FILE:AM13E_FW1_V16.elf>" "${am13e_v16_raw}"
-        DEPENDS AM13E_FW1_V16.elf
+        "-Wl,-Map,${CMAKE_CURRENT_BINARY_DIR}/AM13E_FW1_REL17.map")
+    set_target_properties(AM13E_FW1_REL17.elf PROPERTIES
+        OUTPUT_NAME "AM13E_FW1_REL17" SUFFIX ".elf")
+    set(am13e_rel17_raw "${CMAKE_CURRENT_BINARY_DIR}/AM13E_FW1_REL17.bin")
+    set(am13e_rel17_packed "${CMAKE_CURRENT_BINARY_DIR}/AM13E_FW1_REL17.flat.bin")
+    set(am13e_rel17_manifest "${CMAKE_CURRENT_BINARY_DIR}/AM13E_FW1_REL17.json")
+    add_custom_command(OUTPUT "${am13e_rel17_raw}"
+        COMMAND "${AM13E_REL17_OBJCOPY}" -O binary --gap-fill=0xff
+            "$<TARGET_FILE:AM13E_FW1_REL17.elf>" "${am13e_rel17_raw}"
+        DEPENDS AM13E_FW1_REL17.elf
             "${AM13E_PROFILE_APP_LINKER_SCRIPT}"
         VERBATIM)
-    add_custom_command(OUTPUT "${am13e_v16_packed}" "${am13e_v16_manifest}"
+    add_custom_command(OUTPUT "${am13e_rel17_packed}" "${am13e_rel17_manifest}"
         COMMAND "${Python3_EXECUTABLE}"
             "${AM13E_PROFILE_PACKER_SCRIPT}"
-            pack "${am13e_v16_raw}" "${am13e_v16_packed}"
-            --manifest "${am13e_v16_manifest}"
+            pack "${am13e_rel17_raw}" "${am13e_rel17_packed}"
+            --manifest "${am13e_rel17_manifest}"
         COMMAND "${Python3_EXECUTABLE}"
             "${AM13E_PROFILE_PACKER_SCRIPT}"
-            verify "${am13e_v16_packed}"
-        DEPENDS "${am13e_v16_raw}"
+            verify "${am13e_rel17_packed}"
+        DEPENDS "${am13e_rel17_raw}"
             "${AM13E_PROFILE_PACKER_SCRIPT}"
         VERBATIM)
-    add_custom_target(AM13E_FW1_V16_IMAGE
-        DEPENDS "${am13e_v16_packed}" "${am13e_v16_manifest}")
+    add_custom_target(AM13E_FW1_REL17_IMAGE
+        DEPENDS "${am13e_rel17_packed}" "${am13e_rel17_manifest}")
 endif()

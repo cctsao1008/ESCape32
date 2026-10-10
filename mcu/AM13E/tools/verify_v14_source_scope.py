@@ -77,8 +77,9 @@ def main():
           "rx_mode=AM13E_PB14_RX_UNDECIDED" not in
           decoder.split("void am13e_pb14_decoder_idle(")[1],
           "Missing Oneshot125/DShot1200 or upstream receiver mode semantics")
-    check("boot_am13e_image_check(" in src("boot/mcu/AM13E/app.c"),
-          "Boot image ABI changed without migration review")
+    check("boot_am13e_app_validity(" in src("boot/mcu/AM13E/app.c") and
+          "AM13E_BOOT_CFG_ID" in src("boot/mcu/AM13E/app_validity.h"),
+          "Missing approved Rel17 Cfg.id/vector Boot gate")
     check("am13e_power_stage_attach(" not in
           src("mcu/AM13E/motor_power_stage.c"),
           "Five user-deferred IO-only features silently enabled")
