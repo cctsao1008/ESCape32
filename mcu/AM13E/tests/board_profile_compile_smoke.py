@@ -49,6 +49,10 @@ for obj in commands:
     src=pathlib.Path(obj["file"]).name
     if src not in targets:
         continue
+    # The project generates compile commands for many legacy ESC targets
+    # and for BOOT5. NEVER inject AM13E board macros into STM32/Boot.
+    if "CMakeFiles/AM13E.dir/" not in obj["command"]:
+        continue
     observed.add(src)
     args=shlex.split(obj["command"])
     # An object-build command may include "-o PATH" and "-c".
