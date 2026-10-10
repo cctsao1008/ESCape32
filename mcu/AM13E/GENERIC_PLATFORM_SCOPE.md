@@ -97,3 +97,9 @@ This document is a porting boundary, not a hardware qualification.
 ## Host-gated MCU Fault Trip route policy
 
 The new `fault_trip_route_plan.c` has no SDK or board dependency. The actual TI backend calls this policy before register writes and enforces SDK encoding static assertions. `fault_trip_route_plan_host_test.c` exercises 128 route pairs with mismatch/bounds rejection in CI. This is *not* proof of physical fault shutdown, electrical levels or latency.
+
+## Command input GPIO/XBAR source split
+
+- `command_input_route_backend.[ch]` performs real TI digital-input init and INPUTXBAR route/readback. Its descriptor requires the pin, GPIO function and XBAR route explicitly, without configuring motor outputs, pull/bias or board voltages.
+- `command_input_reference.h` owns Reference PB14/GPIO46 to ECAP0 route. `pb14_capture.c` retains the existing exact DShot/servo callbacks, ECAP capture/IRQ/clock calibration and BiDShot dispatch.
+- `AM13E_MCU_COMMAND_INPUT_ROUTE` independently ARM-compiles the generic MCU object with no Board Profile selected. Board physical pin levels, capture latency and ECAP/DMA race verification are open.

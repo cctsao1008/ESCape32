@@ -17,6 +17,8 @@
 #include "io_backend.h"
 #include "input_watchdog.h"
 #include "pb14_bidir_tx.h"
+#include "command_input_route_backend.h"
+#include "command_input_reference.h"
 #include <soc.h>
 #include <dl_gpio.h>
 #include <dl_ecap.h>
@@ -26,12 +28,6 @@
 
 /* Original ESCape32 fatal policy; real motor shutdown remains unresolved. */
 extern void hard_fault_handler(void);
-
-#define PB14_GPIO        GPIO1
-#define PB14_GPIO_PIN    DL_GPIO_PIN(14U)
-#define PB14_PINCM       IOMUX_PINCM_PB14
-#define PB14_GPIO_NUMBER 46U
-#define PB14_ECAP       ECAP0
 
 /* AM13E230x TRM SPRUJF2B (rev B), Tables 11-3 and 24-4:
  *   DMA source index 39 = ECAP0DMA; 40 = ECAP1DMA.
@@ -61,7 +57,15 @@ _Static_assert((unsigned)DL_DMA_TRIGGER_SOURCE_ECAP2DMA == 40U,
                                   DL_ECAP_ISR_SOURCE_CEVT4 | \
                                   DL_ECAP_ISR_SOURCE_CTROVF)
 
-_Static_assert(IOMUX_PINCM_PB14 == 46, "AM13E reference PB14/GPIO46 changed");
+/* Route is a board choice, not an AM13E silicon default. */
+static const AM13E_CommandInputRoute reference_command_input = {
+    .gpio = PB14_GPIO,
+    .pin_mask = PB14_GPIO_PIN,
+    .pincm = PB14_PINCM,
+    .gpio_function = IOMUX_PB14_GPIO46,
+    .gpio_index = PB14_GPIO_NUMBER,
+    .input_xbar = PB14_INPUT_XBAR
+};
 
 static AM13E_PB14_Decoder decoder;
 static volatile uint32_t initialized;
@@ -83,28 +87,9 @@ static void input_fail_closed(void)
 
 void initio(void)
 {
-    DL_GPIO_enablePower(PB14_GPIO);
-    if (!DL_GPIO_isPowerEnabled(PB14_GPIO)) input_fail_closed();
-    /* Boot PB14 service relinquishes ownership. Keep output Hi-Z.
-     * Do not enable internal pull-up/down: external 3.3/5-V interface
-     * pull strength and idle levels are board design responsibilities.
-     */
-    DL_GPIO_disableOutput(PB14_GPIO, PB14_GPIO_PIN);
-    DL_GPIO_initDigitalInput(PB14_PINCM);
-    if (!DL_GPIO_isInputEnabled(PB14_PINCM) ||
-        !DL_GPIO_isPeripheralConnected(PB14_PINCM) ||
-        DL_GPIO_getPeripheralFunctionBits(PB14_PINCM) != IOMUX_PB14_GPIO46) {
+    /* No PB15 interrupt-mask changes or unqualified output defaults. */
+    if (!am13e_mcu_command_input_configure(&reference_command_input))
         input_fail_closed();
-    }
-    /* Only ECAP0 uses INPUTXBAR1. No GPIO1 interrupt for PB14; GPIO1
-     * remains reserved for existing PB15 nFAULT handling.
-     */
-    DL_GPIO_disableInterrupt(PB14_GPIO, PB14_GPIO_PIN);
-    DL_GPIO_clearInterruptStatus(PB14_GPIO, PB14_GPIO_PIN);
-    DL_XBAR_setInputXBAR(DL_XBAR_INPUT1, PB14_GPIO_NUMBER);
-    if (INPUTXBAR->INPUTSELECT[DL_XBAR_INPUT1] != PB14_GPIO_NUMBER) {
-        input_fail_closed();
-    }
 
     /* Idle LOW = normal PWM/DShot, idle HIGH = inverted DShot.
      * This snapshot is NOT a substitute for the external idle-bias test.

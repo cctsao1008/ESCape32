@@ -134,6 +134,9 @@ jobs:
           cmake --build am13e-ci-build --target AM13E_MCU_ADC_PAIR_BACKEND -j 2 \
             >am13e-ci-logs/mcu-adc-pair-backend-build.log 2>&1
           cat am13e-ci-logs/mcu-adc-pair-backend-build.log
+          cmake --build am13e-ci-build --target AM13E_MCU_COMMAND_INPUT_ROUTE -j 2 \
+            >am13e-ci-logs/mcu-command-input-route-build.log 2>&1
+          cat am13e-ci-logs/mcu-command-input-route-build.log
           # Catch Reference clock-provider/diagnostic linker regressions too.
           cmake --build am13e-ci-build --target AM13E_CLOCK.elf -j 2 \
             >am13e-ci-logs/reference-clock-diag-build.log 2>&1
