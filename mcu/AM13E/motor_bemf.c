@@ -35,8 +35,29 @@ _Static_assert(DL_ECAP_INPUT_CMPSS0_CTRIPH == 45U &&
     !defined(AM13E_BEMF_CMP3_HP_PINCM) || !defined(AM13E_BEMF_CMP3_HN_PINCM) || \
     !defined(AM13E_BEMF_CMP0_HP_MUX) || !defined(AM13E_BEMF_CMP0_HN_MUX) || \
     !defined(AM13E_BEMF_CMP1_HP_MUX) || !defined(AM13E_BEMF_CMP1_HN_MUX) || \
-    !defined(AM13E_BEMF_CMP3_HP_MUX) || !defined(AM13E_BEMF_CMP3_HN_MUX)
+    !defined(AM13E_BEMF_CMP3_HP_MUX) || !defined(AM13E_BEMF_CMP3_HN_MUX) || \
+    !defined(AM13E_BEMF_PHASE1_CMPSS_IDX) || \
+    !defined(AM13E_BEMF_PHASE2_CMPSS_IDX) || \
+    !defined(AM13E_BEMF_PHASE3_CMPSS_IDX)
 #error "BEMF requires schematic-verified CMPSS0/1/3 analog pin/mux assignments"
+#endif
+/* Rel17 logical COMP phase 1/2/3 must be explicitly mapped to three
+ * independent physical CMPSS instances; the TRM does not define board
+ * winding-to-comparator wiring or the E62 schematic.
+ */
+_Static_assert((AM13E_BEMF_PHASE1_CMPSS_IDX == 0 ||
+                AM13E_BEMF_PHASE1_CMPSS_IDX == 1 ||
+                AM13E_BEMF_PHASE1_CMPSS_IDX == 3) &&
+               (AM13E_BEMF_PHASE2_CMPSS_IDX == 0 ||
+                AM13E_BEMF_PHASE2_CMPSS_IDX == 1 ||
+                AM13E_BEMF_PHASE2_CMPSS_IDX == 3) &&
+               (AM13E_BEMF_PHASE3_CMPSS_IDX == 0 ||
+                AM13E_BEMF_PHASE3_CMPSS_IDX == 1 ||
+                AM13E_BEMF_PHASE3_CMPSS_IDX == 3) &&
+                AM13E_BEMF_PHASE1_CMPSS_IDX != AM13E_BEMF_PHASE2_CMPSS_IDX &&
+                AM13E_BEMF_PHASE2_CMPSS_IDX != AM13E_BEMF_PHASE3_CMPSS_IDX &&
+                AM13E_BEMF_PHASE1_CMPSS_IDX != AM13E_BEMF_PHASE3_CMPSS_IDX,
+               "BEMF logical phases must map bijectively to CMPSS0/1/3");
 #endif
 #endif
 
@@ -69,11 +90,21 @@ void am13e_app_motor_bemf_abort(void)
 }
 
 #ifdef AM13E_BEMF_BOARD_ANALOG_VERIFIED
-static CMPSS_LITE_Regs *phase_cmp(unsigned phase)
+static unsigned phase_cmp_instance(unsigned logical)
 {
-    switch(phase) {
-        case 1U:return CMPSS0;
-        case 2U:return CMPSS1;
+    switch(logical) {
+        case 1U:return AM13E_BEMF_PHASE1_CMPSS_IDX;
+        case 2U:return AM13E_BEMF_PHASE2_CMPSS_IDX;
+        case 3U:return AM13E_BEMF_PHASE3_CMPSS_IDX;
+        default:bemf_fault();
+    }
+    __builtin_unreachable();
+}
+static CMPSS_LITE_Regs *phase_cmp(unsigned logical)
+{
+    switch(phase_cmp_instance(logical)) {
+        case 0U:return CMPSS0;
+        case 1U:return CMPSS1;
         case 3U:return CMPSS3;
         default:bemf_fault();
     }
@@ -152,8 +183,9 @@ void compctl(int x)
         bemf_fault();
 #else
         const unsigned phase=(unsigned)x&3U;
-        const DL_ECAP_INPUT input=phase==1U?
-            DL_ECAP_INPUT_CMPSS0_CTRIPH:phase==2U?
+        const unsigned hw=phase_cmp_instance(phase);
+        const DL_ECAP_INPUT input=hw==0U?
+            DL_ECAP_INPUT_CMPSS0_CTRIPH:hw==1U?
             DL_ECAP_INPUT_CMPSS1_CTRIPH:DL_ECAP_INPUT_CMPSS3_CTRIPH;
         DL_ECAP_selectECAPInput(BEMF_ECAP,input);
         DL_ECAP_setEventPolarity(BEMF_ECAP,DL_ECAP_EVENT_1,
