@@ -22,6 +22,7 @@
 #include "clock_backend.h"
 #include <soc.h>
 #include <dl_mcpwm.h>
+#include <dl_gpio.h>
 #include <dl_sysctl.h>
 #include <stdint.h>
 

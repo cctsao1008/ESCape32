@@ -1,60 +1,60 @@
-# AM13E Reference Board — Live Power-Stage Porting Profile
+# AM13E Board Configuration — IO-only auxiliary features
 
-**Reference FW1 now defaults to functional Motor/Audio Power Stage code**:
-`AM13E_POWER_STAGE_ENABLED=ON`. That enables real MCPWM0 output
-connections, configurable 6-channel pinmux, RED/FED dead-band, gate
-PB13 control and analog scaling at runtime. **No hardware qualification
-or motor-spin test has been performed.**
+**Scope update:** The five auxiliary functions are **IO initialization
+ONLY**. They are not functional and are not part of the AM13E motor,
+telemetry or protection runtime. This explicitly replaces the earlier
+proposal to enable the PB13 gate driver and nFAULT/OC fault trip.
 
-## Runtime state transitions
-
-1. At boot hold PB13 inactive, all motor pins disconnected, AQ forced LOW,
-   MCPWM stopped. Install mandatory PB15 nFAULT hardware INPUTXBAR2 ->
-   PWMXBAR1 -> MCPWM0 OST1 before interrupt release.
-2. Install configurable TI MCPWM RED/FED dead-band and verify DriverLib
-   DBCTL, DBRED, DBFED and shadow readback.
-3. Acquire real ADC0 PA6 NTC / PA28 VBUS samples and pass the
-   G431-derived default model's scaled values to Rel17 `adcdata()`.
-4. Normal ESCape32 motor/Sine/Braking/Music/PCM requests start MCPWM0,
-   map six phase pins to PWM, release software AQ LOW force, then assert
-   PB13 driver enable **last**.
-5. Stop, fault and audio/motor transitions first deassert PB13, force
-   six AQ outputs LOW, disconnect phase pins, and stop the timebase.
-
-**Overcurrent:** The existing reference PB15 nFAULT -> OST1 route is
-mandatory and actively checked. Independent OC -> OST2 is implemented
-and automatically activated if a real `AM13E_BOARD_OC_GPIO_PINCM` is
-configured. Default `0` explicitly disables only OST2; no invented
-hardware overcurrent input or fictitious OC source is used. Existing
-BEMF comparator routing remains separate.
-
-## Editable G431-derived development parameters
-
-| Item | Default value | Origin and limitation |
+| Function | Default pin and initialization | Explicitly excluded |
 | --- | --- | --- |
-| Pin Mapping | Motor PA8/11, PA9/30, PA10/31; PB13 EN; PB14 command; PB15 nFAULT; PA6 NTC, PA28 VBUS | Existing Reference mapping |
-| Gate Polarity | PB13 active-high `1`, PWM inversion mask `0`; external driver Hi-Z-safe and HW shutdown verification `0` | Active-high software convention; not a verified G431 PB13 net |
-| Dead-time | RED=`92` / FED=`92` ticks; offset=`92`; polarities `0/1`, both input PWMA, swaps `0/0` | G431 TIM1 `DEAD_TIME=155` = 154 cycles / 168MHz = 916.7ns, mapped to 920ns at AM13E 100MHz |
-| Sensing | 12-bit ADC `4095`, VREF `3300mV`, NTC supply `3300mV`, Rtop `26820`Ω / Rbottom `1000`Ω, NTC model `3` | Approximate G431 `VOLT_MUL=224` and NTC10K3455UP10K; **not actual AM13E board calibration** |
-| Fault | PB15 active-low nFAULT OST1 required, OC PINCM `0` disables only OST2 | G431 COMP_MAP=132 is BEMF, not independent overcurrent |
+| Gate Driver Enable | PB13 / GPIO1 output, initialized to the defined **INACTIVE** polarity and held there | No enabling/disabling driver on motor requests, no PWM pad attach |
+| Driver nFAULT | PB15 / GPIO1 input, GPIO interrupt masked | No SysTick polling, GPIO ISR fault action, MCPWM OST1 mapping |
+| Independent OC Trip | `AM13E_BOARD_OC_GPIO_PINCM=0` = unassigned; if specified, configure GPIO input only | No INPUTXBAR/PWMXBAR/OST2, OC interrupt or shutdown |
+| Serial Telemetry TX | `AM13E_BOARD_SERIAL_TX_PINCM=0` = unassigned; if specified, keep GPIO input/Hi-Z | No UART mux, TX DMA, serial telemetry transport |
+| Current Limiting | `AM13E_BOARD_CURRENT_SENSE_PINCM=0` = unassigned; if specified, configure analog pinmux only | No extra ADC SOC, conversion, current sensing, limit PID or overcurrent protection |
 
-CMake `-DAM13E_POWER_STAGE_ENABLED=OFF` explicitly selects the
-former disconnected-output diagnostic variant. This is **not**
-the default. To change electrical values use CMake's
-`AM13E_BOARD_BOARD_PROFILE_FILE` hook to supply a list of
-`AM13E_BOARD_BOARD_DEFINITIONS` or override individual defaults
-in `board_configuration.h`.
+`0` denotes **unassigned optional pin**, not a real pin. The three
+optional pins cannot share a PINCM or overlap any active Reference motor,
+BEMF, DShot or ADC route; static compile assertions reject collisions.
 
-## Feature completion vs validation
+## Still functional in the firmware
 
-Real source paths are connected and linked, and software regression
-tests can verify source/encoding/IRQ integration. Physical output
-polarities, shoot-through prevention, gate-driver input states, OST1
-response, thermal behavior, and ADC gain are NOT yet validated on a
-real board; they require a controlled bench bring-up. In particular,
-there is **no physically routed current-sense ADC** in this Reference
-profile; Rel17 current-dependent features need an additional actual
-board input before they are complete on a particular ESC.
+Full Rel17 application algorithms remain compiled and linked:
+six-step/sine, PWM timer & compare/AQ staging, adjustable RED/FED
+dead-band, BEMF CMPSS/ECAP, DShot / BiDShot command & reply, NTC/VBUS
+ADC0 sampling & numerical model, Motor Music/PCM using **the same
+MCPWM0**, flash configuration, watchdog policy, Boot v1.6 image ABI.
 
-The boot/update v1.6 APP_BASE=0x6000, CRC, signature and other
-on-flash ABI contracts have not changed.
+The G431-derived software defaults are still editable: RED/FED
+`92/92 ticks` at 100MHz, NTC model 3, nominal VREF 3300mV and
+VBUS divider 26820:1000. These are development values, not PCB
+measurement data. No current ADC channel has been invented.
+
+**Important limitation:** Six motor MCPWM0 outputs remain internally
+operational but their GPIO pads remain disconnected, and PB13 remains
+INACTIVE. Consequently this Reference firmware is **not motor-spinning
+or Gate Driver enabled**; pretending otherwise would contradict the
+requested "IO only, no functional implementation" scope.
+
+The FW1 CMake option is `AM13E_MOTOR_RUNTIME_ENABLED=ON`.
+It builds real motor PWM/dead-band and ADC software paths, **not an
+enabled physical power stage**. `AM13E_POWER_STAGE_ENABLED` is retired.
+
+## Sources and CI gates
+
+- `fault_input.c`: PB15 input plus optional OC, UART TX and current
+  sense pin-mode preparation. No IRQ enable.
+- `motor_power_stage.c`: PB13 inactive-output initialization only.
+  No attach/enable functions exist in this module.
+- `motor_safety.c`: pure MCU PWM scheduling, no gate attachment or
+  nFAULT/OC runtime dependency. Motor Audio still owns MCPWM0.
+- `irq_vectors.c`: ordinary SysTick, no nFAULT fault processing.
+- `motor_fault_route.c` and generic `fault_trip_backend.c` remain
+  in source tree for future design work; neither is linked into
+  Reference FW1. The independent generic backend is still compiled
+  in CI to retain its software regression coverage.
+
+CI verifies syntax of the optional IO reservation paths, pin-conflict
+negative cases, and absence of operational gate/fault integration in
+the actual FW1. It also verifies strict Rel17 APP/Boot link,
+native motor/ADC regression and existing v1.6 image integrity.

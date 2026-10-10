@@ -4,16 +4,18 @@
 #include "board_configuration.h"
 #include <stdio.h>
 #ifdef AM13E_BOARD_DEVELOPMENT_ACTIVE_TEST
-#if !defined(AM13E_BOARD_POWER_STAGE_PROFILE) || \
-    !defined(AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED) || \
+#if !defined(AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED) || \
     !defined(AM13E_BOARD_SENSORS_CONFIGURED)
-#error "Full Rel17 Reference FW1 must compile physical motor/ADC"
+#error "AM13E internal motor PWM/dead-band/ADC paths must compile"
+#endif
+#ifdef AM13E_BOARD_POWER_STAGE_PROFILE
+#error "IO-only profile must not compile an operational gate profile"
 #endif
 #else
 #if defined(AM13E_BOARD_POWER_STAGE_PROFILE) || \
     defined(AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED) || \
     defined(AM13E_BOARD_SENSORS_CONFIGURED)
-#error "Board values alone must not select power output in portable builds"
+#error "Board header alone cannot enable firmware runtime logic"
 #endif
 #endif
 #ifndef AM13E_BOARD_DEFAULTS_OVERRIDE_TEST
@@ -45,13 +47,17 @@ _Static_assert(AM13E_BOARD_ADC_FULLSCALE==4095 &&
                AM13E_BOARD_NTC_MODEL==3,
                "G431-inspired sensor model drift");
 _Static_assert(AM13E_BOARD_OC_GPIO_PINCM==0 &&
-               AM13E_BOARD_OC_ACTIVE_LOW==1,
-               "Independent overcurrent should stay disabled");
+               AM13E_BOARD_OC_ACTIVE_LOW==1 &&
+               AM13E_BOARD_SERIAL_TX_PINCM==0 &&
+               AM13E_BOARD_CURRENT_SENSE_PINCM==0,
+               "Unassigned optional IO has no fabricated pin");
 #else
 _Static_assert(AM13E_BOARD_PB13_ACTIVE_LEVEL==0 &&
                AM13E_MOTOR_DB_RED_TICKS==64 &&
                AM13E_BOARD_ADC_VREF_MV==3000 &&
-               AM13E_BOARD_OC_GPIO_PINCM==49,
+               AM13E_BOARD_OC_GPIO_PINCM==49 &&
+               AM13E_BOARD_SERIAL_TX_PINCM==50 &&
+               AM13E_BOARD_CURRENT_SENSE_PINCM==51,
                "Reviewed Board Profile must override its chosen values");
 _Static_assert(AM13E_BOARD_GATE_PWM_INVERT_MASK==0 &&
                AM13E_BOARD_NTC_MODEL==3 &&
@@ -59,6 +65,6 @@ _Static_assert(AM13E_BOARD_GATE_PWM_INVERT_MASK==0 &&
                "Partial override must preserve other numeric defaults");
 #endif
 int main(void){
-    puts("PASS: numeric G431-derived AM13E default/override without arming");
+    puts("PASS: numeric motor model plus auxiliary IO-only pin defaults/overrides");
     return 0;
 }

@@ -23,9 +23,11 @@ the default or authoritative definition of an AM13E23019 board.
   integration**. These are real linked images but they encode a fixed
   0x6000 APP location and fixed reference pin assignments. They must
   not be described as a generic AM13E board support package.
-- Reference FW1 now defaults to live six-pad MCPWM/Power Stage control
-  using G431-derived numerical DEVELOPMENT assumptions. Boot still
-  begins isolated; Rel17 motor/audio requests can connect live outputs.
+- Reference FW1 runs the G431-derived MCPWM / RED/FED / NTC / VBUS
+  **software** model, but the five user-deferred features are IO-only:
+  PB13 Gate Enable never activates, PB15 nFAULT has no interrupt/Trip,
+  independent OC/OST2 is absent, UART TX/current-limit have no routes.
+  Six physical motor output pads stay disconnected.
 
 ## First generic build gate
 
@@ -57,9 +59,9 @@ This document is a porting boundary, not a hardware qualification.
 - `fault_trip_backend.[ch]` is a **board-neutral TI DriverLib backend** with
   explicit MCPWM/XBAR route parameters, route consistency checks and actual
   register/status readback. It never selects pins, arms outputs or clears OST.
-- `motor_fault_route.c` is the **Reference Board adapter** choosing PB15,
-  INPUTXBAR2, PWMXBAR1, active-low and MCPWM0 OST1. Fault latching,
-  readback and fail-closed error handling remain mandatory.
+- `motor_fault_route.c` remains an **unlinked reference design**
+  for a future PB15 -> OST1 function; it is deliberately not compiled
+  into the IO-only FW1. PB15 is initialized as plain GPIO Input only.
 - `AM13E_MCU_FAULT_TRIP_BACKEND` is an independent board-free ARM object
   compile gate. CI also compiles the full reference firmware, uses ESCape32
   CMake + Unix Makefiles, and now treats host regression failures as fatal.
@@ -120,6 +122,10 @@ The new `fault_trip_route_plan.c` has no SDK or board dependency. The actual TI 
 - `motor_safety.c` no longer directly selects PA8/11/9/30/10/31; the same default Motor MCPWM0, exclusive audio ownership and safe-off readback remain. `motor_power_stage.c` keeps PB13 inactive-first/active-last, mandatory OST/OC/Dead-band checks, and fail-closed behavior. CI gates generic ARM backend, Reference firmware/link and dedicated native invalid-pad-route regression.
 - This is **not** a physical enable approval, and MCU GPIO input Hi-Z must not be equated with guaranteed external power-driver shutdown.
 
-## Editable Board Parameter defaults (no physical output)
+## IO-only auxiliary Board Configuration
 
-The `board_configuration.h` G431-derived numeric gate/dead-band/sensing defaults are used by the live Reference FW1 build; independent OST2 OC is optional, whereas existing PB15 OST1 is required. These are CONFIGURED software parameters, **not** VERIFIED or CALIBRATED hardware claims. See `BOARD_CONFIGURATION.md`. Host CI tests default and per-field override semantics.
+Gate, driver nFAULT, independent OC, UART TX and current-sense input
+are **IO-only**; no Gate/Trip/UART/current-limit behavior is linked to
+the Reference FW1. RED/FED and analog numeric model are still
+configured internally, with MCPWM output pads isolated. See
+`BOARD_CONFIGURATION.md` for exact pin definitions and feature scope.

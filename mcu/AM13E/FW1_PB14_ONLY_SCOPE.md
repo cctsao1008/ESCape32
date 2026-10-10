@@ -9,7 +9,7 @@
 | Extended DShot telemetry scheduler | Included | **Original `src/telem.c::sendtelem()`** remains; cycles ESC temperature, motor temperature, voltage, current into `dshotval` every 512 SysTicks when `dshotext` is enabled |
 | PB14 watchdog supervision | Included | WWDT0 fed only after accepted receiver frames; HW behavior still to validate |
 | USART/UNICOMM2 telemetry (KISS, iBUS, S.Port, CRSF, MSB, HoTT) | **Not used by FW1** | Original Rel17 implementations retained for other boards; excluded from AM13E FW1 build |
-| PA22/PA23 UART pin mux | **Not owned by FW1 telemetry** | No UC2 pin mux/enable or UART driver is linked or called by FW1 |
+| Serial Telemetry TX IO reservation | **IO-only** | `AM13E_BOARD_SERIAL_TX_PINCM=0` unassigned; if assigned, configure input/Hi-Z only, without USART/UNICOMM, TX DMA or telemetry stack |
 
 ## Compilation and ownership
 

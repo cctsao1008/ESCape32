@@ -86,12 +86,14 @@ jobs:
             run_test fault_trip_route mcu/AM13E/fault_trip_route_plan.c mcu/AM13E/tests/fault_trip_route_plan_host_test.c
             run_test motor_pad_route mcu/AM13E/motor_output_route_plan.c mcu/AM13E/tests/motor_output_route_plan_host_test.c
             run_test board_configuration -DAM13E mcu/AM13E/tests/board_configuration_host_test.c
-            run_test board_configuration_power -DAM13E -DAM13E_BOARD_DEVELOPMENT_ACTIVE_TEST -DAM13E_BOARD_POWER_STAGE_PROFILE=1 -DAM13E_MOTOR_BOARD_DEADBAND_CONFIGURED=1 -DAM13E_BOARD_SENSORS_CONFIGURED=1 mcu/AM13E/tests/board_configuration_host_test.c
+            run_test board_configuration_motor -DAM13E -DAM13E_BOARD_DEVELOPMENT_ACTIVE_TEST -DAM13E_MOTOR_BOARD_DEADBAND_CONFIGURED=1 -DAM13E_BOARD_SENSORS_CONFIGURED=1 mcu/AM13E/tests/board_configuration_host_test.c
             cc $flags -DAM13E -DAM13E_BOARD_DEFAULTS_OVERRIDE_TEST \
               -DAM13E_BOARD_PB13_ACTIVE_LEVEL=0 \
               -DAM13E_MOTOR_DB_RED_TICKS=64 \
               -DAM13E_BOARD_ADC_VREF_MV=3000 \
               -DAM13E_BOARD_OC_GPIO_PINCM=49 \
+              -DAM13E_BOARD_SERIAL_TX_PINCM=50 \
+              -DAM13E_BOARD_CURRENT_SENSE_PINCM=51 \
               mcu/AM13E/tests/board_configuration_host_test.c -o /tmp/am13e_board_configuration_override
             /tmp/am13e_board_configuration_override
             echo "PASS: board_configuration_override"
@@ -243,7 +245,7 @@ jobs:
           python3 mcu/AM13E/tools/verify_v16_image.py --build am13e-ci-build \
             2>&1 | tee am13e-ci-logs/fw1-v16-static-audit.log
 
-      - name: Compile board-configured power stage (synthetic values, never flash)
+      - name: Compile auxiliary IO-only profile and reject pin conflicts
         id: board_profile
         shell: bash
         run: |
@@ -302,7 +304,7 @@ jobs:
           echo "Configure: ${{ steps.build.outputs.configure_rc }}"
           echo "FW1 objects: ${{ steps.build.outputs.compile_rc }}"
           echo "Strict link: ${{ steps.build.outputs.link_rc }}"
-          echo "Board-profile compile: ${{ steps.board_profile.outcome }}"
+          echo "Auxiliary IO-only compile: ${{ steps.board_profile.outcome }}"
           echo "Motor/ADC/Flash/BEMF host regression: ${{ steps.host.outcome }}"
           echo "v1.6 Boot/Link/Pack Host Tests: ${{ steps.boot.outcome }}"
           echo "Actual Rel17 FW1 v1.6 ELF/Pack/Flash transaction: ${{ steps.v16.outcome }}"
