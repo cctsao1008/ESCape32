@@ -136,6 +136,11 @@ Architecture implementation notes and Axx/Cxx/Bxx semantic mapping live in
 `INTEGRATION_ARCHITECTURE_ALIGNMENT.md`. Native `mcu/AM13E` is the existing
 AM13E23019 target directory; no duplicate framework or fake TI FOC
 Application was introduced. A shared `flash_partition.h` governs
-Boot/FW1/FW2 region owners in C, in addition to their strict Linker
+Boot/ESCape32 Config/Reserved region owners in C, plus strict Linker
 Scripts. `CMD_WINDOW=6` extends Boot 1KiB addressing to all 488 logical
 APP blocks; it does not silently add A/B or a second installed image.
+
+**Rev1.4 authority:** The earlier Rev1.1 coverage mapping is superseded by
+[`REL17_V14_SOURCE_GAP_AUDIT.md`](REL17_V14_SOURCE_GAP_AUDIT.md).
+Original conditional source features remain in scope; their native
+board/peripheral adapters are not automatically implemented.

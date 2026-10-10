@@ -1,9 +1,9 @@
 /*
  * AM13E reference AM13E23019 — real Rel17 savecfg() Flash persistence backend.
  *
- * SW Architecture Baseline v1.6:
- *   FW1 config 0x00004000..0x00004fff (two 2KiB erase sectors)
- *   FW2 config 0x00005000..0x00005fff (NEVER touched here)
+ * Rev1.4 architecture / existing firmware profile:
+ *   ESCape32 config 0x00004000..0x00004fff (two 2KiB erase sectors)
+ *   Reserved 0x00005000..0x00005fff (NO writer or reader)
  *
  * The original Rel17 savecfg() requires ertm==0 && busy==0 before call.
  * This adapter enforces MCU-side safety and validates source/destination
@@ -21,6 +21,7 @@
  */
 #include "util_backend.h"
 #include "cfg_flash_plan.h"
+#include "flash_partition.h"
 #include "cfg_flash_writer.h"
 #include "motor_backend.h"
 #include "motor_safety.h"
@@ -29,8 +30,8 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define FW1_CFG_START UINT32_C(0x4000)
-#define FW1_CFG_END   UINT32_C(0x5000)
+#define FW1_CFG_START AM13E_FLASH_FW1_PARAM_BASE
+#define FW1_CFG_END   AM13E_FLASH_FW1_PARAM_END
 #define FW1_CFG_MAX   (FW1_CFG_END-FW1_CFG_START)
 #define RAM_C_START   UINT32_C(0x00c18000)
 #define RAM_C_END     UINT32_C(0x00c20000)

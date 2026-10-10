@@ -1,9 +1,10 @@
 #include "cfg_flash_writer.h"
+#include "flash_partition.h"
 #include <stddef.h>
 #include <stdint.h>
-#define FW1_CFG_ADDRESS UINT32_C(0x4000)
-#define FW1_CFG_LIMIT UINT32_C(0x5000)
-#define FLASH_SECTOR_SIZE UINT32_C(2048)
+#define FW1_CFG_ADDRESS AM13E_FLASH_FW1_PARAM_BASE
+#define FW1_CFG_LIMIT AM13E_FLASH_FW1_PARAM_END
+#define FLASH_SECTOR_SIZE AM13E_FLASH_ERASE_SECTOR
 #define ECC_SIZE UINT32_C(16)
 int am13e_cfg_flash_execute(const AM13E_CfgFlashPlan *plan,
                              const uint8_t *source,
