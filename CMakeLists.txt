@@ -466,3 +466,60 @@ if(AM13E_ENABLE_FW1_LINK_GATE)
     set_target_properties(AM13E_FW1.elf PROPERTIES
         OUTPUT_NAME "AM13E_FW1" SUFFIX ".elf")
 endif()
+
+# E62 v1.6 real FW1 source linker/CRC packer, never flash from CI.
+# APP_BASE 0x6000; independent FW1/FW2 configs 0x4000/0x5000.
+# Full 488KiB application allocation; 256KiB transport kept until changed.
+option(AM13E_ENABLE_FW1_V16_IMAGE
+    "Enable E62 v1.6 Rel17 application linked ELF and packed image" ON)
+if(AM13E_ENABLE_FW1_V16_IMAGE)
+    find_program(AM13E_V16_OBJCOPY arm-none-eabi-objcopy REQUIRED)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    add_executable(AM13E_FW1_V16.elf EXCLUDE_FROM_ALL
+        "${AM13E_SDK_ROOT}/source/device/am13e230x/src/startup_gcc_arm.c"
+        $<TARGET_OBJECTS:AM13E>)
+    target_include_directories(AM13E_FW1_V16.elf SYSTEM PRIVATE
+        "$<TARGET_PROPERTY:AM13E,INCLUDE_DIRECTORIES>")
+    target_compile_definitions(AM13E_FW1_V16.elf PRIVATE
+        AM13E TARGET_NAME="AM13E"
+        __DEVICE_SHORT__="am13e230x" __DEVICE_LONG__="AM13E230x"
+        __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
+    target_compile_options(AM13E_FW1_V16.elf PRIVATE
+        -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
+        -mfloat-abi=hard -fno-branch-count-reg)
+    target_link_options(AM13E_FW1_V16.elf PRIVATE
+        -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
+        -mfloat-abi=hard -fno-branch-count-reg
+        "-T${PROJECT_SOURCE_DIR}/mcu/AM13E/linker_app_v16.ld"
+        -Wl,--no-undefined -specs=nosys.specs
+        -Wl,--require-defined=Reset_Handler
+        -Wl,--require-defined=main
+        -Wl,--require-defined=HardFault_Handler
+        -Wl,--require-defined=PendSV_Handler
+        -Wl,--require-defined=SysTick_Handler
+        "-Wl,-Map,${CMAKE_CURRENT_BINARY_DIR}/AM13E_FW1_V16.map")
+    set_target_properties(AM13E_FW1_V16.elf PROPERTIES
+        OUTPUT_NAME "AM13E_FW1_V16" SUFFIX ".elf")
+    set(am13e_v16_raw "${CMAKE_CURRENT_BINARY_DIR}/AM13E_FW1_V16.bin")
+    set(am13e_v16_packed "${CMAKE_CURRENT_BINARY_DIR}/AM13E_FW1_V16.e62.bin")
+    set(am13e_v16_manifest "${CMAKE_CURRENT_BINARY_DIR}/AM13E_FW1_V16.json")
+    add_custom_command(OUTPUT "${am13e_v16_raw}"
+        COMMAND "${AM13E_V16_OBJCOPY}" -O binary --gap-fill=0xff
+            "$<TARGET_FILE:AM13E_FW1_V16.elf>" "${am13e_v16_raw}"
+        DEPENDS AM13E_FW1_V16.elf
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/linker_app_v16.ld"
+        VERBATIM)
+    add_custom_command(OUTPUT "${am13e_v16_packed}" "${am13e_v16_manifest}"
+        COMMAND "${Python3_EXECUTABLE}"
+            "${PROJECT_SOURCE_DIR}/boot/tools/pack_am13e_v2.py"
+            pack "${am13e_v16_raw}" "${am13e_v16_packed}"
+            --manifest "${am13e_v16_manifest}"
+        COMMAND "${Python3_EXECUTABLE}"
+            "${PROJECT_SOURCE_DIR}/boot/tools/pack_am13e_v2.py"
+            verify "${am13e_v16_packed}"
+        DEPENDS "${am13e_v16_raw}"
+            "${PROJECT_SOURCE_DIR}/boot/tools/pack_am13e_v2.py"
+        VERBATIM)
+    add_custom_target(AM13E_FW1_V16_IMAGE
+        DEPENDS "${am13e_v16_packed}" "${am13e_v16_manifest}")
+endif()
