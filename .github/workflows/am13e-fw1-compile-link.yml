@@ -99,6 +99,7 @@ jobs:
             echo "PASS: board_configuration_override"
             run_test bidir_codec mcu/AM13E/bidir_codec.c mcu/AM13E/tests/bidir_codec_host_test.c
             run_test bidir_timing mcu/AM13E/bidir_codec.c mcu/AM13E/bidir_timing.c mcu/AM13E/tests/bidir_timing_host_test.c
+            run_test command_bidir_roundtrip mcu/AM13E/command_decode.c mcu/AM13E/bidir_codec.c mcu/AM13E/bidir_timing.c mcu/AM13E/tests/command_bidir_roundtrip_host_test.c
             run_test motor_duty mcu/AM13E/motor_duty_plan.c mcu/AM13E/tests/motor_duty_plan_host_test.c
             run_test motor_frequency mcu/AM13E/motor_frequency_plan.c mcu/AM13E/tests/motor_frequency_plan_host_test.c
             run_test motor_phase mcu/AM13E/motor_phase_plan.c mcu/AM13E/tests/motor_phase_plan_host_test.c

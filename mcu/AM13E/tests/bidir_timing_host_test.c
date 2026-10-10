@@ -23,6 +23,22 @@ int main(void)
     assert(am13e_bidir_tx_period_ticks(333U,100000000U,100000000U)==133U);
     assert(am13e_bidir_tx_period_ticks(167U,100000000U,100000000U)==67U);
     assert(am13e_bidir_tx_period_ticks(1000U,100000000U,100000000U)==0U);
+    /* ECAP final RX edge, not ISR-entry time, owns 30us deadline.
+     * At 200MHz capture / 100MHz TX clock: 30us=6000 ECAP ticks;
+     * ISR at +5us leaves exactly 2500 TX timer ticks.
+     */
+    const uint32_t cap=200000000U,tx=100000000U;
+    assert(am13e_bidir_turnaround_ticks(100000U,101000U,cap,tx)==2500U);
+    assert(am13e_bidir_turnaround_ticks(100000U,105800U,cap,tx)==100U);
+    assert(am13e_bidir_turnaround_ticks(100000U,105968U,cap,tx)==16U);
+    assert(am13e_bidir_turnaround_ticks(100000U,105970U,cap,tx)==0U);
+    assert(am13e_bidir_turnaround_ticks(100000U,106000U,cap,tx)==0U);
+    assert(am13e_bidir_turnaround_ticks(100000U,106001U,cap,tx)==0U);
+    assert(am13e_bidir_turnaround_ticks(0xfffffff0U,0x3d8U,cap,tx)==2500U);
+    assert(am13e_bidir_turnaround_ticks(100000U,101000U,0U,tx)==0U);
+    assert(am13e_bidir_turnaround_ticks(100000U,101000U,cap,0U)==0U);
+    /* Unknown/implausibly huge 30us period must not overflow TIMG4. */
+    assert(am13e_bidir_turnaround_ticks(0U,0U,cap,UINT32_MAX)==0U);
     puts("AM13E BiDShot TIMG4/DMA toggle plan 4096 payloads PASS");
     return 0;
 }

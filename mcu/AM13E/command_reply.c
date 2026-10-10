@@ -101,12 +101,14 @@ int am13e_pb14_bidir_tx_start(uint32_t final_edge,uint32_t rx_bit_ticks,
     uint8_t levels[AM13E_BIDIR_DMA_LEVELS];
     am13e_app_io_bidir_telemetry_levels(levels);
     am13e_bidir_toggle_plan(levels,TX_PIN,tx_words);
-    /* Deadline measured from the *physical final RX edge*. */
-    const uint32_t elapsed=DL_ECAP_getTimeStampCounter(ECAP0)-final_edge;
-    const uint64_t deadline=(uint64_t)capture_hz*30U/1000000U;
-    if(!deadline || elapsed>=deadline){++tx_rejected;return 0;}
-    const uint32_t remaining=(uint32_t)(((deadline-elapsed)*TX_CLK)/capture_hz);
-    if(remaining<16U){++tx_rejected;return 0;}
+    /* Actual CEVT4 trailing edge -> TIMG4 TX deadline. Reuse the
+     * host-regressed unsigned-wrap/clock-domain policy, never start
+     * a late or sub-16-clock reply on PB14.
+     */
+    const uint32_t remaining=am13e_bidir_turnaround_ticks(
+        final_edge,DL_ECAP_getTimeStampCounter(ECAP0),
+        capture_hz,TX_CLK);
+    if(!remaining){++tx_rejected;return 0;}
     symbol_ticks=ticks;
     timeout_ticks=0U;
     state=TX_DELAY;

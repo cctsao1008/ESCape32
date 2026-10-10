@@ -5,7 +5,7 @@
 | Path | FW1 | Implementation |
 |---|---|---|
 | PB14 GPIO46 — PWM/DShot command RX | Included | ECAP0 RX, DShot CRC/command handling |
-| PB14 GPIO46 — Bidirectional DShot telemetry TX | Included | Rel17 GCR/NRZI codec, TIMG4/DMA0 toggles, direction and RX restoration (HW timing still to validate) |
+| PB14 GPIO46 — Bidirectional DShot telemetry TX | Included | Rel17 GCR/NRZI codec, TIMG4/DMA0 toggles; final-edge-anchored 30us turnaround/rejection is shared with host-tested pure timing logic (physical ISR/DMA latency, waveform and contention still to validate) |
 | Extended DShot telemetry scheduler | Included | **Original `src/telem.c::sendtelem()`** remains; cycles ESC temperature, motor temperature, voltage, current into `dshotval` every 512 SysTicks when `dshotext` is enabled |
 | PB14 watchdog supervision | Included | WWDT0 fed only after accepted receiver frames; HW behavior still to validate |
 | USART/UNICOMM2 telemetry (KISS, iBUS, S.Port, CRSF, MSB, HoTT) | **Not used by FW1** | Original Rel17 implementations retained for other boards; excluded from AM13E FW1 build |

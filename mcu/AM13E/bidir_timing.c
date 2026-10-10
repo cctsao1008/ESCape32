@@ -1,5 +1,6 @@
 #include "bidir_timing.h"
 #include <stddef.h>
+#include <limits.h>
 uint32_t am13e_bidir_tx_period_ticks(uint32_t rx_ticks,uint32_t rx_hz,uint32_t timer_hz)
 {
     if (!rx_hz || !timer_hz || !rx_ticks) return 0U;
@@ -17,6 +18,30 @@ uint32_t am13e_bidir_tx_period_ticks(uint32_t rx_ticks,uint32_t rx_hz,uint32_t t
     if(ticks<8U || ticks>0xffffU) return 0U;
     return (uint32_t)ticks;
 }
+uint32_t am13e_bidir_turnaround_ticks(uint32_t final_edge,
+                                     uint32_t counter_now,
+                                     uint32_t capture_hz,
+                                     uint32_t timer_hz)
+{
+    if (!capture_hz || !timer_hz) return 0U;
+    /* Multiply before division: for >=10MHz capture clock the deadline
+     * retains at least 300 raw ticks of resolution for 30us.
+     */
+    const uint64_t deadline =
+        ((uint64_t)capture_hz * AM13E_BIDIR_TURNAROUND_US) / 1000000U;
+    const uint32_t elapsed = counter_now - final_edge;
+    if (!deadline || (uint64_t)elapsed >= deadline) return 0U;
+    const uint64_t remaining =
+        ((deadline - (uint64_t)elapsed) * (uint64_t)timer_hz) /
+        (uint64_t)capture_hz;
+    /* TIMG4 is used in one-shot timer mode; enforce a bounded,
+     * representable timer period and enough setup slack before TX.
+     */
+    if (remaining < AM13E_BIDIR_MIN_DELAY_TICKS ||
+        remaining > UINT16_MAX) return 0U;
+    return (uint32_t)remaining;
+}
+
 void am13e_bidir_toggle_plan(const uint8_t levels[AM13E_BIDIR_DMA_LEVELS],
                             uint32_t pin_mask,uint32_t words[AM13E_BIDIR_DMA_TRANSFERS])
 {
