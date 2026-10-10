@@ -89,6 +89,19 @@ static void bemf_fault(void)
     am13e_app_motor_fault_reset();
     for(;;) __NOP();
 }
+/* Only BEMF-owned CMPSS0/1/3. A board-qualified OC trip must use
+ * independently mapped protection hardware, not these sense outputs.
+ * Match Rel17 compctl(0) which disables the sensing comparators.
+ */
+#ifdef AM13E_BEMF_BOARD_ANALOG_VERIFIED
+static void sense_comparators_off(void)
+{
+    DL_CMPSSLITE_disableModule(CMPSS0);
+    DL_CMPSSLITE_disableModule(CMPSS1);
+    DL_CMPSSLITE_disableModule(CMPSS3);
+}
+#endif
+
 static void capture_stop(void)
 {
     armed=0U;
@@ -103,7 +116,12 @@ void am13e_app_motor_bemf_abort(void)
 {
     const uint32_t primask=__get_PRIMASK();
     __disable_irq();
-    if(initialized)capture_stop();
+    if(initialized) {
+        capture_stop();
+#ifdef AM13E_BEMF_BOARD_ANALOG_VERIFIED
+        sense_comparators_off();
+#endif
+    }
     selected_code=0U;
     interval_us=0U;
     __set_PRIMASK(primask);
@@ -147,7 +165,10 @@ static void configure_phase_cmp(CMPSS_LITE_Regs *cmp,
     DL_CMPSSLITE_initFilterHigh(cmp);
     DL_CMPSSLITE_configOutputsHigh(cmp,
          DL_CMPSSLITE_TRIP_FILTER|DL_CMPSSLITE_TRIPOUT_FILTER);
-    DL_CMPSSLITE_enableModule(cmp);
+    /* Rel17 does not leave every phase comparator active while idle.
+     * compctl() enables exactly the selected comparator at commutation.
+     */
+    DL_CMPSSLITE_disableModule(cmp);
 }
 #endif
 void am13e_app_motor_bemf_init(void)
@@ -206,6 +227,9 @@ void compctl(int x)
     if(!initialized || x<0 || x>7)bemf_fault();
     capture_stop();
     selected_code=0U;
+#ifdef AM13E_BEMF_BOARD_ANALOG_VERIFIED
+    sense_comparators_off();
+#endif
     if((x&3)!=0) {
 #ifndef AM13E_BEMF_BOARD_ANALOG_VERIFIED
         /* No invented analog net or comparator validity. */
@@ -217,8 +241,12 @@ void compctl(int x)
             DL_ECAP_INPUT_CMPSS0_CTRIPH:hw==1U?
             DL_ECAP_INPUT_CMPSS1_CTRIPH:DL_ECAP_INPUT_CMPSS3_CTRIPH;
         DL_ECAP_selectECAPInput(BEMF_ECAP,input);
+        if ((BEMF_ECAP->ECCTL0 & ECAP_ECCTL0_INPUTSEL_MASK) !=
+                (uint32_t)input)
+            bemf_fault();
         DL_ECAP_setEventPolarity(BEMF_ECAP,DL_ECAP_EVENT_1,
              (x&4)?DL_ECAP_EVENT_FALLING_EDGE:DL_ECAP_EVENT_RISING_EDGE);
+        DL_CMPSSLITE_enableModule(phase_cmp(phase));
         selected_code=(uint32_t)x;
 #endif
     }
@@ -267,12 +295,13 @@ void am13e_app_motor_bemf_stop(void)
  */
 void ECAP1_IRQHandler(void)
 {
+    /* Do not touch an uninitialized/unpowered ECAP1 peripheral. */
+    if(!initialized)bemf_fault();
     const uint16_t flags=DL_ECAP_getInterruptSource(BEMF_ECAP);
-    const uint32_t ticks=DL_ECAP_getEventTimeStamp(BEMF_ECAP,DL_ECAP_EVENT_1);
     DL_ECAP_clearInterrupt(BEMF_ECAP,flags&BEMF_FLAGS);
     DL_ECAP_clearGlobalInterrupt(BEMF_ECAP);
-    if(!initialized)bemf_fault();
     if(!armed)return;
+    /* Counter overflow is a timeout. CAP1 data is not valid here. */
     if(flags&DL_ECAP_ISR_SOURCE_CTROVF) {
         capture_stop();
         am13e_app_motor_timing_cancel();
@@ -282,6 +311,7 @@ void ECAP1_IRQHandler(void)
     if((flags&DL_ECAP_ISR_SOURCE_CEVT1)==0U ||
        (flags&~BEMF_FLAGS)!=0U)bemf_fault();
     if (!calibration_done || !capture_ticks_per_us) bemf_fault();
+    const uint32_t ticks=DL_ECAP_getEventTimeStamp(BEMF_ECAP,DL_ECAP_EVENT_1);
     const uint64_t us=((uint64_t)ticks+capture_ticks_per_us/2U)/
                       capture_ticks_per_us;
     if(us==0U || us>INT32_MAX)bemf_fault();
