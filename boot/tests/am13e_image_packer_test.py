@@ -96,9 +96,19 @@ def main():
         print("PASS out-of-range M33 Reset Handler rejected")
         count += 1
 
-        (root / "oversize.bin").write_bytes(b"\xff" * (256 * 1024 + 16))
+        large = bytearray(b"\xff" * (256 * 1024 + 16))
+        large[:0x800] = raw[:0x800]
+        (root / "window1-raw.bin").write_bytes(large)
+        run("pack", root / "window1-raw.bin", root / "window1-packed.bin")
+        window1 = (root / "window1-packed.bin").read_bytes()
+        assert len(window1) > 256 * 1024
+        run("verify", root / "window1-packed.bin")
+        print("PASS >256KiB image pack/verify with CMD_WINDOW")
+        count += 1
+
+        (root / "oversize.bin").write_bytes(b"\xff" * (488 * 1024 + 16))
         run("pack", root / "oversize.bin", root / "too-large.bin", success=False)
-        print("PASS 256 KiB CMD_WRITE address limit enforced")
+        print("PASS 488 KiB APP partition limit enforced")
         count += 1
 
         (root / "nonempty-header.bin").write_bytes(raw[:0x500] + b"\x01" + raw[0x501:])

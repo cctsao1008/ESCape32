@@ -29,6 +29,7 @@
 #define CMD_WRITE 3U
 #define CMD_UPDATE 4U
 #define CMD_SETWRP 5U
+#define CMD_WINDOW 6U
 #define RES_OK 0U
 #define RES_ERROR 1U
 #define RX_CAPACITY (AM13E_IMAGE_MAX_TRANSPORT_BYTES + 32768U)
@@ -97,6 +98,12 @@ static void queue_write(unsigned block, const uint8_t *payload,
     little_endian_32(value, crc);
     input_bytes(crc, 4U);
     if (expected_ack >= 0) expected_val((uint8_t)expected_ack);
+}
+static void queue_window(unsigned requested,int expected_ack) {
+    CHECK(requested<=255U);
+    input_val(CMD_WINDOW);
+    input_val((uint8_t)requested);
+    if(expected_ack>=0)expected_val((uint8_t)expected_ack);
 }
 static void expected_data(const uint8_t *data, unsigned n) {
     CHECK((n & 3U) == 0U && n >= 4U && n <= BLOCK_BYTES);
@@ -204,6 +211,26 @@ static void queue_protocol(size_t image_bytes, const uint8_t *image) {
     uint8_t info[32] = {4U, 4U, 0x78U, 0x56U, 0x34U, 0x12U};
     expected_data(info, sizeof info);
 
+    /* CMD_WINDOW is a complementary-coded command, not an extra
+     * field in the original READ/WRITE frames. Exercise both windows.
+     */
+    uint8_t probe_upper[16],erased_16[16];
+    memset(probe_upper,0xa5,sizeof probe_upper);
+    memset(erased_16,0xff,sizeof erased_16);
+    queue_window(1U,RES_OK);
+    queue_read(0U,16U,probe_upper);   /* block 256 */
+    queue_read(231U,16U,erased_16);   /* block 487 */
+    queue_window(2U,RES_ERROR);       /* previous window stays 1 */
+    queue_read(0U,16U,probe_upper);
+    queue_write(232U,image+2048U,16U,false,RES_ERROR); /* block488 */
+    /* Invalid READ aborts current command without forging data/CRC. */
+    input_val(CMD_READ);
+    input_val(232U);
+    input_val(3U); /* 16 bytes */
+    input_val(CMD_PROBE);
+    expected_val(RES_OK);
+    queue_window(0U,RES_OK);
+    queue_read(0U,16U,erased_16);
     /* A data block before invalidation must return an explicit NAK. */
     queue_write(2U, image + 2048U, 32U, false, RES_ERROR);
 
@@ -218,8 +245,6 @@ static void queue_protocol(size_t image_bytes, const uint8_t *image) {
      * The next command must still be decoded successfully.
      */
     queue_write(2U, image + 2048U, 32U, true, -1);
-    uint8_t erased_16[16];
-    memset(erased_16, 0xff, sizeof erased_16);
     queue_read(2U, sizeof erased_16, erased_16);
 
     /* Full 1024-byte transport frames explicitly test count=0xff. */
@@ -274,6 +299,13 @@ int main(int argc, char **argv) {
     boot_am13e_test_end = MAP_ADDRESS + MAP_LENGTH;
     memset((void *)(uintptr_t)boot_am13e_test_first, 0xff,
            (size_t)(boot_am13e_test_end - boot_am13e_test_first));
+    /* Distinct Boot/FW1/FW2 bytes must survive all APP commands.
+     * The high-window marker proves the effective block is 256.
+     */
+    memset((void *)(uintptr_t)MAP_ADDRESS,0x42,0x4000U);
+    memset((void *)(uintptr_t)(MAP_ADDRESS+0x4000U),0x43,0x1000U);
+    memset((void *)(uintptr_t)(MAP_ADDRESS+0x5000U),0x44,0x1000U);
+    memset((void *)(uintptr_t)(boot_am13e_test_first+256U*1024U),0xa5,16U);
     boot_am13e_test_reset_update_state();
 
     queue_protocol(image_length, image);
@@ -287,6 +319,7 @@ int main(int argc, char **argv) {
     CHECK(memcmp(transmitted, expected_reply, expected_length) == 0);
     puts("PASS CMD_PROBE/CMD_INFO/CRC32 framing, complement encoding and ACK/NAK");
     puts("PASS malformed payload CRC discarded without Flash programming");
+    puts("PASS CMD_WINDOW 0/1, blocks 256/487, invalid window and block 488");
     puts("PASS actual CMD_WRITE ordering, duplicate block and 1024-byte count=0xff");
     puts("PASS signature held erased until final metadata CRC verification");
     CHECK(erases >= 2U && programs >= 4U);
@@ -298,6 +331,13 @@ int main(int argc, char **argv) {
                                  NULL, 0U, &validated_length) ==
           AM13E_IMAGE_VALID);
     CHECK(validated_length == (uint32_t)image_length);
+    for(unsigned i=0;i<0x4000U;++i)
+        CHECK(*((volatile uint8_t *)(uintptr_t)(MAP_ADDRESS+i))==0x42U);
+    for(unsigned i=0;i<0x1000U;++i) {
+        CHECK(*((volatile uint8_t *)(uintptr_t)(MAP_ADDRESS+0x4000U+i))==0x43U);
+        CHECK(*((volatile uint8_t *)(uintptr_t)(MAP_ADDRESS+0x5000U+i))==0x44U);
+    }
+    puts("PASS protected Boot/FW1/FW2 regions preserved across APP update");
     puts("PASS framed protocol programs ARM-linked packed image byte-for-byte");
 
     free(image);
