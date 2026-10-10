@@ -175,7 +175,7 @@ static uint8_t *load_image(const char *filename, size_t *size_out) {
     if (!fp) { perror(filename); exit(2); }
     CHECK(fseek(fp, 0, SEEK_END) == 0);
     const long n = ftell(fp);
-    CHECK(n >= (long)(AM13E_IMAGE_VECTOR_OFFSET + 16U) &&
+    CHECK(n >= (long)(AM13E_IMAGE_METADATA_SECTOR + 16U) &&
           n <= (long)AM13E_IMAGE_MAX_TRANSPORT_BYTES &&
           (n & 15L) == 0L);
     CHECK(fseek(fp, 0, SEEK_SET) == 0);
@@ -183,7 +183,8 @@ static uint8_t *load_image(const char *filename, size_t *size_out) {
     CHECK(image != NULL);
     CHECK(fread(image, 1U, (size_t)n, fp) == (size_t)n);
     CHECK(fclose(fp) == 0);
-    CHECK(image[0] == 0xea && image[1] == 0x32);
+    CHECK(image[AM13E_IMAGE_SIGNATURE_OFFSET] == 0xea &&
+          image[AM13E_IMAGE_SIGNATURE_OFFSET + 1U] == 0x32);
     *size_out = (size_t)n;
     return image;
 }
@@ -233,12 +234,15 @@ static void queue_protocol(size_t image_bytes, const uint8_t *image) {
                         count, false, RES_OK);
     }
 
-    /* Block 0 is staged, so the signature still cannot be read from Flash. */
+    /* Block 0 now contains the REAL M33 vectors at APP+0; these must
+     * already match the linked image. The signature is in block 1,
+     * which remains all-FF until the LAST ECC16 commit.
+     */
     queue_write(0U, image, BLOCK_BYTES, false, RES_OK);
-    uint8_t pending_head[32];
-    memset(pending_head, 0xff, 16U);
-    memcpy(pending_head + 16U, image + 16U, 16U);
-    queue_read(0U, 32U, pending_head);
+    queue_read(0U, 32U, image);
+    uint8_t blank_signature[32];
+    memset(blank_signature,0xff,sizeof blank_signature);
+    queue_read(1U,32U,blank_signature);
 
     /* Final metadata block commits signature only after complete CRC. */
     queue_write(1U, image + BLOCK_BYTES, BLOCK_BYTES, false, RES_OK);
@@ -246,6 +250,7 @@ static void queue_protocol(size_t image_bytes, const uint8_t *image) {
     queue_write(1U, image + BLOCK_BYTES, BLOCK_BYTES, false, RES_OK);
 
     queue_read(0U, 32U, image);
+    queue_read(1U, 32U, image + BLOCK_BYTES);
     input_val(CMD_UPDATE); expected_val(RES_ERROR);
     input_val(CMD_SETWRP); input_val(0x33U); expected_val(RES_ERROR);
     input_val(CMD_PROBE); expected_val(RES_OK);

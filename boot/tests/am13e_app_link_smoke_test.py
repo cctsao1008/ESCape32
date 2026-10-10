@@ -53,7 +53,7 @@ def main() -> int:
           "ELF ECC16 erased marker slot located at APP+0x400")
     check(layout.get(".image_header") == (0x6500, 32),
           "ELF 32-byte CRC metadata reservation at APP+0x500")
-    check(layout.get(".text", (0, 0))[0] >= 0x6808 and
+    check(layout.get(".text", (0, 0))[0] >= 0x6800 and
           layout[".text"][1] > 0,
           "ELF contains ARM application code after the M33 vectors")
 
