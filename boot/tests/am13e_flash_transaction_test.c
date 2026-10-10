@@ -143,15 +143,22 @@ static void test_invalidation_retry(void) {
 }
 
 static void test_sequential_retry(void) {
+    /* Existing companion half MUST survive writing the first half. */
+    memset((void *)(boot_am13e_test_first+3U*1024U),0xa5,1024U);
     unsigned base = erase_count;
     CHECK(write_block(2, payload, 1024) == 1);
     CHECK(erase_count == base + 1);
+    for(unsigned i=0;i<1024U;++i)
+        CHECK(*((volatile uint8_t *)(boot_am13e_test_first+3U*1024U+i))==0xa5U);
     unsigned prior_prog = program_count;
     CHECK(write_block(2, payload, 1024) == 1);
     CHECK(program_count == prior_prog);
     CHECK(write_block(4, payload, 1024) == 0);
     CHECK(write_block(3, payload, 1024) == 1);
-    CHECK(erase_count == base + 1);
+    CHECK(erase_count == base + 2);
+    CHECK(memcmp((const void *)(boot_am13e_test_first+2U*1024U),
+                 payload,1024U)==0);
+    puts("PASS 1KiB logical writes preserve the other 2KiB sector half");
     puts("PASS sequential, duplicate and skip");
     ++tests;
 }

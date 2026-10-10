@@ -28,6 +28,12 @@ extern char __boot_storage_end__[];
  * Power loss keeps the image unbootable until a new update completes.
  */
 static uint8_t pending_signature[16];
+/* 1KiB logical CMD_WRITE block / 2KiB physical erase sector.
+ * SRAM_S, 16-byte aligned for pinned TI SDK DL_Flash_program.
+ * APP metadata block0/1 retains its distinct signature-last path.
+ */
+static uint8_t sector_merge[AM13E_FLASH_ERASE_SECTOR]
+    __attribute__((aligned(16)));
 static bool pending_signature_valid;
 
 /* One session follows the unchanged WiFi-Link ordering:
@@ -233,34 +239,30 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
         return 1;
     }
 
-    /* Only erase on the first 1 KiB block of each 2 KiB sector.
-     * The host protocol MUST transmit ordered blocks; an interruption
-     * between blocks can leave an incomplete application image.
+    /* Preserve the unaffected 1KiB half on EVERY APP data write.
+     * Full 2KiB sector snapshot happens BEFORE any Flash erase/program.
+     * Flash DriverLib and controller sequence execute from SRAM_C.
      */
-    const uint32_t aligned_len = (uint32_t)len & ~UINT32_C(15);
-    const uint32_t tail_len = (uint32_t)len - aligned_len;
-    if (boot_am13e_flash_execute((uint32_t)addr,
-                                 (uint8_t *)(uintptr_t)src, aligned_len,
-                                 (addr % DL_FLASH_SECTOR_SIZE) == 0U,
-                                 aligned_len != 0U) != DL_FLASH_SUCCESS)
+    const uintptr_t sector_first=addr&
+                         ~((uintptr_t)DL_FLASH_SECTOR_SIZE-1U);
+    const unsigned offset=(unsigned)(addr-sector_first);
+    if(sector_first<first+AM13E_IMAGE_METADATA_SECTOR ||
+       sector_first>end || end-sector_first<DL_FLASH_SECTOR_SIZE ||
+       offset+1024U>DL_FLASH_SECTOR_SIZE)
         return 0;
-    if (tail_len != 0U) {
-        uint8_t tail[16];
-        for (unsigned i = 0U; i < sizeof tail; ++i)
-            tail[i] = UINT8_C(0xff);
-        for (unsigned i = 0U; i < tail_len; ++i)
-            tail[i] = (uint8_t)src[aligned_len + i];
-        if (boot_am13e_flash_execute((uint32_t)(addr + aligned_len),
-                                     tail, sizeof tail, false, true) !=
-            DL_FLASH_SUCCESS)
-            return 0;
-    }
-
-    const volatile uint8_t *verify = (const volatile uint8_t *)addr;
-    for (int i = 0; i < len; ++i) {
-        if (verify[i] != (uint8_t)src[i])
-            return 0;
-    }
+    const volatile uint8_t *old=(const volatile uint8_t *)sector_first;
+    for(unsigned i=0;i<DL_FLASH_SECTOR_SIZE;++i)
+        sector_merge[i]=old[i];
+    for(unsigned i=0;i<1024U;++i)
+        sector_merge[offset+i]=i<(unsigned)len?
+                               (uint8_t)src[i]:UINT8_C(0xff);
+    if(boot_am13e_flash_execute((uint32_t)sector_first,
+                                 sector_merge,DL_FLASH_SECTOR_SIZE,
+                                 true,true)!=DL_FLASH_SUCCESS)
+        return 0;
+    const volatile uint8_t *verify=(const volatile uint8_t *)sector_first;
+    for(unsigned i=0;i<DL_FLASH_SECTOR_SIZE;++i)
+        if(verify[i]!=sector_merge[i])return 0;
 
     /* All further blocks are >=2 (application code/data). We never
      * permit the usual program branch to publish an image marker.
