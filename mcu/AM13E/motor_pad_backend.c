@@ -1,5 +1,6 @@
 #include "motor_pad_backend.h"
 #include <stdint.h>
+#include <stddef.h>
 #include <dl_gpio.h>
 
 int am13e_mcu_motor_pad_route_valid(const AM13E_MotorPadRoute *route)
