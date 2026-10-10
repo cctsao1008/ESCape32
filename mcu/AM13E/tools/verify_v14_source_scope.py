@@ -53,15 +53,24 @@ def main():
               "Rel17 original command ID changed: "+name)
     update=boot.split("case CMD_UPDATE:")[1].split("case CMD_SETWRP:")[0]
     protection=boot.split("case CMD_SETWRP:")[1].split("default:")[0]
-    # Keep the selected AM13E self-update path fail-closed until the
-    # Boot Bank0 SRAM-execution/recovery conditions are qualified.
+    # Original Rel17 reception restored, but no Bank0 Boot Flash commit.
     am13e_update=update.split("#if defined(AM13E)",1)[1].split("#else",1)[0]
-    check("sendval(RES_ERROR);" in am13e_update and
-          "recvdata(" not in am13e_update and
-          "write(" not in am13e_update and
+    stage=src("boot/mcu/AM13E/update_staging.c")
+    check("boot_am13e_stage_begin();" in am13e_update and
+          "recvdata((char *)dst)" in am13e_update and
+          "boot_am13e_stage_accept(" in am13e_update and
+          "sendval(RES_OK);" in am13e_update and
+          "boot_am13e_stage_abort();" in am13e_update and
+          "sendval(RES_ERROR);" in am13e_update and
           "DL_Flash_" not in am13e_update and
+          "update(" not in am13e_update and
+          "write(" not in am13e_update and
+          "DL_Flash_eraseSector(" not in stage and
+          "DL_Flash_program(" not in stage and
+          "boot/mcu/AM13E/update_staging.c" in
+          src("boot/mcu/AM13E/config.cmake") and
           "sendval(RES_ERROR);" in protection,
-          "Unreviewed Boot self-update or protection behavior enabled")
+          "Bounded SRAM staging/Bank0 Flash exclusion changed")
 
     am13e_write=boot.split("case CMD_WRITE:")[1].split(
         "case CMD_WINDOW:")[0].split("#if defined(AM13E)",1)[1].split(
@@ -143,7 +152,7 @@ def main():
         "original_boot_host_tested":[0,1,2,3],
         "am13e_address_extension_host_tested":6,
         "original_boot_missing":["CMD_UPDATE","CMD_SETWRP"],
-        "boot_self_update_preflight":"SOURCE_GAP_REVIEWED_BANK0_ERASE_DISABLED",
+        "boot_self_update_preflight":"BOUNDED_SRAM_STAGE_RECEIVE_ONLY_BANK0_ERASE_DISABLED",
         "boot_update_recovery":"ROM_BSL_SWD_NONMAIN_DEPENDENT_NOT_VERIFIED",
         "conditional_adapters_pending":[
             "input_mode_analog","input_mode_serial",

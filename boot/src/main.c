@@ -28,6 +28,7 @@
 #if defined(AM13E)
 #define CMD_WINDOW 6 /* Rel17 v1.4: 2 windows of 256 logical 1KiB blocks */
 #include "../../mcu/AM13E/flash_partition.h"
+#include "update_staging.h"
 #endif
 
 #define RES_OK    0
@@ -143,16 +144,31 @@ void main(void) {
 #endif
             case CMD_UPDATE: { // Update bootloader
 #if defined(AM13E)
-				/* Fail closed: no Bank0 Boot erase/program is authorized.
-				 * Before enabling, qualify a bounded SRAM-staged Boot image,
-				 * the complete SRAM-executing commit/verify/reset path, and
-				 * an actual ROM BSL/SWD recovery route. The upstream STM32
-				 * _rom/_ram_end staging contract is not portable.
-				 * This is independent of the retired APP v1.6 image ABI.
-				 * See mcu/AM13E/CMD_UPDATE_SOURCE_GAP_REVIEW.md.
-				 */
-				sendval(RES_ERROR);
-				break;
+                /* Preserve Rel17 recvdata(), CRC and per-frame ACKs.
+                 * Stage only: no Boot Bank0 erase/program/reset until
+                 * SRAM-only execution and on-target recovery qualified.
+                 */
+                boot_am13e_stage_begin();
+                for(unsigned i=0U;i<AM13E_BOOT_STAGE_BLOCKS;++i) {
+                    uint8_t *dst=boot_am13e_stage_next(i);
+                    if(!dst) {
+                        boot_am13e_stage_abort();
+                        goto done;
+                    }
+                    int len=recvdata((char *)dst);
+                    if(len<0 || !boot_am13e_stage_accept(i,(unsigned)len)) {
+                        boot_am13e_stage_abort();
+                        goto done;
+                    }
+                    sendval(RES_OK);
+                    if(len<(int)AM13E_BOOT_STAGE_BLOCK_BYTES)break;
+                }
+                /* Current update() Flash commit is NOT IMPLEMENTED:
+                 * explicitly reject completion and clear SRAM stage.
+                 */
+                boot_am13e_stage_abort();
+                sendval(RES_ERROR);
+                break;
 #else
 				char *buf = _ram_end; // Use upper SRAM as buffer
 				int pos = 0;
