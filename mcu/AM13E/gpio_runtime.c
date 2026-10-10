@@ -1,7 +1,7 @@
 /*
  * ESCape32 Rel17 / AM13E23019 GPIO foundation.
  *
- * The E62 HW Architecture Baseline v1.6 assigns power-stage nFAULT to
+ * The AM13E reference HW Architecture Baseline v1.6 assigns power-stage nFAULT to
  * PB15 / GPIO47. This code configures ONLY that MCU input. It neither
  * assumes PB13 gate-enable polarity nor enables any PWM/power output.
  *
@@ -18,7 +18,7 @@
 #define AM13E_NFAULT_PINCM IOMUX_PINCM_PB15
 
 _Static_assert(IOMUX_PINCM_PB15 == 47,
-               "E62 nFAULT pin mapping must stay PB15 / GPIO47");
+               "AM13E reference nFAULT pin mapping must stay PB15 / GPIO47");
 
 static volatile unsigned int nfault_input_initialized;
 

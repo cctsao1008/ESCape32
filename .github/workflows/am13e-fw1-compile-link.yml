@@ -107,6 +107,14 @@ jobs:
           echo "compile_rc=$compile_rc" >> "$GITHUB_OUTPUT"
           echo "link_rc=$link_rc" >> "$GITHUB_OUTPUT"
 
+      - name: Build board-independent AM13E portable logic
+        shell: bash
+        run: |
+          set -e
+          cmake --build am13e-ci-build --target AM13E_PORTABLE_LOGIC -j 2 \
+            >am13e-ci-logs/portable-logic-build.log 2>&1
+          cat am13e-ci-logs/portable-logic-build.log
+
       - name: Verify v1.6 vector-first ARM linker, packer and Boot Flash host transaction
         id: boot
         continue-on-error: true

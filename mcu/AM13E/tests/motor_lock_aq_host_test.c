@@ -9,7 +9,7 @@
  *   /tmp/lock_aq
  *
  * This validates the logic/AQ contract, NOT output non-overlap or driver
- * polarity on the physical E62 power stage.
+ * polarity on the physical AM13E reference power stage.
  */
 #include "motor_phase_plan.h"
 #include "motor_aq_plan.h"

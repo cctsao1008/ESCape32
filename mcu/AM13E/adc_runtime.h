@@ -1,6 +1,6 @@
-/* E62 AM13E23019 ADC0 raw monitoring interface (Rel17 FW1 backend).
+/* AM13E reference AM13E23019 ADC0 raw monitoring interface (Rel17 FW1 backend).
  * Raw codes ONLY: R25/Beta, VBUS divider, reference and calibration
- * are not defined in E62 HW Architecture Baseline v1.6.
+ * are not defined in AM13E reference HW Architecture Baseline v1.6.
  */
 #pragma once
 #if !defined(AM13E)

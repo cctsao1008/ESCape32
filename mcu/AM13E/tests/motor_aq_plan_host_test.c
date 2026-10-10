@@ -71,6 +71,6 @@ int main(void)
     aq.action[0]=UINT16_C(0x1000);
     assert(!am13e_motor_aq_plan_validate(&aq));
     assert(!am13e_motor_aq_plan_validate(NULL));
-    printf("E62 Rel17 six-step AQ: %u sequence/coast pairs, complementary image host PASS; physical damp requires verified board DB\n",checks);
+    printf("AM13E reference Rel17 six-step AQ: %u sequence/coast pairs, complementary image host PASS; physical damp requires verified board DB\n",checks);
     return 0;
 }

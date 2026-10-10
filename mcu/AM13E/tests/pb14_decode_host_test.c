@@ -1,4 +1,4 @@
-/* E62 PB14 independent host test: timestamps and Rel17 callback handoff. */
+/* AM13E reference PB14 independent host test: timestamps and Rel17 callback handoff. */
 #include "pb14_decode.h"
 #include <assert.h>
 #include <stdio.h>

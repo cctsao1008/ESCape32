@@ -13,7 +13,7 @@
 
 void SysTick_Handler(void)
 {
-    /* PB15 nFAULT belongs to E62 HW Baseline v1.6. A 16kHz software
+    /* PB15 nFAULT belongs to AM13E reference HW Baseline v1.6. A 16kHz software
      * observation is secondary supervision, NOT the MCPWM hardware trip.
      * Reject an asserted or uninitialized input before the Rel17 tick.
      * hard_fault_handler() requires the real motor shutdown/reset backend;

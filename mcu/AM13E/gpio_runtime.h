@@ -1,4 +1,4 @@
-/* E62 AM13E23019 PB15/GPIO47 nFAULT input-only service. */
+/* AM13E reference AM13E23019 PB15/GPIO47 nFAULT input-only service. */
 #pragma once
 #if !defined(AM13E)
 #error "AM13E GPIO runtime service is not for legacy MCUs"

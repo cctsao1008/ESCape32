@@ -1,4 +1,4 @@
-/* E62 MCPWM0 power-stage lifecycle (no motor algorithm).
+/* AM13E reference MCPWM0 power-stage lifecycle (no motor algorithm).
  *
  * Default firmware: PB13 untouched, six PWM pads GPIO INPUT, force LOW.
  * Optional board profile: explicit PB13 polarity, six pad inversions,

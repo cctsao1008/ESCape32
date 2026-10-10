@@ -1,4 +1,4 @@
-/* Deliberately unsupported POSIX descriptors on E62 AM13E.
+/* Deliberately unsupported POSIX descriptors on AM13E reference AM13E.
  * Newlib's nosys implementations emit linker warnings and may give the
  * impression that firmware has a UART console. We report a real error
  * instead of masking warnings with -Wno-* or pretending I/O works.

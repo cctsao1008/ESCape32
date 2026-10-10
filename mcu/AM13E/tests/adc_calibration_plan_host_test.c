@@ -1,4 +1,4 @@
-/* Pure arithmetic / unit contract, NOT a measured E62 NTC or divider. */
+/* Pure arithmetic / unit contract, NOT a measured AM13E reference NTC or divider. */
 #include "adc_calibration_plan.h"
 #include <stdint.h>
 #include <assert.h>
