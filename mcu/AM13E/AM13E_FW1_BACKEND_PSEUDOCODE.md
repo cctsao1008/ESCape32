@@ -7,6 +7,14 @@
 **Source of missing-symbol evidence:** E1-AK `e1ak-fw1-link.log` (27 distinct unresolved symbols / 38 references); E1-AK ARM GNU Object Compile PASS 0 warning. E1-AL corrects HDSEL/timeout hardware planning and requires revalidation.
 **Reference boundaries:** Original ESCape32 Rel17 `src/main.c`, `src/io.c`, `src/telem.c`, `src/util.c`, `src/prog.c`; AM13E target-specific contracts in `mcu/AM13E/*.h`; AM13E230x TI TRM/SDK; project SW/HW architecture baseline v1.6.
 
+## E1-AN evidence and E1-AO configuration Flash preparation (2026-10-10)
+
+- **E1-AN measured:** ARM GNU Object Build PASS. No application-owned C warning. TI SDK 26.01.00.03 `dl_timer.c` reports **10 `-Wmaybe-uninitialized` warnings**, because this run recompiles vendor Capture/Compare helpers. FW1 Strict Link FAIL: **22 unique Undefined Symbols / 32 references**, down from E1-AL's 27/38. All five UART symbols are absent. These counts are from the uploaded `e1an-{arm-compile,fw1-link}.log`, not estimates.
+- **FW1 I/O boundary:** PB14 RX/BiDShot/Extended DShot only. Never reintroduce UC2/PA22/PA23 UART to silence missing symbols.
+- **E1-AO new tested helper:** `cfg_flash_plan.{c,h}` checks write destination is **exactly 0x4000**, the FW1 settings partition spans only `0x4000..0x4fff`, source is entirely SRAM_S `0x20000000..0x20017fff`, Flash sector size 2048 bytes, and ECC program-unit padding is a multiple of 16 bytes. Local host GCC `-O2 -Wall -Wextra -Werror -pedantic` **PASS for all 4096 sizes** and invalid address/overflow cases. Physical AM13E ARM GNU and Flash execution are NOT covered by this host test.
+- **Do not implement** `am13e_app_cfg_commit` as an ACK-only wrapper. Before any real erase/program, verify RAM execution of the entire FlashCTL call path (including interrupt/exception safety), FW1/FW2 partition boundaries, active-bank handling, ECC tail staging, read-back and power-loss recovery. The historical `linker_app_reference.ld` is not a production image map; retain `--no-undefined` until an actual Flash backend exists.
+- **Outstanding** (measured E1-AN): 14 Motor/Commutation/BEMF, 7 Audio, 1 Configuration Flash. The E1-AO planner is not itself a resolved backend symbol.
+
 ## Current implementation ledger — after E1-AB through E1-AE
 
 **Build evidence:** E1-Z had 32 symbols / 44 references. E1-AJ ARM GNU Object Build passed with zero warnings; the strict FW1 Link reports **27 unique Undefined Symbols / 38 references**, one symbol/two references fewer than E1-AI. This is measured Link evidence, not WWDT0/Motor silicon validation.

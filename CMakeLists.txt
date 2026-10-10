@@ -86,6 +86,7 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_timer_math.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_frequency_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_duty_plan.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/cfg_flash_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/input_watchdog.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_event_timer.c"
             # Genuine TI DriverLib objects: delayCycles (common) and

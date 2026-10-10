@@ -20,7 +20,8 @@
 - Do not compile `telem_mode_plan.c`, `telem_uc2_preflight.c`, or SDK `dl_unicomm.c` and `dl_unicommuart.c` into the FW1 target. Those earlier investigative sources remain in the repository for history; they are **not** FW1 deliverables.
 - The five unresolved `am13e_telem_hw_*` UART symbols are **out of scope**, not to be implemented or replaced with fake no-op functions for this FW1 target.
 - The remaining Motor/Protection, Audio and Config Flash symbols must still use real backends; `--no-undefined` remains enabled.
-- Re-run ARM GNU Object Build and strict FW1 Link. The previous E1-AL 27-symbol / 38-reference linker log predates this PB14-only target correction; **do not claim** a reduced number until a fresh link log is captured.
+- E1-AN ARM GNU object compile **PASS** (self-owned code 0 warning; TI SDK `dl_timer.c` 10 `-Wmaybe-uninitialized` warnings). E1-AN Strict Link: **22 distinct Undefined Symbols / 32 references**, down from E1-AL 27/38. The five UART callbacks are no longer linked and PB14 Extended DShot code remains.
+- E1-AO adds a standalone FW1 settings Flash write-range/ECC planner with host evidence; it does not implement Flash erase or programming, and does not resolve `am13e_app_cfg_commit`. Rebuild before updating FW1 compile evidence.
 
 ## Mandatory scope checks
 
