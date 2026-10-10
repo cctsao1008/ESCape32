@@ -982,6 +982,15 @@ void main(void) {
 #endif
 	skipduty:
 		if (running && !step) { // Start motor
+#if defined(AM13E)
+            /* A preceding Drag/Lock Brake can own a running MCPWM0
+             * timebase. Freeze it and cancel stale TIMG12/ECAP1 events
+             * BEFORE loading the new first sine/sixstep/brushed image.
+             * The normal Rel17 per-mode start below restarts from
+             * counter zero, with the six physical gate pads still Hi-Z.
+             */
+            am13e_app_motor_commutation_enable(0);
+#endif
 			if (brushed) {
 #if defined(AM13E)
                 am13e_app_motor_brushed_write(reverse, cfg.damp);
