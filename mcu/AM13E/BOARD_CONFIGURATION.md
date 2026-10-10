@@ -1,47 +1,60 @@
-# AM13E Board Configuration — G431-derived Software Defaults
+# AM13E Reference Board — Live Power-Stage Porting Profile
 
-**All configurable fields have concrete numeric development defaults.**
-These values are based where possible on ESCape32 Rel17
-`PHOTONDRIVE1 STM32G431`, not a verified AM13E PCB schematic. Unlike
-`-1` unknown placeholders, the numeric defaults can be used for source,
-formula and simulation work; **physical motor output is still disabled**.
+**Reference FW1 now defaults to functional Motor/Audio Power Stage code**:
+`AM13E_POWER_STAGE_ENABLED=ON`. That enables real MCPWM0 output
+connections, configurable 6-channel pinmux, RED/FED dead-band, gate
+PB13 control and analog scaling at runtime. **No hardware qualification
+or motor-spin test has been performed.**
 
-## G431 source baseline
+## Runtime state transitions
 
-`CMakeLists.txt` defines `PHOTONDRIVE1 STM32G431 DEAD_TIME=155
-COMP_MAP=132 SENS_MAP=0xBFA6 VOLT_MUL=224 CURR_MUL=63
-TEMP_FUNC=NTC10K3455UP10K`.
+1. At boot hold PB13 inactive, all motor pins disconnected, AQ forced LOW,
+   MCPWM stopped. Install mandatory PB15 nFAULT hardware INPUTXBAR2 ->
+   PWMXBAR1 -> MCPWM0 OST1 before interrupt release.
+2. Install configurable TI MCPWM RED/FED dead-band and verify DriverLib
+   DBCTL, DBRED, DBFED and shadow readback.
+3. Acquire real ADC0 PA6 NTC / PA28 VBUS samples and pass the
+   G431-derived default model's scaled values to Rel17 `adcdata()`.
+4. Normal ESCape32 motor/Sine/Braking/Music/PCM requests start MCPWM0,
+   map six phase pins to PWM, release software AQ LOW force, then assert
+   PB13 driver enable **last**.
+5. Stop, fault and audio/motor transitions first deassert PB13, force
+   six AQ outputs LOW, disconnect phase pins, and stop the timebase.
 
-STM32G431 `src/defs.h` converts `DEAD_TIME=155` into `TIM_DTG=0x8D`:
-effective `154/168MHz = 916.7ns`. Since AM13E MCPWM uses 100MHz,
-we round to `92` ticks (920ns) for each RED/FED and the corresponding
-compare-offset modelling. This is **time equivalence**, not a proven
-equivalent six-output MCPWM dead-band topology.
+**Overcurrent:** The existing reference PB15 nFAULT -> OST1 route is
+mandatory and actively checked. Independent OC -> OST2 is implemented
+and automatically activated if a real `AM13E_BOARD_OC_GPIO_PINCM` is
+configured. Default `0` explicitly disables only OST2; no invented
+hardware overcurrent input or fictitious OC source is used. Existing
+BEMF comparator routing remains separate.
 
-| Board setting | Development default | Source / limitation |
+## Editable G431-derived development parameters
+
+| Item | Default value | Origin and limitation |
 | --- | --- | --- |
-| Pin Mapping | PA8/PA11, PA9/PA30, PA10/PA31 motor; PB14 command; PB15 nFAULT; PB13 reserved; PA6/PA28 sensing | Existing reference routes preserved |
-| Gate polarity | PB13 active `1`; invert `0`; Hi-Z safe proof `0`; hardware shutdown proof `0` | Active-high development convention only; PHOTONDRIVE1 does **not** verify PB13 polarity |
-| Dead-time | RED/FED `92/92` ticks; offset `92`; polarity `0/1`; both inputs PWMA (`0`), no swap | G431-derived duration and conventional complementary output, not qualified analog driver behavior |
-| Sensing | 12-bit `4095`; nominal VREF `3300mV`; NTC supply `3300mV`; Rtop `26820`Ω / Rbottom `1000`Ω; model `3` | Approximation from G431 `VOLT_MUL=224`, calibrated 3.3V model and `NTC10K3455UP10K`; NOT actual resistor/VREF data |
-| Fault Routing | PB15 active-low -> OST1 unchanged; dedicated OST2 OC disabled: pin `0`, polarity `1` (inert) | G431 `COMP_MAP=132` handles BEMF, not overcurrent; no fake physical OC pin |
+| Pin Mapping | Motor PA8/11, PA9/30, PA10/31; PB13 EN; PB14 command; PB15 nFAULT; PA6 NTC, PA28 VBUS | Existing Reference mapping |
+| Gate Polarity | PB13 active-high `1`, PWM inversion mask `0`; external driver Hi-Z-safe and HW shutdown verification `0` | Active-high software convention; not a verified G431 PB13 net |
+| Dead-time | RED=`92` / FED=`92` ticks; offset=`92`; polarities `0/1`, both input PWMA, swaps `0/0` | G431 TIM1 `DEAD_TIME=155` = 154 cycles / 168MHz = 916.7ns, mapped to 920ns at AM13E 100MHz |
+| Sensing | 12-bit ADC `4095`, VREF `3300mV`, NTC supply `3300mV`, Rtop `26820`Ω / Rbottom `1000`Ω, NTC model `3` | Approximate G431 `VOLT_MUL=224` and NTC10K3455UP10K; **not actual AM13E board calibration** |
+| Fault | PB15 active-low nFAULT OST1 required, OC PINCM `0` disables only OST2 | G431 COMP_MAP=132 is BEMF, not independent overcurrent |
 
-## Safety, build and future board revisions
+CMake `-DAM13E_POWER_STAGE_ENABLED=OFF` explicitly selects the
+former disconnected-output diagnostic variant. This is **not**
+the default. To change electrical values use CMake's
+`AM13E_BOARD_BOARD_PROFILE_FILE` hook to supply a list of
+`AM13E_BOARD_BOARD_DEFINITIONS` or override individual defaults
+in `board_configuration.h`.
 
-The numeric values remain `#ifndef`-overridable from CMake's
-`AM13E_BOARD_BOARD_PROFILE_FILE` or direct compile definitions.
+## Feature completion vs validation
 
-**Defaults do not define** `AM13E_BOARD_POWER_STAGE_PROFILE`,
-`AM13E_MOTOR_BOARD_DEADBAND_VERIFIED` or
-`AM13E_BOARD_SENSORS_CALIBRATED`. The gate remains disconnected and
-uncalibrated ADC readings do not become real voltage/temperature protection.
-Explicitly forcing the power-stage configuration with only these development
-defaults is rejected because independent OC, verified gate Hi-Z safety, and
-hardware shutdown are unavailable. No GPIO routing, Boot/Image ABI or Motor
-Audio resource ownership changes in this update.
+Real source paths are connected and linked, and software regression
+tests can verify source/encoding/IRQ integration. Physical output
+polarities, shoot-through prevention, gate-driver input states, OST1
+response, thermal behavior, and ADC gain are NOT yet validated on a
+real board; they require a controlled bench bring-up. In particular,
+there is **no physically routed current-sense ADC** in this Reference
+profile; Rel17 current-dependent features need an additional actual
+board input before they are complete on a particular ESC.
 
-The numeric placeholders are development assumptions, NOT design evidence.
-Before any live test the real schematic, protection circuit, voltage divider,
-gate-driver polarity and non-overlap waveforms must be checked and the Board
-Profile updated as required. See `tests/board_profile_compile_smoke.py`
-for synthetic compiler coverage, which is intentionally not production data.
+The boot/update v1.6 APP_BASE=0x6000, CRC, signature and other
+on-flash ABI contracts have not changed.

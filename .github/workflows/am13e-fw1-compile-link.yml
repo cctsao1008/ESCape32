@@ -86,6 +86,7 @@ jobs:
             run_test fault_trip_route mcu/AM13E/fault_trip_route_plan.c mcu/AM13E/tests/fault_trip_route_plan_host_test.c
             run_test motor_pad_route mcu/AM13E/motor_output_route_plan.c mcu/AM13E/tests/motor_output_route_plan_host_test.c
             run_test board_configuration -DAM13E mcu/AM13E/tests/board_configuration_host_test.c
+            run_test board_configuration_power -DAM13E -DAM13E_BOARD_DEVELOPMENT_ACTIVE_TEST -DAM13E_BOARD_POWER_STAGE_PROFILE=1 -DAM13E_MOTOR_BOARD_DEADBAND_CONFIGURED=1 -DAM13E_BOARD_SENSORS_CONFIGURED=1 mcu/AM13E/tests/board_configuration_host_test.c
             cc $flags -DAM13E -DAM13E_BOARD_DEFAULTS_OVERRIDE_TEST \
               -DAM13E_BOARD_PB13_ACTIVE_LEVEL=0 \
               -DAM13E_MOTOR_DB_RED_TICKS=64 \

@@ -8,7 +8,7 @@
 | --- | --- |
 | `AM13E_PORTABLE_LOGIC` | Board-neutral ARM algorithm sources compile; not an executable firmware |
 | `AM13E_MCU_FAULT_TRIP_BACKEND`, `AM13E_MCU_RUNTIME_TICK`, `AM13E_MCU_ADC_PAIR_BACKEND` | Real TI device/backend objects compile without choosing reference pins, oscillator or analog external values |
-| Existing Reference `AM13E_FW1_V16_IMAGE`, `BOOT5_PB14.elf` | **Reference wiring/image ABI only**; strict linked real Rel17/Boot sources; fail-closed by default |
+| Existing Reference `AM13E_FW1_V16_IMAGE`, `BOOT5_PB14.elf` | **Reference wiring/image ABI only**; strict linked real Rel17/Boot sources; live output code by default, inactive boot |
 | Native Host regressions | Control arithmetic, encoding and negative cases; no evidence of gate-driver, current-sense or capture latency |
 | Image `verify_v16_image.py` + Boot host CTest | Reference vector, linker layout, metadata, signature-last update transaction, CRC and Flash range compatibility |
 | Future hardware gate | Physical electrical pinmux, protection latency, output polarity, calibration and motor drive are **not** approved |
@@ -27,15 +27,15 @@
 | Extended DShot / telemetry mode policy | `src/telem.c`, `telem_mode_plan.c` | Telemetry modes host test + FW1 link | Optional actual UART/CAN transport profiles; do not claim DroneCAN complete |
 | BEMF zero-cross / timeout | `motor_bemf.c`, ECAP clock and timeout plans | Host BEMF clock/timeout + full FW1 | Comparator input board profile, timing/noise/overrun qualification |
 | Fault nFAULT asynchronous hardware trip | `fault_trip_backend.c` + `fault_trip_route_plan.c`; Reference route in `motor_fault_route.c` | 128-route host regression + independent ARM object + FW1 link | Physical active-level and shutdown-path verification |
-| Independent OC / Dead-band / Gate outputs | `motor_power_stage.c`, `motor_safety.c` | Synthetic compile branch gate ONLY, **never flashed** | Reviewed electrical profile; **gate fail-closed remains default** |
-| ADC raw monitoring / optional scaling | `analog_sampling_backend.c`; Reference pin/channels in `analog_reference.h` and ISR in `analog_runtime.c` | Native scaling host + independent ARM object + FW1 link | Board VREF, divider, thermistor and channel route, current sensing not assumed |
+| Power Stage / Dead-band / Gate outputs | `motor_power_stage.c`, `motor_safety.c` | Default full FW1 links real MCPWM/Gate/RED/FED paths; optional independent OC source compiles; gate stays inactive until Rel17 motor/audio demand | On-target non-overlap, gate polarity, nFAULT latency, electrical safety, current-sense input not verified |
+| ADC raw monitoring / default model | `analog_sampling_backend.c`; Reference pin/channels in `analog_reference.h` and ISR in `analog_runtime.c` | G431-derived numeric model feeds Rel17 adcdata; scaling native host + full FW1 link | Actual VREF, divider, NTC, current-sense hardware require board work |
 | Clock / Rel17 tick / neutral arming window | `system_runtime.c`, `runtime_tick_contract.h`; `board_clock_reference.c` for 25 MHz/200 MHz only | ARM generic runtime object, linked Reference Clock Diagnostic, 250 ms arming host test | Alternative real clock providers with documented physical oscillator |
 | Flash config persistence / WWDT / update transaction | `cfg_flash_*.c`, Boot sources, image tool | Flash planning/writer host, 6 Boot host tests and 16 image checks | Distinct target-specific Boot/Image Profile selection and transport capacity |
 | Resource ownership / safety | Generic `motor_output_backend.c` and `motor_output_route_plan.c`; Reference `board_motor_output_reference.c`; `motor_safety.c` / `motor_power_stage.c` | Independent ARM object, pad-route negative Host Test, Reference strict link and physical-output compile | Additional runtime ownership/fault integration tests; qualified hardware only last |
 
 ## Constraints that must remain invariant
 
-- **No input command can implicitly enable the power stage.** Unknown gate polarity, external OC, RED/FED or calibration means no output. Synthetic CI electrical settings are compilation fixtures, never production defaults.
+- **Default full Reference FW1 compiles active Power Stage paths** and attaches outputs on an ordinary Rel17 motor/audio request, not at boot. This uses numeric development values, NOT electrically validated production settings. Mandatory PB15 nFAULT OST1 is retained; second independent OST2 is optional when wired.
 - **Motor and Audio share MCPWM0**, and ownership is exclusive. Do not add a standalone GPIO beeper path.
 - Current Reference Image: `APP_BASE=0x6000` and existing single-slot 1KiB-block/8-bit-index update transport. **Preserve magic, CRC, signature, vector, and existing Boot/Flash semantics.** A different profile would need its own explicit ABI/version/migration validation; changing an output filename is not an ABI migration.
 - Host/CI PASS is source-level evidence, not AM13E silicon timing, a gate-drive clearance, or a complete generic board-independent FW1.

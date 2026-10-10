@@ -23,8 +23,9 @@ the default or authoritative definition of an AM13E23019 board.
   integration**. These are real linked images but they encode a fixed
   0x6000 APP location and fixed reference pin assignments. They must
   not be described as a generic AM13E board support package.
-- The reference power stage deliberately remains fail-closed until a
-  separately reviewed electrical configuration is provided.
+- Reference FW1 now defaults to live six-pad MCPWM/Power Stage control
+  using G431-derived numerical DEVELOPMENT assumptions. Boot still
+  begins isolated; Rel17 motor/audio requests can connect live outputs.
 
 ## First generic build gate
 
@@ -121,4 +122,4 @@ The new `fault_trip_route_plan.c` has no SDK or board dependency. The actual TI 
 
 ## Editable Board Parameter defaults (no physical output)
 
-The `board_configuration.h` software defaults are explicit and overridable: G431-derived numeric gate/dead-band/sensing modelling, with independent OC explicitly disabled; hardware qualification is still absent. Existing Reference pin routes remain unchanged and the three physical-output/verification opt-ins stay absent. See `BOARD_CONFIGURATION.md`. Host CI tests default and per-field override semantics.
+The `board_configuration.h` G431-derived numeric gate/dead-band/sensing defaults are used by the live Reference FW1 build; independent OST2 OC is optional, whereas existing PB15 OST1 is required. These are CONFIGURED software parameters, **not** VERIFIED or CALIBRATED hardware claims. See `BOARD_CONFIGURATION.md`. Host CI tests default and per-field override semantics.

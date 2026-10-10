@@ -17,7 +17,7 @@ build=pathlib.Path(sys.argv[1])
 commands=json.loads((build/"compile_commands.json").read_text())
 flags=[
     "-DAM13E_BOARD_POWER_STAGE_PROFILE=1",
-    "-DAM13E_MOTOR_BOARD_DEADBAND_VERIFIED=1",
+    "-DAM13E_MOTOR_BOARD_DEADBAND_CONFIGURED=1",
     "-DAM13E_BOARD_PB13_ACTIVE_LEVEL=1",
     "-DAM13E_BOARD_GATE_PWM_INVERT_MASK=0",
     "-DAM13E_BOARD_OC_GPIO_PINCM=49",
@@ -34,7 +34,7 @@ flags=[
     "-DAM13E_MOTOR_DB_SWAP_B=0",
     "-DAM13E_MOTOR_DB_COMPARE_OFFSET_TICKS=40",
     # Synthetic ADC numbers below exist ONLY to exercise compiler paths.
-    "-DAM13E_BOARD_SENSORS_CALIBRATED=1",
+    "-DAM13E_BOARD_SENSORS_CONFIGURED=1",
     "-DAM13E_BOARD_ADC_FULLSCALE=4095",
     "-DAM13E_BOARD_ADC_VREF_MV=3300",
     "-DAM13E_BOARD_NTC_SUPPLY_MV=3300",
@@ -79,11 +79,12 @@ for obj in commands:
     if result.returncode: raise SystemExit(result.returncode)
 if observed!=targets:
     raise SystemExit(f"Missing source(s) from compile database: {targets-observed}")
-# The G431-derived numeric development defaults MUST NOT qualify the
-# actual motor gate merely by setting high-level opt-in flags.
+# The default compiled AM13E target has live Power Stage + DB + ADC.
+# Positive branch above exercises explicit independent OC/OST2 wiring.
+# A conflicting OC route must STILL fail at compile time (PB15=47).
 safety=next((cmd for cmd in commands if
-             pathlib.Path(cmd["file"]).name=="motor_power_stage.c" and
-             "CMakeFiles/AM13E.dir/" in cmd["command"]), None)
+    pathlib.Path(cmd["file"]).name=="motor_power_stage.c" and
+    "CMakeFiles/AM13E.dir/" in cmd["command"]), None)
 if safety is None:
     raise SystemExit("Missing AM13E power-stage compile command")
 args=shlex.split(safety["command"])
@@ -100,15 +101,13 @@ for word in args:
         continue
     stripped.append(word)
 result=subprocess.run(stripped+[
-    "-DAM13E_BOARD_POWER_STAGE_PROFILE=1",
-    "-DAM13E_MOTOR_BOARD_DEADBAND_VERIFIED=1",
-    "-DAM13E_BOARD_SENSORS_CALIBRATED=1",
+    "-DAM13E_BOARD_OC_GPIO_PINCM=47",
     "-Werror","-fsyntax-only"],
     cwd=safety["directory"],capture_output=True,text=True,check=False)
 if result.returncode==0 or (
-   "Unqualified/conflicting AM13E reference power stage configuration"
+   "Invalid/conflicting AM13E power-stage pin/level configuration"
    not in result.stderr):
     print(result.stdout+result.stderr)
-    raise SystemExit("Unreviewed G431-derived defaults wrongly enabled physical output")
-print("PASS: numeric development defaults cannot authorize power stage")
-print("PASS: 6 board-configured compilation fixtures; NO physical qualification")
+    raise SystemExit("Conflicting independent OC pin was accepted")
+print("PASS: default live Power Stage + ADC, synthetic OC/OST2 and invalid route")
+print("PASS: 6 live branch compiler regression fixtures; NOT on-target proof")

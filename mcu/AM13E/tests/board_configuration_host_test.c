@@ -3,10 +3,18 @@
  */
 #include "board_configuration.h"
 #include <stdio.h>
+#ifdef AM13E_BOARD_DEVELOPMENT_ACTIVE_TEST
+#if !defined(AM13E_BOARD_POWER_STAGE_PROFILE) || \
+    !defined(AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED) || \
+    !defined(AM13E_BOARD_SENSORS_CONFIGURED)
+#error "Full Rel17 Reference FW1 must compile physical motor/ADC"
+#endif
+#else
 #if defined(AM13E_BOARD_POWER_STAGE_PROFILE) || \
-    defined(AM13E_MOTOR_BOARD_DEADBAND_VERIFIED) || \
-    defined(AM13E_BOARD_SENSORS_CALIBRATED)
-#error "Numeric development defaults must not authorize output"
+    defined(AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED) || \
+    defined(AM13E_BOARD_SENSORS_CONFIGURED)
+#error "Board values alone must not select power output in portable builds"
+#endif
 #endif
 #ifndef AM13E_BOARD_DEFAULTS_OVERRIDE_TEST
 enum { G431_DEAD_TIME=155, G431_TIMER_MHZ=168, AM13E_TIMER_MHZ=100,
