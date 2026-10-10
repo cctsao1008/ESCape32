@@ -600,6 +600,7 @@ void am13e_app_motor_commutation_enable(int enable)
     if (!safety_initialized || fault_latched ||
         (enable != 0 && enable != 1)) runtime_fault();
     if (enable == 0) {
+        am13e_app_motor_timing_cancel(); /* Abort sine/commutation IRQ. */
         force_pwm_inactive();       /* Stops shared TBCLK and freezes MCPWM0. */
         disconnect_pwm_pads();
         motor_timebase_running=0U;
@@ -679,6 +680,7 @@ void am13e_app_commutation_reset(void)
         am13e_app_motor_fault_shutdown();
         am13e_app_motor_fault_reset();
     }
+    am13e_app_motor_timing_cancel();
     force_pwm_inactive();
     disconnect_pwm_pads();
     motor_timebase_running=0U;
@@ -698,6 +700,7 @@ void am13e_app_motor_fault_shutdown(void)
      */
     __disable_irq();
     fault_latched = 1U;
+    am13e_app_motor_timing_cancel();
     force_pwm_inactive();
     disconnect_pwm_pads();
     motor_timebase_running=0U;
