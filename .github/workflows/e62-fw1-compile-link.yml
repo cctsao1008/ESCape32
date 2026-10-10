@@ -123,6 +123,28 @@ jobs:
           ctest --test-dir e62-ci-boot-host --output-on-failure \
             2>&1 | tee e62-ci-logs/boot-host-test.log
 
+      - name: Link and pack FULL FW1 v1.6, verify Boot Flash transaction in host memory
+        id: v16
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -e
+          set -o pipefail
+          cmake --build e62-ci-build --target AM13E_FW1_V16_IMAGE -j 2 \
+            >e62-ci-logs/fw1-v16-build.log 2>&1
+          arm-none-eabi-size e62-ci-build/AM13E_FW1_V16.elf \
+            2>&1 | tee e62-ci-logs/fw1-v16-size.log
+          arm-none-eabi-objdump -h e62-ci-build/AM13E_FW1_V16.elf \
+            >e62-ci-logs/fw1-v16-sections.log
+          cmake -S boot/tests/am13e_host -B e62-ci-v16-host -G Ninja \
+            -DAM13E_HOST_SANITIZERS=OFF \
+            -DAM13E_HOST_PACKED_IMAGE="$(pwd)/e62-ci-build/AM13E_FW1_V16.e62.bin" \
+            >e62-ci-logs/v16-host-configure.log 2>&1
+          cmake --build e62-ci-v16-host -j 2 \
+            >e62-ci-logs/v16-host-build.log 2>&1
+          ctest --test-dir e62-ci-v16-host --output-on-failure \
+            2>&1 | tee e62-ci-logs/v16-host-test.log
+
       - name: Compile board-configured power stage (synthetic values, never flash)
         id: board_profile
         shell: bash
@@ -165,6 +187,11 @@ jobs:
           path: |
             e62-ci-logs/
             e62-ci-build/AM13E_FW1.map
+            e62-ci-build/AM13E_FW1_V16.map
+            e62-ci-build/AM13E_FW1_V16.elf
+            e62-ci-build/AM13E_FW1_V16.bin
+            e62-ci-build/AM13E_FW1_V16.e62.bin
+            e62-ci-build/AM13E_FW1_V16.json
           retention-days: 14
           if-no-files-found: warn
 
@@ -177,8 +204,10 @@ jobs:
           echo "Strict link: ${{ steps.build.outputs.link_rc }}"
           echo "Board-profile compile: ${{ steps.board_profile.outcome }}"
           echo "v1.6 Boot/Link/Pack Host Tests: ${{ steps.boot.outcome }}"
+          echo "Actual Rel17 FW1 v1.6 ELF/Pack/Flash transaction: ${{ steps.v16.outcome }}"
           test "${{ steps.build.outputs.configure_rc }}" = 0 &&
           test "${{ steps.build.outputs.compile_rc }}" = 0 &&
           test "${{ steps.build.outputs.link_rc }}" = 0 &&
           test "${{ steps.board_profile.outcome }}" = success &&
-          test "${{ steps.boot.outcome }}" = success
+          test "${{ steps.boot.outcome }}" = success &&
+          test "${{ steps.v16.outcome }}" = success
