@@ -44,7 +44,7 @@ def fixed_timer(source: str) -> str:
             f"{param_type} *config)\n{{"
         )
         replacement = signature + (
-            "\n    /* E62 integration: fail closed on unmapped channels. */"
+            "\n    /* AM13E reference integration: fail closed on unmapped channels. */"
             "\n    if (config->inputChan != DL_TIMER_INPUT_CHAN_0 &&"
             "\n        config->inputChan != DL_TIMER_INPUT_CHAN_1)"
             "\n        return;"

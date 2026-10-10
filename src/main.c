@@ -537,11 +537,11 @@ void adcdata(int t, int u, int v, int c, int a) {
 	static int z = 3300, st = -1, su = -1, sa = -1;
 #if defined(AM13E)
     /* ADC0 INT1 invokes this only after a valid calibrated NTC/VBUS
-     * sample pair. No E62 current sense pin has been assigned, so do
+     * sample pair. No AM13E reference current sense pin has been assigned, so do
      * NOT perform the legacy shunt-zero calibration on invented data.
      */
     ready=1;
-    /* E62 has no current ADC in IO Plan v1.0. Do not fabricate a
+    /* AM13E reference has no current ADC in IO Plan v1.0. Do not fabricate a
      * shunt offset or zero-current measurement just to update status.
      */
     (void)c;

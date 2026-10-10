@@ -1,5 +1,5 @@
 /*
- * E62 AM13E v2 application LINK SMOKE ONLY.
+ * AM13E reference AM13E v2 application LINK SMOKE ONLY.
  * NOT a production motor-controller application linker.
  * The current legacy ESCape32 CMD_WRITE addressing is limited to 256 KiB.
  *
@@ -96,4 +96,4 @@ ASSERT(SIZEOF(.intvecs) >= 8, "M33 vectors must contain SP and PC")
  */
 ASSERT(SIZEOF(.data) == 0, "Smoke fixture must not contain initialized .data")
 ASSERT(__app_flash_payload_end__ <= 0x00046000,
-       "E62 v2 legacy CMD_WRITE image exceeds 256 KiB")
+       "AM13E reference v2 legacy CMD_WRITE image exceeds 256 KiB")

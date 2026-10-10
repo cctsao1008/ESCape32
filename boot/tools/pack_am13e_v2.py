@@ -23,7 +23,7 @@ HEADER_OFFSET = 0x500
 METADATA_SECTOR = 0x800
 HEADER_SIZE = 32
 MAX_LENGTH = 256 * 1024
-HEADER_MAGIC = 0x49323645  # "E62I"
+HEADER_MAGIC = 0x49323645  # "legacy-image-magic"
 TARGET_ID = 0x33314D41    # "AM13"
 VERSION = 1
 HEADER_FORMAT = "<IHHIIIIII"
@@ -122,7 +122,7 @@ def verify(image: bytes) -> dict[str, int | str]:
     if image_crc != actual_crc:
         raise ImageError(f"Payload CRC mismatch: expected {image_crc:08x}, got {actual_crc:08x}")
     return {
-        "contract": "E62 AM13E v1.6 vector-first signature-last",
+        "contract": "AM13E reference AM13E v1.6 vector-first signature-last",
         "app_base": APP_BASE,
         "vector_address": APP_BASE + VECTOR_OFFSET,
         "header_address": APP_BASE + HEADER_OFFSET,

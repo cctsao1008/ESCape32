@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static ELF audit of the AM13E E62 Boot Flash-service RAM execution path.
+"""Static ELF audit of the AM13E AM13E reference Boot Flash-service RAM execution path.
 
 Checks ELF VMA/LMA, the startup RAM-copy linker symbols, required DriverLib
 function placement and direct branches from .TI.ramfunc.
@@ -174,7 +174,7 @@ def audit(args):
                 "Map object names found; manually inspect .TI.ramfunc inputs"
             )
 
-    print("=== E62 / AM13E BOOT RAM EXECUTION ELF AUDIT ===")
+    print("=== AM13E reference / AM13E BOOT RAM EXECUTION ELF AUDIT ===")
     for note in notes:
         print("[INFO]", note)
     for fail in failures:
