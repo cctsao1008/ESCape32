@@ -14,7 +14,9 @@ void ECAP0_IRQHandler(void);
 
 typedef struct {
     uint32_t capture_pairs;
-    uint32_t capture_overruns; /* observed phase movement during CAP1..CAP4 read */
+    uint32_t capture_overruns; /* observed phase movement or stale DShot read */
+    uint32_t late_capture_groups; /* DShot pair exceeded next CEVT4 deadline */
+    uint32_t max_capture_age_ticks; /* observed ECAP ISR snapshot age */
     uint32_t invalid_capture_groups; /* physical ordering/width rejected */
     uint32_t good_pwm;
     uint32_t good_dshot_rx;

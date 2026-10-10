@@ -72,6 +72,8 @@ static AM13E_PB14_Decoder decoder;
 static volatile uint32_t initialized;
 static volatile uint32_t capture_pairs;
 static volatile uint32_t capture_overruns;
+static volatile uint32_t late_capture_groups;
+static volatile uint32_t max_capture_age_ticks;
 static volatile uint32_t invalid_capture_groups;
 static volatile uint32_t unexpected_gpio1_irqs;
 static uint32_t calib_counter;
@@ -192,6 +194,21 @@ void ECAP0_IRQHandler(void)
         am13e_pb14_decoder_abort(&decoder);
         return;
     }
+    /* DShot150/300/600 arrives in two-pulse/four-edge groups.
+     * CPU snapshot must finish before the NEXT CEVT4 can overwrite
+     * these four CAP registers, even when flag/phase checks passed.
+     * A deadline miss MUST NOT feed Rel17 throttle/WWDT/BiDShot.
+     */
+    const uint32_t snapshot_now=DL_ECAP_getTimeStampCounter(PB14_ECAP);
+    const uint32_t age=snapshot_now-end2; /* modulo-2^32 rollover-safe */
+    if(age>max_capture_age_ticks) max_capture_age_ticks=age;
+    if(!am13e_pb14_capture_budget_ok(start1,start2,end2,
+                                      snapshot_now,decoder.tick_hz)) {
+        ++late_capture_groups;
+        ++capture_overruns;
+        am13e_pb14_decoder_abort(&decoder);
+        return;
+    }
     capture_pairs += 2U;
     const uint32_t good_before = decoder.good_dshot;
     /* Both pulses pass through the same Rel17 PWM/DShot callbacks.
@@ -268,6 +285,8 @@ void am13e_app_pb14_status(AM13E_PB14_Status *out)
     if (out == NULL) return;
     out->capture_pairs = capture_pairs;
     out->capture_overruns = capture_overruns;
+    out->late_capture_groups = late_capture_groups;
+    out->max_capture_age_ticks = max_capture_age_ticks;
     out->invalid_capture_groups = invalid_capture_groups;
     out->good_pwm = decoder.good_pwm;
     out->good_dshot_rx = decoder.good_dshot;

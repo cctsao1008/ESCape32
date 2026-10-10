@@ -53,3 +53,23 @@ when paired with commutation/BEMF activity; a measured ISR worst-case
 execution-time budget or a verified DMA capture architecture remains
 an **on-target** acceptance requirement. This is reported separately
 from the now-passing software coverage audit.
+
+### DShot capture freshness and measurable diagnostics
+
+The actual ECAP0 IRQ now reads TSCTR after snapshotting CAP1–CAP4
+and **rejects DShot pairs older than two calibrated DShot bit periods**.
+This is the next four-event CEVT4 arrival budget. It is a conservative
+software admission check, not proof of deterministic ISR capacity.
+
+`AM13E_PB14_Status` now exposes `late_capture_groups` and
+`max_capture_age_ticks`, alongside `capture_overruns`, for on-target
+measurements. A rejected pair drops the partial frame instead of
+feeding Rel17 or WWDT. The native tests exercise DShot150/300/600,
+deadline boundaries, uint32 counter wrap and servo exemption.
+
+At DShot600, a two-bit group arrives in approximately 3.33us; at
+200MHz that is only about 667 MCU cycles **before other interrupt
+costs**. The present RX backend uses ECAP0 CEVT4 IRQ rather than
+DMA capture. It is therefore not legitimate to declare physical
+high-rate RX loss-free without a measured ISR budget or a tested DMA
+buffered capture path.

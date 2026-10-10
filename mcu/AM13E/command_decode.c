@@ -23,6 +23,21 @@ int am13e_pb14_capture_snapshot_valid(
            phase_after==next_expected_phase;
 }
 
+int am13e_pb14_capture_budget_ok(uint32_t first_start,
+                                  uint32_t second_start,
+                                  uint32_t final_edge,
+                                  uint32_t current_counter,
+                                  uint32_t capture_hz)
+{
+    const uint32_t us_ticks=capture_hz/UINT32_C(1000000);
+    if(!us_ticks || us_ticks>200U)return 0;
+    const uint32_t bit_ticks=second_start-first_start;
+    if(bit_ticks<us_ticks/2U || bit_ticks>us_ticks*9U)
+        return 1; /* Separate servo pulses, not a DShot bit pair. */
+    return (uint32_t)(current_counter-final_edge)<
+           (uint32_t)(bit_ticks*2U);
+}
+
 int am13e_pb14_capture_group_valid(uint32_t start1, uint32_t end1,
                                    uint32_t start2, uint32_t end2,
                                    uint32_t tick_hz)

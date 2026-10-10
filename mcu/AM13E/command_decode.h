@@ -39,6 +39,18 @@ int am13e_pb14_capture_snapshot_valid(
     uint32_t required_events, unsigned phase_before,
     unsigned phase_after, unsigned next_expected_phase);
 
+/* Conservative DShot ECAP group freshness admission. Two DShot bit
+ * periods make one four-event batch; if the CPU reads the group after
+ * the next CEVT4 deadline, the old registers cannot be trusted.
+ * Servo PWM (>9us spacing) is not subject to this DShot-only bound.
+ * True worst-case IRQ execution time still requires silicon evidence.
+ */
+int am13e_pb14_capture_budget_ok(uint32_t first_start,
+                                  uint32_t second_start,
+                                  uint32_t final_edge,
+                                  uint32_t current_counter,
+                                  uint32_t capture_hz);
+
 int am13e_pb14_capture_group_valid(uint32_t start1, uint32_t end1,
                                    uint32_t start2, uint32_t end2,
                                    uint32_t tick_hz);

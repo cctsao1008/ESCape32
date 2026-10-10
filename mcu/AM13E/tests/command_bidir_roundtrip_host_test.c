@@ -105,6 +105,10 @@ int main(void)
     /* Capture snapshot race must abort before reaching the decoder.
      * Valid complete groups still forward all DShot150/300/600 bits.
      */
+    assert(am13e_pb14_capture_budget_ok(100U,433U,600U,1265U,
+                                         CAPTURE_HZ));
+    assert(!am13e_pb14_capture_budget_ok(100U,433U,600U,1266U,
+                                          CAPTURE_HZ));
     assert(am13e_pb14_capture_snapshot_valid(15U,0U,15U,1U,1U,1U));
     assert(!am13e_pb14_capture_snapshot_valid(15U,1U,15U,1U,1U,1U));
     assert(!am13e_pb14_capture_snapshot_valid(7U,0U,15U,1U,1U,1U));

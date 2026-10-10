@@ -92,6 +92,30 @@ int main(void)
     assert(!am13e_pb14_capture_snapshot_valid(required,0U,
                                               0U,1U,1U,1U));
 
+    /* A four-event DShot batch has exactly two bit periods to finish
+     * before the following CEVT4 slot. Late old CAP values cannot be
+     * forwarded to the decoder even if their CRC might appear valid.
+     */
+    const uint32_t dshot_periods[3]={1333U,667U,333U};
+    for(unsigned i=0U;i<3U;++i){
+        const uint32_t bit=dshot_periods[i];
+        assert(am13e_pb14_capture_budget_ok(
+            10000U,10000U+bit,10000U+bit+bit/2U,
+            10000U+bit+bit/2U+bit*2U-1U,200000000U));
+        assert(!am13e_pb14_capture_budget_ok(
+            10000U,10000U+bit,10000U+bit+bit/2U,
+            10000U+bit+bit/2U+bit*2U,200000000U));
+    }
+    assert(am13e_pb14_capture_budget_ok(
+        UINT32_C(0xfffffff0),UINT32_C(0xfffffff0)+333U,200U,
+        200U+665U,200000000U));
+    assert(!am13e_pb14_capture_budget_ok(
+        UINT32_C(0xfffffff0),UINT32_C(0xfffffff0)+333U,200U,
+        200U+666U,200000000U));
+    /* 20ms servo period must not be subject to 3.33us DShot budget. */
+    assert(am13e_pb14_capture_budget_ok(1000,4001000,4001300,
+                                        4300000,200000000U));
+    assert(!am13e_pb14_capture_budget_ok(1000,1333,1533,2000,0U));
     /* Non-DSHOT accepted cases: servo width/period and 32-bit wrap. */
     assert(am13e_pb14_capture_group_valid(
         100000U, 100150U, 100333U, 100580U, 200000000U));
