@@ -955,6 +955,14 @@ void main(void) {
 		if (curduty > newduty ? sync < 6 || (curduty -= b) < newduty : (curduty += b) > newduty) curduty = newduty; // Duty cycle slew rate limiting
 	setduty:
 #if defined(AM13E)
+        /* Quiesce a previously active Drag/Lock Brake BEFORE staging the
+         * next motor's Period/Compare values. The skipduty Start guard
+         * below remains necessary for sine paths that bypass setduty.
+         * This ordering becomes essential if physical gates are later
+         * enabled under an electrically verified power-stage contract.
+         */
+        if (running && !step)
+            am13e_app_motor_commutation_enable(0);
         /* Backend maps Rel17 logical duty and frequency policy onto MCPWM.
          * This interface has no assumed physical frequency/dead-time.
          */
