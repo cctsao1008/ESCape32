@@ -38,7 +38,12 @@ def main():
         if "CMakeFiles/AM13E.dir/" not in item["command"]:
             continue
         path=Path(item["file"]).resolve()
-        app.add(str(path.relative_to(root.resolve())))
+        try:
+            app.add(str(path.relative_to(root.resolve())))
+        except ValueError:
+            # TI DriverLib is compiled from the pinned external SDK,
+            # but is not an ESCape32-owned feature source.
+            continue
     require(len(app)>=45,"Real AM13E Rel17 source compilation missing")
     summary=(args.logs/"summary.txt").read_text()
     for key in ("CONFIGURE_RC=0","OBJECT_COMPILE_RC=0","STRICT_LINK_RC=0"):
@@ -64,7 +69,7 @@ def main():
             require(src in app,"Feature omitted from linked FW1 "+sid+
                                 ": "+src)
         for case in tests:
-            require(re.search(r"(?m)^PASS: "+re.escape(case)+r"\\s*$",host)
+            require(re.search(r"(?m)^PASS: "+re.escape(case)+r"\s*$",host)
                     is not None,
                     "Declared native regression not PASS "+sid+"/"+case)
             all_tests.add(case)
@@ -125,7 +130,7 @@ def main():
     require("DL_GPIO_initDigitalOutput(IOMUX_PINCM_PB13)" in stage,
             "PB13 inactive-only output mode not initialized")
     for pin in ("OC_GPIO","SERIAL_TX","CURRENT_SENSE"):
-        require(re.search(r"#define AM13E_BOARD_"+pin+r"_PINCM 0\\b",cfg),
+        require(re.search(r"#define AM13E_BOARD_"+pin+r"_PINCM 0\b",cfg),
                 "Unassigned optional aux pin became a fabricated pin: "+pin)
     require("DL_GPIO_initPeripheralAnalogFunction(AM13E_BOARD_CURRENT_SENSE_PINCM)" in fault,
             "Current Sense optional pin initialization lost")
@@ -146,7 +151,7 @@ def main():
     }
     args.logs.mkdir(exist_ok=True,parents=True)
     (args.logs/"rel17-functional-coverage.json").write_text(
-        json.dumps(result,indent=2,ensure_ascii=False)+"\\n")
+        json.dumps(result,indent=2,ensure_ascii=False)+"\n")
     lines=["# Rel17 / AM13E FW1 — Executable Software Evidence",
            "",
            "ARM FW1 strict link: **PASS**; Boot/Image v1.6: **PASS**.",
@@ -159,7 +164,7 @@ def main():
     lines.extend(["", "## Explicitly NOT verified", ""])
     lines.extend("- "+p for p in data["hardware_pending"])
     (args.logs/"rel17-functional-coverage.md").write_text(
-        "\\n".join(lines)+"\\n")
+        "\n".join(lines)+"\n")
     print(f"PASS: {len(data['ported_software'])} ported-software features, "+
           f"{len(data['io_only'])} IO-only, "+
           f"{len(all_tests)} distinct native cases, FW1/Boot v1.6 link")
