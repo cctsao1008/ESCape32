@@ -480,6 +480,7 @@ if(AM13E_BUILD_CLOCK_DIAGNOSTIC)
         "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_diagnostic_entry.c"
         "${PROJECT_SOURCE_DIR}/mcu/AM13E/system_runtime.c"
         "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_xtal25_pll200.c"
+        "${PROJECT_SOURCE_DIR}/mcu/AM13E/board_clock_reference.c"
         "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_common.c"
         "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_fri.c"
         "${PROJECT_BINARY_DIR}/am13e-sdk-compat/startup_gcc_arm.c")

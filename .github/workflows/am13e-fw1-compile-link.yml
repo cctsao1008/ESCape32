@@ -119,6 +119,10 @@ jobs:
           cmake --build am13e-ci-build --target AM13E_MCU_RUNTIME_TICK -j 2 \
             >am13e-ci-logs/mcu-runtime-tick-build.log 2>&1
           cat am13e-ci-logs/mcu-runtime-tick-build.log
+          # Catch Reference clock-provider/diagnostic linker regressions too.
+          cmake --build am13e-ci-build --target AM13E_CLOCK.elf -j 2 \
+            >am13e-ci-logs/reference-clock-diag-build.log 2>&1
+          cat am13e-ci-logs/reference-clock-diag-build.log
 
       - name: Verify v1.6 vector-first ARM linker, packer and Boot Flash host transaction
         id: boot
