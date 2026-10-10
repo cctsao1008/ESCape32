@@ -1,0 +1,93 @@
+name: E62 AM13E FW1 Compile and Strict Link
+on:
+  push:
+    branches: [am13e-port-v2]
+    paths:
+      - 'CMakeLists.txt'
+      - 'src/**'
+      - 'mcu/AM13E/**'
+      - '.github/workflows/e62-fw1-compile-link.yml'
+  workflow_dispatch:
+
+jobs:
+  fw1-build-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout ESCape32
+        uses: actions/checkout@v4
+
+      - name: Install ARM GNU toolchain
+        uses: carlosperate/arm-none-eabi-gcc-action@v1
+
+      - name: Pin TI AM13E SDK source
+        shell: bash
+        run: |
+          git clone --quiet --depth 1 https://github.com/TexasInstruments/am13e2x_sdk.git /tmp/e62-ti-sdk
+          git -C /tmp/e62-ti-sdk fetch --quiet --depth 1 origin b872469ceef18de5e39a1d3acb0821ec158b44c7
+          git -C /tmp/e62-ti-sdk checkout --quiet --detach b872469ceef18de5e39a1d3acb0821ec158b44c7
+          test -f /tmp/e62-ti-sdk/source/driverlib/am13e230x/dl_flash.h
+          arm-none-eabi-gcc --version | head -1
+
+      - name: Compile all original Rel17 FW1 objects and attempt strict full link
+        id: build
+        shell: bash
+        run: |
+          set +e
+          mkdir -p e62-ci-logs
+          cmake -S . -B e62-ci-build -G Ninja \
+            -DAM13E_SDK_ROOT=/tmp/e62-ti-sdk \
+            -DAM13E_ENABLE_FW1_LINK_GATE=ON \
+            >e62-ci-logs/configure.log 2>&1
+          config_rc=$?
+          if [ "$config_rc" -eq 0 ]; then
+            cmake --build e62-ci-build --target AM13E -j 2 \
+              >e62-ci-logs/compile.log 2>&1
+            compile_rc=$?
+          else
+            compile_rc=99
+            echo "SKIPPED (CMake configuration failed)" >e62-ci-logs/compile.log
+          fi
+          if [ "$compile_rc" -eq 0 ]; then
+            cmake --build e62-ci-build --target AM13E_FW1.elf -j 2 \
+              >e62-ci-logs/link.log 2>&1
+            link_rc=$?
+          else
+            link_rc=99
+            echo "SKIPPED (FW1 object compilation failed)" >e62-ci-logs/link.log
+          fi
+          {
+            echo "HEAD=$(git rev-parse HEAD)"
+            echo "SDK=b872469ceef18de5e39a1d3acb0821ec158b44c7"
+            echo "CONFIGURE_RC=$config_rc"
+            echo "OBJECT_COMPILE_RC=$compile_rc"
+            echo "STRICT_LINK_RC=$link_rc"
+            echo "NOTE=Diagnostic historical linker only; never flash."
+          } | tee e62-ci-logs/summary.txt
+          echo "configure_rc=$config_rc" >> "$GITHUB_OUTPUT"
+          echo "compile_rc=$compile_rc" >> "$GITHUB_OUTPUT"
+          echo "link_rc=$link_rc" >> "$GITHUB_OUTPUT"
+
+      - name: Upload raw logs and linker map
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e62-am13e-fw1-build-evidence
+          path: |
+            e62-ci-logs/
+            e62-ci-build/AM13E_FW1.map
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Report diagnostic gates
+        if: always()
+        shell: bash
+        run: |
+          echo "Configure: ${{ steps.build.outputs.configure_rc }}"
+          echo "FW1 objects: ${{ steps.build.outputs.compile_rc }}"
+          echo "Strict link: ${{ steps.build.outputs.link_rc }}"
+          test "${{ steps.build.outputs.configure_rc }}" = 0 &&
+          test "${{ steps.build.outputs.compile_rc }}" = 0 &&
+          test "${{ steps.build.outputs.link_rc }}" = 0
