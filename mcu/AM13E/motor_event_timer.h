@@ -1,4 +1,5 @@
 /* TIMG12 sole owner: Rel17 sine and BEMF commutation one-shot. */
+#include <stdint.h>
 #pragma once
 #if !defined(AM13E)
 #error "AM13E motor timer only"
