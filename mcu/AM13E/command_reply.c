@@ -84,6 +84,13 @@ void am13e_pb14_bidir_tx_init(void)
     DL_DMA_enableInterrupt(TX_DMA,TX_DMA_FLAGS);
     state=TX_IDLE;
     timeout_ticks=0U;
+    /* Rel17 DMA TX done prepares the following reply payload. Prime
+     * the first one here; every later frame is prepared at TX done,
+     * not after decoding that frame's current throttle command.
+     */
+    uint8_t prepared[AM13E_BIDIR_DMA_LEVELS];
+    am13e_app_io_bidir_telemetry_levels(prepared);
+    am13e_bidir_toggle_plan(prepared,TX_PIN,tx_words);
     NVIC_SetPriority(TIMG4_0_INT_IRQn,0U);
     NVIC_SetPriority(DMA0_INT_IRQn,0U);
     NVIC_ClearPendingIRQ(TIMG4_0_INT_IRQn);
@@ -98,9 +105,10 @@ int am13e_pb14_bidir_tx_start(uint32_t final_edge,uint32_t rx_bit_ticks,
     if(state!=TX_IDLE){++tx_rejected;return 0;}
     const uint32_t ticks=am13e_bidir_tx_period_ticks(rx_bit_ticks,capture_hz,TX_CLK);
     if(!ticks){++tx_rejected;return 0;}
-    uint8_t levels[AM13E_BIDIR_DMA_LEVELS];
-    am13e_app_io_bidir_telemetry_levels(levels);
-    am13e_bidir_toggle_plan(levels,TX_PIN,tx_words);
+    /* tx_words was primed at init or prepared after LAST TX
+     * completion. Do not change telemetry value/rep while the
+     * current RX CRC or throttle command is being processed.
+     */
     /* Actual CEVT4 trailing edge -> TIMG4 TX deadline. Reuse the
      * host-regressed unsigned-wrap/clock-domain policy, never start
      * a late or sub-16-clock reply on PB14.
@@ -153,6 +161,13 @@ void DMA0_IRQHandler(void)
     DL_Timer_stopCounter(TX_TIMER);
     DL_DMA_disableChannel(TX_DMA,TX_CH);
     DL_GPIO_disableOutput(GPIO1,TX_PIN);
+    /* Source rel17 prepares the NEXT GCR/NRZI response after TX DMA
+     * completion and before re-arming RX. No current-frame CRC
+     * decision is needed to reach this state.
+     */
+    uint8_t prepared[AM13E_BIDIR_DMA_LEVELS];
+    am13e_app_io_bidir_telemetry_levels(prepared);
+    am13e_bidir_toggle_plan(prepared,TX_PIN,tx_words);
     state=TX_IDLE;
     ++tx_completed;
     am13e_pb14_resume_rx();

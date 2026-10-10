@@ -108,3 +108,20 @@ or a qualified DMA Capture implementation.
 This does not turn on the upstream Serial/Analog/Hall/Hybrid conditional
 board features automatically; they remain target-capability gaps
 until their required native pins and MCU adapters are supplied.
+
+## Rev1.4 inverted-DShot response ordering
+
+Original rel17 `iotim_dma_isr()` configures inverted physical
+BiDShot output **before** validating the just-received RX frame.
+Then **TX DMA completion** assembles the next GCR/NRZI payload from
+`dshotval`/eRPM. v1.1's CRC-valid-only reply start was not equivalent.
+The AM13E CEVT4 ISR now checks the validated pulse-15/16 capture
+epoch via `am13e_pb14_decoder_bidir_reply_due()`, arms a PREPARED
+TIMG4/DMA reply before invoking the Rel17 CRC/WWDT command callback,
+then TX DMA completion prepares the following telemetry frame and
+restores ECAP0 RX ownership. Host tests exercise valid and invalid
+current-frame CRC, mode exclusion and callback order.
+
+This is a software/IRQ-path alignment only. The E2x silicon's
+TIMG4 DMA physical pad turnaround, contention risk and CPU
+deadline at DShot1200 remain qualification items.

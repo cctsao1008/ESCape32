@@ -112,6 +112,35 @@ int main(void)
     assert(am13e_pb14_capture_snapshot_valid(15U,0U,15U,1U,1U,1U));
     assert(!am13e_pb14_capture_snapshot_valid(15U,1U,15U,1U,1U,1U));
     assert(!am13e_pb14_capture_snapshot_valid(7U,0U,15U,1U,1U,1U));
+    /* Rel17 inverted physical reply is queued BEFORE CRC disposition.
+     * Simulate the same callback order: the 15th/16th pulse pair is
+     * scheduled while the frame is still at 13 decoded bits.
+     */
+    const unsigned prior=dshot_delivered;
+    for(int invalid=0;invalid<2;++invalid) {
+        AM13E_PB14_Decoder b;
+        am13e_pb14_decoder_reset(&b,CAPTURE_HZ,1);
+        uint16_t frame=frame_for(800U,1);
+        if(invalid)frame^=1U; /* invalid current CRC, prior TX persists */
+        const uint32_t period=333U,start=450000U+(uint32_t)invalid*20000U;
+        feed(&b,frame,start,period,14U);
+        assert(b.decoded_bits==13U && b.good_dshot==0U);
+        assert(am13e_pb14_decoder_bidir_reply_due(
+                    &b,start+14U*period,start+15U*period));
+        feed(&b,frame,start+14U*period,period,2U);
+        assert(b.decoded_bits==0U);
+        assert(dshot_delivered==prior+(invalid?1U:1U));
+        assert(b.good_dshot==(invalid?0U:1U));
+    }
+    AM13E_PB14_Decoder p;
+    am13e_pb14_decoder_reset(&p,CAPTURE_HZ,1);
+    assert(!am13e_pb14_decoder_bidir_reply_due(&p,100U,433U));
+    p.rx_mode=AM13E_PB14_RX_PWM;
+    p.active=1U;p.decoded_bits=13U;p.last_bit_period=333U;
+    p.last_start=100U;
+    assert(!am13e_pb14_decoder_bidir_reply_due(&p,433U,766U));
+    p.rx_mode=AM13E_PB14_RX_ONESHOT;
+    assert(!am13e_pb14_decoder_bidir_reply_due(&p,433U,766U));
     assert(pwm_delivered==0U);
     const unsigned before_bad=dshot_delivered;
     AM13E_PB14_Decoder d;

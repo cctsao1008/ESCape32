@@ -112,6 +112,27 @@ static void finish_frame(AM13E_PB14_Decoder *d, AM13E_PB14_DshotCallback cb)
     clear_frame(d);
 }
 
+int am13e_pb14_decoder_bidir_reply_due(
+    const AM13E_PB14_Decoder *d,
+    uint32_t pulse15_start,uint32_t pulse16_start)
+{
+    if (d==NULL || !d->active || d->decoded_bits!=13U ||
+        !d->last_bit_period || !d->tick_hz ||
+        d->rx_mode==AM13E_PB14_RX_PWM ||
+        d->rx_mode==AM13E_PB14_RX_ONESHOT)
+        return 0;
+    const uint32_t p=pulse16_start-pulse15_start;
+    const uint32_t gap=pulse15_start-d->last_start;
+    const uint64_t old=d->last_bit_period;
+    /* Confirm that the final two incoming bit periods belong to
+     * the captured DShot timing epoch, independent of CRC value.
+     */
+    return p && (uint64_t)p*5U>=old*4U &&
+           (uint64_t)p*5U<=old*6U &&
+           (uint64_t)gap*5U>=old*4U &&
+           (uint64_t)gap*5U<=old*6U;
+}
+
 void am13e_pb14_decoder_pulse(AM13E_PB14_Decoder *d, uint32_t start,
                               uint32_t end, AM13E_PB14_PwmCallback pwm,
                               AM13E_PB14_DshotCallback dshot)

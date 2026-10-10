@@ -210,21 +210,27 @@ void ECAP0_IRQHandler(void)
         return;
     }
     capture_pairs += 2U;
-    const uint32_t good_before = decoder.good_dshot;
-    /* Both pulses pass through the same Rel17 PWM/DShot callbacks.
-     * No motor output or fake watchdog is introduced.
+    /* Rel17 iotim_dma_isr() puts the inverted reply on the line
+     * BEFORE CRC/command disposition. Original TX DMA completion
+     * builds the NEXT telemetry payload, not the current one.
+     * This CEVT4 batch supplies the physical 15th/16th RX pulses.
+     * Only source-equivalent DShot framing (not Servo/Oneshot)
+     * is permitted to borrow PB14 for physical TX.
      */
-    am13e_pb14_decoder_pulse(&decoder, start1, end1,
-                             am13e_app_io_servo_pulse,
-                             am13e_app_io_dshot_packet);
-    am13e_pb14_decoder_pulse(&decoder, start2, end2,
-                             am13e_app_io_servo_pulse,
-                             am13e_app_io_dshot_packet);
-    /* Reply to CRC-valid inverted DShot, anchored to the final edge. */
-    if (inverted_rx && decoder.good_dshot != good_before) {
-        (void)am13e_pb14_bidir_tx_start(end2, start2 - start1,
-                                       decoder.tick_hz);
+    if (inverted_rx &&
+        am13e_pb14_decoder_bidir_reply_due(&decoder,start1,start2)) {
+        (void)am13e_pb14_bidir_tx_start(end2,start2-start1,
+                                        decoder.tick_hz);
     }
+    /* Decide CRC, WWDT and Rel17 throttle AFTER physical reply
+     * is armed. A bad CRC cannot apply a command or feed WWDT.
+     */
+    am13e_pb14_decoder_pulse(&decoder,start1,end1,
+                             am13e_app_io_servo_pulse,
+                             am13e_app_io_dshot_packet);
+    am13e_pb14_decoder_pulse(&decoder,start2,end2,
+                             am13e_app_io_servo_pulse,
+                             am13e_app_io_dshot_packet);
 }
 
 /* Called by the real 16kHz TI SysTick vector only after GPIO + eCAP

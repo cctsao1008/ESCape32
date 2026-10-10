@@ -67,6 +67,16 @@ typedef void (*AM13E_PB14_PwmCallback)(unsigned int pulse_us);
 typedef int (*AM13E_PB14_DshotCallback)(uint16_t frame, int inverted);
 
 void am13e_pb14_decoder_reset(AM13E_PB14_Decoder *d, uint32_t tick_hz, int inverted);
+/* The native CEVT4 interrupt is processing pulses 15 and 16 of the
+ * current DShot capture. At this moment frame CRC is NOT yet decided.
+ * Rel17 prepares inverted physical TX BEFORE CRC/command handling.
+ * Invalid CRC therefore does not skip the already-queued old reply.
+ * Servo/Oneshot and incomplete captures MUST return false.
+ */
+int am13e_pb14_decoder_bidir_reply_due(
+    const AM13E_PB14_Decoder *d,
+    uint32_t pulse15_start,uint32_t pulse16_start);
+
 void am13e_pb14_decoder_pulse(AM13E_PB14_Decoder *d, uint32_t start,
                               uint32_t end, AM13E_PB14_PwmCallback pwm,
                               AM13E_PB14_DshotCallback dshot);
