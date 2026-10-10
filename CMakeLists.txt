@@ -163,6 +163,30 @@ function(add_target_ti_am13e name)
         # Still compile src/telem.c for Extended DShot packet scheduling.
         target_compile_definitions(${am13e_binary} PRIVATE
             AM13E_PB14_ONLY AM13E_E62_IO_PLAN_V1=1)
+
+        # Production Board Electrical Configuration is supplied as an
+        # externally owned CMake file with an explicit definitions LIST:
+        #   set(AM13E_E62_BOARD_DEFINITIONS
+        #       AM13E_E62_POWER_STAGE_PROFILE=1
+        #       AM13E_E62_PB13_ACTIVE_LEVEL=<verified active level>
+        #       ...red/fed/OC pin/phase inversions...)
+        # There is intentionally no fallback to an EVM or guessed
+        # values. The default build keeps PB13 untouched and six pads Hi-Z.
+        set(AM13E_E62_BOARD_PROFILE_FILE "" CACHE FILEPATH
+            "Reviewed E62 gate driver/dead-band/independent OC definitions")
+        if(AM13E_E62_BOARD_PROFILE_FILE)
+            if(NOT EXISTS "${AM13E_E62_BOARD_PROFILE_FILE}")
+                message(FATAL_ERROR "Board profile file not found")
+            endif()
+            include("${AM13E_E62_BOARD_PROFILE_FILE}")
+            if(NOT DEFINED AM13E_E62_BOARD_DEFINITIONS OR
+               NOT AM13E_E62_BOARD_DEFINITIONS)
+                message(FATAL_ERROR
+                    "Board profile must provide AM13E_E62_BOARD_DEFINITIONS")
+            endif()
+            target_compile_definitions(${am13e_binary} PRIVATE
+                ${AM13E_E62_BOARD_DEFINITIONS})
+        endif()
     endif()
     target_compile_options(${am13e_binary} PRIVATE
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16

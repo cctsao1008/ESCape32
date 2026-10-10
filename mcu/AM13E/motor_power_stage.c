@@ -104,6 +104,14 @@ static void output_pin(uint32_t pincm,uint32_t function,unsigned bit)
         DL_GPIO_RESISTOR_NONE,DL_GPIO_DRIVE_STRENGTH_LOW,
         DL_GPIO_HIZ_DISABLE);
 }
+static int pad_inv_matches(uint32_t pincm,unsigned bit)
+{
+    const uint32_t actual=IOMUX->SECCFG.PINCM[pincm]&IOMUX_PINCM_INV_MASK;
+    const uint32_t desired=(AM13E_E62_GATE_PWM_INVERT_MASK&(1U<<bit))?
+                            IOMUX_PINCM_INV_ENABLE:IOMUX_PINCM_INV_DISABLE;
+    return actual==desired && DL_GPIO_isPeripheralConnected(pincm);
+}
+
 static int pwm_function_readback(void)
 {
     return DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PA8)==
@@ -117,7 +125,16 @@ static int pwm_function_readback(void)
            DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PA10)==
                  IOMUX_PA10_MCPWM0_3A &&
            DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PA31)==
-                 IOMUX_PA31_MCPWM0_3B;
+                 IOMUX_PA31_MCPWM0_3B &&
+           /* Inversion is part of the electrical contract, not merely
+            * the peripheral function select field.
+            */
+           pad_inv_matches(IOMUX_PINCM_PA8,0U) &&
+           pad_inv_matches(IOMUX_PINCM_PA11,1U) &&
+           pad_inv_matches(IOMUX_PINCM_PA9,2U) &&
+           pad_inv_matches(IOMUX_PINCM_PA30,3U) &&
+           pad_inv_matches(IOMUX_PINCM_PA10,4U) &&
+           pad_inv_matches(IOMUX_PINCM_PA31,5U);
 }
 static int driver_level_matches(int active)
 {
