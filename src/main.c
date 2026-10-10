@@ -959,6 +959,13 @@ void main(void) {
 			if (brushed) {
 #if defined(AM13E)
                 am13e_app_motor_brushed_write(reverse, cfg.damp);
+                /* Rel17 starts brushed PWM at its COM update. Route the
+                 * equivalent board-controlled enable through the same
+                 * MCPWM lifecycle contract as six-step, not a separate path.
+                 * Physical output remains blocked until gate/trip wiring
+                 * and dead-band are established in that backend.
+                 */
+                am13e_app_motor_commutation_enable(1);
 #else
 				int m1 = TIM_CCMR1_OC1PE | TIM_CCMR1_OC2PE;
 				int m2 = TIM_CCMR2_OC3PE;
