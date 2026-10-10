@@ -12,6 +12,7 @@
 #include "motor_backend.h"
 #include "motor_event_timer.h"
 #include "motor_safety.h"
+#include "motor_shadow_plan.h"
 #include <soc.h>
 #include <dl_mcpwm.h>
 #include <dl_gpio.h>
@@ -155,6 +156,52 @@ void am13e_app_motor_init(void)
     }
     am13e_app_motor_timing_init();
     safety_initialized = 1U; /* Inactive-preflight only, NOT motor ready. */
+}
+
+/* E1-AR real MCPWM0 period and six compare SHADOW writes. MCPWM TBCLK
+ * stays STOP/FREEZE; AQ forced low; all six pins GPIO input/Hi-Z.
+ * No dead-time, trip routing, drive polarity or output enable is implied.
+ * Software staging is only one prerequisite for an eventual motor port.
+ */
+int am13e_app_motor_stage_inactive_shadow(const AM13E_MotorShadowPlan *plan)
+{
+    if (!am13e_motor_shadow_validate(plan)) return 0;
+    const uint32_t previous_primask=__get_PRIMASK();
+    __disable_irq();
+    if (!safety_initialized || fault_latched) {
+        __set_PRIMASK(previous_primask);
+        return 0;
+    }
+    if (!pwm_pads_disconnected() || !pwm_registers_inactive()) {
+        am13e_app_motor_fault_shutdown();
+        am13e_app_motor_fault_reset();
+    }
+
+    static const DL_MCPWM_COUNTER_COMPARE_MODULE channels[6] = {
+        DL_MCPWM_COUNTER_COMPARE_1A, DL_MCPWM_COUNTER_COMPARE_1B,
+        DL_MCPWM_COUNTER_COMPARE_2A, DL_MCPWM_COUNTER_COMPARE_2B,
+        DL_MCPWM_COUNTER_COMPARE_3A, DL_MCPWM_COUNTER_COMPARE_3B
+    };
+    DL_MCPWM_setTimeBasePeriodShadow(MCPWM0, plan->period);
+    for (unsigned i=0U;i<6U;++i)
+        DL_MCPWM_setCounterCompareShadowValue(MCPWM0,channels[i],plan->compare[i]);
+
+    if (DL_MCPWM_getTimeBasePeriodShadow(MCPWM0)!=plan->period) {
+        am13e_app_motor_fault_shutdown();
+        am13e_app_motor_fault_reset();
+    }
+    for (unsigned i=0U;i<6U;++i) {
+        if (DL_MCPWM_getCounterCompareShadowValue(MCPWM0,channels[i])!=plan->compare[i]) {
+            am13e_app_motor_fault_shutdown();
+            am13e_app_motor_fault_reset();
+        }
+    }
+    if (!pwm_pads_disconnected() || !pwm_registers_inactive()) {
+        am13e_app_motor_fault_shutdown();
+        am13e_app_motor_fault_reset();
+    }
+    __set_PRIMASK(previous_primask);
+    return 1;
 }
 
 /* Rel17 util.c::resetcom(): restore *physical MCU-side inactive bridge*

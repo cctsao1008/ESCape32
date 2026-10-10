@@ -15,6 +15,16 @@
 - **Do not implement** `am13e_app_cfg_commit` as an ACK-only wrapper. Before any real erase/program, verify RAM execution of the entire FlashCTL call path (including interrupt/exception safety), FW1/FW2 partition boundaries, active-bank handling, ECC tail staging, read-back and power-loss recovery. The historical `linker_app_reference.ld` is not a production image map; retain `--no-undefined` until an actual Flash backend exists.
 - **Outstanding** (measured E1-AN): 14 Motor/Commutation/BEMF, 7 Audio, 1 Configuration Flash. The E1-AO planner is not itself a resolved backend symbol.
 
+## E1-AR — Motor-first priority; Audio postponed
+
+**Product decision:** Defer all seven Audio/Music/PCM symbols until the motor-control hardware path is functional and validated. They share the MCPWM resource, but note/PCM waveforms, volume, pacing and audio ownership **still require separate implementation/validation** later. No dummy Audio functions and no removal of the original Rel17 audio logic.
+
+**Last supplied logs are E1-AP, not E1-AQ:** Incremental ARM GNU object PASS (0 warning in `cfg_flash_writer.c`); strict FW1 Link FAIL with **22 unique symbols / 32 references**: Motor/BEMF **14 / 23**, Audio **7 / 8**, Flash **1 / 1**. `am13e_app_commutation_reset` appears in these logs (five references), so they cannot verify the newer E1-AQ commit. The next E1-AQ/E1-AR measured result is pending.
+
+**Priority execution order:** (1) MCPWM0 period/compare staging, correct six-step AQ and dead-band, physical shadow/commit timing; (2) CMPSS BEMF zero-cross routing, blanking/filter and event timer; (3) real hardware overcurrent trip path CMPSS→PWMXBAR→MCPWM and physical PB13 gate polarity; (4) stable Rel17 motor start/run/reverse/brake with PB14 DShot/BiDShot and scoped waveforms; (5) board-qualified config Flash commit; (6) Audio note/PCM playback reusing validated motor bridge resources.
+
+**New MCU-side staging:** `motor_shadow_plan.{c,h}` checks six independent 16-bit Compare values and timebase period. `am13e_app_motor_stage_inactive_shadow()` writes the TI MCPWM0 `TBPRDS` and all six `CMPAS/CMPBS` shadow registers with readback, while six bridge pins are still Hi-Z and Timebase is Stop/Freeze. It **does not** resolve the missing real `am13e_app_motor_pwm_apply()`, does not enable motor/gate, and does not claim hardware Trip is implemented. New Host test and ARM GNU are pending.
+
 ## E1-AQ — Safe MCU-side commutation reset and Flash plan hardening
 
 - **Last measured E1-AP:** Incremental ARM GNU object compile PASS, `cfg_flash_writer.c` 0 warning; FW1 strict link **FAIL, 22 symbols / 32 references** (unchanged from E1-AO). New host fixture execution not included in the WSL logs; do not assert Host PASS from these uploads.
