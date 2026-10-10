@@ -1,12 +1,12 @@
 # AM13E Rel17 FW1 — Missing Backend Implementation Pseudocode
 
 **Status:** Design / TODO; intentionally **NOT compiled**; no MCU callback stubs or fake return values.
-**Source of missing-symbol evidence:** E1-AH `e1ah-fw1-link.log` (28 distinct unresolved symbols / 40 references; reduced from E1-Z's 32/44). E1-AH ARM GNU Object Compile passed with zero warnings. New E1-AI duty policy code and test need subsequent WSL validation.
+**Source of missing-symbol evidence:** E1-AI `e1ai-fw1-link.log` (28 distinct unresolved symbols / 40 references, down from E1-Z 32/44); E1-AI ARM GNU Object Compile passed with zero warnings. E1-AJ WWDT0 backend requires the next WSL build.
 **Reference boundaries:** Original ESCape32 Rel17 `src/main.c`, `src/io.c`, `src/telem.c`, `src/util.c`, `src/prog.c`; AM13E target-specific contracts in `mcu/AM13E/*.h`; AM13E230x TI TRM/SDK; project SW/HW architecture baseline v1.6.
 
 ## Current implementation ledger — after E1-AB through E1-AE
 
-**Build evidence:** E1-Z had 32 symbols / 44 references. E1-AG and E1-AH ARM GNU compilation passed (0 warnings); E1-AH strict FW1 link reports **28 symbols / 40 references**. E1-AI new duty planner and interface extension are not yet ARM-/host-tested. None of these are physical motor tests.
+**Build evidence:** E1-Z had 32 symbols / 44 references. E1-AI ARM GNU Object Build passed with zero warnings and its strict FW1 Link retained **28 unique Undefined Symbols / 40 references** (last MEASURED). E1-AJ introduces a real WWDT0 input backend; until WSL rebuild, its effect on the linker baseline remains UNVERIFIED. No physical motor/WWDT test is implied.
 
 | Backend function / hardware resource | Current source state | Verification remaining |
 |---|---|---|
@@ -20,6 +20,7 @@
 | Motor microsecond conversion | Pure-C `motor_timer_math.{c,h}` with overflow checks | Host Test and peripheral clock measurement |
 | Rel17 PWM frequency interpolation | E1-AH pure-C `motor_frequency_plan.{c,h}`: 1000–2000us **period** interpolation; `ertm_us=0` uses minimum frequency. ARM GNU PASS. E1-AI corrected its Host Test's 1GHz/16kHz valid 62500-tick boundary | Host Test and motor scope; final MCPWM driver remains unresolved |
 | Rel17 duty compare policy | E1-AI pure-C `motor_duty_plan.{c,h}` models `scale()` with `running`, `lock`, `damp`, `brushed`, `FULL_DUTY`, and supplied board dead-time ticks; the AM13E-only call interface now includes `running` | Host Test, ARM GNU; actual dead-time and PWM compare hardware still unresolved |
+| Real receiver-input WWDT0 | E1-AJ `input_watchdog.c`: WWDT0 powered during PB14 `initio()`; hardware watchdog starts on the first validated PWM/DShot command, then restarts only on subsequent valid commands; zero closed window, 2^15 nominal LFCLK ticks; `BOOTWWDT0` already maps to FORCE_ARM. | ARM GNU pending; verify actual watchdog source clock, hardware expiration/reset latency, Boot ownership, first-frame BiDShot turnaround and repeated malformed input behavior |
 
 **Still intentionally unresolved:** `am13e_app_motor_runtime_enable_interrupts` and `am13e_app_motor_commutation_enable` cannot legitimately release the inverter before the PB13 enable polarity, real hardware over-current source → PWMXBAR → MCPWM Trip Zone path, inactive fault action, timer/dead-time policy and relevant board protection checks are verified. This is a real firmware safety dependency, not removal of any Rel17 feature. `sine_write`, `sixstep_write`, `pwm_apply`, comparator/BEMF configuration, the watchdog, UART, audio and config-flash driver also remain unimplemented.
 
@@ -268,7 +269,7 @@ Existing contract: `mcu/AM13E/util_backend.h`.
 
 **Evidence labels**: [REL17] = call site grounded in current FW1 linker/source; [SDK DECLARED] = name confirmed in the uploaded `am13e2x_sdk-main.zip` under `source/driverlib/am13e230x/`; [PORTING PROPOSED] = engineering plan, not implemented; [HW VALIDATION] = a required silicon/board demonstration.
 
-**Build state (2026-10-10):** E1-AH ARM GNU object compile PASS, zero warnings. FW1 strict link still FAIL, **28 unique symbols / 40 references**. E1-AI corrects the Host Test boundary and adds the duty policy helper (ARM build pending).
+**Build state (2026-10-10):** E1-AI ARM GNU Object Build PASS, zero warnings; FW1 strict link still FAIL at **28 unique symbols / 40 references**. E1-AJ WWDT0 backend was added after these logs; new ARM/GNU and hardware evidence pending.
 
 ### Common porting method and TI SDK mapping
 
