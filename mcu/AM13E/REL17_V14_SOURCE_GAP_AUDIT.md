@@ -47,11 +47,11 @@ nor their compile guards may be deleted merely to make this table shorter.
 | 1 | `CMD_INFO` | Host-tested, native ID and 32-byte CRC frame | Preserved |
 | 2 | `CMD_READ` | Host-tested, APP-only | Preserved |
 | 3 | `CMD_WRITE` | Host-tested, 1KiB logical / 2KiB SRAM RMW | Preserved, HW pending |
-| 4 | `CMD_UPDATE` | **Returns RES_ERROR** | **MISSING mandatory self-update/reset** |
+| 4 | `CMD_UPDATE` | **Original CRC-framed receive + per-block RES_OK, bounded 16 KiB SRAM; final RES_ERROR, no Flash commit** | **PARTIAL staging; MISSING mandatory Bank0 self-update/verify/reset** |
 | 5 | `CMD_SETWRP` | **Returns RES_ERROR** | **MISSING mandatory reversible static WRP** |
 | 6 | `CMD_WINDOW` | AM13E-specific, Host-tested up to 488KiB | Additive, not original |
 
-**CMD_UPDATE review:** The source-level preflight is recorded in
+**CMD_UPDATE review:** Original receive-only staging is now linked and Host-tested. Complete Boot erase/program/verify/reset remains deliberately disabled, so this is **not** functional parity. Detailed evidence in
 [CMD_UPDATE_SOURCE_GAP_REVIEW.md](CMD_UPDATE_SOURCE_GAP_REVIEW.md).
 The current AM13E parser deliberately rejects before receiving a
 Boot update image or erasing Bank0; this behavior is covered by native
