@@ -63,7 +63,10 @@ void compctl(int x);
 
 static volatile uint32_t initialized,selected_code,armed;
 static volatile uint32_t captured_events,rejected_events,interval_us;
-static volatile uint32_t capture_ticks_per_us;
+/* 16 complete SysTick intervals form 1ms; retain the FULL ECAP tick
+ * count instead of rounding to an integer MHz (ticks/us).
+ */
+static volatile uint32_t capture_ticks_per_ms, capture_timeout_ticks;
 static volatile uint32_t calibration_ticks,calibration_start;
 static volatile uint32_t calibration_done;
 static void bemf_fault(void)
@@ -166,10 +169,15 @@ void am13e_app_motor_bemf_init(void)
     config.captureModeConfig.continouousOrOneShot=DL_ECAP_CONTINUOUS_CAPTURE_MODE;
     config.captureModeConfig.wrapOrStopAtEvent=DL_ECAP_EVENT_1;
     config.captureModeConfig.captureEvent1Polarity=DL_ECAP_EVENT_RISING_EDGE;
-    config.captureModeConfig.resetCounter=true;
+    config.captureModeConfig.resetCounter=true; /* reset only at init */
+    config.captureModeConfig.enableCounterResetOnCaptureEvent1=false;
     config.captureModeConfig.reArm=true;
     config.interruptsConfig.interruptSourceEnableMask=0U;
     DL_ECAP_init(BEMF_ECAP,&config);
+    /* Continuous rejected-edge capture MUST keep the commutation-
+     * referenced TSCTR; do not let CEVT1 reset the counter.
+     */
+    if (BEMF_ECAP->ECCTL1 & ECAP_ECCTL1_CTRRST1_MASK) bemf_fault();
     DL_ECAP_enableTimeStampCapture(BEMF_ECAP);
     capture_stop();
     /* Calibrate on an unarmed input: TSCTR is free running, while ECAP1
@@ -256,7 +264,8 @@ void am13e_app_motor_bemf_interval_select(int ertm_us)
     interval_us=(uint32_t)ertm_us;
     rejected_events=0U;
     if(selected_code) {
-        if (!calibration_done || capture_ticks_per_us == 0U) bemf_fault();
+        if (!calibration_done || capture_ticks_per_ms == 0U ||
+            capture_timeout_ticks == 0U) bemf_fault();
 #ifdef AM13E_E62_IO_PLAN_V1
         const uint32_t prescale=ertm_us<100?0U:ertm_us<200?1U:
               ertm_us<1000?3U:ertm_us<2000?7U:15U;
@@ -302,13 +311,12 @@ void ECAP1_IRQHandler(void)
     }
     if((flags&DL_ECAP_ISR_SOURCE_CEVT1)==0U ||
        (flags&~BEMF_FLAGS)!=0U)bemf_fault();
-    if (!calibration_done || !capture_ticks_per_us) bemf_fault();
+    if (!calibration_done || !capture_ticks_per_ms) bemf_fault();
     const uint32_t ticks=DL_ECAP_getEventTimeStamp(BEMF_ECAP,DL_ECAP_EVENT_1);
-    const uint64_t us=((uint64_t)ticks+capture_ticks_per_us/2U)/
-                      capture_ticks_per_us;
+    const uint64_t us=((uint64_t)ticks*UINT64_C(1000)+
+                      capture_ticks_per_ms/2U)/capture_ticks_per_ms;
     if(us==0U || us>INT32_MAX)bemf_fault();
-    if ((uint64_t)ticks >=
-        (uint64_t)BEMF_TIMEOUT_US*capture_ticks_per_us) {
+    if (ticks >= capture_timeout_ticks) {
         capture_stop();
         am13e_app_motor_timing_cancel();
         (void)am13e_app_motor_on_bemf_event(0,1);
@@ -350,20 +358,26 @@ void am13e_app_motor_bemf_tick(void)
         if (++calibration_ticks == BEMF_CALIB_SYSTICKS+1U) {
             const uint32_t elapsed=DL_ECAP_getTimeStampCounter(BEMF_ECAP)-
                                    calibration_start;
-            const uint32_t measured=(elapsed+500U)/1000U;
-            if (measured<10U || measured>200U) bemf_fault();
-            capture_ticks_per_us=measured;
+            /* Complete 1ms reference. 8.192ms/32.768ms conversions
+             * below retain noninteger ECAP MHz rates without drift.
+             */
+            if (elapsed < 10000U || elapsed > 200000U) bemf_fault();
+            const uint64_t timeout=((uint64_t)BEMF_TIMEOUT_US*elapsed+
+                                   UINT64_C(999))/UINT64_C(1000);
+            if (timeout==0U || timeout>UINT32_MAX) bemf_fault();
+            capture_ticks_per_ms=elapsed;
+            capture_timeout_ticks=(uint32_t)timeout;
             calibration_done=1U;
         }
         return;
     }
     if (!armed) return;
     if (DL_ECAP_getTimeStampCounter(BEMF_ECAP) <
-        BEMF_TIMEOUT_US*capture_ticks_per_us) return;
+        capture_timeout_ticks) return;
     const uint32_t mask=__get_PRIMASK();
     __disable_irq();
     if (armed && DL_ECAP_getTimeStampCounter(BEMF_ECAP) >=
-                     BEMF_TIMEOUT_US*capture_ticks_per_us) {
+                     capture_timeout_ticks) {
         capture_stop();
         am13e_app_motor_timing_cancel();
         (void)am13e_app_motor_on_bemf_event(0,1);
