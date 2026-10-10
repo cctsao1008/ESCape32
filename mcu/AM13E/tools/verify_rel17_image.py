@@ -30,11 +30,68 @@ def sec(tool,elf):
 def check(value,reason):
     if not value:raise AssertionError(reason)
     print("PASS",reason)
+
+def check_ram_flash_branches(objdump, boot, ram_start, ram_bytes):
+    """Audit direct branch targets in SRAM-resident Flash routines.
+
+    This deliberately does NOT claim proof against indirect jumps,
+    literal/data fetches, NMIs, brown-out, or peripheral HW behavior.
+    The only pre-erase Flash call permitted from the quarantined RAM
+    wrapper is stage_prepare, which must precede the sector executor.
+    """
+    asm=run(objdump,"-d","--no-show-raw-insn",boot)
+    end=ram_start+ram_bytes
+    function=""
+    direct=0
+    preflight=0
+    commit_calls=0
+    for line in asm.splitlines():
+        h=re.match(r"^\\s*[0-9a-fA-F]+\\s+<([^>]+)>:\\s*$",line)
+        if h:
+            function=h.group(1)
+            continue
+        match=re.match(r"^\\s*([0-9a-fA-F]+):\\s+([A-Za-z][A-Za-z0-9_.]*)\\s*(.*)$",line)
+        if not match:continue
+        address=int(match.group(1),16)
+        if not (ram_start<=address<end):continue
+        opcode=match.group(2).lower()
+        operand=match.group(3)
+        baseop=opcode.split(".")[0]
+        if baseop not in ("bl","blx","b","bx","beq","bne",
+                         "bcc","bcs","bhi","bls","bge","blt",
+                         "bgt","ble","bmi","bpl","bvs","bvc"):
+            continue
+        if baseop=="bx" and operand.strip()=="lr":
+            continue
+        target=re.search(r"(?<![0-9a-zA-Z])(?:0x)?([0-9a-fA-F]{6,8})\\s+<([^>]+)>",operand)
+        if target is None:
+            raise AssertionError("SRAM Flash code has unverifiable branch "+
+                                 function+": "+line.strip())
+        dest=int(target.group(1),16)
+        callee=target.group(2).split("+")[0]
+        if ram_start<=dest<end:
+            direct+=1
+            if function=="boot_am13e_update_commit_quarantined" and callee=="boot_am13e_commit_sectors":
+                commit_calls+=1
+            continue
+        if (function=="boot_am13e_update_commit_quarantined" and
+            callee=="boot_am13e_stage_prepare_for_commit" and
+            commit_calls==0):
+            # before IRQ disable / first erase; no erased Boot dependency
+            preflight+=1
+            continue
+        raise AssertionError("SRAM Flash command reaches Flash/non-SRAM: "+
+                             function+" -> "+callee+" @"+hex(dest))
+    check(direct>=8 and preflight==1 and commit_calls==1,
+          "Flash commit direct branches stay in SRAM_C after preflight")
+    print("LIMIT: indirect/literal execution and on-silicon recovery remain unqualified")
+
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--build",type=Path,required=True)
     p.add_argument("--nm",default="arm-none-eabi-nm")
     p.add_argument("--readelf",default="arm-none-eabi-readelf")
+    p.add_argument("--objdump",default="arm-none-eabi-objdump")
     opt=p.parse_args()
     root=opt.build
     boot=root/"boot/BOOT5_PB14.elf"
@@ -88,6 +145,7 @@ def main():
                "boot_am13e_update_commit_quarantined")) and
           "boot_am13e_update_commit_host_run" not in b,
           "Quarantined Boot sector executor and nonreturning entry reside in SRAM_C")
+    check_ram_flash_branches(opt.objdump,boot,ram[0],ram[1])
     check(8<=len(raw)<=MAX and len(flat)<=MAX and
           len(flat)%4==0 and 0<=len(flat)-len(raw)<=3 and
           flat[:len(raw)]==raw and
