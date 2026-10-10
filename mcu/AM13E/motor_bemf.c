@@ -27,7 +27,7 @@
  * ECAP1 32-bit overflow (~42.9s at 100MHz) cannot substitute for it.
  * SysTick supervision resolution is nominal 62.5us at 16kHz.
  */
-#define BEMF_TIMEOUT_US UINT32_C(32768)
+#define BEMF_TIMEOUT_US AM13E_BEMF_REL17_TIMEOUT_US
 #define BEMF_CALIB_SYSTICKS 16U /* 1ms at 16kHz */
 #define BEMF_FLAGS (DL_ECAP_ISR_SOURCE_CEVT1 | DL_ECAP_ISR_SOURCE_CEVT2 | \
                     DL_ECAP_ISR_SOURCE_CEVT3 | DL_ECAP_ISR_SOURCE_CEVT4 | \
