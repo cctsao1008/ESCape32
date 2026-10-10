@@ -45,8 +45,9 @@ void HardFault_Handler(void)
 
 /* Strong TI CMSIS vector: GPIO1 is shared by PB15 and any PB14 GPIO
  * events. The original ESCape32 control policy remains in src/main.c.
- * Hardware MCPWM Trip-Zone (not implemented here) is required for
- * bounded-latency protection of the power stage.
+ * PB15 driver nFAULT now also feeds MCPWM0 hardware OST1 through
+ * INPUTXBAR2/PWMXBAR1. Independent current-overlimit Trip and
+ * physical gate-driver output qualification remain separate work.
  */
 void GPIO1_IRQHandler(void)
 {

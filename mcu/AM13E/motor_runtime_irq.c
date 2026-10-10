@@ -14,6 +14,7 @@
 #include "motor_bemf.h"
 #include "motor_event_timer.h"
 #include "motor_nfault_trip.h"
+#include "adc_runtime.h" /* ADC0 monitoring must have a live IRQ handler */
 #include "irq_vectors.h"
 #include "gpio_runtime.h"
 #include "pb14_capture.h"
@@ -59,6 +60,7 @@ void am13e_app_motor_runtime_enable_interrupts(void)
         !vector_matches(PendSV_IRQn,PendSV_Handler) ||
         !vector_matches(HardFault_IRQn,HardFault_Handler) ||
         !vector_matches(GPIO1_INT_IRQn,GPIO1_IRQHandler) ||
+        !vector_matches(ADC0_INT1_INT_IRQn,ADC0_INT1_IRQHandler) ||
         !vector_matches(ECAP0_INT_IRQn,ECAP0_IRQHandler) ||
         !vector_matches(ECAP1_INT_IRQn,ECAP1_IRQHandler) ||
         !vector_matches(TIMG12_0_INT_IRQn,TIMG12_0_IRQHandler) ||
@@ -77,7 +79,8 @@ void am13e_app_motor_runtime_enable_interrupts(void)
         NVIC_GetPriority(ECAP1_INT_IRQn)!=0U ||
         NVIC_GetPriority(TIMG12_0_INT_IRQn)!=0U ||
         NVIC_GetPriority(TIMG4_0_INT_IRQn)!=0U ||
-        NVIC_GetPriority(DMA0_INT_IRQn)!=0U)
+        NVIC_GetPriority(DMA0_INT_IRQn)!=0U ||
+        NVIC_GetPriority(ADC0_INT1_INT_IRQn)!=1U)
         irq_barrier_fault();
 
     if (!NVIC_GetEnableIRQ(GPIO1_INT_IRQn) ||
@@ -85,7 +88,8 @@ void am13e_app_motor_runtime_enable_interrupts(void)
         !NVIC_GetEnableIRQ(ECAP1_INT_IRQn) ||
         !NVIC_GetEnableIRQ(TIMG12_0_INT_IRQn) ||
         !NVIC_GetEnableIRQ(TIMG4_0_INT_IRQn) ||
-        !NVIC_GetEnableIRQ(DMA0_INT_IRQn))
+        !NVIC_GetEnableIRQ(DMA0_INT_IRQn) ||
+        !NVIC_GetEnableIRQ(ADC0_INT1_INT_IRQn))
         irq_barrier_fault();
 
     AM13E_PB14_Status rx={0};
