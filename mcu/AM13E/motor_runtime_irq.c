@@ -13,6 +13,7 @@
 #include "motor_safety.h"
 #include "motor_bemf.h"
 #include "motor_event_timer.h"
+#include "motor_nfault_trip.h"
 #include "irq_vectors.h"
 #include "gpio_runtime.h"
 #include "pb14_capture.h"
@@ -90,6 +91,7 @@ void am13e_app_motor_runtime_enable_interrupts(void)
     AM13E_PB14_Status rx={0};
     am13e_app_pb14_status(&rx);
     if (!rx.initialized || am13e_app_nfault_asserted() ||
+        !am13e_app_motor_nfault_trip_ready() ||
         !am13e_app_motor_inactive_preflight_ok() ||
         (SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK) != 0U)
         irq_barrier_fault();

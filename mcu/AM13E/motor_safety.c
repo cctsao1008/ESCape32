@@ -12,7 +12,8 @@
 #include "motor_backend.h"
 #include "board_io_plan_v1.h" /* Pin/function assertions, no gate enable */
 #include "motor_event_timer.h"
-#include "motor_bemf.h" /* ECAP1 comparator IRQ lifecycle */
+#include "motor_bemf.h"
+#include "motor_nfault_trip.h" /* PB15 -> asynchronous MCPWM Trip */ /* ECAP1 comparator IRQ lifecycle */
 #include "motor_safety.h"
 #include "motor_shadow_plan.h"
 #include "motor_aq_plan.h"
@@ -293,6 +294,11 @@ void am13e_app_motor_init(void)
     config.tripZoneConfig.actionOnB = DL_MCPWM_TZ_ACTION_HIGH_Z;
     DL_MCPWM_init(MCPWM0, &config);
     force_pwm_inactive();
+    /* Configure a real PB15 nFAULT one-shot HARDWARE trip before any
+     * internal PWM counter or CPU interrupt can run. Independent OC is
+     * still a distinct board-level requirement.
+     */
+    am13e_app_motor_nfault_trip_init();
     configure_motor_deadband_isolated();
     if (!pwm_pads_disconnected() || !pwm_registers_inactive()) {
         am13e_app_motor_fault_shutdown();
@@ -905,7 +911,9 @@ void am13e_app_motor_commutation_enable(int enable)
          * and all physical pad-mux readbacks still indicate isolation.
          * A PB15 nFAULT assertion is treated as a non-recoverable fault.
          */
-        if (am13e_app_nfault_asserted() || !pwm_pads_disconnected())
+        if (am13e_app_nfault_asserted() ||
+            !am13e_app_motor_nfault_trip_ready() ||
+            !pwm_pads_disconnected())
             runtime_fault();
         if (!motor_timebase_running) {
             if (!pwm_registers_inactive() ||
