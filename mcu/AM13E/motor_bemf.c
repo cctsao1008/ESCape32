@@ -19,13 +19,15 @@
 /* ECAP1 clock can differ from MCPWM/TIMG12 BUSCLK. It is measured
  * against the verified 16 kHz SysTick before any BEMF capture arms.
  */
-/* Rel17 STM32G431 IFTIM: CLK=168MHz, IFTIM_XRES=2, prescaler=20
- * -> 8MHz TIM2; 16-bit ARR=65535 -> 65536 ticks = 8192us.
- * The ECAP1 counter itself only overflows after ~42.9s at 100MHz.
- * Bound missed-zero-cross recovery using the *original* 8192us window.
- * SysTick supervision has <=62.5us quantization at 16kHz.
+/* Rel17 STM32G431: CLK=168MHz, IFTIM_XRES=2, TIM2 PSC=20
+ * -> 8MHz TIM2. src/main.c sets IFTIM ARR to
+ * (1 << (IFTIM_XRES + 16)) - 1 = 262143, NOT 65535.
+ * Thus UPDATE timeout = 262144 / 8MHz = 32768us. The previous
+ * 8192us adaptation incorrectly shortened the Rel17 BEMF window 4x.
+ * ECAP1 32-bit overflow (~42.9s at 100MHz) cannot substitute for it.
+ * SysTick supervision resolution is nominal 62.5us at 16kHz.
  */
-#define BEMF_TIMEOUT_US UINT32_C(8192)
+#define BEMF_TIMEOUT_US UINT32_C(32768)
 #define BEMF_CALIB_SYSTICKS 16U /* 1ms at 16kHz */
 #define BEMF_FLAGS (DL_ECAP_ISR_SOURCE_CEVT1 | DL_ECAP_ISR_SOURCE_CEVT2 | \
                     DL_ECAP_ISR_SOURCE_CEVT3 | DL_ECAP_ISR_SOURCE_CEVT4 | \
