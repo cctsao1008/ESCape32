@@ -373,6 +373,15 @@ static void nextstep(void) {
 }
 
 static void laststep(void) {
+#if defined(AM13E)
+    /* At rest a pending ECAP1/TIMG12 IRQ must not interleave with
+     * resetcom -> locked nextstep -> AQ staging -> compctl(0).
+     * This also preserves the original caller's PRIMASK state.
+     * Do NOT hold IRQs disabled in the normal 16kHz motor loop.
+     */
+    const uint32_t laststep_irqmask=__get_PRIMASK();
+    __disable_irq();
+#endif
 	resetcom();
 	if (sine && prep) { // Switch over to 6-step
 		step = (step + 29) / 60 + 1;
@@ -406,6 +415,9 @@ static void laststep(void) {
 	compctl(0);
 	oldstep = step;
 	step = 0;
+#if defined(AM13E)
+    __set_PRIMASK(laststep_irqmask);
+#endif
 }
 
 /* Shared Rel17 sensorless BEMF control policy.
