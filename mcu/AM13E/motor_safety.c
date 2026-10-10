@@ -14,7 +14,8 @@
 #include "board_io_plan_v1.h" /* Pin/function assertions, no gate enable */
 #include "motor_event_timer.h"
 #include "motor_bemf.h"
-#include "motor_nfault_trip.h" /* PB15 -> asynchronous MCPWM Trip */ /* ECAP1 comparator IRQ lifecycle */
+#include "motor_nfault_trip.h"
+#include "motor_power_stage.h" /* Board-profiled PB13 / OC OST2 / gate mux */ /* PB15 -> asynchronous MCPWM Trip */ /* ECAP1 comparator IRQ lifecycle */
 #include "motor_safety.h"
 #include "motor_shadow_plan.h"
 #include "motor_aq_plan.h"
@@ -107,6 +108,10 @@ static int pwm_pads_disconnected(void)
 
 static void force_pwm_inactive(void)
 {
+    /* PB13 inactive FIRST (when board-configured), then six-pad
+     * disconnect, and only then freeze the internal PWM timebase.
+     */
+    am13e_power_stage_force_off();
     /* The timebase is stopped and each AQ output continuously low.
      * This is complementary to pad disconnect, not a proven physical
      * gate-driver disable or a substitute for hardware Trip Zone.
@@ -125,6 +130,14 @@ static void force_pwm_inactive(void)
                                         DL_MCPWM_AQ_SW_CONTINUOUS_LOW);
     DL_MCPWM_setActionQualifierSWAction(MCPWM0, DL_MCPWM_AQ_OUTPUT_3B,
                                         DL_MCPWM_AQ_SW_CONTINUOUS_LOW);
+}
+
+static int pwm_io_for_runtime(void)
+{
+    /* Supports live Motor/Audio AQ and Compare updates on a qualified
+     * bridge. Default IO Plan still accepts GPIO INPUT/Hi-Z only.
+     */
+    return pwm_pads_disconnected() || am13e_power_stage_attached();
 }
 
 static int pwm_registers_inactive(void)
@@ -311,6 +324,7 @@ void am13e_app_motor_init(void)
      * still a distinct board-level requirement.
      */
     am13e_app_motor_nfault_trip_init();
+    am13e_power_stage_init(); /* Board-profiled independent OC OST2 */
     configure_motor_deadband_isolated();
     if (!pwm_pads_disconnected() || !pwm_registers_inactive()) {
         am13e_app_motor_fault_shutdown();
@@ -797,7 +811,7 @@ void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
         DL_MCPWM_AQ_OUTPUT_LOW_ZERO|DL_MCPWM_AQ_OUTPUT_HIGH_UP_CMPB);
     const uint32_t irqmask=__get_PRIMASK();
     __disable_irq();
-    if (!pwm_pads_disconnected()) runtime_fault();
+    if (!pwm_io_for_runtime()) runtime_fault();
     const int frozen=(MCPWM0->TBCTL&MCPWM_TBCTL_CTRMODE_MASK)==
                        (uint32_t)DL_MCPWM_COUNTER_MODE_STOP_FREEZE;
     if (frozen && !pwm_registers_inactive()) runtime_fault();
@@ -866,7 +880,7 @@ void am13e_app_motor_sine_finish(void)
     __disable_irq();
     if (!safety_initialized || fault_latched ||
         !sine_entry_pending || sine_mode_active ||
-        !pwm_pads_disconnected()) runtime_fault();
+        !pwm_io_for_runtime()) runtime_fault();
     sine_entry_pending=0U;
     sine_mode_active=1U;
     __set_PRIMASK(irqmask);
@@ -932,7 +946,7 @@ void am13e_app_motor_commutation_enable(int enable)
          */
         if (am13e_app_nfault_asserted() ||
             !am13e_app_motor_nfault_trip_ready() ||
-            !pwm_pads_disconnected())
+            !pwm_io_for_runtime())
             runtime_fault();
         if (!motor_timebase_running) {
             if (!pwm_registers_inactive() ||
@@ -952,7 +966,14 @@ void am13e_app_motor_commutation_enable(int enable)
                      (uint32_t)DL_MCPWM_COUNTER_MODE_UP ||
                    !(SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
             runtime_fault();
-        /* No GPIO output mux, no PB13 enable, no SW forced-LOW release. */
+        /* A fully specified board profile alone may connect six PWM
+         * functions and release software AQ force, then assert PB13
+         * as the LAST step. An unspecified board remains isolated.
+         */
+        if (am13e_power_stage_board_profile_present() &&
+            !am13e_power_stage_attached() &&
+            !am13e_power_stage_attach())
+            runtime_fault();
     }
     __set_PRIMASK(irqmask);
 }
@@ -1035,7 +1056,7 @@ void am13e_app_motor_audio_period(uint16_t period)
     const uint32_t mask=__get_PRIMASK();
     __disable_irq();
     if (!audio_owner || period<2U || fault_latched ||
-        !pwm_pads_disconnected()) runtime_fault();
+        !pwm_io_for_runtime()) runtime_fault();
     /* A note change is a genuine motor-timebase mode change. Stop,
      * reset phase and program both shadow and active registers before
      * the next period. No previous DRIVE/PCM waveform can leak through.
@@ -1059,7 +1080,7 @@ void am13e_app_motor_audio_compare(uint16_t u,uint16_t w)
     const uint32_t mask=__get_PRIMASK();
     __disable_irq();
     if (!audio_owner || !audio_period_valid || fault_latched ||
-        !pwm_pads_disconnected() ||
+        !pwm_io_for_runtime() ||
         u >= DL_MCPWM_getTimeBasePeriodActive(MCPWM0) ||
         w >= DL_MCPWM_getTimeBasePeriodActive(MCPWM0))
         runtime_fault();
@@ -1075,6 +1096,10 @@ void am13e_app_motor_audio_compare(uint16_t u,uint16_t w)
             !(SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
             runtime_fault();
     }
+    if (am13e_power_stage_board_profile_present() &&
+        !am13e_power_stage_attached() &&
+        !am13e_power_stage_attach())
+        runtime_fault();
     __set_PRIMASK(mask);
 }
 
@@ -1195,7 +1220,7 @@ void am13e_app_motor_brake_counter_update(int running,int step,
         (brushed!=0 && brushed!=1))
         runtime_fault();
     if (running || step || brushed) return;
-    if (!pwm_pads_disconnected()) runtime_fault();
+    if (!pwm_io_for_runtime()) runtime_fault();
     if (lock) {
         if (!lock_brake_aq_staged) {
             /* Rel17 zero-throttle coast instead of lock drive. */
