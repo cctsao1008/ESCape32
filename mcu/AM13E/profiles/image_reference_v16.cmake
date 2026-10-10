@@ -1,3 +1,6 @@
+# SUPERSEDED: historical/unselected REFERENCE_V16 profile artifact.
+# DO NOT select this profile for current Rel17 v1.4 linked firmware.
+# Current source: mcu/AM13E/profiles/image_rel17_v14.cmake.
 # Existing AM13E REFERENCE_V16 image ABI selector (NOT universal MCU policy).
 # No change to linker layouts, on-flash magic, signature, CRC or packer.
 set(AM13E_PROFILE_APP_LINKER_SCRIPT

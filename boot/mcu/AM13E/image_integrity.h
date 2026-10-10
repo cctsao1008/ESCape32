@@ -1,3 +1,7 @@
+/* SUPERSEDED v1.6 ONLY: legacy APP metadata/signature/CRC ABI.
+ * NOT an active Boot/Image contract; use app_validity.h and
+ * mcu/AM13E/APP_LINK_CONTRACT.md for Rel17 v1.4.
+ */
 /*
  * AM13E reference/AM13E host-testable image integrity contract.
  *

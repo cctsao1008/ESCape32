@@ -1,3 +1,8 @@
+/* SUPERSEDED v1.6 ONLY: historical APP header/CRC validator.
+ * This source is NOT compiled into the current Rel17 v1.4 Boot or
+ * Host CTest. Native validity is Cfg.id + Cortex-M33 APP vectors.
+ * Retained for historical review, never as an update acceptance gate.
+ */
 /*
  * AM13E reference 32-byte image metadata and whole-image CRC validator.
  * Portable C: no TI DriverLib or target-specific headers.

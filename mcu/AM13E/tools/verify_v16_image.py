@@ -1,3 +1,5 @@
+# SUPERSEDED v1.6 image-validation tool; historical, NOT in active CI.
+# Use mcu/AM13E/tools/verify_rel17_image.py for Rel17 v1.4.
 #!/usr/bin/env python3
 """AM13E reference v1.6 real FW1/Boot ELF + Packed BIN static integration gate.
 

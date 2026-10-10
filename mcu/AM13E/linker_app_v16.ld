@@ -1,3 +1,7 @@
+/* SUPERSEDED/compatibility filename: not the active FW1 profile linker.
+ * Current linked FW1 uses linker_app_rel17.ld; this retained file's
+ * contents may resemble v1.4, but the name conveys no ABI authority.
+ */
 /*
  * ESCape32 Rel17 v1.4 AM13E23019 Application linker.
  * FLASH APP is 0x6000..0x7ffff (488KiB MAXIMUM, NOT fixed image size).

@@ -23,7 +23,7 @@ Full Rel17 application algorithms remain compiled and linked:
 six-step/sine, PWM timer & compare/AQ staging, adjustable RED/FED
 dead-band, BEMF CMPSS/ECAP, DShot / BiDShot command & reply, NTC/VBUS
 ADC0 sampling & numerical model, Motor Music/PCM using **the same
-MCPWM0**, flash configuration, watchdog policy, Boot v1.6 image ABI.
+MCPWM0**, flash configuration, watchdog policy, the active Rel17 v1.4 Cfg.id/vector Boot contract.
 
 The G431-derived software defaults are still editable: RED/FED
 `92/92 ticks` at 100MHz, NTC model 3, nominal VREF 3300mV and
@@ -57,4 +57,4 @@ enabled physical power stage**. `AM13E_POWER_STAGE_ENABLED` is retired.
 CI verifies syntax of the optional IO reservation paths, pin-conflict
 negative cases, and absence of operational gate/fault integration in
 the actual FW1. It also verifies strict Rel17 APP/Boot link,
-native motor/ADC regression and existing v1.6 image integrity.
+native motor/ADC regression, Rel17 v1.4 flat-image/Boot host tests and linked-size bounds.

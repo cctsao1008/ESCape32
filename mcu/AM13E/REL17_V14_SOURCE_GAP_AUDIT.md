@@ -111,3 +111,24 @@ and complete hardware compatibility remain outstanding.
 Boot operations and multiple conditional MCU adapters missing;
 the former v1.6 Image ABI has been replaced, while Boot operations and
 conditional native adapters remain missing.**
+
+## Documentation / Specification Synchronization
+
+The active host guide is
+[`boot/tests/am13e_host/README.md`](../../boot/tests/am13e_host/README.md).
+Previous v1.6/v2 APP-header/CRC/Signature-last test instructions are
+preserved only in
+[`README_V16_SUPERSEDED.md`](../../boot/tests/am13e_host/README_V16_SUPERSEDED.md)
+and explicitly **SUPERSEDED**. Historical porting and pseudocode ledgers
+also carry a non-normative header. Obsolete `image_integrity.{c,h}`,
+`verify_v16_image.py` and `image_reference_v16.cmake` are retained
+as historical artifacts, **not** enabled in the Rel17 v1.4 Boot/FW1
+build or Host CTest. Legacy-named linker/packer compatibility sources
+must be judged by their current code, not their filenames.
+
+The CI `verify_v14_docs.py` gate guards current host instructions,
+partition/linked-size terminology, five IO-only boundaries, retired
+image-ABI quarantine and continuing mandatory `CMD_UPDATE` /
+`CMD_SETWRP` plus conditional-backend gaps. Its PASS proves
+documentation/source-reference consistency **only**, not implementation
+of the missing operations or AM13E hardware acceptance.

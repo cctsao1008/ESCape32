@@ -1,3 +1,15 @@
+> **SUPERSEDED HISTORICAL LEDGER — not the current Boot/Image specification.**
+> The entries below preserve prior chronological observations, including
+> obsolete v1.6 APP header/CRC/signature-last experiments and older
+> object/link failures. Do **not** interpret their present-tense wording
+> as current requirements or CI status. The approved active contract is
+> [APP_LINK_CONTRACT.md](APP_LINK_CONTRACT.md) and the current
+> [REL17_V14_SOURCE_GAP_AUDIT.md](REL17_V14_SOURCE_GAP_AUDIT.md):
+> `Cfg.id=0x32EA` at `0x4000`, M33 vectors at `0x6000`, reserved
+> `0x5000..0x5fff`, actual linked binary length (up to **488 KiB
+> Flash allocation maximum**), no APP header/image CRC/signature-last.
+> Host/ARM software PASS is **not** hardware validation.
+
 # AM13E ESCape32 Rel17 Application — porting ledger
 
 This is an **application** work log, not a board-validation report.

@@ -1,3 +1,12 @@
+> **HISTORICAL IMPLEMENTATION LEDGER / PSEUDOCODE — NON-NORMATIVE.**
+> Earlier per-step missing-symbol counts, v1.6 software/image ideas and
+> draft backend prescriptions below are archived and may conflict with
+> the completed ARM strict-link / Rel17 v1.4 CI state. Current design
+> authority: [APP_LINK_CONTRACT.md](APP_LINK_CONTRACT.md) and
+> [REL17_V14_SOURCE_GAP_AUDIT.md](REL17_V14_SOURCE_GAP_AUDIT.md).
+> Hardware pinout discussions must not be mistaken for an active
+> v1.6 Boot/Image ABI or for physical validation.
+
 # AM13E Rel17 FW1 — Missing Backend Implementation Pseudocode
 
 > **Corrected product I/O scope:** FW1 external command/telemetry is **PB14-only**: PWM/DShot receive, BiDShot and Extended DShot telemetry. No UART/UNICOMM2 is used by ESCape32 FW1. The historical UART symbols listed below are **not FW1 requirements**. See [FW1_PB14_ONLY_SCOPE.md](FW1_PB14_ONLY_SCOPE.md). Do not remove `src/telem.c::sendtelem()`: its Extended DShot scheduler remains active with UART transport excluded. `--no-undefined` stays mandatory for real remaining hardware backends.

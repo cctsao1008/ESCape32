@@ -310,11 +310,11 @@ function(add_target name mcu)
 	add_custom_target(flash-${name} COMMAND st-flash --reset --connect-under-reset --format ihex write ${hex} DEPENDS ${hex})
 endfunction()
 
-# Stage C2: opt-in ARM application LINK SMOKE (not production FW1/FW2).
-# Uses the same ESCape32 root CMake toolchain and existing SDK installation.
-# The application code remains an OBJECT library until full rel17 porting.
+# Stage C2: opt-in ARM Rel17 v1.4 vector-first linker/packer smoke fixture.
+# Not production FW1/FW2; the full Rel17 FW1 strict linked image is separate.
+# Legacy packer filename below implements the current flat v1.4 format.
 option(AM13E_ENABLE_APP_SMOKE
-    "Enable AM13E reference v2 ARM app-link / packer smoke validation" OFF)
+    "Enable AM13E Rel17 v1.4 ARM app-link / flat packer smoke validation" OFF)
 if(AM13E_ENABLE_APP_SMOKE)
     set(am13e_smoke_script
         "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/linker_app_smoke.ld")

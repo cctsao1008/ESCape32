@@ -264,6 +264,13 @@ jobs:
           python3 mcu/AM13E/tools/verify_rel17_coverage.py \
             --build am13e-ci-build --logs am13e-ci-logs
 
+      - name: Enforce v1.4 documentation and retired Image ABI boundaries
+        id: v14_docs
+        shell: bash
+        run: |
+          set -e
+          python3 mcu/AM13E/tools/verify_v14_docs.py
+
       - name: Audit v1.4 upstream source and unresolved Boot interfaces
         id: v14_scope
         shell: bash
@@ -325,6 +332,7 @@ jobs:
           echo "Auxiliary IO-only compile: ${{ steps.board_profile.outcome }}"
           echo "Rel17 functional coverage evidence: ${{ steps.coverage.outcome }}"
           echo "Rev1.4 scope audit (open blockers tracked): ${{ steps.v14_scope.outcome }}"
+          echo "Rev1.4 documentation/legacy-ABI audit: ${{ steps.v14_docs.outcome }}"
           echo "Motor/ADC/Flash/BEMF host regression: ${{ steps.host.outcome }}"
           echo "Rel17-v1.4 Boot/Link/Pack Host Tests: ${{ steps.boot.outcome }}"
           echo "Actual Rel17 FW1 Rel17-v1.4 ELF/Pack/Flash transaction: ${{ steps.rel17.outcome }}"
@@ -337,6 +345,7 @@ jobs:
           test "${{ steps.board_profile.outcome }}" = success &&
           test "${{ steps.coverage.outcome }}" = success &&
           test "${{ steps.v14_scope.outcome }}" = success &&
+          test "${{ steps.v14_docs.outcome }}" = success &&
           test "${{ steps.boot.outcome }}" = success &&
           test "${{ steps.rel17.outcome }}" = success &&
           test "${{ steps.boot_elf.outcome }}" = success &&
