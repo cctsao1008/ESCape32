@@ -65,3 +65,17 @@ This document is a porting boundary, not a hardware qualification.
 - This is not a universal runnable firmware or physical safety qualification.
   ADC/pinmux, clock, DShot, gate/pad mapping and Boot/image profile separation
   remain open work.
+
+## Clock provider split
+
+- `system_runtime.c` now consumes a required `am13e_board_clock_start()`
+  interface; it implements Rel17's 16kHz scheduling and PRIMASK gates
+  without selecting an oscillator, PLL or image profile.
+- `board_clock_reference.c` owns the existing 25MHz XTAL/200MHz PLL
+  and clock-good readback. It still calls the original, bounded-polling
+  `clock_xtal25_pll200.c` DriverLib/register implementation.
+- `AM13E_MCU_RUNTIME_TICK` compiles this reusable ARM object without a
+  linked reference clock; missing a real provider must remain a linker
+  error on any future complete generic firmware, never a fake stub.
+- Same reference MCLK, 16kHz SysTick, 16/16 static image validations
+  and Boot compatibility gates; no physical oscillator qualification.

@@ -116,6 +116,9 @@ jobs:
           cmake --build am13e-ci-build --target AM13E_MCU_FAULT_TRIP_BACKEND -j 2 \
             >am13e-ci-logs/mcu-fault-trip-backend-build.log 2>&1
           cat am13e-ci-logs/mcu-fault-trip-backend-build.log
+          cmake --build am13e-ci-build --target AM13E_MCU_RUNTIME_TICK -j 2 \
+            >am13e-ci-logs/mcu-runtime-tick-build.log 2>&1
+          cat am13e-ci-logs/mcu-runtime-tick-build.log
 
       - name: Verify v1.6 vector-first ARM linker, packer and Boot Flash host transaction
         id: boot

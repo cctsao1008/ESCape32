@@ -35,9 +35,9 @@ _Static_assert(AM13E_APP_XTAL_HZ / 2U * (AM13E_PLL_QDIV_RAW + 1U) ==
                "XTAL/PDIV/QDIV do not generate 400MHz VCO");
 _Static_assert(AM13E_APP_VCO_HZ / 2U == AM13E_APP_MCLK_HZ,
                "SYSPLLCLK0 must generate exactly 200MHz");
-_Static_assert(AM13E_APP_MCLK_HZ / 16000U == 12500U,
+_Static_assert(AM13E_APP_MCLK_HZ / AM13E_APP_SYSTICK_HZ == 12500U,
                "Rel17 16kHz tick period must be exact");
-_Static_assert(AM13E_APP_MCLK_HZ % 16000U == 0U,
+_Static_assert(AM13E_APP_MCLK_HZ % AM13E_APP_SYSTICK_HZ == 0U,
                "Rel17 SysTick rate must divide MCLK");
 
 static int wait_clock_good(uint32_t mask, uint32_t required, uint32_t budget)

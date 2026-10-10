@@ -107,6 +107,7 @@ function(add_target_ti_am13e name)
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_runtime_irq.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/arming_window.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_xtal25_pll200.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/board_clock_reference.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_safety.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_power_stage.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_audio.c"
@@ -443,6 +444,23 @@ target_compile_definitions(AM13E_MCU_FAULT_TRIP_BACKEND PRIVATE
     AM13E __DEVICE_SHORT__="am13e230x" __DEVICE_LONG__="AM13E230x"
     __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
 target_compile_options(AM13E_MCU_FAULT_TRIP_BACKEND PRIVATE
+    -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
+    -mfloat-abi=hard -fno-branch-count-reg -Werror)
+
+# Board-independent Rel17 scheduler/backend compile gate. The clock
+# provider is an external REQUIRED board implementation; this target
+# does not pull in the reference XTAL/PLL startup source.
+add_library(AM13E_MCU_RUNTIME_TICK OBJECT EXCLUDE_FROM_ALL
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/system_runtime.c")
+target_include_directories(AM13E_MCU_RUNTIME_TICK PRIVATE
+    "${PROJECT_SOURCE_DIR}/src" "${PROJECT_SOURCE_DIR}/mcu/AM13E")
+target_include_directories(AM13E_MCU_RUNTIME_TICK SYSTEM PRIVATE
+    "$<TARGET_PROPERTY:AM13E,INCLUDE_DIRECTORIES>")
+target_compile_definitions(AM13E_MCU_RUNTIME_TICK PRIVATE
+    AM13E TARGET_NAME="AM13E" __DEVICE_SHORT__="am13e230x"
+    __DEVICE_LONG__="AM13E230x" __CPU_SHORT__="m33"
+    __CGT_SHORT__="gcc_arm")
+target_compile_options(AM13E_MCU_RUNTIME_TICK PRIVATE
     -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
     -mfloat-abi=hard -fno-branch-count-reg -Werror)
 

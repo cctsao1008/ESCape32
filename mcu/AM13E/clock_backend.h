@@ -23,11 +23,12 @@
 #endif
 
 #include <stdint.h>
+#include "runtime_tick_contract.h"
 
 #define AM13E_APP_XTAL_HZ  UINT32_C(25000000)
 #define AM13E_APP_MCLK_HZ  UINT32_C(200000000)
 #define AM13E_APP_VCO_HZ   UINT32_C(400000000)
-#define AM13E_APP_SYSTICK_HZ UINT32_C(16000)
+
 
 /* Returns 200MHz only after oscillator/PLL/clock/flash status checks.
  * The returned frequency is computed from verified dividers, not an
