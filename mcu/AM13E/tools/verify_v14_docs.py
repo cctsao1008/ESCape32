@@ -61,7 +61,7 @@ def main():
                      "Conditional native adapter missing",
                      "488 KiB", "Cfg.id=0x32EA",
                      "Documentation / Specification Synchronization")
-    require("PARTIAL" in audit and "Hardware" in audit,
+    require("PARTIAL" in audit and "hardware" in audit.lower(),
             "Source Gap Audit must retain partial/hardware limits")
     for path in ("mcu/AM13E/PORTING_STATUS.md",
                  "mcu/AM13E/AM13E_FW1_BACKEND_PSEUDOCODE.md"):
