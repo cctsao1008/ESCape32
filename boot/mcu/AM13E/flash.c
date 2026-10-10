@@ -22,12 +22,13 @@ extern char __boot_storage_end__[];
 #define BOOT_APP_END ((uintptr_t)__boot_storage_end__)
 #endif
 
-/* RAM-only staging of the application signature program unit.
- * Never publish the valid signature before both final metadata blocks
- * have been verified. Reset loses the staged signature safely.
+/* Signature resides in ECC16 at APP+0x400 (start of restore block 1).
+ * APP+0 vectors are programmed during restore block 0; the marker
+ * remains erased until CRC and EVERY code byte are verified.
+ * Power loss keeps the image unbootable until a new update completes.
  */
-static uint8_t pending_header[16];
-static bool pending_header_valid;
+static uint8_t pending_signature[16];
+static bool pending_signature_valid;
 
 /* One session follows the unchanged WiFi-Link ordering:
  * invalidate 0, invalidate 1, sequential blocks 2..N, restore 0, restore 1.
@@ -51,9 +52,9 @@ static unsigned last_length;
  */
 #ifdef AM13E_FLASH_TEST
 void boot_am13e_test_reset_update_state(void) {
-    for (unsigned i = 0; i < sizeof pending_header; ++i)
-        pending_header[i] = 0U;
-    pending_header_valid = false;
+    for (unsigned i = 0; i < sizeof pending_signature; ++i)
+        pending_signature[i] = 0U;
+    pending_signature_valid = false;
     update_phase = UPDATE_IDLE;
     next_block = 2U;
     last_block = 256U;
@@ -117,15 +118,8 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
              */
             if (update_phase == UPDATE_COMPLETE && len == 1024)
                 return same_flash_block(addr, src, 1024U) ? 1 : 0;
-            if (update_phase == UPDATE_RESTORE_1 && len == 1024 &&
-                pending_header_valid) {
-                for (unsigned i = 0; i < sizeof pending_header; ++i)
-                    if (pending_header[i] != (uint8_t)src[i])
-                        return 0;
-                return same_flash_block(addr + sizeof pending_header,
-                                        src + sizeof pending_header,
-                                        1024U - sizeof pending_header) ? 1 : 0;
-            }
+            if (update_phase == UPDATE_RESTORE_1 && len == 1024)
+                return same_flash_block(addr, src, 1024U) ? 1 : 0;
             if (update_phase != UPDATE_PROGRAM || next_block <= 2U ||
                 len != 1024)
                 return 0;
@@ -159,7 +153,7 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
         for (unsigned i = 0; i < 8U; ++i)
             if ((uint8_t)src[i] != UINT8_C(0xff))
                 return 0;
-        pending_header_valid = false;
+        pending_signature_valid = false;
         if (addr == first &&
             boot_am13e_flash_execute((uint32_t)first, 0, 0, true, false) != DL_FLASH_SUCCESS)
             return 0;
@@ -184,33 +178,60 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
     if (((unsigned)len & 3U) != 0U)
         return 0;
 
-    /* The host restores metadata block 0 before metadata block 1.
-     * Delay the first 16-byte program unit (which contains 0x32ea)
-     * until block 1 has been written and read back successfully.
-     * This prevents an interrupted metadata restore from publishing
-     * a valid signature prematurely.
+    /* Block 0 now CONTAINS M33 vectors at 0x6000, not a signature.
+     * Restore the entire vector table as ordinary Flash data. Its
+     * validity cannot be published until block 1's APP+0x400 ECC16
+     * marker is written last and CRC verification has succeeded.
      */
     if (addr == first) {
         if (len != 1024)
             return 0;
-        pending_header_valid = false;
-        for (unsigned i = 0; i < sizeof pending_header; ++i)
-            pending_header[i] = (uint8_t)src[i];
-        if (boot_am13e_flash_execute((uint32_t)addr + 16U,
-                                     (uint8_t *)(uintptr_t)(src + 16),
-                                     (uint32_t)len - 16U, false,
-                                     true) != DL_FLASH_SUCCESS)
+        if (boot_am13e_flash_execute((uint32_t)addr,
+                                     (uint8_t *)(uintptr_t)src,
+                                     (uint32_t)len,false,true) !=
+            DL_FLASH_SUCCESS)
             return 0;
-        const volatile uint8_t *verify = (const volatile uint8_t *)addr;
-        for (int i = 16; i < len; ++i)
-            if (verify[i] != (uint8_t)src[i])
-                return 0;
-        pending_header_valid = true;
-        update_phase = UPDATE_RESTORE_1;
+        if (!same_flash_block(addr,src,(unsigned)len)) return 0;
+        pending_signature_valid=false;
+        update_phase=UPDATE_RESTORE_1;
         return 1;
     }
-    if (addr == first + 1024U && (len != 1024 || !pending_header_valid))
+    if (addr == first + 1024U && len != 1024)
         return 0;
+
+    /* Block 1 contains the signature at its first ECC16. Hold it
+     * in SRAM and program the rest of the block first. The signature
+     * must remain all-FF if the process crashes at any prior step.
+     */
+    if (addr == first + AM13E_IMAGE_SIGNATURE_OFFSET) {
+        for (unsigned i=0U;i<16U;++i)
+            pending_signature[i]=(uint8_t)src[i];
+        pending_signature_valid=true;
+        if (boot_am13e_flash_execute((uint32_t)(addr+16U),
+                                     (uint8_t *)(uintptr_t)(src+16),
+                                     1024U-16U,false,true)!=
+            DL_FLASH_SUCCESS) return 0;
+        if (!same_flash_block(addr+16U,src+16,1024U-16U))
+            return 0;
+        const volatile uint8_t *marker=(const volatile uint8_t *)addr;
+        for (unsigned i=0U;i<16U;++i)
+            if (marker[i]!=UINT8_C(0xff)) return 0;
+
+        const uint32_t received_length=
+            (uint32_t)last_block*1024U + (uint32_t)last_length;
+        uint32_t image_length=0U;
+        if(boot_am13e_image_check(first,end,pending_signature,16U,
+                                   &image_length)!=AM13E_IMAGE_VALID ||
+           image_length!=received_length) return 0;
+        if (boot_am13e_flash_execute((uint32_t)addr,pending_signature,
+                                     16U,false,true)!=DL_FLASH_SUCCESS)
+            return 0;
+        for(unsigned i=0U;i<16U;++i)
+            if(marker[i]!=pending_signature[i]) return 0;
+        pending_signature_valid=false;
+        update_phase=UPDATE_COMPLETE;
+        return 1;
+    }
 
     /* Only erase on the first 1 KiB block of each 2 KiB sector.
      * The host protocol MUST transmit ordered blocks; an interruption
@@ -241,34 +262,10 @@ int boot_am13e_flash_write(char *dst, const char *src, int len) {
             return 0;
     }
 
-    if (addr == first + 1024U) {
-        /* The host protocol has no end-of-image command. Therefore we
-         * require the CRC-validated image length to match exactly the
-         * sequential data span acknowledged in this transaction.
-         * Flash bytes for the metadata sector have now been programmed
-         * and read back, but the application signature is still erased.
-         */
-        uint32_t image_length = 0U;
-        const uint32_t received_length =
-            (uint32_t)last_block * 1024U + (uint32_t)last_length;
-        if (boot_am13e_image_check(first, end, pending_header,
-                                   sizeof pending_header, &image_length) !=
-                AM13E_IMAGE_VALID ||
-            image_length != received_length)
-            return 0;
-
-        pending_header_valid = false;
-        if (boot_am13e_flash_execute((uint32_t)first,
-                                     pending_header,
-                                     sizeof pending_header,
-                                     false, true) != DL_FLASH_SUCCESS)
-            return 0;
-        const volatile uint8_t *header = (const volatile uint8_t *)first;
-        for (unsigned i = 0; i < sizeof pending_header; ++i)
-            if (header[i] != pending_header[i])
-                return 0;
-        update_phase = UPDATE_COMPLETE;
-    } else {
+    /* All further blocks are >=2 (application code/data). We never
+     * permit the usual program branch to publish an image marker.
+     */
+    {
         last_block = block;
         last_length = (unsigned)len;
         ++next_block;
