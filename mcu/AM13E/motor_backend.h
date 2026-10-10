@@ -33,6 +33,8 @@
 void am13e_app_motor_init(void);
 void am13e_app_motor_sine_schedule_us(int period_us);
 void am13e_app_motor_sine_write(int a, int b, int c, int power, int start);
+/* Called once after first sine sample to ENTER sine PWM (not sine exit).
+ * The original nextstep() transitions to six-step elsewhere. */
 void am13e_app_motor_sine_finish(void);
 void am13e_app_motor_commutation_commit(void);
 void am13e_app_motor_sixstep_write(int positive_mask, int negative_mask,

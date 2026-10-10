@@ -627,7 +627,14 @@ void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
             MCPWM0,runtime_aq_modules[i],DL_MCPWM_AQ_LOAD_ON_CNTR_ZERO);
         DL_MCPWM_setActionQualifierActionCompleteShadow(
             MCPWM0,runtime_aq_outputs[i],action);
-        if (DL_MCPWM_getCounterCompareShadowValue(
+        /* Verify real AQ Shadow writes as well as Compare writes. */
+        const uint32_t aq_shadow[6]={
+            MCPWM0->PWM1_AQCTLAS,MCPWM0->PWM1_AQCTLBS,
+            MCPWM0->PWM2_AQCTLAS,MCPWM0->PWM2_AQCTLBS,
+            MCPWM0->PWM3_AQCTLAS,MCPWM0->PWM3_AQCTLBS
+        };
+        if (aq_shadow[i]!=(uint32_t)action ||
+            DL_MCPWM_getCounterCompareShadowValue(
                 MCPWM0,runtime_compare_modules[i])!=compare)
             runtime_fault();
         runtime_aq_last[i]=action;
@@ -645,6 +652,8 @@ void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
     if (DL_MCPWM_getTimeBasePeriodShadow(MCPWM0)!=period ||
         (frozen && DL_MCPWM_getTimeBasePeriodActive(MCPWM0)!=period))
         runtime_fault();
+    /* Sine image supersedes any prior six-step COM pending flag. */
+    runtime_phase_pending=0U;
     ++sine_write_count;
     if (start) sine_entry_pending=1U;
     __set_PRIMASK(irqmask);
