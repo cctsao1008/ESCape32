@@ -25,14 +25,14 @@ def main():
           "Rel17 src/prog.c changed: review command API before claiming parity")
     feature_sources={
         "src/main.c":("nextstep(","compctl(","HALL_MAP","SINE_RANGE",
-                      "BRUSHED","PARK_PIN","ERPM_PIN","adcdata("),
+                      "BRUSHED","PARK_PIN","ERPM_PIN","adcdata(", "PWM_ENABLE"),
         "src/io.c":("entryirq(","calibirq(","servoirq(","dshotirq(",
                     "iotim_dma_isr(","dshotcrc(","serialirq(","ibusfunc(",
                     "sbusfunc(","crsffunc(","exbusfunc(","hottfunc("),
         "src/telem.c":("sendtelem(","sendtelemdata(","sendkiss(",
                        "sendcrsf(","dshotval"),
         "src/util.c":("savecfg(","resetcfg(","BEC_MAP","LED_MAP"),
-        "src/defs.h":("SENS_MAP","PWM_ENABLE","LED_MAP"),
+        "src/defs.h":("SENS_MAP","LED_MAP"),
     }
     for path,symbols in feature_sources.items():
         content=src(path)
