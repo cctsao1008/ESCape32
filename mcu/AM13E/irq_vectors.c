@@ -8,6 +8,7 @@
 #include "gpio_runtime.h"
 #include "io_backend.h"
 #include "pb14_capture.h"
+#include "motor_bemf.h"
 #include <dl_gpio.h>
 
 void SysTick_Handler(void)
@@ -28,6 +29,8 @@ void SysTick_Handler(void)
     sys_tick_handler();
     /* PB14 ECAP reference calibration / RX-only frame-gap processing. */
     am13e_app_pb14_systick();
+    /* BEMF ECAP1 timeouts must be bounded even if no edge arrives. */
+    am13e_app_motor_bemf_tick();
 }
 
 void PendSV_Handler(void)

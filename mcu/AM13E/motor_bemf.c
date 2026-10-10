@@ -5,6 +5,7 @@
  */
 #include "motor_backend.h"
 #include "motor_bemf.h" /* Declarations for init, abort and ECAP1 IRQ */
+#include "motor_event_timer.h" /* Cancel obsolete TIMG12 on BEMF timeout */
 #include "clock_backend.h"
 #include "irq_vectors.h"
 #include <soc.h>
@@ -16,6 +17,17 @@
 
 #define BEMF_ECAP ECAP1
 #define BEMF_CLOCK_HZ (AM13E_APP_MCLK_HZ / 2U)
+/* Rel17 STM32G431 IFTIM: CLK=168MHz, IFTIM_XRES=2, prescaler=20
+ * -> 8MHz TIM2; 16-bit ARR=65535 -> 65536 ticks = 8192us.
+ * The ECAP1 counter itself only overflows after ~42.9s at 100MHz.
+ * Bound missed-zero-cross recovery using the *original* 8192us window.
+ * SysTick supervision has <=62.5us quantization at 16kHz.
+ */
+#define BEMF_TIMEOUT_US UINT32_C(8192)
+#define BEMF_TIMEOUT_TICKS ((uint64_t)BEMF_CLOCK_HZ * BEMF_TIMEOUT_US / UINT64_C(1000000))
+_Static_assert(BEMF_CLOCK_HZ == UINT32_C(100000000) &&
+               BEMF_TIMEOUT_TICKS < UINT32_MAX,
+               "BEMF timeout clock contract changed");
 #define BEMF_FLAGS (DL_ECAP_ISR_SOURCE_CEVT1 | DL_ECAP_ISR_SOURCE_CEVT2 | \
                     DL_ECAP_ISR_SOURCE_CEVT3 | DL_ECAP_ISR_SOURCE_CEVT4 | \
                     DL_ECAP_ISR_SOURCE_CTROVF)
@@ -251,6 +263,7 @@ void ECAP1_IRQHandler(void)
     if(!armed)return;
     if(flags&DL_ECAP_ISR_SOURCE_CTROVF) {
         capture_stop();
+        am13e_app_motor_timing_cancel();
         (void)am13e_app_motor_on_bemf_event(0,1);
         return;
     }
@@ -259,6 +272,12 @@ void ECAP1_IRQHandler(void)
     const uint64_t us=((uint64_t)ticks*UINT64_C(1000000)+
           BEMF_CLOCK_HZ/2U)/BEMF_CLOCK_HZ;
     if(us==0U || us>INT32_MAX)bemf_fault();
+    if (ticks >= (uint32_t)BEMF_TIMEOUT_TICKS) {
+        capture_stop();
+        am13e_app_motor_timing_cancel();
+        (void)am13e_app_motor_on_bemf_event(0,1);
+        return;
+    }
     ++captured_events;
     /* Rel17 rejects crossings earlier than ival/2. Keep ECAP1
      * continuously capturing until the shared policy accepts an edge.
@@ -268,4 +287,25 @@ void ECAP1_IRQHandler(void)
         capture_stop();
     else
         ++rejected_events;
+}
+
+/* 16kHz SysTick supervision. ECAP1 hardware provides the elapsed
+ * time in actual ticks, so timeout does not depend on scheduler jitter.
+ * A no-edge BEMF interval cannot wait for the 32-bit counter overflow.
+ * Calling the unchanged Rel17 timeout policy preserves sync reset.
+ */
+void am13e_app_motor_bemf_tick(void)
+{
+    if (!initialized || !armed) return;
+    if (DL_ECAP_getTimeStampCounter(BEMF_ECAP) <
+        (uint32_t)BEMF_TIMEOUT_TICKS) return;
+    const uint32_t mask=__get_PRIMASK();
+    __disable_irq();
+    if (armed && DL_ECAP_getTimeStampCounter(BEMF_ECAP) >=
+                     (uint32_t)BEMF_TIMEOUT_TICKS) {
+        capture_stop();
+        am13e_app_motor_timing_cancel();
+        (void)am13e_app_motor_on_bemf_event(0,1);
+    }
+    __set_PRIMASK(mask);
 }
