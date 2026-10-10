@@ -16,7 +16,9 @@
 #include <stdint.h>
 
 #define BEMF_ECAP ECAP1
-#define BEMF_CLOCK_HZ (AM13E_APP_MCLK_HZ / 2U)
+/* ECAP1 clock can differ from MCPWM/TIMG12 BUSCLK. It is measured
+ * against the verified 16 kHz SysTick before any BEMF capture arms.
+ */
 /* Rel17 STM32G431 IFTIM: CLK=168MHz, IFTIM_XRES=2, prescaler=20
  * -> 8MHz TIM2; 16-bit ARR=65535 -> 65536 ticks = 8192us.
  * The ECAP1 counter itself only overflows after ~42.9s at 100MHz.
@@ -24,10 +26,7 @@
  * SysTick supervision has <=62.5us quantization at 16kHz.
  */
 #define BEMF_TIMEOUT_US UINT32_C(8192)
-#define BEMF_TIMEOUT_TICKS ((uint64_t)BEMF_CLOCK_HZ * BEMF_TIMEOUT_US / UINT64_C(1000000))
-_Static_assert(BEMF_CLOCK_HZ == UINT32_C(100000000) &&
-               BEMF_TIMEOUT_TICKS < UINT32_MAX,
-               "BEMF timeout clock contract changed");
+#define BEMF_CALIB_SYSTICKS 16U /* 1ms at 16kHz */
 #define BEMF_FLAGS (DL_ECAP_ISR_SOURCE_CEVT1 | DL_ECAP_ISR_SOURCE_CEVT2 | \
                     DL_ECAP_ISR_SOURCE_CEVT3 | DL_ECAP_ISR_SOURCE_CEVT4 | \
                     DL_ECAP_ISR_SOURCE_CTROVF)
@@ -81,6 +80,9 @@ void compctl(int x);
 
 static volatile uint32_t initialized,selected_code,armed;
 static volatile uint32_t captured_events,rejected_events,interval_us;
+static volatile uint32_t capture_ticks_per_us;
+static volatile uint32_t calibration_ticks,calibration_start;
+static volatile uint32_t calibration_done;
 static void bemf_fault(void)
 {
     am13e_app_motor_fault_shutdown();
@@ -166,6 +168,15 @@ void am13e_app_motor_bemf_init(void)
     DL_ECAP_init(BEMF_ECAP,&config);
     DL_ECAP_enableTimeStampCapture(BEMF_ECAP);
     capture_stop();
+    /* Calibrate on an unarmed input: TSCTR is free running, while ECAP1
+     * capture interrupts remain disabled and no motor output is enabled.
+     * This is genuine counter timing used later for every zero-cross.
+     */
+    calibration_ticks=0U;
+    calibration_done=0U;
+    DL_ECAP_resetCounters(BEMF_ECAP);
+    DL_ECAP_startCounter(BEMF_ECAP);
+    calibration_start=DL_ECAP_getTimeStampCounter(BEMF_ECAP);
 #ifdef AM13E_BEMF_BOARD_ANALOG_VERIFIED
     configure_phase_cmp(CMPSS0,DL_SYSCTL_PWREN_CMPSS0,DL_SYSCTL_CMPSS0_MUX,
         AM13E_BEMF_CMP0_HP_PINCM,AM13E_BEMF_CMP0_HN_PINCM,
@@ -225,6 +236,7 @@ void am13e_app_motor_bemf_interval_select(int ertm_us)
     interval_us=(uint32_t)ertm_us;
     rejected_events=0U;
     if(selected_code) {
+        if (!calibration_done || capture_ticks_per_us == 0U) bemf_fault();
 #ifdef AM13E_BEMF_BOARD_ANALOG_VERIFIED
         const uint32_t prescale=ertm_us<100?0U:ertm_us<200?1U:
               ertm_us<1000?3U:ertm_us<2000?7U:15U;
@@ -269,10 +281,12 @@ void ECAP1_IRQHandler(void)
     }
     if((flags&DL_ECAP_ISR_SOURCE_CEVT1)==0U ||
        (flags&~BEMF_FLAGS)!=0U)bemf_fault();
-    const uint64_t us=((uint64_t)ticks*UINT64_C(1000000)+
-          BEMF_CLOCK_HZ/2U)/BEMF_CLOCK_HZ;
+    if (!calibration_done || !capture_ticks_per_us) bemf_fault();
+    const uint64_t us=((uint64_t)ticks+capture_ticks_per_us/2U)/
+                      capture_ticks_per_us;
     if(us==0U || us>INT32_MAX)bemf_fault();
-    if (ticks >= (uint32_t)BEMF_TIMEOUT_TICKS) {
+    if ((uint64_t)ticks >=
+        (uint64_t)BEMF_TIMEOUT_US*capture_ticks_per_us) {
         capture_stop();
         am13e_app_motor_timing_cancel();
         (void)am13e_app_motor_on_bemf_event(0,1);
@@ -296,13 +310,28 @@ void ECAP1_IRQHandler(void)
  */
 void am13e_app_motor_bemf_tick(void)
 {
-    if (!initialized || !armed) return;
+    if (!initialized) return;
+    /* Tick0..16 uses a real 1ms SysTick reference. No UART or MCU pin
+     * is needed. Match the already-established PB14 ECAP0 approach.
+     */
+    if (!calibration_done) {
+        if (++calibration_ticks >= BEMF_CALIB_SYSTICKS) {
+            const uint32_t elapsed=DL_ECAP_getTimeStampCounter(BEMF_ECAP)-
+                                   calibration_start;
+            const uint32_t measured=(elapsed+500U)/1000U;
+            if (measured<10U || measured>200U) bemf_fault();
+            capture_ticks_per_us=measured;
+            calibration_done=1U;
+        }
+        return;
+    }
+    if (!armed) return;
     if (DL_ECAP_getTimeStampCounter(BEMF_ECAP) <
-        (uint32_t)BEMF_TIMEOUT_TICKS) return;
+        BEMF_TIMEOUT_US*capture_ticks_per_us) return;
     const uint32_t mask=__get_PRIMASK();
     __disable_irq();
     if (armed && DL_ECAP_getTimeStampCounter(BEMF_ECAP) >=
-                     (uint32_t)BEMF_TIMEOUT_TICKS) {
+                     BEMF_TIMEOUT_US*capture_ticks_per_us) {
         capture_stop();
         am13e_app_motor_timing_cancel();
         (void)am13e_app_motor_on_bemf_event(0,1);
