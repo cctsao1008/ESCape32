@@ -29,6 +29,7 @@
 #define CMD_WINDOW 6 /* Rel17 v1.4: 2 windows of 256 logical 1KiB blocks */
 #include "../../mcu/AM13E/flash_partition.h"
 #include "update_staging.h"
+#include "update_commit.h"
 #endif
 
 #define RES_OK    0
@@ -163,9 +164,13 @@ void main(void) {
                     sendval(RES_OK);
                     if(len<(int)AM13E_BOOT_STAGE_BLOCK_BYTES)break;
                 }
-                /* Current Boot Flash commit is NOT IMPLEMENTED:
-                 * explicitly reject completion and clear SRAM stage.
+                /* A separately qualified build may perform SRAM_C
+                 * self-update. Reference code ALWAYS aborts and NAKs.
                  */
+#if defined(AM13E_BOOT_RECOVERY_QUALIFIED) && AM13E_BOOT_RECOVERY_QUALIFIED
+                if(boot_am13e_stage_vector_plausible())
+                    boot_am13e_update_commit_quarantined();
+#endif
                 boot_am13e_stage_abort();
                 sendval(RES_ERROR);
                 break;
@@ -186,8 +191,13 @@ void main(void) {
 			}
 			case CMD_SETWRP: // Set write protection
 #if defined(AM13E)
-				if (recvval() == -1) goto done;
-				/* Never acknowledge protection that was not applied. */
+				const int requested=recvval();
+				if(requested<0)goto done;
+				/* Three original Rel17 selectors; default setwrp returns. */
+				if(requested==0x33)setwrp(0);
+				else if(requested==0x44)setwrp(1);
+				else if(requested==0x55)setwrp(2);
+				/* No fake success before a verified reset. */
 				sendval(RES_ERROR);
 				break;
 #else

@@ -61,6 +61,7 @@ def main():
           "boot_am13e_stage_accept(" in am13e_update and
           "sendval(RES_OK);" in am13e_update and
           "boot_am13e_stage_abort();" in am13e_update and
+          "#if defined(AM13E_BOOT_RECOVERY_QUALIFIED)" in am13e_update and
           "sendval(RES_ERROR);" in am13e_update and
           "DL_Flash_" not in am13e_update and
           "update(" not in am13e_update and
@@ -87,10 +88,19 @@ def main():
           "boot_am13e_update_commit_quarantined(" in commit and
           "NVIC_SystemReset();" in commit and
           "KEEP (*(.TI.ramfunc .TI.ramfunc.*))" in boot_linker and
-          "boot_am13e_update_commit_quarantined" not in boot and
+          "boot_am13e_update_commit_quarantined();" in am13e_update and
           "boot_am13e_commit_sectors" not in boot and
           "update_commit.c" in src("boot/mcu/AM13E/config.cmake"),
           "Boot sector executor must be SRAM-resident and QUARANTINED")
+    wrp=src("boot/mcu/AM13E/wrp_nonmain_runtime.c")
+    check("AM13E_BOOT_ROM_BSL_SWD_RECOVERY_TESTED" in wrp and
+          "AM13E_BOOT_NONMAIN_REVERSIBILITY_TESTED" in wrp and
+          "AM13E_BOOT_POWERLOSS_RECOVERY_TESTED" in wrp and
+          "DL_FlashCTL_programMemory128WithECCGenerated(" in wrp and
+          "void setwrp(int type)" in wrp and
+          "requested==0x33" in protection and
+          "sendval(RES_ERROR);" in protection,
+          "Original setwrp must remain Recovery-gated and NAK until qualified")
     # Original CRSF executor/CRC, not replacement command policy;
     # the real UART TX gate must refuse a busy queue *before* Write.
     crsf_app=src("src/io.c")
