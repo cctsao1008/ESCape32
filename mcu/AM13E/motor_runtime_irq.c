@@ -20,6 +20,7 @@
 #include "command_capture.h"
 #include "command_reply.h"
 #include "serial_uart_rx.h"
+#include "common.h" /* original Rel17 cfg.input_mode / Cfg declaration */
 #include "clock_backend.h"
 #include <soc.h>
 #include <dl_mcpwm.h>

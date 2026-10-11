@@ -16,6 +16,7 @@
 #include "command_decode.h"
 #include "io_backend.h"
 #include "serial_uart_rx.h"
+#include "common.h" /* original Rel17 cfg.input_mode / Cfg declaration */
 #include "input_watchdog.h"
 #include "command_reply.h"
 #include "command_input_route_backend.h"
