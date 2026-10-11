@@ -124,7 +124,10 @@ jobs:
             cc $flags -DAM13E mcu/AM13E/tests/test_bemf_timeout_host.c -o /tmp/am13e_bemf_timeout
             /tmp/am13e_bemf_timeout
             echo "PASS: bemf_timeout"
-          } >am13e-ci-logs/host-tests.log 2>&1
+          } >am13e-ci-logs/host-tests.log 2>&1 || {
+            tail -n 90 am13e-ci-logs/host-tests.log
+            exit 1
+          }
           cat am13e-ci-logs/host-tests.log
 
       - name: Compile all original Rel17 FW1 objects and attempt strict full link
