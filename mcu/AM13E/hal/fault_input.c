@@ -90,7 +90,7 @@ void initgpio(void)
     /* Current-sense reservation: analog pinmux only. No ADC SOC/ISR. */
     DL_GPIO_initPeripheralAnalogFunction(AM13E_BOARD_CURRENT_SENSE_PINCM);
 #endif
-#if defined(PARK_PIN) || defined(ERPM_PIN)
+#if defined(PARK_PIN) || defined(ERPM_PIN) || defined(BEC_MAP)
     am13e_app_aux_gpio_init();
 #endif
 }

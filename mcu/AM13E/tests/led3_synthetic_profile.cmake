@@ -1,5 +1,6 @@
 # Compile/link fixture only; NEVER FLASH. These are not product pad assignments.
 set(AM13E_BOARD_BOARD_DEFINITIONS
+    LED_OD
     LED_MAP=0xAFB5B3
     LED_STAT
     LED2_INV

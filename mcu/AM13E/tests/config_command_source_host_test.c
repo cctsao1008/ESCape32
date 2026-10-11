@@ -9,6 +9,39 @@
 #include <assert.h>
 #include <stdio.h>
 #include <limits.h>
+#ifdef BEC_MAP
+#include "../hal/aux_gpio.c" /* Actual production peripheral unit, not a model. */
+#include <setjmp.h>
+GPIO_Regs test_gpio[3];
+unsigned test_function[96],test_input[96],test_enable_calls,test_read_toggle;
+static jmp_buf bec_failed;
+void test_halt(void) { longjmp(bec_failed,1); }
+void test_output_enable(GPIO_Regs *g,uint32_t mask)
+{
+    assert(g==GPIO1 && mask && !(mask&~3U));
+    assert(g->latch==(unsigned)am13e_app_bec_selector());
+    assert(test_function[32]==1U && test_function[33]==1U);
+}
+static void bec_regressions(void)
+{
+    for(int value=BEC_MIN;value<=BEC_MAX;++value){
+        cfg.bec=value;checkcfg();
+        assert(am13e_app_bec_selector()==value-BEC_MIN);
+        bec_initialized=0U; /* Simulated MCU reset between startup choices. */
+        memset(test_gpio,0,sizeof test_gpio);
+        memset(test_function,0,sizeof test_function);
+        am13e_app_aux_gpio_init();
+        assert(test_gpio[1].output==3U && test_gpio[1].latch==(unsigned)(value-BEC_MIN));
+    }
+    const unsigned enabled=test_enable_calls;
+    if(!setjmp(bec_failed)){am13e_app_aux_gpio_init();assert(0);}
+    assert(test_enable_calls==enabled);
+    bec_initialized=0U;cfg.bec=BEC_MAX+1;
+    if(!setjmp(bec_failed)){am13e_app_aux_gpio_init();assert(0);}
+    assert(test_enable_calls==enabled);
+    puts("PASS production Cfg BEC selector -> native GPIO startup bits/order; invalid/reinit no output enable");
+}
+#endif
 
 char _cfg[4096];
 static unsigned feeds, commits, erases, programs, reads;
@@ -88,6 +121,9 @@ int main(void)
     memcpy(&cfg,&cfgdata,sizeof cfg);checkcfg();
     assert(cfg.id==0x32eaU && cfg.revision==17 && cfg.revpatch==3);
     const Cfg defaults=cfg;
+#ifdef BEC_MAP
+    bec_regressions();memcpy(&cfg,&defaults,sizeof cfg);
+#endif
     cfg.revdir=1;
     receive(0U,0U);
     for(unsigned n=0U;n<5U;++n)receive(47U,1U);

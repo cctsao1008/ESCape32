@@ -20,6 +20,10 @@
 #if defined(AM13E)
 #include "util_backend.h"
 #include "motor_backend.h" /* Real 250 ms arming timeout, not WWDT feed */
+#ifdef BEC_MAP
+#include "aux_gpio.h"
+int am13e_app_bec_selector(void) { return cfg.bec - BEC_MIN; }
+#endif
 #endif
 
 /* STM32/AT32/GD32-specific GPIO and Flash register definitions. */

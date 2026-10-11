@@ -62,14 +62,14 @@ jobs:
         shell: bash
         run: |
           mkdir -p am13e-ci-logs
-          set -e
+          set -euo pipefail
           {
             flags="-std=c11 -O2 -Wall -Wextra -Werror -Wpedantic -Imcu/AM13E"
             run_test () {
               name="$1"
               shift
-              cc $flags "$@" -o "/tmp/am13e_$name"
-              "/tmp/am13e_$name"
+              cc $flags "$@" -o "/tmp/am13e_$name" || exit 1
+              "/tmp/am13e_$name" || exit 1
               echo "PASS: $name"
             }
             run_test flash_plan mcu/AM13E/cfg_flash_plan.c mcu/AM13E/tests/cfg_flash_plan_host_test.c
@@ -99,14 +99,14 @@ jobs:
             run_test receiver_config_serial -DAM13E -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Imcu/AM13E/tests/aux_mock -DAM13E_BOARD_SERIAL_RX_CONFIGURED=1 src/io.c src/util.c mcu/AM13E/serial_command.c mcu/AM13E/ibus_receiver.c mcu/AM13E/sbus_receiver.c mcu/AM13E/sbus2_reply.c mcu/AM13E/crsf_receiver.c mcu/AM13E/exbus_receiver.c mcu/AM13E/hott_receiver.c mcu/AM13E/tests/rel17_defaults_host.c mcu/AM13E/tests/receiver_config_source_host_test.c
             run_test receiver_config_disabled -DAM13E -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Imcu/AM13E/tests/aux_mock -DAM13E_BOARD_SERIAL_RX_CONFIGURED=1 -DDISABLE_EXBUS -DDISABLE_HOTT src/io.c src/util.c mcu/AM13E/serial_command.c mcu/AM13E/ibus_receiver.c mcu/AM13E/sbus_receiver.c mcu/AM13E/sbus2_reply.c mcu/AM13E/crsf_receiver.c mcu/AM13E/exbus_receiver.c mcu/AM13E/hott_receiver.c mcu/AM13E/tests/rel17_defaults_host.c mcu/AM13E/tests/receiver_config_source_host_test.c
             run_test led_source -DAM13E_TEST_GPIO_ENABLE_OBSERVER -DAM13E -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' -DLED_STAT -DLED2_INV -DLED_MAP=0xAFB5B3 -DAM13E_BOARD_LED1_GPIO=GPIO1 -DAM13E_BOARD_LED1_MASK=1U -DAM13E_BOARD_LED1_PINCM=32U -DAM13E_BOARD_LED2_GPIO=GPIO1 -DAM13E_BOARD_LED2_MASK=2U -DAM13E_BOARD_LED2_PINCM=33U -DAM13E_BOARD_LED3_GPIO=GPIO1 -DAM13E_BOARD_LED3_MASK=4U -DAM13E_BOARD_LED3_PINCM=34U -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Imcu/AM13E/tests/aux_mock src/io.c mcu/AM13E/hal/aux_gpio.c mcu/AM13E/tests/led_source_host_test.c
-            run_test led_inverted_source -DAM13E_TEST_GPIO_ENABLE_OBSERVER -DAM13E -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' -DLED_STAT -DLED2_INV -DLED_MAP=0xAFB5B3 -DLED_INV -DAM13E_BOARD_LED1_GPIO=GPIO1 -DAM13E_BOARD_LED1_MASK=1U -DAM13E_BOARD_LED1_PINCM=32U -DAM13E_BOARD_LED2_GPIO=GPIO1 -DAM13E_BOARD_LED2_MASK=2U -DAM13E_BOARD_LED2_PINCM=33U -DAM13E_BOARD_LED3_GPIO=GPIO1 -DAM13E_BOARD_LED3_MASK=4U -DAM13E_BOARD_LED3_PINCM=34U -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Imcu/AM13E/tests/aux_mock src/io.c mcu/AM13E/hal/aux_gpio.c mcu/AM13E/tests/led_source_host_test.c
-            run_test led_four_source -DAM13E_TEST_GPIO_ENABLE_OBSERVER -DAM13E -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' -DLED_STAT -DLED2_INV -DLED_MAP=0xffffffff -DAM13E_BOARD_LED1_GPIO=GPIO1 -DAM13E_BOARD_LED1_MASK=1U -DAM13E_BOARD_LED1_PINCM=32U -DAM13E_BOARD_LED2_GPIO=GPIO1 -DAM13E_BOARD_LED2_MASK=2U -DAM13E_BOARD_LED2_PINCM=33U -DAM13E_BOARD_LED3_GPIO=GPIO1 -DAM13E_BOARD_LED3_MASK=4U -DAM13E_BOARD_LED3_PINCM=34U -DAM13E_BOARD_LED4_GPIO=GPIO1 -DAM13E_BOARD_LED4_MASK=8U -DAM13E_BOARD_LED4_PINCM=35U -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Imcu/AM13E/tests/aux_mock src/io.c mcu/AM13E/hal/aux_gpio.c mcu/AM13E/tests/led_source_host_test.c
+            run_test led_inverted_source -DLED_OD -DAM13E_TEST_GPIO_ENABLE_OBSERVER -DAM13E -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' -DLED_STAT -DLED2_INV -DLED_MAP=0xAFB5B3 -DLED_INV -DAM13E_BOARD_LED1_GPIO=GPIO1 -DAM13E_BOARD_LED1_MASK=1U -DAM13E_BOARD_LED1_PINCM=32U -DAM13E_BOARD_LED2_GPIO=GPIO1 -DAM13E_BOARD_LED2_MASK=2U -DAM13E_BOARD_LED2_PINCM=33U -DAM13E_BOARD_LED3_GPIO=GPIO1 -DAM13E_BOARD_LED3_MASK=4U -DAM13E_BOARD_LED3_PINCM=34U -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Imcu/AM13E/tests/aux_mock src/io.c mcu/AM13E/hal/aux_gpio.c mcu/AM13E/tests/led_source_host_test.c
+            run_test led_four_source -DLED4_OD -DAM13E_TEST_GPIO_ENABLE_OBSERVER -DAM13E -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' -DLED_STAT -DLED2_INV -DLED_MAP=0xffffffff -DAM13E_BOARD_LED1_GPIO=GPIO1 -DAM13E_BOARD_LED1_MASK=1U -DAM13E_BOARD_LED1_PINCM=32U -DAM13E_BOARD_LED2_GPIO=GPIO1 -DAM13E_BOARD_LED2_MASK=2U -DAM13E_BOARD_LED2_PINCM=33U -DAM13E_BOARD_LED3_GPIO=GPIO1 -DAM13E_BOARD_LED3_MASK=4U -DAM13E_BOARD_LED3_PINCM=34U -DAM13E_BOARD_LED4_GPIO=GPIO1 -DAM13E_BOARD_LED4_MASK=8U -DAM13E_BOARD_LED4_PINCM=35U -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Imcu/AM13E/tests/aux_mock src/io.c mcu/AM13E/hal/aux_gpio.c mcu/AM13E/tests/led_source_host_test.c
             run_test led_wrong_port -DAM13E_BOARD_LED1_GPIO=GPIO0 -DAM13E -DLED_MAP=0xAF -DAM13E_BOARD_LED1_MASK=1U -DAM13E_BOARD_LED1_PINCM=32U -Isrc -Imcu/AM13E/tests/aux_mock mcu/AM13E/hal/aux_gpio.c mcu/AM13E/tests/led_route_negative_host_test.c
             run_test led_serial_conflict -DAM13E_BOARD_LED1_GPIO=GPIO1 -DAM13E_BOARD_SERIAL_RX_CONFIGURED=1 -DAM13E_BOARD_SERIAL_RX_PINCM=32U -DAM13E -DLED_MAP=0xAF -DAM13E_BOARD_LED1_MASK=1U -DAM13E_BOARD_LED1_PINCM=32U -Isrc -Imcu/AM13E/tests/aux_mock mcu/AM13E/hal/aux_gpio.c mcu/AM13E/tests/led_route_negative_host_test.c
             run_test aux_led_conflict -DAM13E -DLED_MAP=0xAF -DAM13E_BOARD_LED1_GPIO=GPIO1 -DAM13E_BOARD_LED1_MASK=1U -DAM13E_BOARD_LED1_PINCM=32U -DERPM_PIN=1 -DAM13E_BOARD_ERPM_GPIO=GPIO1 -DAM13E_BOARD_ERPM_MASK=1U -DAM13E_BOARD_ERPM_PINCM=32U -Isrc -Imcu/AM13E/tests/aux_mock mcu/AM13E/hal/aux_gpio.c mcu/AM13E/tests/aux_route_negative_host_test.c
             run_test led_erpm_conflict -DAM13E_BOARD_LED1_GPIO=GPIO1 -DERPM_PIN=1 -DAM13E_BOARD_ERPM_GPIO=GPIO1 -DAM13E_BOARD_ERPM_MASK=1U -DAM13E_BOARD_ERPM_PINCM=32U -DAM13E -DLED_MAP=0xAF -DAM13E_BOARD_LED1_MASK=1U -DAM13E_BOARD_LED1_PINCM=32U -Isrc -Imcu/AM13E/tests/aux_mock mcu/AM13E/hal/aux_gpio.c mcu/AM13E/tests/led_route_negative_host_test.c
             run_test motor_source -DAM13E -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Imcu/AM13E/tests/motor_mock src/util.c mcu/AM13E/motor_bemf_event_plan.c mcu/AM13E/motor_phase_plan.c mcu/AM13E/tests/motor_source_host_test.c
-            run_test config_command_source -D_GNU_SOURCE -DAM13E -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Imcu/AM13E/tests/aux_mock -include mcu/AM13E/tests/newlib_host.h src/io.c src/prog.c mcu/AM13E/cfg_flash_plan.c mcu/AM13E/cfg_flash_writer.c mcu/AM13E/tests/rel17_defaults_host.c mcu/AM13E/tests/config_command_source_host_test.c
+            run_test config_command_source -DBEC_MAP=0xB35 -DAM13E_BOARD_BEC_BITS=2 -DAM13E_BOARD_BEC1_GPIO=GPIO1 -DAM13E_BOARD_BEC1_MASK=1U -DAM13E_BOARD_BEC1_PINCM=32U -DAM13E_BOARD_BEC2_GPIO=GPIO1 -DAM13E_BOARD_BEC2_MASK=2U -DAM13E_BOARD_BEC2_PINCM=33U -DAM13E_TEST_GPIO_ENABLE_OBSERVER -D_GNU_SOURCE -DAM13E -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Imcu/AM13E/tests/aux_mock -include mcu/AM13E/tests/newlib_host.h src/io.c src/prog.c mcu/AM13E/cfg_flash_plan.c mcu/AM13E/cfg_flash_writer.c mcu/AM13E/tests/rel17_defaults_host.c mcu/AM13E/tests/config_command_source_host_test.c
             run_test servo_source -DAM13E -DCLK=200000000 -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Imcu/AM13E/tests/service_mock src/io.c src/util.c mcu/AM13E/command_decode.c mcu/AM13E/servo_calibration.c mcu/AM13E/tests/servo_source_host_test.c
             run_test servo_trim_source -DAM13E -DAM13E_BOARD_SERVO_CLOCK_TRIM_CONFIGURED=1 -DCLK=200000000 -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Imcu/AM13E/tests/service_mock src/io.c src/util.c mcu/AM13E/servo_calibration.c mcu/AM13E/tests/servo_trim_source_host_test.c
             run_test bemf_clock mcu/AM13E/tests/motor_bemf_clock_host_test.c
@@ -148,11 +148,7 @@ jobs:
             cc $flags -DAM13E mcu/AM13E/tests/test_bemf_timeout_host.c -o /tmp/am13e_bemf_timeout
             /tmp/am13e_bemf_timeout
             echo "PASS: bemf_timeout"
-          } >am13e-ci-logs/host-tests.log 2>&1 || {
-            tail -n 90 am13e-ci-logs/host-tests.log
-            exit 1
-          }
-          cat am13e-ci-logs/host-tests.log
+          } 2>&1 | tee am13e-ci-logs/host-tests.log
 
       - name: Compile all original Rel17 FW1 objects and attempt strict full link
         id: build

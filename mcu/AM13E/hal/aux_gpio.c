@@ -9,7 +9,7 @@
 #include "common.h"
 #endif
 
-#if defined(PARK_PIN) || defined(ERPM_PIN) || LED_CNT > 0
+#if defined(PARK_PIN) || defined(ERPM_PIN) || defined(BEC_MAP) || LED_CNT > 0
 /* Conservative exclusions for every existing Reference owner, plus
  * explicit auxiliary/serial reservations. A new board must reconcile
  * resource ownership rather than selecting a conflicting spare pad.
@@ -78,14 +78,14 @@ _Static_assert(AM13E_BOARD_PARK_PINCM!=AM13E_BOARD_ERPM_PINCM,
 #endif
 
 
+#if defined(BEC_MAP) && (LED_CNT > 0 || defined(PARK_PIN) || defined(ERPM_PIN))
+static int bec_owns_pin(unsigned pin);
+#endif
 #if LED_CNT > 0
 #ifdef LED_WS2812
 #error "AM13E WS2812 timed peripheral backend remains unimplemented"
 #endif
-#if defined(LED_OD) || defined(LED1_OD) || defined(LED2_OD) || defined(LED3_OD) || defined(LED4_OD)
-#error "AM13E open-drain LED electrical backend remains unimplemented"
-#endif
-/* Discrete push-pull LEDs use original logical bits/polarity. No default
+/* Discrete LEDs use original logical bits/polarity/open-drain selection. No default
  * product pads, voltage, current, external resistor or drive qualification. */
 #if LED_CNT >= 1
 #if !defined(AM13E_BOARD_LED1_GPIO) || !defined(AM13E_BOARD_LED1_MASK) || !defined(AM13E_BOARD_LED1_PINCM)
@@ -158,25 +158,46 @@ _Static_assert(AM13E_BOARD_LED4_PINCM!=AM13E_BOARD_LED3_PINCM,"LED routes cannot
 typedef struct {
     GPIO_Regs *gpio;
     uint32_t mask;
-    unsigned pin, inverted;
+    unsigned pin, inverted, open_drain;
 } LedRoute;
+/* Global LED_OD, like upstream LED_INV, aliases only LEDs1..3. */
+#if defined(LED1_OD) || defined(LED_OD)
+#define LED1_DRAIN 1U
+#else
+#define LED1_DRAIN 0U
+#endif
+#if defined(LED2_OD) || defined(LED_OD)
+#define LED2_DRAIN 1U
+#else
+#define LED2_DRAIN 0U
+#endif
+#if defined(LED3_OD) || defined(LED_OD)
+#define LED3_DRAIN 1U
+#else
+#define LED3_DRAIN 0U
+#endif
+#ifdef LED4_OD
+#define LED4_DRAIN 1U
+#else
+#define LED4_DRAIN 0U
+#endif
 static const LedRoute leds[]={
 #if LED_CNT >= 1
-    {AM13E_BOARD_LED1_GPIO,AM13E_BOARD_LED1_MASK,AM13E_BOARD_LED1_PINCM,LED1_INVERTED},
+    {AM13E_BOARD_LED1_GPIO,AM13E_BOARD_LED1_MASK,AM13E_BOARD_LED1_PINCM,LED1_INVERTED,LED1_DRAIN},
 #endif
 #if LED_CNT >= 2
-    {AM13E_BOARD_LED2_GPIO,AM13E_BOARD_LED2_MASK,AM13E_BOARD_LED2_PINCM,LED2_INVERTED},
+    {AM13E_BOARD_LED2_GPIO,AM13E_BOARD_LED2_MASK,AM13E_BOARD_LED2_PINCM,LED2_INVERTED,LED2_DRAIN},
 #endif
 #if LED_CNT >= 3
-    {AM13E_BOARD_LED3_GPIO,AM13E_BOARD_LED3_MASK,AM13E_BOARD_LED3_PINCM,LED3_INVERTED},
+    {AM13E_BOARD_LED3_GPIO,AM13E_BOARD_LED3_MASK,AM13E_BOARD_LED3_PINCM,LED3_INVERTED,LED3_DRAIN},
 #endif
 #if LED_CNT >= 4
-    {AM13E_BOARD_LED4_GPIO,AM13E_BOARD_LED4_MASK,AM13E_BOARD_LED4_PINCM,LED4_INVERTED},
+    {AM13E_BOARD_LED4_GPIO,AM13E_BOARD_LED4_MASK,AM13E_BOARD_LED4_PINCM,LED4_INVERTED,LED4_DRAIN},
 #endif
 };
 _Static_assert(sizeof leds/sizeof leds[0]==LED_CNT,"LED count differs from source");
 static unsigned led_initialized;
-#if defined(PARK_PIN) || defined(ERPM_PIN)
+#if defined(PARK_PIN) || defined(ERPM_PIN) || defined(BEC_MAP)
 static int led_owns_pin(unsigned pin)
 {
     for(unsigned i=0U;i<LED_CNT;++i)if(leds[i].pin==pin)return 1;
@@ -190,6 +211,9 @@ void initled(void)
     for(unsigned i=0U;i<LED_CNT;++i){
         const LedRoute *r=&leds[i];
         if(!available(r->gpio,r->mask,r->pin))fail();
+#ifdef BEC_MAP
+        if(bec_owns_pin(r->pin))fail();
+#endif
 #ifdef PARK_PIN
         if(r->pin==AM13E_BOARD_PARK_PINCM)fail();
 #endif
@@ -207,6 +231,8 @@ void initled(void)
         else DL_GPIO_clearPins(r->gpio,r->mask);
         DL_GPIO_initDigitalOutput(r->pin);
         if(DL_GPIO_getPeripheralFunctionBits(r->pin)!=1U)fail();
+        DL_GPIO_setOpenDrain(r->pin,r->open_drain ? DL_GPIO_HIZ_ENABLE : DL_GPIO_HIZ_DISABLE);
+        if(DL_GPIO_isOpenDrainEnabled(r->pin)!=!!r->open_drain)fail();
     }
     for(unsigned i=0U;i<LED_CNT;++i)
         DL_GPIO_enableOutput(leds[i].gpio,leds[i].mask);
@@ -223,8 +249,108 @@ void ledctl(int value)
 }
 #endif
 
+#ifdef BEC_MAP
+#if BEC_MAP == 0xADE
+#error "BEC on debug pins requires native external-pulldown/SWD qualification; no automatic override"
+#endif
+#if !defined(AM13E_BOARD_BEC_BITS) || AM13E_BOARD_BEC_BITS < 1 || AM13E_BOARD_BEC_BITS > 3
+#error "BEC_MAP needs an explicit native 1..3-bit board route"
+#endif
+_Static_assert(BEC_MAX >= BEC_MIN && BEC_MAX-BEC_MIN < (1U<<AM13E_BOARD_BEC_BITS),
+               "BEC voltage choices exceed configured GPIO bits");
+typedef struct { GPIO_Regs *gpio; uint32_t mask; unsigned pin; } BecRoute;
+#if AM13E_BOARD_BEC_BITS >= 1
+#if !defined(AM13E_BOARD_BEC1_GPIO) || !defined(AM13E_BOARD_BEC1_MASK) || !defined(AM13E_BOARD_BEC1_PINCM)
+#error "BEC_MAP needs explicit AM13E GPIO/mask/PINCM for each bit"
+#endif
+_Static_assert(FREE_PIN(AM13E_BOARD_BEC1_PINCM) && SINGLE_PIN(AM13E_BOARD_BEC1_MASK) &&
+ AM13E_BOARD_BEC1_MASK==(UINT32_C(1)<<(AM13E_BOARD_BEC1_PINCM&31U)),
+ "BEC route conflicts or mask is invalid");
+#endif
+#if AM13E_BOARD_BEC_BITS >= 2
+#if !defined(AM13E_BOARD_BEC2_GPIO) || !defined(AM13E_BOARD_BEC2_MASK) || !defined(AM13E_BOARD_BEC2_PINCM)
+#error "BEC_MAP needs explicit AM13E GPIO/mask/PINCM for each bit"
+#endif
+_Static_assert(FREE_PIN(AM13E_BOARD_BEC2_PINCM) && SINGLE_PIN(AM13E_BOARD_BEC2_MASK) &&
+ AM13E_BOARD_BEC2_MASK==(UINT32_C(1)<<(AM13E_BOARD_BEC2_PINCM&31U)),
+ "BEC route conflicts or mask is invalid");
+#endif
+#if AM13E_BOARD_BEC_BITS >= 3
+#if !defined(AM13E_BOARD_BEC3_GPIO) || !defined(AM13E_BOARD_BEC3_MASK) || !defined(AM13E_BOARD_BEC3_PINCM)
+#error "BEC_MAP needs explicit AM13E GPIO/mask/PINCM for each bit"
+#endif
+_Static_assert(FREE_PIN(AM13E_BOARD_BEC3_PINCM) && SINGLE_PIN(AM13E_BOARD_BEC3_MASK) &&
+ AM13E_BOARD_BEC3_MASK==(UINT32_C(1)<<(AM13E_BOARD_BEC3_PINCM&31U)),
+ "BEC route conflicts or mask is invalid");
+#endif
+static const BecRoute bec_routes[]={
+#if AM13E_BOARD_BEC_BITS >= 1
+ {AM13E_BOARD_BEC1_GPIO,AM13E_BOARD_BEC1_MASK,AM13E_BOARD_BEC1_PINCM},
+#endif
+#if AM13E_BOARD_BEC_BITS >= 2
+ {AM13E_BOARD_BEC2_GPIO,AM13E_BOARD_BEC2_MASK,AM13E_BOARD_BEC2_PINCM},
+#endif
+#if AM13E_BOARD_BEC_BITS >= 3
+ {AM13E_BOARD_BEC3_GPIO,AM13E_BOARD_BEC3_MASK,AM13E_BOARD_BEC3_PINCM},
+#endif
+};
+static unsigned bec_initialized;
+#if LED_CNT > 0 || defined(PARK_PIN) || defined(ERPM_PIN)
+static int bec_owns_pin(unsigned pin)
+{
+    for(unsigned i=0U;i<AM13E_BOARD_BEC_BITS;++i)if(bec_routes[i].pin==pin)return 1;
+    return 0;
+}
+#endif
+static void bec_init(void)
+{
+    const int bits=am13e_app_bec_selector();
+    if(bec_initialized || __get_PRIMASK()!=1U || bits<0 ||
+       bits>BEC_MAX-BEC_MIN)fail();
+#ifdef PARK_PIN
+    if(!available(AM13E_BOARD_PARK_GPIO,AM13E_BOARD_PARK_MASK,AM13E_BOARD_PARK_PINCM))fail();
+#endif
+#ifdef ERPM_PIN
+    if(!available(AM13E_BOARD_ERPM_GPIO,AM13E_BOARD_ERPM_MASK,AM13E_BOARD_ERPM_PINCM))fail();
+#endif
+    /* Check every owner and bit before touching ANY BEC output. */
+    for(unsigned i=0U;i<AM13E_BOARD_BEC_BITS;++i){
+        const BecRoute *r=&bec_routes[i];
+        if(!available(r->gpio,r->mask,r->pin))fail();
+        for(unsigned j=0U;j<i;++j)if(r->pin==bec_routes[j].pin)fail();
+#if LED_CNT > 0
+        if(led_owns_pin(r->pin))fail();
+#endif
+#ifdef PARK_PIN
+        if(r->pin==AM13E_BOARD_PARK_PINCM)fail();
+#endif
+#ifdef ERPM_PIN
+        if(r->pin==AM13E_BOARD_ERPM_PINCM)fail();
+#endif
+    }
+    for(unsigned i=0U;i<AM13E_BOARD_BEC_BITS;++i){
+        const BecRoute *r=&bec_routes[i];
+        DL_GPIO_enablePower(r->gpio);
+        if(!DL_GPIO_isPowerEnabled(r->gpio))fail();
+        DL_GPIO_disableOutput(r->gpio,r->mask);
+        if(((unsigned)bits>>i)&1U)DL_GPIO_setPins(r->gpio,r->mask);
+        else DL_GPIO_clearPins(r->gpio,r->mask);
+        DL_GPIO_initDigitalOutput(r->pin);
+        DL_GPIO_setOpenDrain(r->pin,DL_GPIO_HIZ_DISABLE);
+        if(DL_GPIO_getPeripheralFunctionBits(r->pin)!=1U ||
+           DL_GPIO_isOpenDrainEnabled(r->pin))fail();
+    }
+    for(unsigned i=0U;i<AM13E_BOARD_BEC_BITS;++i)
+        DL_GPIO_enableOutput(bec_routes[i].gpio,bec_routes[i].mask);
+    bec_initialized=1U;
+}
+#endif
+
 void am13e_app_aux_gpio_init(void)
 {
+#ifdef BEC_MAP
+    bec_init();
+#endif
 #if defined(PARK_PIN) || defined(ERPM_PIN)
     if(initialized || __get_PRIMASK()!=1U)fail();
 #if LED_CNT > 0
@@ -236,6 +362,9 @@ void am13e_app_aux_gpio_init(void)
 #endif
 #endif
 #ifdef PARK_PIN
+#ifdef BEC_MAP
+    if(bec_owns_pin(AM13E_BOARD_PARK_PINCM))fail();
+#endif
     if(!available(AM13E_BOARD_PARK_GPIO,AM13E_BOARD_PARK_MASK,
                   AM13E_BOARD_PARK_PINCM))fail();
     DL_GPIO_enablePower(AM13E_BOARD_PARK_GPIO);
@@ -247,6 +376,9 @@ void am13e_app_aux_gpio_init(void)
        DL_GPIO_getPeripheralFunctionBits(AM13E_BOARD_PARK_PINCM)!=1U)fail();
 #endif
 #ifdef ERPM_PIN
+#ifdef BEC_MAP
+    if(bec_owns_pin(AM13E_BOARD_ERPM_PINCM))fail();
+#endif
     if(!available(AM13E_BOARD_ERPM_GPIO,AM13E_BOARD_ERPM_MASK,
                   AM13E_BOARD_ERPM_PINCM))fail();
     DL_GPIO_enablePower(AM13E_BOARD_ERPM_GPIO);

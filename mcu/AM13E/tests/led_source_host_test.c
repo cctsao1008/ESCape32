@@ -30,7 +30,7 @@ void test_output_enable(GPIO_Regs *g,uint32_t mask)
 {
     assert(g==GPIO1 && mask && !(mask&~((1U<<LED_CNT)-1U)));
     assert(g->latch==physical(0U)); /* every inactive latch BEFORE enable */
-    for(unsigned i=0U;i<LED_CNT;++i)assert(test_function[32U+i]==1U);
+    for(unsigned i=0U;i<LED_CNT;++i)assert((test_function[32U+i]&1U)==1U);
 }
 void am13e_app_motor_fault_shutdown(void) { ++fault_off; }
 __attribute__((noreturn)) void am13e_app_motor_fault_reset(void)
@@ -48,7 +48,19 @@ int main(void)
     assert(test_enable_calls==before); /* no write before initialization */
     initled();
     assert(test_gpio[1].output==((1U<<LED_CNT)-1U) && test_gpio[1].latch==physical(0U));
-    assert(test_function[32]==1U && test_function[33]==1U && test_function[34]==1U);
+    for(unsigned i=0U;i<LED_CNT;++i)assert((test_function[32U+i]&1U)==1U);
+#ifdef LED_OD
+    for(unsigned i=0U;i<3U;++i)assert(DL_GPIO_isOpenDrainEnabled(32U+i));
+#else
+    for(unsigned i=0U;i<3U;++i)assert(!DL_GPIO_isOpenDrainEnabled(32U+i));
+#endif
+#if LED_CNT == 4
+#ifdef LED4_OD
+    assert(DL_GPIO_isOpenDrainEnabled(35U));
+#else
+    assert(!DL_GPIO_isOpenDrainEnabled(35U));
+#endif
+#endif
     for(unsigned value=0;value<16U;++value){ledctl((int)value);assert(test_gpio[1].latch==physical(value));}
     cfg.led=0;cfg.input_mode=0;tick=0;
     command(22U);pend_sv_handler();assert(cfg.led==1 && test_gpio[1].latch==physical(1U));
