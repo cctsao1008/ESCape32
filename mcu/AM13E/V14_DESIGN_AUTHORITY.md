@@ -1,3 +1,5 @@
+> Historical Rev1.4 authority index. Current authority: [DESIGN_AUTHORITY.md](DESIGN_AUTHORITY.md) and the original Rev1.6 documents. Statements below describe the previous baseline, not current requirements.
+
 # AM13E23019 / ESCape32 Rel17 — Rev1.4 Design Authority
 
 **Status:** authority index for the original user-provided Rev1.4

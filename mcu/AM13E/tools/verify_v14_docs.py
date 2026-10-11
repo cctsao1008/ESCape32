@@ -25,6 +25,10 @@ def read(path):
     return file.read_text(encoding="utf-8")
 
 def check_current_contract():
+    # Retain every historical integrity/safety check and also enforce the
+    # current user-adopted design originals and requirement crosswalk.
+    from verify_v16_docs import check_current_contract as check_v16
+    check_v16()
     authority=read("mcu/AM13E/V14_DESIGN_AUTHORITY.md")
     for name,digest in DIGESTS.items():
         require(name in authority and digest in authority,

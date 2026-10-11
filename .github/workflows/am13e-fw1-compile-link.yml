@@ -495,7 +495,7 @@ jobs:
           python3 mcu/AM13E/tools/verify_rel17_coverage.py \
             --build am13e-ci-build --logs am13e-ci-logs
 
-      - name: Enforce original Rel17 and supplied v1.4 design authority
+      - name: Enforce current Rev1.6 authority and immutable historical Rev1.4 documents
         id: v14_docs
         shell: bash
         run: |
