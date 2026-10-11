@@ -4,6 +4,7 @@ from pathlib import Path
 import csv
 import hashlib
 import re
+import subprocess
 
 ROOT = Path(__file__).resolve().parents[4]
 BASE = ROOT / "mcu/_support/AM13E"
@@ -30,7 +31,9 @@ def check_current_contract():
         if not all(r.values()) or r["hardware_status"] != "PENDING / NOT QUALIFIED":
             raise RuntimeError("Incomplete or unjustified qualification: " + r["id"])
     allowed={".github","boot","mcu","src","CMakeLists.txt","LICENSE","README.md"}
-    actual={p.name for p in ROOT.iterdir() if p.name!=".git"}
+    # Audit repository architecture, excluding untracked CI build/log artifacts.
+    tracked = subprocess.check_output(["git", "-C", str(ROOT), "ls-files", "-z"])
+    actual={p.split("/", 1)[0] for p in tracked.decode().split("\0") if p}
     if actual!=allowed:raise RuntimeError("Repository root drift: "+str(actual^allowed))
     for directory,names in [("mcu/AM13E",{"config.c","config.h","config.cmake","config.ld","preset.c","hal"}),
                             ("boot/mcu/AM13E",{"config.c","config.h","config.cmake","config.ld","hal"})]:
