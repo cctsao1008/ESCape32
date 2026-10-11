@@ -294,7 +294,13 @@ void RX_HANDLER(void)
             else {
                 const int valid=am13e_app_io_crsf_frame(bytes,len);
 #ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
-                if(valid && crsf_tx_available){
+                /* Do not execute 0x2d Write (or Save/Reset) if the
+                 * previous reply is still on the wire. Executing
+                 * execcrsfcmd() and THEN rejecting its ACK due to a
+                 * busy TX queue could mutate cfg without a response.
+                 * The TX queue is owned by this single UC IRQ.
+                 */
+                if(valid && crsf_tx_available && crsf_tx.count==0U){
                     uint8_t reply[AM13E_SERIAL_TX_MAX];
                     const unsigned n=am13e_app_io_crsf_reply(
                         bytes,len,reply,sizeof reply);
