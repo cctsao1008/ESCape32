@@ -63,6 +63,13 @@ int am13e_app_io_crsf_frame(const uint8_t *frame,unsigned length);
  * Valid telemetry request is recognized but never falsely ACKed/TX.
  */
 int am13e_app_io_exbus_frame(const uint8_t *frame,unsigned length);
+/* Construct source-defined EXBUS response from original Rel17 sensor
+ * values. Caller must supply board-qualified stable device identity
+ * and own a validated half-duplex TX path. Not used by Reference.
+ */
+unsigned am13e_app_io_exbus_telemetry(uint8_t request_id,
+                                      uint32_t device_id,uint8_t *out,
+                                      unsigned capacity);
 /* HoTT/SUMD original mode=7 v1/v3 channel maps, physical timing
  * still requires board-qualified UNICOMM RX.
  */

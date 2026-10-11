@@ -242,12 +242,15 @@
         "mcu/AM13E/serial_frame_rx.c",
         "mcu/AM13E/serial_uart_rx.c",
         "src/io.c",
-        "mcu/AM13E/exbus_autobaud.c"
+        "mcu/AM13E/exbus_autobaud.c",
+        "mcu/AM13E/exbus_telemetry_reply.c",
+        "src/io.c"
       ],
       "host_tests": [
         "exbus_receiver",
         "serial_frames",
-        "exbus_autobaud"
+        "exbus_autobaud",
+        "exbus_telemetry_reply"
       ]
     },
     {
@@ -336,7 +339,7 @@
     }
   ],
   "conditional_upstream_pending": [
-    "Original input_mode=2 serial/CLI and UART RX DMA; EXBUS telemetry response/adaptive baud, HoTT physical UART frame-idle boundary still pending",
+    "Original input_mode=2 serial/CLI and UART RX DMA; EXBUS half-duplex reply UART and physical baud timing, HoTT physical UART frame-idle boundary still pending",
     "SBUS2 telemetry response timing and dedicated half-duplex UART physical turnarounds",
     "General KISS/iBUS/S.Port/CRSF/MSB/HoTT serial telemetry transport; CRSF 0x28/0x2c/0x2d command TX only source/Host/synthetic-ARM",
     "Hall/hybrid and board-specific BEC/LED/ERPM/PARK I/O adaptation",

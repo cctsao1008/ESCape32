@@ -25,6 +25,7 @@
 #include "sbus_receiver.h" /* Packed 11-bit SBUS channel extraction */
 #include "crsf_receiver.h" /* Original CRSF CRC8-DVB-S2 channel RX */
 #include "exbus_receiver.h" /* Original EXBUS CRC16 and channel semantics */
+#include "exbus_telemetry_reply.h" /* Preserve original exbusresp fields */
 #include "hott_receiver.h" /* Original HoTT/SUMDv1/SUMDv3 and XMODEM CRC */
 #include "crsf_command_reply.h" /* Preserve original execcrsfcmd response */
 #else
@@ -649,6 +650,24 @@ int am13e_app_io_exbus_frame(const uint8_t *frame,unsigned length)
     }
     (void)telemetry_request;
     return 1;
+}
+/* Packet formatting uses the original sensor/telemetry variables,
+ * source-defined EXBUS CRC helpers and caller-owned board identity.
+ * It does not enable a UART TX or assume a half-duplex transceiver.
+ */
+unsigned am13e_app_io_exbus_telemetry(uint8_t request_id,
+                                      uint32_t device_id,uint8_t *out,
+                                      unsigned capacity)
+{
+    if(cfg.input_mode!=6)return 0U;
+    static AM13E_ExbusTelemetryState state;
+    const AM13E_ExbusTelemetryValues v={
+        .device_id=device_id,.temp1=temp1,.temp2=temp2,
+        .volt=volt,.curr=curr,.csum=csum,.erpm=erpm,
+        .telem_poles=cfg.telem_poles
+    };
+    return am13e_exbus_telemetry_build(&state,&v,request_id,
+                                      out,capacity,crc8,crc16ccitt);
 }
 /* Rel17 crsffunc() refreshes WWDT for CRC-valid CRSF frames, and
  * changes throttle/brake only for channel data (type 0x16).
