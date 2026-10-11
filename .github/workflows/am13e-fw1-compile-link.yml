@@ -305,7 +305,11 @@ jobs:
             }
           arm-none-eabi-nm am13e-ci-crsf-tx/AM13E_FW1_REL17.elf \
             >am13e-ci-logs/serial-tx-symbols.txt
-          grep -Eq ' [Tt] UC0_IRQHandler
+          grep -Eq ' [Tt] UC0_IRQHandler$' am13e-ci-logs/serial-tx-symbols.txt
+          grep -Eq ' [Tt] am13e_app_io_crsf_reply$' am13e-ci-logs/serial-tx-symbols.txt
+          grep -Eq ' [Tt] am13e_crsf_reply_envelope$' am13e-ci-logs/serial-tx-symbols.txt
+          grep -Eq ' [Tt] am13e_serial_tx_queue_begin$' am13e-ci-logs/serial-tx-symbols.txt
+          echo "PASS selected full-duplex UNICOMM CRSF TX strict link (SYNTHETIC, NOT FLASHED)"
 
       - name: Audit actual Rel17 functional software coverage
         id: coverage
