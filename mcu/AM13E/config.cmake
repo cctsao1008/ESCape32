@@ -19,6 +19,7 @@
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/command_decode.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/ibus_receiver.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/sbus_receiver.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/crsf_receiver.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/serial_frame_rx.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/serial_uart_rx.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_codec.c"
