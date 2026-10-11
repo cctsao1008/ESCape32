@@ -24,6 +24,7 @@
 #include "ibus_receiver.h" /* Native frame inspection uses original iBUS semantics */
 #include "sbus_receiver.h" /* Packed 11-bit SBUS channel extraction */
 #include "crsf_receiver.h" /* Original CRSF CRC8-DVB-S2 channel RX */
+#include "exbus_receiver.h" /* Original EXBUS CRC16 and channel semantics */
 #include "crsf_command_reply.h" /* Preserve original execcrsfcmd response */
 #else
 #ifdef AT32F4
@@ -601,6 +602,30 @@ int am13e_app_io_sbus_frame(const uint8_t *frame,unsigned length)
     am13e_app_io_watchdog_feed();
     setthrot(throttle_us);
     setbrake(brake_us);
+    return 1;
+}
+/* EXBUS original input_mode=6. The native decoder invokes the
+ * actual Rel17 util.c::crc16ccitt (not a second CRC algorithm).
+ * EXBUS telemetry requests are recognized but cannot be replied
+ * to until qualified physical half-duplex TX/switching is added.
+ */
+int am13e_app_io_exbus_frame(const uint8_t *frame,unsigned length)
+{
+    int throttle_us=-1,brake_us=-1;
+    bool channels=false,telemetry_request=false;
+    if(cfg.input_mode!=6 ||
+       !am13e_exbus_decode_frame(frame,length,
+         (unsigned)(uint8_t)cfg.input_ch1,
+         (unsigned)(uint8_t)cfg.input_ch2,
+         crc16ccitt,&throttle_us,&brake_us,
+         &channels,&telemetry_request))
+        return 0;
+    am13e_app_io_watchdog_feed();
+    if(channels) {
+        setthrot(throttle_us);
+        setbrake(brake_us);
+    }
+    (void)telemetry_request;
     return 1;
 }
 /* Rel17 crsffunc() refreshes WWDT for CRC-valid CRSF frames, and

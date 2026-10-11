@@ -78,6 +78,7 @@ jobs:
             run_test ibus_receiver mcu/AM13E/ibus_receiver.c mcu/AM13E/tests/ibus_receiver_host_test.c
             run_test sbus_receiver mcu/AM13E/sbus_receiver.c mcu/AM13E/tests/sbus_receiver_host_test.c
             run_test crsf_receiver mcu/AM13E/crsf_receiver.c mcu/AM13E/tests/crsf_receiver_host_test.c
+            run_test exbus_receiver mcu/AM13E/exbus_receiver.c mcu/AM13E/tests/exbus_receiver_host_test.c
             run_test crsf_command_reply mcu/AM13E/crsf_command_reply.c mcu/AM13E/tests/crsf_command_reply_host_test.c
             run_test serial_tx_queue mcu/AM13E/serial_tx_queue.c mcu/AM13E/tests/serial_tx_queue_host_test.c
             run_test serial_frames mcu/AM13E/serial_frame_rx.c mcu/AM13E/tests/serial_frame_rx_host_test.c

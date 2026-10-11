@@ -59,6 +59,10 @@ int am13e_app_io_sbus_frame(const uint8_t *frame,unsigned length);
  * updates original throttle/brake. Command response TX still missing.
  */
 int am13e_app_io_crsf_frame(const uint8_t *frame,unsigned length);
+/* EXBUS input_mode=6: original CRC16ccitt and getchan2 semantics.
+ * Valid telemetry request is recognized but never falsely ACKed/TX.
+ */
+int am13e_app_io_exbus_frame(const uint8_t *frame,unsigned length);
 /* Invoke the real Rel17 execcrsfcmd()/crc8dvbs2() only for a validated
  * CRSF input_mode=5 command, telmode=4; return completed wire bytes.
  */

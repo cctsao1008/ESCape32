@@ -154,7 +154,7 @@ void RX_HANDLER(void);
 bool am13e_app_serial_rx_init(unsigned mode)
 {
     if(__get_PRIMASK()!=1U || initialized ||
-       (mode!=3U && mode!=4U && mode!=5U))return false;
+       (mode!=3U && mode!=4U && mode!=5U && mode!=6U))return false;
     /* UCS are shared with I2C/SPI; board profile must assign a
      * DEDICATED instance that no other owner has initialized.
      */
@@ -209,7 +209,8 @@ bool am13e_app_serial_rx_init(unsigned mode)
     DL_UART_init(RX_UC,&config);
     DL_UART_configBaudRate(RX_UC,AM13E_BOARD_SERIAL_RX_BUSCLK_HZ,
                            mode==4U?100000U:
-                           mode==5U?416666U:115200U);
+                           mode==5U?416666U:
+                           mode==6U?125000U:115200U);
     DL_UART_enableFIFOs(RX_UC);
     DL_UART_setRXFIFOThreshold(RX_UC,DL_UART_RX_FIFO_LEVEL_NOT_EMPTY);
 #ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
@@ -291,6 +292,8 @@ void RX_HANDLER(void)
                 (void)am13e_app_io_ibus_frame(bytes,len);
             else if(rx_state.mode==4U)
                 (void)am13e_app_io_sbus_frame(bytes,len);
+            else if(rx_state.mode==6U)
+                (void)am13e_app_io_exbus_frame(bytes,len);
             else {
                 const int valid=am13e_app_io_crsf_frame(bytes,len);
 #ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED

@@ -24,7 +24,8 @@ bool am13e_serial_frame_byte(AM13E_SerialFrameRx *rx,uint8_t b,
                              unsigned *length)
 {
     if(!rx||!out||!length||capacity==0U||
-       (rx->mode!=3U&&rx->mode!=4U&&rx->mode!=5U))
+       (rx->mode!=3U&&rx->mode!=4U&&rx->mode!=5U&&
+        rx->mode!=6U))
         return false;
     if(rx->used==0U){
         if((rx->mode==3U&&b!=0x20U)||
@@ -35,12 +36,27 @@ bool am13e_serial_frame_byte(AM13E_SerialFrameRx *rx,uint8_t b,
         rx->used=0U;
         rx->expected=32U;
         if(b!=0x20U)return false;
+    } else if(rx->mode==6U&&rx->used==2U){
+        /* EXBUS length byte at offset 2. The original parser does
+         * not require a fixed start address: idle-framed packets
+         * must be synchronized by the board transport.
+         */
+        if(b<8U||b>AM13E_SERIAL_MAX_FRAME){
+            am13e_serial_frame_abort(rx);
+            return false;
+        }
+        rx->expected=b;
     } else if(rx->mode==5U&&rx->used==1U){
         if(b<2U||b>62U){
             am13e_serial_frame_abort(rx);
             return false;
         }
         rx->expected=(unsigned)b+2U;
+    }
+    if(rx->mode==6U && rx->used==5U &&
+       (unsigned)b+8U!=rx->expected){
+        am13e_serial_frame_abort(rx);
+        return false;
     }
     if(rx->used>=AM13E_SERIAL_MAX_FRAME){
         am13e_serial_frame_abort(rx);
