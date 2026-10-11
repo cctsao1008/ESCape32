@@ -6,7 +6,7 @@ include(CTest)
 set(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../..")
 add_executable(am13e_flash_transaction_test
     "${REPO_ROOT}/boot/tests/am13e_flash_transaction_test.c"
-    "${REPO_ROOT}/boot/mcu/AM13E/flash.c"
+    "${REPO_ROOT}/boot/mcu/AM13E/hal/flash.c"
     "${REPO_ROOT}/boot/mcu/AM13E/app_validity.c")
 target_compile_features(am13e_flash_transaction_test PRIVATE c_std_11)
 target_compile_definitions(am13e_flash_transaction_test PRIVATE AM13E_FLASH_TEST)
@@ -40,7 +40,7 @@ add_test(NAME am13e_update_staging COMMAND am13e_update_staging_test)
 # mock, including mid-update failure and post-program corruption.
 add_executable(am13e_update_commit_test
     "${REPO_ROOT}/boot/tests/am13e_update_commit_test.c"
-    "${REPO_ROOT}/boot/mcu/AM13E/update_commit.c"
+    "${REPO_ROOT}/boot/mcu/AM13E/hal/update_commit.c"
     "${REPO_ROOT}/boot/mcu/AM13E/update_staging.c")
 target_compile_features(am13e_update_commit_test PRIVATE c_std_11)
 target_compile_definitions(am13e_update_commit_test PRIVATE
@@ -97,11 +97,11 @@ if(AM13E_HOST_PACKED_IMAGE)
         "${REPO_ROOT}/boot/src/util.c"
         "${REPO_ROOT}/boot/tests/am13e_crcp_mock.c"
         "${REPO_ROOT}/boot/mcu/AM13E/flash_range.c"
-        "${REPO_ROOT}/boot/mcu/AM13E/flash.c"
+        "${REPO_ROOT}/boot/mcu/AM13E/hal/flash.c"
         "${REPO_ROOT}/boot/mcu/AM13E/app_validity.c"
         "${REPO_ROOT}/boot/mcu/AM13E/update_staging.c"
         "${REPO_ROOT}/boot/mcu/AM13E/wrp_nonmain.c"
-        "${REPO_ROOT}/boot/mcu/AM13E/wrp_nonmain_runtime.c")
+        "${REPO_ROOT}/boot/mcu/AM13E/hal/wrp_nonmain_runtime.c")
     target_compile_features(am13e_boot_protocol_test PRIVATE c_std_11)
     target_compile_definitions(am13e_boot_protocol_test PRIVATE
         AM13E AM13E_FLASH_TEST IO_PB14)

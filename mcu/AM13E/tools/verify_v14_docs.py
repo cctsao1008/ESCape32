@@ -109,7 +109,7 @@ def check_current_contract():
             "sendval(write(write_addr, buf, len)" in
             read("boot/src/main.c"),
             "Original Boot write() hook must be reused in AM13E parser")
-    flash=read("boot/mcu/AM13E/flash.c")
+    flash=read("boot/mcu/AM13E/hal/flash.c")
     require("#define AM13E_WRITE_ENTRY write" in flash and
             "int AM13E_WRITE_ENTRY(" in flash,
             "AM13E must export original Boot write(), not a parallel public API")

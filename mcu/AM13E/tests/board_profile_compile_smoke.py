@@ -135,10 +135,10 @@ print("PASS: optional CRSF TX IRQ/EOT board route and fail-closed contract")
 # Static non-operation checks: actual default firmware must not install
 # a PB15 or OC trip, drive PB13 active, or enable nFAULT interrupts.
 source_root=pathlib.Path(__file__).resolve().parents[3]
-power=(source_root/"mcu/AM13E/motor_power_stage.c").read_text()
-nfault=(source_root/"mcu/AM13E/fault_input.c").read_text()
-runtime=(source_root/"mcu/AM13E/motor_safety.c").read_text()
-vectors=(source_root/"mcu/AM13E/irq_vectors.c").read_text()
+power=(source_root/"mcu/AM13E/hal/motor_power_stage.c").read_text()
+nfault=(source_root/"mcu/AM13E/hal/fault_input.c").read_text()
+runtime=(source_root/"mcu/AM13E/hal/motor_safety.c").read_text()
+vectors=(source_root/"mcu/AM13E/hal/irq_vectors.c").read_text()
 ref_cmake=(source_root/"CMakeLists.txt").read_text()
 checks=[
     ("PB13 active enable", "gate_hold_inactive" in power and
@@ -147,7 +147,7 @@ checks=[
     ("nFAULT IRQ", "DL_GPIO_enableInterrupt(" not in nfault and
      "am13e_app_nfault_asserted(" not in vectors),
     ("Fault Trip", "am13e_app_motor_nfault_trip_init(" not in runtime and
-     '"/mcu/AM13E/motor_fault_route.c"' not in ref_cmake),
+     '"/mcu/AM13E/hal/motor_fault_route.c"' not in ref_cmake),
     ("Independent OC", "DL_XBAR_selectPWMXBARSource(" not in power),
     ("GPIO-only serial", "DL_GPIO_initDigitalInput(AM13E_BOARD_SERIAL_TX_PINCM)" in nfault),
     ("Analog-only current sense", "DL_GPIO_initPeripheralAnalogFunction(AM13E_BOARD_CURRENT_SENSE_PINCM)" in nfault)

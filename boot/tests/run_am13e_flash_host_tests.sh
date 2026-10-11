@@ -9,6 +9,6 @@ mkdir -p "$BUILD"
   -DAM13E_FLASH_TEST \
   -I"$ROOT/boot/tests/am13e_mock" \
   "$ROOT/boot/tests/am13e_flash_transaction_test.c" \
-  "$ROOT/boot/mcu/AM13E/flash.c" \
+  "$ROOT/boot/mcu/AM13E/hal/flash.c" \
   -o "$BUILD/am13e_flash_transaction_test"
 "$BUILD/am13e_flash_transaction_test"

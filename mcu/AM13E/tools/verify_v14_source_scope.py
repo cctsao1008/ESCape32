@@ -84,10 +84,10 @@ def main():
         "case CMD_WINDOW:")[0].split("#if defined(AM13E)",1)[1].split(
         "#else",1)[0]
     check("sendval(write(write_addr, buf, len)" in am13e_write and
-          "int AM13E_WRITE_ENTRY(" in src("boot/mcu/AM13E/flash.c"),
+          "int AM13E_WRITE_ENTRY(" in src("boot/mcu/AM13E/hal/flash.c"),
           "AM13E CMD_WRITE must use original Rel17 write() entry")
 
-    commit=src("boot/mcu/AM13E/update_commit.c")
+    commit=src("boot/mcu/AM13E/hal/update_commit.c")
     boot_linker=src("boot/mcu/AM13E/config.ld")
     check("boot_am13e_commit_sectors(" in commit and
           "DL_Flash_eraseSector(" in commit and
@@ -99,7 +99,7 @@ def main():
           "boot_am13e_commit_sectors" not in boot and
           "update_commit.c" in src("boot/mcu/AM13E/config.cmake"),
           "Boot sector executor must be SRAM-resident and QUARANTINED")
-    wrp=src("boot/mcu/AM13E/wrp_nonmain_runtime.c")
+    wrp=src("boot/mcu/AM13E/hal/wrp_nonmain_runtime.c")
     check("AM13E_BOOT_ROM_BSL_SWD_RECOVERY_TESTED" in wrp and
           "AM13E_BOOT_NONMAIN_REVERSIBILITY_TESTED" in wrp and
           "AM13E_BOOT_POWERLOSS_RECOVERY_TESTED" in wrp and
@@ -112,7 +112,7 @@ def main():
     # Original CRSF executor/CRC, not replacement command policy;
     # the real UART TX gate must refuse a busy queue *before* Write.
     crsf_app=src("src/io.c")
-    uart=src("mcu/AM13E/serial_uart_rx.c")
+    uart=src("mcu/AM13E/hal/serial_uart_rx.c")
     crsf_envelope=src("mcu/AM13E/crsf_command_reply.c")
     check("execcrsfcmd,crc8dvbs2" in crsf_app and
           "am13e_crsf_reply_envelope(" in crsf_app and
@@ -121,7 +121,7 @@ def main():
           "am13e_crsf_deferred_begin(" in uart and
           "am13e_app_serial_crsf_service_pending(" in uart and
           "am13e_app_serial_crsf_service_pending();" in
-              src("mcu/AM13E/irq_vectors.c") and
+              src("mcu/AM13E/hal/irq_vectors.c") and
           "am13e_app_io_crsf_reply(" not in
               uart.split("void RX_HANDLER(void)\n{")[1] and
           "DL_UART_IIDX_EOT_DONE" in uart and
@@ -148,12 +148,12 @@ def main():
           "AM13E_FLASH_FW2_PARAM_BASE" not in partition and
           "FLASH_RESERVED" in ld,"Rev1.4 Reserved partition missing")
 
-    rx=src("mcu/AM13E/command_capture.c")
+    rx=src("mcu/AM13E/hal/command_capture.c")
     isr=rx.split("void ECAP0_IRQHandler(void)")[1]
     check(isr.index("am13e_pb14_bidir_tx_start(") <
           isr.index("am13e_pb14_decoder_pulse("),
           "Rel17 inverted DShot reply must be queued before CRC")
-    dma=src("mcu/AM13E/command_reply.c").split("void DMA0_IRQHandler(void)")[1]
+    dma=src("mcu/AM13E/hal/command_reply.c").split("void DMA0_IRQHandler(void)")[1]
     check("am13e_app_io_bidir_telemetry_levels(" in dma,
           "NEXT BiDShot payload must be prepared at TX DMA completion")
     decoder=src("mcu/AM13E/command_decode.c")
@@ -167,7 +167,7 @@ def main():
           "am13e_app_pb14_service_takeover()" in uart and
           "!am13e_app_io_service_idle()" in uart,
           "Conditional HIGH CLI entry must be reachable and idle/capture gated")
-    reset=src("mcu/AM13E/service_reset.c")
+    reset=src("mcu/AM13E/hal/service_reset.c")
     check(reset.index("am13e_app_motor_fault_shutdown();") <
           reset.index("NVIC_SystemReset();") and
           "am13e_app_service_reset();" in uart,
@@ -175,24 +175,24 @@ def main():
     app_source=src("src/main.c")
     check("int y=am13e_app_park_level();" in app_source and
           "am13e_app_erpm_write(0)" in app_source and
-          "PARK_PIN needs explicit AM13E" in src("mcu/AM13E/aux_gpio.c"),
+          "PARK_PIN needs explicit AM13E" in src("mcu/AM13E/hal/aux_gpio.c"),
           "Conditional PARK/ERPM require real native source hooks/routing guards")
     check("AM13E_PB14_RX_ONESHOT" in decoder and
           "1200000U" in src("mcu/AM13E/bidir_timing.c") and
           "rx_mode=AM13E_PB14_RX_UNDECIDED" not in
           decoder.split("void am13e_pb14_decoder_idle(")[1],
           "Missing Oneshot125/DShot1200 or upstream receiver mode semantics")
-    gate=src("boot/mcu/AM13E/app.c")
+    gate=src("boot/mcu/AM13E/hal/app.c")
     check("boot_am13e_quiesce();" in gate and
-          "boot_am13e_release_io();" in src("boot/mcu/AM13E/handoff.c") and
-          "TMU_LVF_INT_IRQn" in src("boot/mcu/AM13E/handoff.c"),
+          "boot_am13e_release_io();" in src("boot/mcu/AM13E/hal/handoff.c") and
+          "TMU_LVF_INT_IRQn" in src("boot/mcu/AM13E/hal/handoff.c"),
           "Boot handoff must release IO and clear only implemented IRQ state")
     check('"${REPO_ROOT}/boot/src/util.c"' in
           src("boot/tests/am13e_host/CMakeLists.txt") and
           "uint32_t crc32(" not in src("boot/tests/am13e_protocol_host_test.c"),
           "Boot protocol tests must exercise production CRC adapter")
     gate_impl=src("boot/mcu/AM13E/app_validity.c")
-    flash=src("boot/mcu/AM13E/flash.c")
+    flash=src("boot/mcu/AM13E/hal/flash.c")
     build=src("CMakeLists.txt")
     profile=src("mcu/AM13E/profiles/image_rel17_v14.cmake")
     packer=src("boot/tools/pack_am13e_rel17.py")
@@ -221,7 +221,7 @@ def main():
           "SIGNATURE_OFFSET" not in packer,
           "Flat packer must use actual linked size, without embedded CRC")
     check("am13e_power_stage_attach(" not in
-          src("mcu/AM13E/motor_power_stage.c"),
+          src("mcu/AM13E/hal/motor_power_stage.c"),
           "Unqualified Reference power-stage attach unexpectedly enabled")
 
     result={

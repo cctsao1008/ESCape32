@@ -19,7 +19,7 @@ This host test now compiles the **real production sources**:
 `boot/src/main.c` (entry renamed only in the host wrapper),
 `boot/src/io.c` (recvval/recvdata/senddata),
 `boot/mcu/AM13E/flash_range.c`,
-`boot/mcu/AM13E/flash.c` and
+`boot/mcu/AM13E/hal/flash.c` and
 `boot/mcu/AM13E/image_integrity.c`.
 
 The mocked boundary is **only** the PB14 byte-stream transport, TI Flash
@@ -65,7 +65,7 @@ behavior, or production motor-control firmware. This is a command/framing
 
 Stage C2 produces a linked ARM image with its **physical** Reset Handler
 at 0x6811 (subject to ARM compiler output). Stage C3 tests that image against
-the **actual production** `boot/mcu/AM13E/flash.c` transaction implementation,
+the **actual production** `boot/mcu/AM13E/hal/flash.c` transaction implementation,
 via the native-GCC Mock Flash controller.
 
 The host maps Flash at `0x10006000` because Linux cannot directly map

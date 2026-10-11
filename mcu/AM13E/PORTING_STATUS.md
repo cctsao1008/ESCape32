@@ -468,7 +468,7 @@ on Application-matched ARM GNU GCC **15.2.1**.
 
 The temporary non-flashable ELF used the REAL TI
 `source/driverlib/am13e230x/dl_fri.c` plus the TI
-`startup_gcc_arm.c` and `mcu/AM13E/irq_vectors.c`, linked
+`startup_gcc_arm.c` and `mcu/AM13E/hal/irq_vectors.c`, linked
 under `linker_app_reference.ld`.
 
 Verified link facts:
@@ -637,7 +637,7 @@ been compiled with ARM GCC or validated on hardware**.
 
 - `mcu/AM13E/clock_backend.h`: nominal 25MHz XTAL, 400MHz
   VCO, 200MHz MCLK interface constants and return contract.
-- `mcu/AM13E/clock_source_reference.c`: actual TI SYSCTL/FRI
+- `mcu/AM13E/hal/clock_source_reference.c`: actual TI SYSCTL/FRI
   register control. PDIV=/2, QDIV register=31 (effective ×32),
   SYSPLLCLK0 RDIV=/2, source=HFCLK; selects the factory
   feedback-input 8..16MHz tuning bin for fLOOPIN=12.5MHz.
@@ -817,7 +817,7 @@ oscillator running on silicon or an Application ELF.**
 ## E1-C reset-cause WSL PASS; baseline SYSOSC/SysTick backend awaiting compile (2026-10-09)
 
 Newest user `e1c-resetcause-build.log` records
-`[1/1] Building ... mcu/AM13E/reset_cause.c.obj` with no
+`[1/1] Building ... mcu/AM13E/hal/reset_cause.c.obj` with no
 diagnostics. The `e1c-resetcause-symbols.log` audit confirms:
 
 | Evidence | Value |
@@ -917,7 +917,7 @@ CMake build**:
 
 ### First genuine board-independent DriverLib slice (pending WSL build)
 
-New `mcu/AM13E/reset_cause.c` reads actual
+New `mcu/AM13E/hal/reset_cause.c` reads actual
 `DL_SYSCTL_getResetCause()` and translates
 `DL_SYSCTL_RESET_CAUSE_BOOTWWDT0` into the Rel17 logical
 watchdog/reset-arm flags. This is real TI SYSCTL access, **not**
@@ -1124,7 +1124,7 @@ TI `startup_gcc_arm.c` uses strong/weak CMSIS names
 and declares `extern int main(void)`. Rel17 has lowercase
 `sys_tick_handler`, `pend_sv_handler`, `hard_fault_handler`.
 Added **strong non-stub interrupt dispatchers** in
-`mcu/AM13E/irq_vectors.c`, their prototypes in
+`mcu/AM13E/hal/irq_vectors.c`, their prototypes in
 `irq_vectors.h`, and the platform-specific adapter object
 in the AM13E Application CMake target. For AM13E only, main
 now has the TI startup-compatible `int main(void)` signature;
@@ -1715,7 +1715,7 @@ on Application-matched ARM GNU GCC **15.2.1**.
 
 The temporary non-flashable ELF used the REAL TI
 `source/driverlib/am13e230x/dl_fri.c` plus the TI
-`startup_gcc_arm.c` and `mcu/AM13E/irq_vectors.c`, linked
+`startup_gcc_arm.c` and `mcu/AM13E/hal/irq_vectors.c`, linked
 under `linker_app_reference.ld`.
 
 Verified link facts:
@@ -1884,7 +1884,7 @@ been compiled with ARM GCC or validated on hardware**.
 
 - `mcu/AM13E/clock_backend.h`: nominal 25MHz XTAL, 400MHz
   VCO, 200MHz MCLK interface constants and return contract.
-- `mcu/AM13E/clock_source_reference.c`: actual TI SYSCTL/FRI
+- `mcu/AM13E/hal/clock_source_reference.c`: actual TI SYSCTL/FRI
   register control. PDIV=/2, QDIV register=31 (effective ×32),
   SYSPLLCLK0 RDIV=/2, source=HFCLK; selects the factory
   feedback-input 8..16MHz tuning bin for fLOOPIN=12.5MHz.
@@ -2064,7 +2064,7 @@ oscillator running on silicon or an Application ELF.**
 ## E1-C reset-cause WSL PASS; baseline SYSOSC/SysTick backend awaiting compile (2026-10-09)
 
 Newest user `e1c-resetcause-build.log` records
-`[1/1] Building ... mcu/AM13E/reset_cause.c.obj` with no
+`[1/1] Building ... mcu/AM13E/hal/reset_cause.c.obj` with no
 diagnostics. The `e1c-resetcause-symbols.log` audit confirms:
 
 | Evidence | Value |
@@ -2164,7 +2164,7 @@ CMake build**:
 
 ### First genuine board-independent DriverLib slice (pending WSL build)
 
-New `mcu/AM13E/reset_cause.c` reads actual
+New `mcu/AM13E/hal/reset_cause.c` reads actual
 `DL_SYSCTL_getResetCause()` and translates
 `DL_SYSCTL_RESET_CAUSE_BOOTWWDT0` into the Rel17 logical
 watchdog/reset-arm flags. This is real TI SYSCTL access, **not**
@@ -2371,7 +2371,7 @@ TI `startup_gcc_arm.c` uses strong/weak CMSIS names
 and declares `extern int main(void)`. Rel17 has lowercase
 `sys_tick_handler`, `pend_sv_handler`, `hard_fault_handler`.
 Added **strong non-stub interrupt dispatchers** in
-`mcu/AM13E/irq_vectors.c`, their prototypes in
+`mcu/AM13E/hal/irq_vectors.c`, their prototypes in
 `irq_vectors.h`, and the platform-specific adapter object
 in the AM13E Application CMake target. For AM13E only, main
 now has the TI startup-compatible `int main(void)` signature;
@@ -3062,7 +3062,7 @@ on Application-matched ARM GNU GCC **15.2.1**.
 
 The temporary non-flashable ELF used the REAL TI
 `source/driverlib/am13e230x/dl_fri.c` plus the TI
-`startup_gcc_arm.c` and `mcu/AM13E/irq_vectors.c`, linked
+`startup_gcc_arm.c` and `mcu/AM13E/hal/irq_vectors.c`, linked
 under `linker_app_reference.ld`.
 
 Verified link facts:
@@ -3231,7 +3231,7 @@ been compiled with ARM GCC or validated on hardware**.
 
 - `mcu/AM13E/clock_backend.h`: nominal 25MHz XTAL, 400MHz
   VCO, 200MHz MCLK interface constants and return contract.
-- `mcu/AM13E/clock_source_reference.c`: actual TI SYSCTL/FRI
+- `mcu/AM13E/hal/clock_source_reference.c`: actual TI SYSCTL/FRI
   register control. PDIV=/2, QDIV register=31 (effective ×32),
   SYSPLLCLK0 RDIV=/2, source=HFCLK; selects the factory
   feedback-input 8..16MHz tuning bin for fLOOPIN=12.5MHz.
@@ -3411,7 +3411,7 @@ oscillator running on silicon or an Application ELF.**
 ## E1-C reset-cause WSL PASS; baseline SYSOSC/SysTick backend awaiting compile (2026-10-09)
 
 Newest user `e1c-resetcause-build.log` records
-`[1/1] Building ... mcu/AM13E/reset_cause.c.obj` with no
+`[1/1] Building ... mcu/AM13E/hal/reset_cause.c.obj` with no
 diagnostics. The `e1c-resetcause-symbols.log` audit confirms:
 
 | Evidence | Value |
@@ -3511,7 +3511,7 @@ CMake build**:
 
 ### First genuine board-independent DriverLib slice (pending WSL build)
 
-New `mcu/AM13E/reset_cause.c` reads actual
+New `mcu/AM13E/hal/reset_cause.c` reads actual
 `DL_SYSCTL_getResetCause()` and translates
 `DL_SYSCTL_RESET_CAUSE_BOOTWWDT0` into the Rel17 logical
 watchdog/reset-arm flags. This is real TI SYSCTL access, **not**
@@ -3718,7 +3718,7 @@ TI `startup_gcc_arm.c` uses strong/weak CMSIS names
 and declares `extern int main(void)`. Rel17 has lowercase
 `sys_tick_handler`, `pend_sv_handler`, `hard_fault_handler`.
 Added **strong non-stub interrupt dispatchers** in
-`mcu/AM13E/irq_vectors.c`, their prototypes in
+`mcu/AM13E/hal/irq_vectors.c`, their prototypes in
 `irq_vectors.h`, and the platform-specific adapter object
 in the AM13E Application CMake target. For AM13E only, main
 now has the TI startup-compatible `int main(void)` signature;
@@ -4309,7 +4309,7 @@ on Application-matched ARM GNU GCC **15.2.1**.
 
 The temporary non-flashable ELF used the REAL TI
 `source/driverlib/am13e230x/dl_fri.c` plus the TI
-`startup_gcc_arm.c` and `mcu/AM13E/irq_vectors.c`, linked
+`startup_gcc_arm.c` and `mcu/AM13E/hal/irq_vectors.c`, linked
 under `linker_app_reference.ld`.
 
 Verified link facts:
@@ -4478,7 +4478,7 @@ been compiled with ARM GCC or validated on hardware**.
 
 - `mcu/AM13E/clock_backend.h`: nominal 25MHz XTAL, 400MHz
   VCO, 200MHz MCLK interface constants and return contract.
-- `mcu/AM13E/clock_source_reference.c`: actual TI SYSCTL/FRI
+- `mcu/AM13E/hal/clock_source_reference.c`: actual TI SYSCTL/FRI
   register control. PDIV=/2, QDIV register=31 (effective ×32),
   SYSPLLCLK0 RDIV=/2, source=HFCLK; selects the factory
   feedback-input 8..16MHz tuning bin for fLOOPIN=12.5MHz.
@@ -4658,7 +4658,7 @@ oscillator running on silicon or an Application ELF.**
 ## E1-C reset-cause WSL PASS; baseline SYSOSC/SysTick backend awaiting compile (2026-10-09)
 
 Newest user `e1c-resetcause-build.log` records
-`[1/1] Building ... mcu/AM13E/reset_cause.c.obj` with no
+`[1/1] Building ... mcu/AM13E/hal/reset_cause.c.obj` with no
 diagnostics. The `e1c-resetcause-symbols.log` audit confirms:
 
 | Evidence | Value |
@@ -4758,7 +4758,7 @@ CMake build**:
 
 ### First genuine board-independent DriverLib slice (pending WSL build)
 
-New `mcu/AM13E/reset_cause.c` reads actual
+New `mcu/AM13E/hal/reset_cause.c` reads actual
 `DL_SYSCTL_getResetCause()` and translates
 `DL_SYSCTL_RESET_CAUSE_BOOTWWDT0` into the Rel17 logical
 watchdog/reset-arm flags. This is real TI SYSCTL access, **not**
@@ -4965,7 +4965,7 @@ TI `startup_gcc_arm.c` uses strong/weak CMSIS names
 and declares `extern int main(void)`. Rel17 has lowercase
 `sys_tick_handler`, `pend_sv_handler`, `hard_fault_handler`.
 Added **strong non-stub interrupt dispatchers** in
-`mcu/AM13E/irq_vectors.c`, their prototypes in
+`mcu/AM13E/hal/irq_vectors.c`, their prototypes in
 `irq_vectors.h`, and the platform-specific adapter object
 in the AM13E Application CMake target. For AM13E only, main
 now has the TI startup-compatible `int main(void)` signature;

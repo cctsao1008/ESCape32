@@ -81,17 +81,17 @@ def main():
     # These tests must use the IMPLEMENTED runtime functions. A
     # disconnected test-only model is not an acceptable coverage claim.
     required_symbols={
-        "mcu/AM13E/command_capture.c":[
+        "mcu/AM13E/hal/command_capture.c":[
             "am13e_pb14_capture_snapshot_valid(",
             "am13e_pb14_decoder_abort("],
-        "mcu/AM13E/command_reply.c":[
+        "mcu/AM13E/hal/command_reply.c":[
             "am13e_bidir_turnaround_ticks("],
-        "mcu/AM13E/motor_bemf.c":[
+        "mcu/AM13E/hal/motor_bemf.c":[
             "am13e_bemf_sample_plan(",
             "am13e_app_motor_on_bemf_event("],
         "src/main.c":["am13e_bemf_policy_plan(",
                       "am13e_app_motor_bemf_commutation_delay_us("],
-        "mcu/AM13E/motor_safety.c":[
+        "mcu/AM13E/hal/motor_safety.c":[
             "am13e_motor_owner_next(",
             "AM13E_OWNER_EVENT_SIXSTEP",
             "AM13E_OWNER_EVENT_SINE",
@@ -99,7 +99,7 @@ def main():
             "AM13E_OWNER_EVENT_MUSIC_START",
             "AM13E_OWNER_EVENT_PCM_START",
             "AM13E_OWNER_EVENT_AUDIO_END"],
-        "mcu/AM13E/motor_power_stage.c":["gate_hold_inactive()"]
+        "mcu/AM13E/hal/motor_power_stage.c":["gate_hold_inactive()"]
     }
     for src,needles in required_symbols.items():
         code=(root/src).read_text()
@@ -108,14 +108,14 @@ def main():
                                    " : "+symbol)
 
     cmake=(root/"CMakeLists.txt").read_text()
-    stage=(root/"mcu/AM13E/motor_power_stage.c").read_text()
-    fault=(root/"mcu/AM13E/fault_input.c").read_text()
-    vectors=(root/"mcu/AM13E/irq_vectors.c").read_text()
-    motor=(root/"mcu/AM13E/motor_safety.c").read_text()
+    stage=(root/"mcu/AM13E/hal/motor_power_stage.c").read_text()
+    fault=(root/"mcu/AM13E/hal/fault_input.c").read_text()
+    vectors=(root/"mcu/AM13E/hal/irq_vectors.c").read_text()
+    motor=(root/"mcu/AM13E/hal/motor_safety.c").read_text()
     cfg=(root/"mcu/AM13E/board_configuration.h").read_text()
-    for item in ("mcu/AM13E/motor_fault_route.c",
-                 "mcu/AM13E/fault_trip_backend.c",
-                 "mcu/AM13E/telem_uc2_preflight.c"):
+    for item in ("mcu/AM13E/hal/motor_fault_route.c",
+                 "mcu/AM13E/hal/fault_trip_backend.c",
+                 "mcu/AM13E/hal/telem_uc2_preflight.c"):
         require(item not in app,"Excluded physical protection/UART linked "+item)
     # Current Reference hardware is deliberately unqualified. This is
     # an evidence gate, not a permanent exception to source-defined

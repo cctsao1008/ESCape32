@@ -28,9 +28,9 @@
       "id": "dshot_rx_capture",
       "label": "PB14 ECAP0 PWM/DShot150/300/600 RX, capture-race rejection",
       "sources": [
-        "mcu/AM13E/command_capture.c",
+        "mcu/AM13E/hal/command_capture.c",
         "mcu/AM13E/command_decode.c",
-        "mcu/AM13E/command_input_route_backend.c"
+        "mcu/AM13E/hal/command_input_route_backend.c"
       ],
       "host_tests": [
         "command_decode",
@@ -41,7 +41,7 @@
       "id": "bidir_reply",
       "label": "PB14 GCR/NRZI BiDShot reply, 30us final-edge turnaround",
       "sources": [
-        "mcu/AM13E/command_reply.c",
+        "mcu/AM13E/hal/command_reply.c",
         "mcu/AM13E/bidir_codec.c",
         "mcu/AM13E/bidir_timing.c"
       ],
@@ -57,7 +57,7 @@
       "sources": [
         "mcu/AM13E/motor_phase_plan.c",
         "mcu/AM13E/motor_aq_plan.c",
-        "mcu/AM13E/motor_safety.c"
+        "mcu/AM13E/hal/motor_safety.c"
       ],
       "host_tests": [
         "motor_phase",
@@ -85,8 +85,8 @@
       "id": "motor_sine",
       "label": "Original 360-entry sine table and runtime modulation",
       "sources": [
-        "mcu/AM13E/motor_sine_table.c",
-        "mcu/AM13E/motor_safety.c"
+        "mcu/AM13E/preset.c",
+        "mcu/AM13E/hal/motor_safety.c"
       ],
       "host_tests": [
         "sine_carrier",
@@ -97,7 +97,7 @@
       "id": "motor_braking",
       "label": "Drag and Lock brake AQ with motor/audio ownership",
       "sources": [
-        "mcu/AM13E/motor_safety.c",
+        "mcu/AM13E/hal/motor_safety.c",
         "mcu/AM13E/motor_aq_plan.c"
       ],
       "host_tests": [
@@ -110,9 +110,9 @@
       "id": "motor_bemf",
       "label": "CMPSS ECAP1 BEMF edge/timeout -> Rel17 policy -> TIMG12",
       "sources": [
-        "mcu/AM13E/motor_bemf.c",
+        "mcu/AM13E/hal/motor_bemf.c",
         "mcu/AM13E/motor_bemf_event_plan.c",
-        "mcu/AM13E/motor_event_timer.c"
+        "mcu/AM13E/hal/motor_event_timer.c"
       ],
       "host_tests": [
         "bemf_clock",
@@ -125,10 +125,10 @@
       "id": "motor_music_pcm",
       "label": "Exclusive MCPWM0 Music/PCM and TIMG12 PCM clock",
       "sources": [
-        "mcu/AM13E/motor_audio.c",
+        "mcu/AM13E/hal/motor_audio.c",
         "mcu/AM13E/motor_audio_plan.c",
         "mcu/AM13E/motor_ownership_plan.c",
-        "mcu/AM13E/motor_safety.c"
+        "mcu/AM13E/hal/motor_safety.c"
       ],
       "host_tests": [
         "motor_audio",
@@ -139,8 +139,8 @@
       "id": "vbus_ntc_adc",
       "label": "PA6 NTC and PA28 VBUS real ADC model",
       "sources": [
-        "mcu/AM13E/analog_sampling_backend.c",
-        "mcu/AM13E/analog_runtime.c",
+        "mcu/AM13E/hal/analog_sampling_backend.c",
+        "mcu/AM13E/hal/analog_runtime.c",
         "mcu/AM13E/analog_calibration_plan.c"
       ],
       "host_tests": [
@@ -152,7 +152,7 @@
       "id": "config_flash",
       "label": "FW1 Rel17 settings persistence and ECC writer",
       "sources": [
-        "mcu/AM13E/cfg_flash_runtime.c",
+        "mcu/AM13E/hal/cfg_flash_runtime.c",
         "mcu/AM13E/cfg_flash_plan.c",
         "mcu/AM13E/cfg_flash_writer.c"
       ],
@@ -166,7 +166,7 @@
       "label": "SysTick, verified reference clock and arming window",
       "sources": [
         "mcu/AM13E/config.c",
-        "mcu/AM13E/board_clock_reference.c",
+        "mcu/AM13E/hal/board_clock_reference.c",
         "mcu/AM13E/arming_window.c"
       ],
       "host_tests": [
@@ -178,8 +178,8 @@
       "id": "watchdog_policy",
       "label": "PB14-valid-command WWDT0 feed; physical reset still unverified",
       "sources": [
-        "mcu/AM13E/input_watchdog.c",
-        "mcu/AM13E/command_capture.c"
+        "mcu/AM13E/hal/input_watchdog.c",
+        "mcu/AM13E/hal/command_capture.c"
       ],
       "host_tests": [
         "command_decode",
@@ -190,7 +190,7 @@
       "id": "analog_receiver_conditional",
       "label": "Original Rel17 input_mode=1 conditional ADC0 SOC2 analog receiver (board-owned signal path; HW pending)",
       "sources": [
-        "mcu/AM13E/analog_runtime.c",
+        "mcu/AM13E/hal/analog_runtime.c",
         "mcu/AM13E/analog_calibration_plan.c",
         "src/main.c"
       ],
@@ -203,7 +203,7 @@
       "label": "Original iBUS/SBUS/CRSF RX via conditional TI UNICOMM IRQ/FIFO (Synthetic Full ARM Link; physical pending)",
       "sources": [
         "mcu/AM13E/serial_frame_rx.c",
-        "mcu/AM13E/serial_uart_rx.c",
+        "mcu/AM13E/hal/serial_uart_rx.c",
         "mcu/AM13E/ibus_receiver.c",
         "mcu/AM13E/sbus_receiver.c",
         "mcu/AM13E/crsf_receiver.c",
@@ -222,11 +222,11 @@
       "sources": [
         "mcu/AM13E/crsf_command_reply.c",
         "mcu/AM13E/serial_tx_queue.c",
-        "mcu/AM13E/serial_uart_rx.c",
+        "mcu/AM13E/hal/serial_uart_rx.c",
         "src/io.c",
         "src/prog.c",
         "mcu/AM13E/crsf_deferred_command.c",
-        "mcu/AM13E/irq_vectors.c"
+        "mcu/AM13E/hal/irq_vectors.c"
       ],
       "host_tests": [
         "crsf_command_reply",
@@ -240,7 +240,7 @@
       "sources": [
         "mcu/AM13E/exbus_receiver.c",
         "mcu/AM13E/serial_frame_rx.c",
-        "mcu/AM13E/serial_uart_rx.c",
+        "mcu/AM13E/hal/serial_uart_rx.c",
         "src/io.c",
         "mcu/AM13E/exbus_autobaud.c",
         "mcu/AM13E/exbus_telemetry_reply.c",
@@ -259,7 +259,7 @@
       "sources": [
         "mcu/AM13E/hott_receiver.c",
         "mcu/AM13E/serial_frame_rx.c",
-        "mcu/AM13E/serial_uart_rx.c",
+        "mcu/AM13E/hal/serial_uart_rx.c",
         "src/io.c"
       ],
       "host_tests": [
@@ -271,7 +271,7 @@
       "id": "native_serial_mode2",
       "label": "Rel17 Serial input_mode=2 460800 baud CRC8 command/reply and original throttle/brake policy, conditional UART (hardware pending)",
       "sources": [
-        "mcu/AM13E/serial_uart_rx.c",
+        "mcu/AM13E/hal/serial_uart_rx.c",
         "mcu/AM13E/serial_frame_rx.c",
         "mcu/AM13E/serial_command.c",
         "src/io.c"
@@ -286,7 +286,7 @@
       "label": "Rel17 KISS/iBUS/S.Port/CRSF/MSB/HoTT source telemetry, optional two-wire UNICOMM FIFO/EOT and bounded 128B queue, physical PHY unqualified",
       "sources": [
         "src/telem.c",
-        "mcu/AM13E/telem_backend.c",
+        "mcu/AM13E/hal/telem_backend.c",
         "mcu/AM13E/telem_frame_rx.c",
         "mcu/AM13E/telem_tx_progress.c",
         "mcu/AM13E/serial_tx_queue.c"
@@ -330,7 +330,7 @@
       "id": "gate_enable",
       "label": "PB13 Gate Driver Enable output initialized inactive",
       "sources": [
-        "mcu/AM13E/motor_power_stage.c"
+        "mcu/AM13E/hal/motor_power_stage.c"
       ],
       "host_tests": [
         "board_configuration",
@@ -341,7 +341,7 @@
       "id": "driver_nfault",
       "label": "PB15 nFAULT GPIO input, IRQ/OST1 currently unconnected",
       "sources": [
-        "mcu/AM13E/fault_input.c"
+        "mcu/AM13E/hal/fault_input.c"
       ],
       "host_tests": [
         "board_configuration"
@@ -351,7 +351,7 @@
       "id": "independent_oc",
       "label": "Optional OC GPIO input, OST2 currently unconnected",
       "sources": [
-        "mcu/AM13E/fault_input.c"
+        "mcu/AM13E/hal/fault_input.c"
       ],
       "host_tests": [
         "board_configuration",
@@ -362,7 +362,7 @@
       "id": "serial_telemetry_tx",
       "label": "Optional Serial TX GPIO input/Hi-Z, UART protocol adapter pending",
       "sources": [
-        "mcu/AM13E/fault_input.c"
+        "mcu/AM13E/hal/fault_input.c"
       ],
       "host_tests": [
         "board_configuration",
@@ -373,7 +373,7 @@
       "id": "current_limiting",
       "label": "Optional current analog pad config, current-limit backend pending",
       "sources": [
-        "mcu/AM13E/fault_input.c"
+        "mcu/AM13E/hal/fault_input.c"
       ],
       "host_tests": [
         "adc_scaling",

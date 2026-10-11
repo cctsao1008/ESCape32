@@ -42,7 +42,7 @@ operation on a physical board.
 - `src/main.c` and the other original ESCape32 Rel17 sources
   own FW1 control and application behavior.
 - `mcu/AM13E/config.c`,
-  `mcu/AM13E/clock_source_reference.c` and
+  `mcu/AM13E/hal/clock_source_reference.c` and
   `mcu/AM13E/clock_backend.h` own **AM13E MCU adaptation**.
 - TI SDK/CMSIS/DriverLib supply low-level peripheral access
   just as libopencm3 supports existing STM32 targets.

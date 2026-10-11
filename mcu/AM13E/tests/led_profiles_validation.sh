@@ -25,7 +25,7 @@ for flags in \
   "-DLED_MAP=0xAF -DLED_OD $route" \
   "-DLED_WS2812 $route"; do
   if cc -std=c11 -DAM13E -Isrc -Imcu/AM13E -Imcu/AM13E/tests/aux_mock \
-    -fsyntax-only $flags mcu/AM13E/aux_gpio.c >"$logs/led-negative.log" 2>&1; then
+    -fsyntax-only $flags mcu/AM13E/hal/aux_gpio.c >"$logs/led-negative.log" 2>&1; then
     echo 'FAIL invalid or missing LED capability accepted'; exit 1
   fi
   grep -Eq 'needs explicit AM13E|LED route conflicts|cannot share a pin|remains unimplemented' "$logs/led-negative.log"

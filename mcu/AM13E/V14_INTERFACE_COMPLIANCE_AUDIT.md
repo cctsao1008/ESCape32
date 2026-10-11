@@ -41,10 +41,10 @@ prove electrical behavior or full feature parity.
 | C05 | `src/io.c::am13e_app_io_servo_pulse`, `command_decode.c` | MAPPED; input-mode/timing pending |
 | B01 | `boot/mcu/AM13E/flash_range.c::boot_am13e_read_range` | MAPPED; APP-only bounds |
 | B02 | `boot/mcu/AM13E/flash_range.c::boot_am13e_write_range` + original `write()` | **Original Rel17 Boot write() restored**; Host CTest aliases name only |
-| B03 | `boot/mcu/AM13E/device.c::boot_am13e_device_id` | MAPPED; original 32-byte response |
-| B04 | `boot/mcu/AM13E/app.c::boot_am13e_application_valid` | MAPPED; Cfg.id=0x32EA + M33 APP vectors |
-| B05 | `boot/mcu/AM13E/app.c::boot_am13e_launch_application` | MAPPED; real handoff pending silicon |
-| B06 / A13 | `boot/mcu/AM13E/device.c::boot_am13e_take_reboot_ack` | Independently linked Boot reset-cause policy |
+| B03 | `boot/mcu/AM13E/hal/device.c::boot_am13e_device_id` | MAPPED; original 32-byte response |
+| B04 | `boot/mcu/AM13E/hal/app.c::boot_am13e_application_valid` | MAPPED; Cfg.id=0x32EA + M33 APP vectors |
+| B05 | `boot/mcu/AM13E/hal/app.c::boot_am13e_launch_application` | MAPPED; real handoff pending silicon |
+| B06 / A13 | `boot/mcu/AM13E/hal/device.c::boot_am13e_take_reboot_ack` | Independently linked Boot reset-cause policy |
 
 **Status clarification:** MAPPED refers only to an identifiable
 function/semantic path; it does not mean the exact proposed
@@ -56,7 +56,7 @@ function/semantic path; it does not mean the exact proposed
 | --- | --- | --- |
 | Keep original shared code, App + Boot directories | `src/`, `mcu/AM13E/`, `boot/src/`, `boot/mcu/AM13E/` with legacy targets retained | MATCHED |
 | Reuse original `init/initio/compctl/adctrig/adcdata` | Current native implementation defines these entry hooks | MAPPED; conditional modes pending |
-| Original Rel17 Boot `write()` | Production `boot/mcu/AM13E/flash.c` now exports `write`; parser calls it directly | FIXED; native Host only renames to avoid POSIX libc collision |
+| Original Rel17 Boot `write()` | Production `boot/mcu/AM13E/hal/flash.c` now exports `write`; parser calls it directly | FIXED; native Host only renames to avoid POSIX libc collision |
 | Original Boot `update()` / `setwrp()` | Conditional SRAM_C Boot update executor and NONMAIN Off/Boot/Full planner/writer are Recovery-gated; default Reference still final RES_ERROR | **SOFTWARE CONDITIONAL — PHYSICAL QUALIFICATION MISSING** |
 | Source-defined conditional input and telemetry | Native Serial mode2, iBUS/SBUS/CRSF/EXBUS/HoTT/SUMD RX, source-based two-wire Telemetry, SBUS2 packet plan; physical half-duplex/DMA/Hall/board GPIO pending | PARTIAL — synthetic ARM evidence, NOT silicon acceptance |
 | Native `add_target()` with MCU-local `config.c/h/cmake/ld` | App/Boot `config.cmake` own real Source lists; `config.c` implement native `init()`; active Rel17 image profile selects their `config.ld` | ALIGNED for selected Reference source/linker; hardware still pending |

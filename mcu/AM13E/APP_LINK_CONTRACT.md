@@ -47,7 +47,7 @@ allowed when `AM13E_ENABLE_FW1_REL17_IMAGE=OFF`. The superseded
 
 Native source of truth:
 `boot/mcu/AM13E/app_validity.c`,
-`boot/mcu/AM13E/app.c`,
+`boot/mcu/AM13E/hal/app.c`,
 `mcu/AM13E/config.ld`,
 `boot/tools/pack_am13e_rel17.py`,
 `mcu/AM13E/tools/verify_rel17_image.py`.

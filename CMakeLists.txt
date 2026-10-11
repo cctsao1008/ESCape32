@@ -339,7 +339,7 @@ target_compile_options(AM13E_PORTABLE_LOGIC PRIVATE
 # Board-neutral ARM compile gate for real TI XBAR/MCPWM fault routing.
 # No pins, output levels, or reference profile are selected here.
 add_library(AM13E_MCU_FAULT_TRIP_BACKEND OBJECT EXCLUDE_FROM_ALL
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/fault_trip_backend.c")
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/fault_trip_backend.c")
 target_include_directories(AM13E_MCU_FAULT_TRIP_BACKEND SYSTEM PRIVATE
     "$<TARGET_PROPERTY:AM13E,INCLUDE_DIRECTORIES>")
 target_compile_definitions(AM13E_MCU_FAULT_TRIP_BACKEND PRIVATE
@@ -369,7 +369,7 @@ target_compile_options(AM13E_MCU_RUNTIME_TICK PRIVATE
 # Compile real TI ADC0/1/2 pair initialization without choosing
 # a sensor pin or external calibration; object-only, not executable.
 add_library(AM13E_MCU_ADC_PAIR_BACKEND OBJECT EXCLUDE_FROM_ALL
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/analog_sampling_backend.c")
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/analog_sampling_backend.c")
 target_include_directories(AM13E_MCU_ADC_PAIR_BACKEND PRIVATE
     "${PROJECT_SOURCE_DIR}/mcu/AM13E")
 target_include_directories(AM13E_MCU_ADC_PAIR_BACKEND SYSTEM PRIVATE
@@ -385,7 +385,7 @@ target_compile_options(AM13E_MCU_ADC_PAIR_BACKEND PRIVATE
 # Generic AM13E MCU digital command input / INPUTXBAR routing.
 # Explicit board route required; no output, oscillator or ADC defaults.
 add_library(AM13E_MCU_COMMAND_INPUT_ROUTE OBJECT EXCLUDE_FROM_ALL
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/command_input_route_backend.c")
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/command_input_route_backend.c")
 target_include_directories(AM13E_MCU_COMMAND_INPUT_ROUTE PRIVATE
     "${PROJECT_SOURCE_DIR}/mcu/AM13E")
 target_include_directories(AM13E_MCU_COMMAND_INPUT_ROUTE SYSTEM PRIVATE
@@ -401,7 +401,7 @@ target_compile_options(AM13E_MCU_COMMAND_INPUT_ROUTE PRIVATE
 # Source-only object, never a qualified ESC output executable.
 add_library(AM13E_MCU_MOTOR_PAD_BACKEND OBJECT EXCLUDE_FROM_ALL
     "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_output_route_plan.c"
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_output_backend.c")
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_output_backend.c")
 target_include_directories(AM13E_MCU_MOTOR_PAD_BACKEND PRIVATE
     "${PROJECT_SOURCE_DIR}/mcu/AM13E")
 target_include_directories(AM13E_MCU_MOTOR_PAD_BACKEND SYSTEM PRIVATE
@@ -428,8 +428,8 @@ if(AM13E_BUILD_CLOCK_DIAGNOSTIC)
     add_executable(AM13E_CLOCK.elf EXCLUDE_FROM_ALL
         "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_diagnostic_entry.c"
         "${PROJECT_SOURCE_DIR}/mcu/AM13E/config.c"
-        "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_source_reference.c"
-        "${PROJECT_SOURCE_DIR}/mcu/AM13E/board_clock_reference.c"
+        "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/clock_source_reference.c"
+        "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/board_clock_reference.c"
         "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_common.c"
         "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_fri.c"
         "${PROJECT_BINARY_DIR}/am13e-sdk-compat/startup_gcc_arm.c")

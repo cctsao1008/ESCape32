@@ -21,9 +21,9 @@ This is not silicon, recovery or full Boot Self-update evidence.
 
 1. Original ESCape32 Rel17 `boot/src/main.c`, `boot/src/io.c` and
    `boot/src/util.c` (upstream source is functional authority).
-2. Current `boot/src/main.c`, `boot/mcu/AM13E/flash.c`,
+2. Current `boot/src/main.c`, `boot/mcu/AM13E/hal/flash.c`,
    `boot/mcu/AM13E/config.ld`, `boot/src/common.h`,
-   `boot/mcu/AM13E/device.c`, `boot/tests/am13e_protocol_host_test.c`.
+   `boot/mcu/AM13E/hal/device.c`, `boot/tests/am13e_protocol_host_test.c`.
 3. TI AM13E230x TRM SPRUJF2B (August 2026 revision):
    §13.2 Flash banks, §13.3 Flash Controller (especially §13.3.1),
    §5.4 BCR / Fast Boot, §5.5 ROM BSL, §13.4 write protection.
@@ -102,9 +102,9 @@ Boot validity gate. The active FW1 launch remains
 - `boot/mcu/AM13E/update_staging.c`: real aligned 16KiB SRAM_S
   buffer with ordered/capacity/4-byte checks, abort zeroization,
   basic M33 reset-vector plausibility (not authenticity/completeness).
-- `boot/mcu/AM13E/flash.c`: implements **APP-only CMD_WRITE**
+- `boot/mcu/AM13E/hal/flash.c`: implements **APP-only CMD_WRITE**
   with 1 KiB logical / 2 KiB SRAM RMW, not Boot self-update.
-- `boot/mcu/AM13E/update_commit.c`: **quarantined** Boot-only
+- `boot/mcu/AM13E/hal/update_commit.c`: **quarantined** Boot-only
   eight-sector (2 KiB each) Erase/Program/byte-Verify executor.
   Firmware includes it in SRAM_C but the actual `CMD_UPDATE` parser
   **does not call it**. Its non-returning SRAM wrapper resets only on

@@ -94,7 +94,7 @@ def main():
                                      args.objcopy)
     startup = (args.sdk_root / "source/device/am13e230x/src"
                / "startup_gcc_arm.c")
-    adapter = repo / "mcu/AM13E/irq_vectors.c"
+    adapter = repo / "mcu/AM13E/hal/irq_vectors.c"
     linker = repo / "mcu/AM13E/linker_app_reference.ld"
     real_fri = (args.sdk_root / "source/driverlib/am13e230x"
                 / "dl_fri.c")

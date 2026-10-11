@@ -79,7 +79,7 @@ lifecycle or erase the Boot vector without qualified recovery.
 The approved and **now active** `AM13E_IMAGE_PROFILE=REL17_V14`
 build uses `Cfg.id=0x32EA` at the beginning of the `0x4000`
 configuration region and the M33 initial MSP/Thumb Reset PC at
-`APP_BASE=0x6000`. The active `boot/mcu/AM13E/app.c` and
+`APP_BASE=0x6000`. The active `boot/mcu/AM13E/hal/app.c` and
 `app_validity.c` no longer validate an APP+0x400 signature, APP+0x500
 header, or embedded image CRC. Those are superseded v1.6 ABI artifacts,
 not v1.4 Boot acceptance rules.
