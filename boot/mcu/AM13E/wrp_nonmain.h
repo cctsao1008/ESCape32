@@ -18,6 +18,8 @@
 typedef enum {
   AM13E_WRP_OFF=0,AM13E_WRP_BOOT=1,AM13E_WRP_FULL=2
 } AM13E_NonmainWrpMode;
+/* Original Rel17 command entry; Reference is always a no-op + NAK. */
+void setwrp(int type);
 bool boot_am13e_nonmain_wrp_prepare(const uint8_t *original,
     unsigned length,AM13E_NonmainWrpMode mode,uint8_t *planned,
     unsigned out_bytes,bool *needs_write);

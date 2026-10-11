@@ -97,7 +97,9 @@ if(AM13E_HOST_PACKED_IMAGE)
         "${REPO_ROOT}/boot/mcu/AM13E/flash_range.c"
         "${REPO_ROOT}/boot/mcu/AM13E/flash.c"
         "${REPO_ROOT}/boot/mcu/AM13E/app_validity.c"
-        "${REPO_ROOT}/boot/mcu/AM13E/update_staging.c")
+        "${REPO_ROOT}/boot/mcu/AM13E/update_staging.c"
+        "${REPO_ROOT}/boot/mcu/AM13E/wrp_nonmain.c"
+        "${REPO_ROOT}/boot/mcu/AM13E/wrp_nonmain_runtime.c")
     target_compile_features(am13e_boot_protocol_test PRIVATE c_std_11)
     target_compile_definitions(am13e_boot_protocol_test PRIVATE
         AM13E AM13E_FLASH_TEST IO_PB14)
