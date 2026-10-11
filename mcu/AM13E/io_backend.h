@@ -55,6 +55,10 @@ int am13e_app_io_ibus_frame(const uint8_t *frame,unsigned length);
  * SBUS2 telemetry request/slot scheduling is a separate MCU gap.
  */
 int am13e_app_io_sbus_frame(const uint8_t *frame,unsigned length);
+/* Original CRSF input_mode=5. Valid CRC refreshes WWDT; type 0x16
+ * updates original throttle/brake. Command response TX still missing.
+ */
+int am13e_app_io_crsf_frame(const uint8_t *frame,unsigned length);
 /* Read original Rel17 cfg.input_mode from src/io.c, avoiding
  * duplicate shared/MCU platform declarations in native IRQ modules.
  */

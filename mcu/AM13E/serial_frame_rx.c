@@ -1,6 +1,6 @@
-/* Native UART FIFO byte accumulator, no invented packet CRC.
- * Original iBUS uses 0x20,0x40 and 32 bytes; SBUS uses 0x0f and 25.
- * On UART parity/noise/frame/overrun errors, caller must abort RX.
+/* Original transport framing: iBUS 0x20/0x40 32B,
+ * SBUS 0x0f 25B, CRSF length+2 4..64B. CRC belongs to
+ * protocol receiver; do not invent a CRSF address constraint.
  */
 #include "serial_frame_rx.h"
 #include <string.h>
@@ -15,28 +15,46 @@ void am13e_serial_frame_abort(AM13E_SerialFrameRx *rx)
 {
     if(!rx)return;
     rx->used=0U;
+    rx->expected=0U;
     memset(rx->bytes,0,sizeof rx->bytes);
     ++rx->frame_errors;
 }
 bool am13e_serial_frame_byte(AM13E_SerialFrameRx *rx,uint8_t b,
-                             uint8_t ready[32],unsigned *len)
+                             uint8_t *out,unsigned capacity,
+                             unsigned *length)
 {
-    if(!rx||!ready||!len||(rx->mode!=3U&&rx->mode!=4U))return false;
-    const uint8_t start=rx->mode==3U?0x20U:0x0fU;
-    const unsigned total=rx->mode==3U?32U:25U;
+    if(!rx||!out||!length||capacity==0U||
+       (rx->mode!=3U&&rx->mode!=4U&&rx->mode!=5U))
+        return false;
     if(rx->used==0U){
-        if(b!=start)return false;
+        if((rx->mode==3U&&b!=0x20U)||
+           (rx->mode==4U&&b!=0x0fU))return false;
+        rx->expected=rx->mode==3U?32U:
+                     rx->mode==4U?25U:0U;
     } else if(rx->mode==3U&&rx->used==1U&&b!=0x40U){
-        /* Preserve potential 0x20 as the next header when a partial
-         * iBUS start was followed by another packet's first byte.
-         */
         rx->used=0U;
-        if(b!=start)return false;
+        rx->expected=32U;
+        if(b!=0x20U)return false;
+    } else if(rx->mode==5U&&rx->used==1U){
+        if(b<2U||b>62U){
+            am13e_serial_frame_abort(rx);
+            return false;
+        }
+        rx->expected=(unsigned)b+2U;
+    }
+    if(rx->used>=AM13E_SERIAL_MAX_FRAME){
+        am13e_serial_frame_abort(rx);
+        return false;
     }
     rx->bytes[rx->used++]=b;
-    if(rx->used!=total)return false;
-    memcpy(ready,rx->bytes,total);
-    *len=total;
+    if(rx->expected==0U||rx->used<rx->expected)return false;
+    if(rx->used!=rx->expected||capacity<rx->expected){
+        am13e_serial_frame_abort(rx);
+        return false;
+    }
+    memcpy(out,rx->bytes,rx->expected);
+    *length=rx->expected;
     rx->used=0U;
+    rx->expected=0U;
     return true;
 }
