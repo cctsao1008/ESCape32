@@ -1,6 +1,8 @@
 /* Original setwrp(0=Off,1=Boot,2=Full), TI NONMAIN bank0 NM1.
  * Compiles destructive operations ONLY for explicitly recovery-qualified
- * boards: ROM BSL/SWD and NONMAIN rollback + brownout tested.
+ * boards: ROM BSL/SWD, NONMAIN rollback, brownout AND observed
+ * Bank0+Bank1 latched WRP bit mapping tested. The reference build
+ * MUST NOT be activated by setting these synthetic CI flags.
  * Reference CMake has no qualification and remains NAK-only.
  */
 #include "wrp_nonmain.h"
@@ -9,10 +11,12 @@
 #if !defined(AM13E_BOOT_ROM_BSL_SWD_RECOVERY_TESTED) || \
     !defined(AM13E_BOOT_NONMAIN_REVERSIBILITY_TESTED) || \
     !defined(AM13E_BOOT_POWERLOSS_RECOVERY_TESTED) || \
+    !defined(AM13E_BOOT_WEP_BITMAP_READBACK_TESTED) || \
     (AM13E_BOOT_ROM_BSL_SWD_RECOVERY_TESTED!=1) || \
     (AM13E_BOOT_NONMAIN_REVERSIBILITY_TESTED!=1) || \
-    (AM13E_BOOT_POWERLOSS_RECOVERY_TESTED!=1)
-#error "Boot NONMAIN WRP requires verified ROM BSL/SWD, reversibility and power-loss recovery"
+    (AM13E_BOOT_POWERLOSS_RECOVERY_TESTED!=1) || \
+    (AM13E_BOOT_WEP_BITMAP_READBACK_TESTED!=1)
+#error "Boot NONMAIN WRP requires verified ROM BSL/SWD, reversibility and power-loss recovery plus WEP bitmap readback"
 #endif
 #include <soc.h>
 #include <dl_flash.h>

@@ -96,6 +96,7 @@ def main():
     check("AM13E_BOOT_ROM_BSL_SWD_RECOVERY_TESTED" in wrp and
           "AM13E_BOOT_NONMAIN_REVERSIBILITY_TESTED" in wrp and
           "AM13E_BOOT_POWERLOSS_RECOVERY_TESTED" in wrp and
+          "AM13E_BOOT_WEP_BITMAP_READBACK_TESTED" in wrp and
           "DL_FlashCTL_programMemory128WithECCGenerated(" in wrp and
           "void setwrp(int type)" in wrp and
           "requested==0x33" in protection and
