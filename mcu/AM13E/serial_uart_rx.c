@@ -191,4 +191,10 @@ void RX_HANDLER(void)
         }
     }
 }
+#else
+/* Default Reference provides no UART-backed receiver and exports
+ * no UART function or interrupt symbol. Keep strict ISO C happy
+ * without a fake-success serial implementation.
+ */
+enum { AM13E_REFERENCE_SERIAL_RX_DISABLED = 0 };
 #endif /* board-selected UART input only */
