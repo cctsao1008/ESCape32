@@ -9,6 +9,9 @@
 #include "io_backend.h"
 #include "command_capture.h"
 #include "serial_uart_rx.h"
+#ifdef AM13E_BOARD_TELEM_UART_CONFIGURED
+#include "telem_backend.h"
+#endif
 #include "motor_bemf.h"
 #include <dl_gpio.h>
 
@@ -18,6 +21,9 @@ void SysTick_Handler(void)
      * PB14 is serviced by its independent ECAP0 RX backend.
      */
     sys_tick_handler();
+#ifdef AM13E_BOARD_TELEM_UART_CONFIGURED
+    am13e_telem_hw_systick();
+#endif
     /* PB14 ECAP reference calibration / RX-only frame-gap processing. */
     am13e_app_pb14_systick();
     /* BEMF ECAP1 timeouts must be bounded even if no edge arrives. */

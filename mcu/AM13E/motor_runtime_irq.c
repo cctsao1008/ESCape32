@@ -20,6 +20,9 @@
 #include "command_capture.h"
 #include "command_reply.h"
 #include "serial_uart_rx.h"
+#ifdef AM13E_BOARD_TELEM_UART_CONFIGURED
+#include "telem_backend.h"
+#endif
 #include "io_backend.h" /* native access to original cfg.input_mode */
 /* Input mode is queried through original io.c policy owner. */
 #include "clock_backend.h"
@@ -95,6 +98,10 @@ void am13e_app_motor_runtime_enable_interrupts(void)
         am13e_app_io_input_mode()==6||
         am13e_app_io_input_mode()==7) &&
        !am13e_app_serial_rx_irq_ready())
+        irq_barrier_fault();
+#endif
+#ifdef AM13E_BOARD_TELEM_UART_CONFIGURED
+    if(!am13e_telem_hw_irq_ready())
         irq_barrier_fault();
 #endif
     if (!NVIC_GetEnableIRQ(ECAP0_INT_IRQn) ||

@@ -25,7 +25,7 @@
  * only from the AM13E FW1 product. The shared Extended DShot scheduler
  * below remains compiled and continues updating PB14 BiDShot payloads.
  */
-#if !defined(AM13E_PB14_ONLY)
+#if !defined(AM13E_PB14_ONLY) || defined(AM13E_BOARD_TELEM_UART_CONFIGURED)
 #if defined(AM13E)
 #include "telem_backend.h"
 #else
@@ -434,7 +434,7 @@ static void sendcrsf(void) {
 #endif /* !AM13E_PB14_ONLY: legacy UART telemetry and transports */
 
 void sendtelem(void) {
-#if !defined(AM13E_PB14_ONLY)
+#if !defined(AM13E_PB14_ONLY) || defined(AM13E_BOARD_TELEM_UART_CONFIGURED)
 	if (telreq && !telmode) { // KISS
 		sendkiss();
 		telreq = 0;
@@ -492,7 +492,7 @@ void sendtelem(void) {
 	__enable_irq();
 }
 
-#if !defined(AM13E_PB14_ONLY)
+#if !defined(AM13E_PB14_ONLY) || defined(AM13E_BOARD_TELEM_UART_CONFIGURED)
 void sendtelemdata(const char *buf, int len) {
 	__disable_irq();
 	char *pos = iopos;

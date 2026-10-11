@@ -756,7 +756,7 @@ void main(void) {
 	/* No LED wiring is defined for the generic AM13E target. */
 	initled();
 #endif
-#if !defined(AM13E_PB14_ONLY)
+#if !defined(AM13E_PB14_ONLY) || defined(AM13E_BOARD_TELEM_UART_CONFIGURED)
 	inittelem();
 #endif
 #ifndef ANALOG

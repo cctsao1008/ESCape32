@@ -33,6 +33,8 @@ bool am13e_telem_hw_tx_busy(void);
 void am13e_telem_hw_tx_start(const char *bytes, unsigned int length);
 void am13e_telem_hw_tx_byte(uint8_t byte, bool last_byte);
 void am13e_telem_hw_pause_rx(void);
+void am13e_telem_hw_systick(void);
+bool am13e_telem_hw_irq_ready(void);
 
 int am13e_telem_on_rx_frame(unsigned int received);
 void am13e_telem_on_tx_done(void);
