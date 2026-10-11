@@ -8,6 +8,7 @@
 #include "serial_uart_rx.h"
 #ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
 #include "serial_frame_rx.h"
+#include "exbus_autobaud.h"
 #ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
 #include "serial_tx_queue.h"
 #include "crsf_deferred_command.h"
@@ -123,6 +124,54 @@ static unsigned initialized;
  * SysTick while UART IRQ might be in flight.
  */
 static volatile uint32_t serial_rx_tick;
+/* Only UART IRQ creates a new EXBUS retry; PendSV owns the actual
+ * peripheral configuration. SysTick supplies time and pends PendSV,
+ * but never mutates UART hardware or shared RX parser.
+ */
+static AM13E_ExbusAutobaud exbus_baud;
+static volatile uint32_t exbus_change_requested_tick;
+static volatile uint32_t exbus_change_pending;
+
+static void exbus_request_retry(void)
+{
+    if(rx_state.mode!=6U || exbus_change_pending)return;
+    uint32_t new_baud=0U;
+    if(!am13e_exbus_autobaud_bad(&exbus_baud,&new_baud))
+        return;
+    (void)new_baud;
+    am13e_serial_frame_abort(&rx_state);
+    exbus_change_requested_tick=serial_rx_tick;
+    exbus_change_pending=1U;
+    /* No wait for UART Busy and no synchronous clock changes in ISR.
+     * The low-priority worker is re-pended after an idle guard time.
+     */
+}
+/* Fail closed on live RX: only PendSV may touch baud registers,
+ * and never while a UART character is being received or FIFO nonempty.
+ */
+void am13e_app_serial_exbus_service_pending(void)
+{
+    if(!initialized||rx_state.mode!=6U||!exbus_change_pending||
+       (uint32_t)(serial_rx_tick-exbus_change_requested_tick)<4U)
+        return;
+    NVIC_DisableIRQ(RX_IRQ);
+    __DSB();
+    if(exbus_change_pending && rx_state.mode==6U &&
+       DL_UART_isRXFIFOEmpty(RX_UC) && !DL_UART_isBusy(RX_UC)){
+        DL_UART_disable(RX_UC);
+        /* TI SDK DL_UART_configBaudRate modifies CTL0 oversampling
+         * and baud divisors: UART must be disabled first.
+         * No blocking DL_UART_changeConfig() is called in PendSV.
+         */
+        DL_UART_configBaudRate(RX_UC,
+            AM13E_BOARD_SERIAL_RX_BUSCLK_HZ,exbus_baud.baud);
+        DL_UART_enable(RX_UC);
+        am13e_serial_frame_abort(&rx_state);
+        rx_state.has_previous_byte_tick=false;
+        exbus_change_pending=0U;
+    }
+    NVIC_EnableIRQ(RX_IRQ);
+}
 #ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
 static AM13E_SerialTxQueue crsf_tx;
 static AM13E_CrsfDeferredCommand crsf_cmd;
@@ -251,6 +300,9 @@ bool am13e_app_serial_rx_init(unsigned mode)
                                    DL_UART_TX_FIFO_LEVEL_NOT_FULL);
 #endif
     am13e_serial_frame_init(&rx_state,mode);
+    am13e_exbus_autobaud_init(&exbus_baud);
+    exbus_change_requested_tick=0U;
+    exbus_change_pending=0U;
     DL_UART_clearInterruptStatus(RX_UC,
                   DL_UART_INTERRUPT_RX|RX_IRQ_ERRORS);
     DL_UART_enableInterrupt(RX_UC,
@@ -263,7 +315,16 @@ bool am13e_app_serial_rx_init(unsigned mode)
 }
 void am13e_app_serial_rx_systick(void)
 {
-    if(initialized)++serial_rx_tick;
+    if(!initialized)return;
+    ++serial_rx_tick;
+    /* The selected UART is configured in preemptible PendSV ONLY;
+     * a 4-tick guard avoids a write while a character is in flight.
+     * Periodic 8-tick retries remain bounded and nonblocking.
+     */
+    if(rx_state.mode==6U && exbus_change_pending &&
+       (uint32_t)(serial_rx_tick-exbus_change_requested_tick)>=4U &&
+       (serial_rx_tick&7U)==0U)
+        SCB->ICSR=SCB_ICSR_PENDSVSET_Msk;
 }
 bool am13e_app_serial_rx_irq_ready(void)
 {
@@ -312,13 +373,19 @@ void RX_HANDLER(void)
            reason==DL_UART_IIDX_BREAK_ERROR){
             am13e_serial_frame_abort(&rx_state);
             DL_UART_clearInterruptStatus(RX_UC,RX_IRQ_ERRORS);
+            exbus_request_retry();
         }
         if(DL_UART_isRXFIFOEmpty(RX_UC))break;
         const uint32_t raw=RX_UC->uart->RXDATA;
         if((raw&RX_ERRORS)!=0U){
             am13e_serial_frame_abort(&rx_state);
+            exbus_request_retry();
             continue;
         }
+        /* All bytes captured at the OLD baud are discarded until
+         * the queued PendSV configuration actually completes.
+         */
+        if(rx_state.mode==6U && exbus_change_pending)continue;
         uint8_t bytes[AM13E_SERIAL_MAX_FRAME];
         unsigned len=0U;
         /* Original USART DMA received a complete packet at IDLE.
@@ -327,16 +394,37 @@ void RX_HANDLER(void)
          * This is a provisional software boundary, NOT a claim
          * about actual EXBUS/SUMD inter-frame timing on silicon.
          */
+        const uint32_t before_errors=rx_state.frame_errors;
         am13e_serial_frame_gap(&rx_state,serial_rx_tick,4U);
-        if(am13e_serial_frame_byte(&rx_state,
+        if(rx_state.mode==6U && rx_state.frame_errors!=before_errors){
+            exbus_request_retry();
+            continue;
+        }
+        const bool complete=am13e_serial_frame_byte(&rx_state,
                 (uint8_t)(raw&UNICOMMUART_RXDATA_DATA_MASK),
-                bytes,sizeof bytes,&len)){
+                bytes,sizeof bytes,&len);
+        if(rx_state.mode==6U && rx_state.frame_errors!=before_errors){
+            exbus_request_retry();
+            continue;
+        }
+        if(complete){
             if(rx_state.mode==3U)
                 (void)am13e_app_io_ibus_frame(bytes,len);
             else if(rx_state.mode==4U)
                 (void)am13e_app_io_sbus_frame(bytes,len);
-            else if(rx_state.mode==6U)
-                (void)am13e_app_io_exbus_frame(bytes,len);
+            else if(rx_state.mode==6U){
+                const int valid=am13e_app_io_exbus_frame(bytes,len);
+                if(valid){
+                    /* Upstream n=0 ONLY when 0x31 channel data
+                     * arrives. CRC-valid unknown and telemetry
+                     * frames do not consume the retry budget.
+                     */
+                    am13e_exbus_autobaud_valid(
+                        &exbus_baud,bytes[4]==0x31U);
+                } else {
+                    exbus_request_retry();
+                }
+            }
             else if(rx_state.mode==7U)
                 (void)am13e_app_io_hott_frame(bytes,len);
             else {

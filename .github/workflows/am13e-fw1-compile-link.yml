@@ -290,7 +290,369 @@ jobs:
           grep -Eq ' [Tt] UC0_IRQHandler$' am13e-ci-logs/serial-selected-symbols.txt
           grep -Eq ' [Tt] am13e_app_serial_rx_init$' am13e-ci-logs/serial-selected-symbols.txt
           grep -Eq ' [Tt] am13e_app_io_ibus_frame$' am13e-ci-logs/serial-selected-symbols.txt
-          grep -Eq ' [Tt] am13e_app_io_sbus_frame$' am13e-ci-logs/serial-selected-symbols.txt
+          grep -Eq ' [Tt] am13e_app_io_sbus_frame
+          echo "PASS synthetic selected UNICOMM RX ARM link; NOT FLASHED"
+          # Diagnostic UC TX selected firmware, not a valid PCB pin plan.
+          cmake -S . -B am13e-ci-crsf-tx -G "Unix Makefiles" \
+            -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/config.ld" \
+            -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/mcu/AM13E/tests/uart_crsf_tx_synthetic_profile.cmake" \
+            >am13e-ci-logs/serial-tx-configure.log 2>&1 || {
+              cat am13e-ci-logs/serial-tx-configure.log
+              exit 1
+            }
+          cmake --build am13e-ci-crsf-tx --target AM13E_FW1_REL17.elf -j 2 \
+            >am13e-ci-logs/serial-tx-link.log 2>&1 || {
+              cat am13e-ci-logs/serial-tx-link.log
+              exit 1
+            }
+          arm-none-eabi-nm am13e-ci-crsf-tx/AM13E_FW1_REL17.elf \
+            >am13e-ci-logs/serial-tx-symbols.txt
+          grep -Eq ' [Tt] UC0_IRQHandler$' am13e-ci-logs/serial-tx-symbols.txt
+          grep -Eq ' [Tt] am13e_app_io_crsf_reply$' am13e-ci-logs/serial-tx-symbols.txt
+          grep -Eq ' [Tt] am13e_crsf_reply_envelope$' am13e-ci-logs/serial-tx-symbols.txt
+          grep -Eq ' [Tt] am13e_serial_tx_queue_begin$' am13e-ci-logs/serial-tx-symbols.txt
+          echo "PASS selected 2-wire CRSF TX strict ARM link (synthetic, NOT FLASHED)"
+
+      - name: Audit actual Rel17 functional software coverage
+        id: coverage
+        shell: bash
+        run: |
+          set -e
+          python3 mcu/AM13E/tools/verify_rel17_coverage.py \
+            --build am13e-ci-build --logs am13e-ci-logs
+
+      - name: Enforce original Rel17 and supplied v1.4 design authority
+        id: v14_docs
+        shell: bash
+        run: |
+          set -e
+          python3 mcu/AM13E/tools/verify_v14_docs.py
+
+      - name: Audit v1.4 upstream source and unresolved Boot interfaces
+        id: v14_scope
+        shell: bash
+        run: |
+          set -e
+          python3 mcu/AM13E/tools/verify_v14_source_scope.py
+
+      - name: Summarize actual undefined symbols
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import collections, json, pathlib, re
+          log=pathlib.Path("am13e-ci-logs/link.log")
+          content=log.read_text(errors="replace") if log.exists() else ""
+          pattern=r"undefined reference to [\x60']([^\x60']+)[\x60']"
+          names=re.findall(pattern,content)
+          counts=collections.Counter(names)
+          audio={n:k for n,k in counts.items() if n.startswith("am13e_app_audio_")}
+          other={n:k for n,k in counts.items() if not n.startswith("am13e_app_audio_")}
+          report={
+            "undefined_unique":len(counts),
+            "undefined_references":len(names),
+            "audio_unique":len(audio),
+            "non_audio_unique":len(other),
+            "audio":dict(sorted(audio.items())),
+            "non_audio":dict(sorted(other.items()))
+          }
+          pathlib.Path("am13e-ci-logs/undefined-symbols.json").write_text(
+            json.dumps(report,indent=2)+"\n")
+          print(json.dumps(report,indent=2))
+          PY
+
+      - name: Upload raw logs and linker map
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: am13e-am13e-fw1-build-evidence
+          path: |
+            am13e-ci-logs/
+            am13e-ci-build/AM13E_FW1.map
+            am13e-ci-build/boot/BOOT5_PB14.map
+            am13e-ci-build/boot/BOOT5_PB14.elf
+            am13e-ci-build/AM13E_FW1_REL17.map
+            am13e-ci-build/AM13E_FW1_REL17.elf
+            am13e-ci-build/AM13E_FW1_REL17.bin
+            am13e-ci-build/AM13E_FW1_REL17.flat.bin
+            am13e-ci-build/AM13E_FW1_REL17.json
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Report diagnostic gates
+        if: always()
+        shell: bash
+        run: |
+          echo "Configure: ${{ steps.build.outputs.configure_rc }}"
+          echo "FW1 objects: ${{ steps.build.outputs.compile_rc }}"
+          echo "Strict link: ${{ steps.build.outputs.link_rc }}"
+          echo "Reference board IO compile (physical not qualified): ${{ steps.board_profile.outcome }}"
+          echo "Synthetic UNICOMM RX full ARM link (NOT FLASHED): ${{ steps.serial_selected.outcome }}"
+          echo "Rel17 functional coverage evidence: ${{ steps.coverage.outcome }}"
+          echo "Rev1.4 scope audit (open blockers tracked): ${{ steps.v14_scope.outcome }}"
+          echo "Rev1.4 documentation/legacy-ABI audit: ${{ steps.v14_docs.outcome }}"
+          echo "Motor/ADC/Flash/BEMF host regression: ${{ steps.host.outcome }}"
+          echo "Rel17-v1.4 Boot/Link/Pack Host Tests: ${{ steps.boot.outcome }}"
+          echo "Actual Rel17 FW1 Rel17-v1.4 ELF/Pack/Flash transaction: ${{ steps.rel17.outcome }}"
+          echo "Common 16KiB AM13E Boot ELF: ${{ steps.boot_elf.outcome }}"
+          echo "Rel17-v1.4 linked-image static audit: ${{ steps.static_image.outcome }}"
+          test "${{ steps.host.outcome }}" = success &&
+          test "${{ steps.build.outputs.configure_rc }}" = 0 &&
+          test "${{ steps.build.outputs.compile_rc }}" = 0 &&
+          test "${{ steps.build.outputs.link_rc }}" = 0 &&
+          test "${{ steps.board_profile.outcome }}" = success &&
+          test "${{ steps.serial_selected.outcome }}" = success &&
+          test "${{ steps.coverage.outcome }}" = success &&
+          test "${{ steps.v14_scope.outcome }}" = success &&
+          test "${{ steps.v14_docs.outcome }}" = success &&
+          test "${{ steps.boot.outcome }}" = success &&
+          test "${{ steps.rel17.outcome }}" = success &&
+          test "${{ steps.boot_elf.outcome }}" = success &&
+          test "${{ steps.static_image.outcome }}" = success
+ am13e-ci-logs/serial-selected-symbols.txt
+          grep -Eq ' [Tt] am13e_app_serial_exbus_service_pending
+          echo "PASS synthetic selected UNICOMM RX ARM link; NOT FLASHED"
+          # Diagnostic UC TX selected firmware, not a valid PCB pin plan.
+          cmake -S . -B am13e-ci-crsf-tx -G "Unix Makefiles" \
+            -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/config.ld" \
+            -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/mcu/AM13E/tests/uart_crsf_tx_synthetic_profile.cmake" \
+            >am13e-ci-logs/serial-tx-configure.log 2>&1 || {
+              cat am13e-ci-logs/serial-tx-configure.log
+              exit 1
+            }
+          cmake --build am13e-ci-crsf-tx --target AM13E_FW1_REL17.elf -j 2 \
+            >am13e-ci-logs/serial-tx-link.log 2>&1 || {
+              cat am13e-ci-logs/serial-tx-link.log
+              exit 1
+            }
+          arm-none-eabi-nm am13e-ci-crsf-tx/AM13E_FW1_REL17.elf \
+            >am13e-ci-logs/serial-tx-symbols.txt
+          grep -Eq ' [Tt] UC0_IRQHandler$' am13e-ci-logs/serial-tx-symbols.txt
+          grep -Eq ' [Tt] am13e_app_io_crsf_reply$' am13e-ci-logs/serial-tx-symbols.txt
+          grep -Eq ' [Tt] am13e_crsf_reply_envelope$' am13e-ci-logs/serial-tx-symbols.txt
+          grep -Eq ' [Tt] am13e_serial_tx_queue_begin$' am13e-ci-logs/serial-tx-symbols.txt
+          echo "PASS selected 2-wire CRSF TX strict ARM link (synthetic, NOT FLASHED)"
+
+      - name: Audit actual Rel17 functional software coverage
+        id: coverage
+        shell: bash
+        run: |
+          set -e
+          python3 mcu/AM13E/tools/verify_rel17_coverage.py \
+            --build am13e-ci-build --logs am13e-ci-logs
+
+      - name: Enforce original Rel17 and supplied v1.4 design authority
+        id: v14_docs
+        shell: bash
+        run: |
+          set -e
+          python3 mcu/AM13E/tools/verify_v14_docs.py
+
+      - name: Audit v1.4 upstream source and unresolved Boot interfaces
+        id: v14_scope
+        shell: bash
+        run: |
+          set -e
+          python3 mcu/AM13E/tools/verify_v14_source_scope.py
+
+      - name: Summarize actual undefined symbols
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import collections, json, pathlib, re
+          log=pathlib.Path("am13e-ci-logs/link.log")
+          content=log.read_text(errors="replace") if log.exists() else ""
+          pattern=r"undefined reference to [\x60']([^\x60']+)[\x60']"
+          names=re.findall(pattern,content)
+          counts=collections.Counter(names)
+          audio={n:k for n,k in counts.items() if n.startswith("am13e_app_audio_")}
+          other={n:k for n,k in counts.items() if not n.startswith("am13e_app_audio_")}
+          report={
+            "undefined_unique":len(counts),
+            "undefined_references":len(names),
+            "audio_unique":len(audio),
+            "non_audio_unique":len(other),
+            "audio":dict(sorted(audio.items())),
+            "non_audio":dict(sorted(other.items()))
+          }
+          pathlib.Path("am13e-ci-logs/undefined-symbols.json").write_text(
+            json.dumps(report,indent=2)+"\n")
+          print(json.dumps(report,indent=2))
+          PY
+
+      - name: Upload raw logs and linker map
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: am13e-am13e-fw1-build-evidence
+          path: |
+            am13e-ci-logs/
+            am13e-ci-build/AM13E_FW1.map
+            am13e-ci-build/boot/BOOT5_PB14.map
+            am13e-ci-build/boot/BOOT5_PB14.elf
+            am13e-ci-build/AM13E_FW1_REL17.map
+            am13e-ci-build/AM13E_FW1_REL17.elf
+            am13e-ci-build/AM13E_FW1_REL17.bin
+            am13e-ci-build/AM13E_FW1_REL17.flat.bin
+            am13e-ci-build/AM13E_FW1_REL17.json
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Report diagnostic gates
+        if: always()
+        shell: bash
+        run: |
+          echo "Configure: ${{ steps.build.outputs.configure_rc }}"
+          echo "FW1 objects: ${{ steps.build.outputs.compile_rc }}"
+          echo "Strict link: ${{ steps.build.outputs.link_rc }}"
+          echo "Reference board IO compile (physical not qualified): ${{ steps.board_profile.outcome }}"
+          echo "Synthetic UNICOMM RX full ARM link (NOT FLASHED): ${{ steps.serial_selected.outcome }}"
+          echo "Rel17 functional coverage evidence: ${{ steps.coverage.outcome }}"
+          echo "Rev1.4 scope audit (open blockers tracked): ${{ steps.v14_scope.outcome }}"
+          echo "Rev1.4 documentation/legacy-ABI audit: ${{ steps.v14_docs.outcome }}"
+          echo "Motor/ADC/Flash/BEMF host regression: ${{ steps.host.outcome }}"
+          echo "Rel17-v1.4 Boot/Link/Pack Host Tests: ${{ steps.boot.outcome }}"
+          echo "Actual Rel17 FW1 Rel17-v1.4 ELF/Pack/Flash transaction: ${{ steps.rel17.outcome }}"
+          echo "Common 16KiB AM13E Boot ELF: ${{ steps.boot_elf.outcome }}"
+          echo "Rel17-v1.4 linked-image static audit: ${{ steps.static_image.outcome }}"
+          test "${{ steps.host.outcome }}" = success &&
+          test "${{ steps.build.outputs.configure_rc }}" = 0 &&
+          test "${{ steps.build.outputs.compile_rc }}" = 0 &&
+          test "${{ steps.build.outputs.link_rc }}" = 0 &&
+          test "${{ steps.board_profile.outcome }}" = success &&
+          test "${{ steps.serial_selected.outcome }}" = success &&
+          test "${{ steps.coverage.outcome }}" = success &&
+          test "${{ steps.v14_scope.outcome }}" = success &&
+          test "${{ steps.v14_docs.outcome }}" = success &&
+          test "${{ steps.boot.outcome }}" = success &&
+          test "${{ steps.rel17.outcome }}" = success &&
+          test "${{ steps.boot_elf.outcome }}" = success &&
+          test "${{ steps.static_image.outcome }}" = success
+ am13e-ci-logs/serial-selected-symbols.txt
+          grep -Eq ' [Tt] am13e_exbus_autobaud_bad
+          echo "PASS synthetic selected UNICOMM RX ARM link; NOT FLASHED"
+          # Diagnostic UC TX selected firmware, not a valid PCB pin plan.
+          cmake -S . -B am13e-ci-crsf-tx -G "Unix Makefiles" \
+            -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/config.ld" \
+            -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/mcu/AM13E/tests/uart_crsf_tx_synthetic_profile.cmake" \
+            >am13e-ci-logs/serial-tx-configure.log 2>&1 || {
+              cat am13e-ci-logs/serial-tx-configure.log
+              exit 1
+            }
+          cmake --build am13e-ci-crsf-tx --target AM13E_FW1_REL17.elf -j 2 \
+            >am13e-ci-logs/serial-tx-link.log 2>&1 || {
+              cat am13e-ci-logs/serial-tx-link.log
+              exit 1
+            }
+          arm-none-eabi-nm am13e-ci-crsf-tx/AM13E_FW1_REL17.elf \
+            >am13e-ci-logs/serial-tx-symbols.txt
+          grep -Eq ' [Tt] UC0_IRQHandler$' am13e-ci-logs/serial-tx-symbols.txt
+          grep -Eq ' [Tt] am13e_app_io_crsf_reply$' am13e-ci-logs/serial-tx-symbols.txt
+          grep -Eq ' [Tt] am13e_crsf_reply_envelope$' am13e-ci-logs/serial-tx-symbols.txt
+          grep -Eq ' [Tt] am13e_serial_tx_queue_begin$' am13e-ci-logs/serial-tx-symbols.txt
+          echo "PASS selected 2-wire CRSF TX strict ARM link (synthetic, NOT FLASHED)"
+
+      - name: Audit actual Rel17 functional software coverage
+        id: coverage
+        shell: bash
+        run: |
+          set -e
+          python3 mcu/AM13E/tools/verify_rel17_coverage.py \
+            --build am13e-ci-build --logs am13e-ci-logs
+
+      - name: Enforce original Rel17 and supplied v1.4 design authority
+        id: v14_docs
+        shell: bash
+        run: |
+          set -e
+          python3 mcu/AM13E/tools/verify_v14_docs.py
+
+      - name: Audit v1.4 upstream source and unresolved Boot interfaces
+        id: v14_scope
+        shell: bash
+        run: |
+          set -e
+          python3 mcu/AM13E/tools/verify_v14_source_scope.py
+
+      - name: Summarize actual undefined symbols
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import collections, json, pathlib, re
+          log=pathlib.Path("am13e-ci-logs/link.log")
+          content=log.read_text(errors="replace") if log.exists() else ""
+          pattern=r"undefined reference to [\x60']([^\x60']+)[\x60']"
+          names=re.findall(pattern,content)
+          counts=collections.Counter(names)
+          audio={n:k for n,k in counts.items() if n.startswith("am13e_app_audio_")}
+          other={n:k for n,k in counts.items() if not n.startswith("am13e_app_audio_")}
+          report={
+            "undefined_unique":len(counts),
+            "undefined_references":len(names),
+            "audio_unique":len(audio),
+            "non_audio_unique":len(other),
+            "audio":dict(sorted(audio.items())),
+            "non_audio":dict(sorted(other.items()))
+          }
+          pathlib.Path("am13e-ci-logs/undefined-symbols.json").write_text(
+            json.dumps(report,indent=2)+"\n")
+          print(json.dumps(report,indent=2))
+          PY
+
+      - name: Upload raw logs and linker map
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: am13e-am13e-fw1-build-evidence
+          path: |
+            am13e-ci-logs/
+            am13e-ci-build/AM13E_FW1.map
+            am13e-ci-build/boot/BOOT5_PB14.map
+            am13e-ci-build/boot/BOOT5_PB14.elf
+            am13e-ci-build/AM13E_FW1_REL17.map
+            am13e-ci-build/AM13E_FW1_REL17.elf
+            am13e-ci-build/AM13E_FW1_REL17.bin
+            am13e-ci-build/AM13E_FW1_REL17.flat.bin
+            am13e-ci-build/AM13E_FW1_REL17.json
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Report diagnostic gates
+        if: always()
+        shell: bash
+        run: |
+          echo "Configure: ${{ steps.build.outputs.configure_rc }}"
+          echo "FW1 objects: ${{ steps.build.outputs.compile_rc }}"
+          echo "Strict link: ${{ steps.build.outputs.link_rc }}"
+          echo "Reference board IO compile (physical not qualified): ${{ steps.board_profile.outcome }}"
+          echo "Synthetic UNICOMM RX full ARM link (NOT FLASHED): ${{ steps.serial_selected.outcome }}"
+          echo "Rel17 functional coverage evidence: ${{ steps.coverage.outcome }}"
+          echo "Rev1.4 scope audit (open blockers tracked): ${{ steps.v14_scope.outcome }}"
+          echo "Rev1.4 documentation/legacy-ABI audit: ${{ steps.v14_docs.outcome }}"
+          echo "Motor/ADC/Flash/BEMF host regression: ${{ steps.host.outcome }}"
+          echo "Rel17-v1.4 Boot/Link/Pack Host Tests: ${{ steps.boot.outcome }}"
+          echo "Actual Rel17 FW1 Rel17-v1.4 ELF/Pack/Flash transaction: ${{ steps.rel17.outcome }}"
+          echo "Common 16KiB AM13E Boot ELF: ${{ steps.boot_elf.outcome }}"
+          echo "Rel17-v1.4 linked-image static audit: ${{ steps.static_image.outcome }}"
+          test "${{ steps.host.outcome }}" = success &&
+          test "${{ steps.build.outputs.configure_rc }}" = 0 &&
+          test "${{ steps.build.outputs.compile_rc }}" = 0 &&
+          test "${{ steps.build.outputs.link_rc }}" = 0 &&
+          test "${{ steps.board_profile.outcome }}" = success &&
+          test "${{ steps.serial_selected.outcome }}" = success &&
+          test "${{ steps.coverage.outcome }}" = success &&
+          test "${{ steps.v14_scope.outcome }}" = success &&
+          test "${{ steps.v14_docs.outcome }}" = success &&
+          test "${{ steps.boot.outcome }}" = success &&
+          test "${{ steps.rel17.outcome }}" = success &&
+          test "${{ steps.boot_elf.outcome }}" = success &&
+          test "${{ steps.static_image.outcome }}" = success
+ am13e-ci-logs/serial-selected-symbols.txt
           echo "PASS synthetic selected UNICOMM RX ARM link; NOT FLASHED"
           # Diagnostic UC TX selected firmware, not a valid PCB pin plan.
           cmake -S . -B am13e-ci-crsf-tx -G "Unix Makefiles" \

@@ -11,6 +11,8 @@ bool am13e_app_serial_rx_init(unsigned mode);
 bool am13e_app_serial_rx_irq_ready(void);
 /* Called from existing 16kHz SysTick only: no new motor timer. */
 void am13e_app_serial_rx_systick(void);
+/* PendSV-only EXBUS autobaud. No blocking UART Busy wait in RX IRQ. */
+void am13e_app_serial_exbus_service_pending(void);
 #ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
 /* PendSV-only, never from UART RX ISR. Original CRSF command executor
  * may perform Flash operations and requires preemptible context.

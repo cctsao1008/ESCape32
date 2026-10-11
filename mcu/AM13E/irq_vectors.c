@@ -27,6 +27,12 @@ void SysTick_Handler(void)
 void PendSV_Handler(void)
 {
     pend_sv_handler();
+#ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
+    /* EXBUS bitrate switch only when UART RX is genuinely idle.
+     * Never alter UNICOMM clock/dividers inside UART or SysTick IRQ.
+     */
+    am13e_app_serial_exbus_service_pending();
+#endif
     /* DShot CMD_SAVE is queued by PB14/ECAP0 IRQ, not executed there.
      * PendSV can be preempted by higher-priority valid RX, preserving
      * WWDT feeding between individual Flash commands.
