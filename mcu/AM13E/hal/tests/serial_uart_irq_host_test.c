@@ -212,19 +212,21 @@ static void sbus2(void)
     const uint8_t ids[6]={0x43,0xc3,0x23,0xa3,0x63,0xe3};
     for(unsigned n=0U;n<6U;++n){
         assert(timer_cc==(uint16_t)(65000U+3200U+660U*n));
+        if(n==2U)curr=0x2345; /* Original Core samples this slot's live value. */
         timer_irq(n==2U?40U:0U); /* Absolute next deadlines do not drift. */
         assert(wire_bytes==3U*(n+1U) && wire[3U*n]==ids[n]);
         interrupt(DL_UART_IIDX_EOT_DONE);
         assert(sbus2_active);
     }
     assert(wire[1]==125U && wire[2]==0x80U && wire[4]==90U &&
-        wire[7]==(0x34U|0x40U) && wire[8]==0x56U &&
+        wire[7]==(0x23U|0x40U) && wire[8]==0x45U &&
         wire[10]==0x56U && wire[11]==0x78U &&
         wire[13]==0x12U && wire[14]==0x34U && wire[16]==(uint8_t)(18000/42));
     assert(timer_cc==(uint16_t)(65000U+7160U));
     timer_irq(0U);assert(!sbus2_active && !timer_enabled);
     /* Other phase group mutes RX for7160us without sending another group's slots. */
-    p[24]=0x14U;frame(p,25U);assert(sbus2_active && !sbus2_count);
+    p[24]=0x14U;frame(p,25U);assert(sbus2_active);
+    timer_irq(0U);assert(sbus2_active && wire_bytes==18U);
     timer_irq(0U);assert(!sbus2_active && wire_bytes==18U);
     /* Ordinary SBUS does not schedule any reply. */
     p[24]=0U;frame(p,25U);assert(!sbus2_active && !timer_enabled);

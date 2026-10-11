@@ -245,7 +245,6 @@ static void crsf_tx_start(const uint8_t *p,unsigned n);
 #define SBUS2_IRQ DL_TIMER_INTERRUPT_CC1_UP_EVENT
 static bool sbus2_timer_owned;
 static volatile bool sbus2_active,sbus2_release_due;
-static uint8_t sbus2_slots[6][3];
 static unsigned sbus2_slot,sbus2_count;
 static uint16_t sbus2_origin,sbus2_deadline;
 static uint32_t sbus2_origin_tick;
@@ -307,18 +306,13 @@ static bool sbus2_timer_init(void)
 static void sbus2_begin(uint16_t received)
 {
     if(!sbus2_timer_owned || sbus2_active || crsf_tx.count!=0U)return;
-    sbus2_count=sbus2_slot=0U;
-    /* Snapshot ORIGINAL sbuspacket() output before timer IRQ can use it.
-     * The timer never shares Core iobuf with the RX parser/CLI.
-     */
-    unsigned delay;
-    while(sbus2_count<6U && am13e_app_io_sbus2_next_slot(
-        sbus2_slots[sbus2_count],&delay))++sbus2_count;
+    sbus2_slot=0U;
+    sbus2_count=6U; /* Core decides eligibility at the first slot deadline. */
     sbus2_origin=received;
     sbus2_origin_tick=serial_rx_tick;
     sbus2_active=true;
     sbus2_release_due=false;
-    if(!sbus2_compare((uint16_t)(received+(sbus2_count?3200U:7160U)))){
+    if(!sbus2_compare((uint16_t)(received+3200U))){
         sbus2_count=0U;
         if(sbus2_compare((uint16_t)(received+7160U)))return;
         sbus2_release_due=true;
@@ -347,7 +341,17 @@ void am13e_app_serial_sbus2_timer_irq(void)
     const int16_t late=(int16_t)(sbus2_now()-sbus2_deadline);
     if(sbus2_slot<sbus2_count && late>=0 && late<300 &&
        crsf_tx.count==0U && !DL_UART_isBusy(RX_UC)){
-        crsf_tx_start(sbus2_slots[sbus2_slot++],3U);
+        uint8_t packet[3];unsigned delay_us;
+        /* Original sbusirq2 samples telemetry at EACH slot, not frame RX.
+         * UART and TIMG4 have equal priority and RX is muted, so neither
+         * parser nor CLI can concurrently mutate the original Core iobuf.
+         */
+        if(am13e_app_io_sbus2_next_slot(packet,&delay_us) &&
+           delay_us==(sbus2_slot?660U:3200U) &&
+           (int16_t)(sbus2_now()-sbus2_deadline)<300){
+            ++sbus2_slot;
+            crsf_tx_start(packet,3U);
+        } else sbus2_slot=sbus2_count;
     } else sbus2_slot=sbus2_count;
     if(sbus2_slot<sbus2_count){
         if(sbus2_compare((uint16_t)(sbus2_origin+3200U+660U*sbus2_slot)))return;
