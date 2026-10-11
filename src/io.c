@@ -23,6 +23,7 @@
 #include "command_reply.h" /* DShot save waits for pending BiDShot reply */
 #include "ibus_receiver.h" /* Native frame inspection uses original iBUS semantics */
 #include "sbus_receiver.h" /* Packed 11-bit SBUS channel extraction */
+#include "sbus2_reply.h" /* Original 6x3B SBUS2 telemetry slot payload */
 #include "crsf_receiver.h" /* Original CRSF CRC8-DVB-S2 channel RX */
 #include "serial_command.h" /* Original binary serialfunc commands */
 #include "exbus_receiver.h" /* Original EXBUS CRC16 and channel semantics */
@@ -619,6 +620,24 @@ int am13e_app_io_ibus_frame(const uint8_t *frame,unsigned length)
     setbrake(brake_us);
     return 1;
 }
+/* The selected board owns the physical 3200us first-slot delay and
+ * 660us slot spacing. Reference NEVER drives UART TX for SBUS2.
+ */
+static AM13E_Sbus2ReplyState sbus2_reply_state;
+static unsigned sbus2_reply_remaining;
+int am13e_app_io_sbus2_next_slot(uint8_t out[3],unsigned *delay_us)
+{
+    if(cfg.input_mode!=4||sbus2_reply_remaining==0U)return 0;
+    const AM13E_Sbus2ReplyValues v={
+        .temp1=temp1,.temp2=temp2,.curr=curr,.volt=volt,
+        .csum=csum,.erpm=erpm,.telem_poles=cfg.telem_poles,
+        .telphid=(unsigned)(uint8_t)telphid
+    };
+    if(!am13e_sbus2_next_packet(&sbus2_reply_state,&v,out,delay_us))
+        return 0;
+    --sbus2_reply_remaining;
+    return 1;
+}
 /* Original Rel17 SBUS input_mode=4 channel values; USART framing,
  * inversion, 8E2 settings and SBUS2 time-slot reply are UART-owned.
  * Frame-level acceptance mirrors upstream sbusfunc() (len/header).
@@ -635,6 +654,12 @@ int am13e_app_io_sbus_frame(const uint8_t *frame,unsigned length)
     am13e_app_io_watchdog_feed();
     setthrot(throttle_us);
     setbrake(brake_us);
+    sbus2_reply_remaining=0U;
+    if(am13e_sbus2_eligible(frame,length,
+              (unsigned)(uint8_t)telmode,(unsigned)(uint8_t)telphid)){
+        sbus2_reply_state.slot_index=0U;
+        sbus2_reply_remaining=6U;
+    }
     return 1;
 }
 /* HoTT/SUMD original input_mode=7. The native decoder passes

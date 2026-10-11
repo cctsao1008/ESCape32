@@ -55,6 +55,10 @@ int am13e_app_io_ibus_frame(const uint8_t *frame,unsigned length);
  * SBUS2 telemetry request/slot scheduling is a separate MCU gap.
  */
 int am13e_app_io_sbus_frame(const uint8_t *frame,unsigned length);
+/* Original six SBUS2 reply payloads with explicit delay per slot.
+ * Actual RX mute/physical slot TX requires qualified hardware timer.
+ */
+int am13e_app_io_sbus2_next_slot(uint8_t out[3],unsigned *delay_us);
 /* Original input_mode=2 binary serial control (not text CLI).
  * Return 1 only if wire CRC accepted; 0/4/12 response bytes.
  */
