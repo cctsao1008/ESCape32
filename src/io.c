@@ -396,6 +396,7 @@ static char cmd, cnt, rep;
  * Never erase/program Bank0 Flash from the DShot RX interrupt. PendSV
  * services the request after TX completes, with a stable motor stop.
  */
+/* 1 = Save, 2 = Reset. Both source commands may write configuration. */
 static volatile uint8_t dshot_save_pending;
 static volatile uint8_t dshot_save_running;
 #endif
@@ -527,7 +528,11 @@ static inline __attribute__((always_inline)) void dshot_apply_packet(int x) {
 			break;
 		case 47: // Reset settings
 			if (cnt != 6) break;
+#if defined(AM13E)
+            if (!dshot_save_running) dshot_save_pending = 2U;
+#else
 			beepval = resetcfg();
+#endif
 			break;
 	}
 }
@@ -1366,16 +1371,24 @@ int am13e_app_io_cli_line(char *line) {
  */
 void am13e_app_io_service_pending_save(void)
 {
-    if (!dshot_save_pending || dshot_save_running) return;
-    if (am13e_pb14_bidir_tx_busy()) return; /* preserve current reply */
+    /* Claim the operation atomically with respect to capture IRQs. */
+    const uint32_t mask=__get_PRIMASK();
+    __disable_irq();
+    if (!dshot_save_pending || dshot_save_running ||
+        am13e_pb14_bidir_tx_busy()) {
+        __set_PRIMASK(mask);
+        return; /* preserve current reply and queued request */
+    }
+    const unsigned operation=dshot_save_pending;
+    dshot_save_pending=0U;
     if (ertm || throt) {
-        dshot_save_pending=0U;
         beepval=0; /* do not persist while throttle is requested */
+        __set_PRIMASK(mask);
         return;
     }
     dshot_save_running=1U;
-    dshot_save_pending=0U;
-    beepval=savecfg();
+    __set_PRIMASK(mask);
+    beepval=operation==2U?resetcfg():savecfg();
     dshot_save_running=0U;
 }
 #endif

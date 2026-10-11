@@ -198,3 +198,42 @@ verification of TI's actual peripheral. Production protocol/CRC code is unchange
 CLI milestone CI: run 38155216282, exact HEAD
 `ebcfe735072392449548e5373a87206437b59f01`, job `fw1-build-evidence` SUCCESS,
 all 22 reported steps SUCCESS.
+
+## Round 2: production command/configuration persistence
+
+Starting HEAD: `f1dbbf10e6f824a447d8e1894d55784057ef3541`.
+DShot Reset (47) previously called `resetcfg()` from capture IRQ and could
+enter Bank0 configuration erase/program there. Like Save (12), it now queues
+a coalesced operation for the existing PendSV service. An IRQ-masked claim
+retains a pending request while BiDShot TX owns the line; nonzero throttle or
+active motor cancels persistence. A running transaction refuses requeue.
+Legacy DShot branches and original sixth-repeat/telemetry-bit policies are unchanged.
+
+`config_command_source` links production `src/io.c`, unchanged `src/prog.c`,
+real defaults/globals from `src/main.c`, actual `src/util.c` configuration
+functions and native configuration plan/writer. Hardware cfg-commit boundary
+is mocked; the real `cfg_flash_runtime.c` register/RAM closure is not exercised.
+Tests execute deferred Reset/Save, first-five/sixth repetition, TX deferral,
+throttle/motor cancellation, reentrant capture during save, invalid CRC/no
+watchdog feed, wrong telemetry bit, original direction/3D throttle commands,
+CLI parse/range errors and save/reset busy/motor refusal, serialized reload,
+program/readback failure reporting, and actual CRSF Save/Reset confirmation.
+No Flash operation occurs in capture context; unchanged persistence is wear-free.
+This does not claim atomic storage or power-loss recovery: the native writer
+still reports failure after an interrupted transaction, with no rollback.
+
+All original-platform targets were compiled/linked using official GCC 15.2.1
+and libopencm3 `ddcbb2889fa018626c604e27ea50e66db5755b78` (external checkout):
+STM32F051/G071/G431/L431, AT32F421, GD32E230/F350 and eight original Boot
+targets. No legacy MCU implementation or immutable design document was edited.
+This is software compile/link evidence, not board qualification.
+
+Round 2 milestone local validation: default startup 11/11 CTests; smoke and
+full-image suites each 11/11; full native Host block including the added
+source-linked regression; historical strict FW1 link; portable/backends/clock;
+selected UART/CRSF+CLI/EXBUS/telemetry and PARK/ERPM profiles; five auxiliary
+routing negatives; six Boot recovery negatives; image/layout, documentation,
+functional coverage and source-scope audits; all 52 legacy ELF links PASS.
+The added test fails against the baseline capture-context Reset implementation
+at the hardware commit boundary, and passes after the fix. All physical
+recovery/self-update/WRP operations remain gated and were not executed.

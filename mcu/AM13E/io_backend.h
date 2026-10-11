@@ -115,7 +115,7 @@ void am13e_app_io_watchdog_feed(void);
  */
 void am13e_app_io_on_gpio1_interrupt(uint32_t pending);
 
-/* Lowest-priority PendSV services DShot Save after PB14 TX completes.
+/* Lowest-priority PendSV services DShot Save/Reset after PB14 TX completes.
  * Never execute erase/program synchronously inside ECAP0 IRQ.
  */
 void am13e_app_io_service_pending_save(void);

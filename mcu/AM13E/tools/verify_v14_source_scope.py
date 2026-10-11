@@ -43,7 +43,8 @@ def main():
     for test in ("command_decode","command_bidir_roundtrip",
                  "bidir_timing","bemf_commutation","motor_ownership",
                  "service_handoff","servo_source","servo_trim_source",
-                 "cli_entry","park_source","aux_wrong_port","aux_serial_conflict"):
+                 "cli_entry","park_source","aux_wrong_port","aux_serial_conflict",
+                 "config_command_source"):
         check(re.search(r"(?m)^PASS: "+test+r"\s*$",host),
               "Missing Native regression PASS: "+test)
 

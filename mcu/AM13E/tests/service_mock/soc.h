@@ -20,4 +20,6 @@ void test_reset(void);
 #define __NOP() ((void)0)
 #define __disable_irq() ((void)0)
 #define __enable_irq() ((void)0)
+static inline uint32_t __get_PRIMASK(void) { return 0U; }
+static inline void __set_PRIMASK(uint32_t x) { (void)x; }
 #define NVIC_SystemReset() test_reset()
