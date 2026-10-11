@@ -120,6 +120,7 @@ jobs:
             run_test motor_timer_math mcu/AM13E/motor_timer_math.c mcu/AM13E/tests/motor_timer_math_host_test.c
             run_test command_decode mcu/AM13E/command_decode.c mcu/AM13E/tests/command_decode_host_test.c
             run_test telem_modes mcu/AM13E/telem_mode_plan.c mcu/AM13E/tests/telem_mode_plan_host_test.c
+            run_test telem_frame_rx mcu/AM13E/telem_frame_rx.c mcu/AM13E/tests/telem_frame_rx_host_test.c
             run_test arming_window -DAM13E mcu/AM13E/arming_window.c mcu/AM13E/tests/test_arming_window_host.c
             run_test sine_carrier mcu/AM13E/motor_sine_table.c mcu/AM13E/tests/test_sine_carrier_host.c
             cc $flags -DAM13E mcu/AM13E/tests/test_bemf_timeout_host.c -o /tmp/am13e_bemf_timeout
