@@ -67,8 +67,17 @@
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_cmpss_lite.c"
             "${am13e_sdk_compat_dir}/dl_timer.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_dma.c"
+            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_unicomm.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_unicommuart.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_mcpwm.c")
+        # TI 26.01 dl_unicomm.h defines six legacy UC*_INST_PTR
+        # objects inside SDK translation units. Suppress that
+        # third-party warning ONLY on these pinned SDK .c files;
+        # our native sources retain full -Werror.
+        set_source_files_properties(
+            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_unicomm.c"
+            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_unicommuart.c"
+            PROPERTIES COMPILE_OPTIONS "-Wno-unused-variable")
         set(am13e_source_dir "${PROJECT_SOURCE_DIR}/src")
 function(am13e_configure_reference_board target)
         # Reference selects PB14 and has no qualified UART transport.

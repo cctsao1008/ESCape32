@@ -54,27 +54,27 @@ _Static_assert(AM13E_BOARD_SERIAL_RX_PINCM!=IOMUX_PINCM_PB14 &&
                "Native serial RX pin conflicts with board-reserved IO");
 
 #if AM13E_BOARD_SERIAL_RX_UC_INDEX==0
-#define RX_UC ((DL_UNICOMM_Inst_Regs *)UNICOMM0)
+#define RX_UC UC0_INST_PTR
 #define RX_IRQ UC0_INT_IRQn
 #define RX_HANDLER UC0_IRQHandler
 #elif AM13E_BOARD_SERIAL_RX_UC_INDEX==1
-#define RX_UC ((DL_UNICOMM_Inst_Regs *)UNICOMM1)
+#define RX_UC UC1_INST_PTR
 #define RX_IRQ UC1_INT_IRQn
 #define RX_HANDLER UC1_IRQHandler
 #elif AM13E_BOARD_SERIAL_RX_UC_INDEX==2
-#define RX_UC ((DL_UNICOMM_Inst_Regs *)UNICOMM2)
+#define RX_UC UC2_INST_PTR
 #define RX_IRQ UC2_INT_IRQn
 #define RX_HANDLER UC2_IRQHandler
 #elif AM13E_BOARD_SERIAL_RX_UC_INDEX==3
-#define RX_UC ((DL_UNICOMM_Inst_Regs *)UNICOMM3)
+#define RX_UC UC3_INST_PTR
 #define RX_IRQ UC3_INT_IRQn
 #define RX_HANDLER UC3_IRQHandler
 #elif AM13E_BOARD_SERIAL_RX_UC_INDEX==4
-#define RX_UC ((DL_UNICOMM_Inst_Regs *)UNICOMM4)
+#define RX_UC UC4_INST_PTR
 #define RX_IRQ UC4_INT_IRQn
 #define RX_HANDLER UC4_IRQHandler
 #elif AM13E_BOARD_SERIAL_RX_UC_INDEX==5
-#define RX_UC ((DL_UNICOMM_Inst_Regs *)UNICOMM5)
+#define RX_UC UC5_INST_PTR
 #define RX_IRQ UC5_INT_IRQn
 #define RX_HANDLER UC5_IRQHandler
 #else
