@@ -15,3 +15,5 @@ Conditional discrete LEDs now use native open-drain configuration/readback as se
 REL17_V14 remains the backward-compatible CMake token for the flat APP physical image profile; current wire addressing is Rev1.6 Config-prefix. Historical manifest-based experiments bearing a v1.6 label are unrelated to the newly adopted originals.
 
 SBUS2 slot scheduling and soft-UART timing remain incomplete. AM13E23019 SDK exposes TIMG4 (BiDShot TX) and TIMG12 (motor/audio), and ECAP0/1 (receiver/BEMF). A native role-arbitration implementation or another validated timing peripheral is required; no fictitious spare timer or global motor-clock enable is permitted. Board serial electrical topology, Hall, clock trim and gate-driver data remain essential inputs.
+
+Shared native verification: `bash mcu/AM13E/tools/run_host_regressions.sh fast` selects core production/safety groups; `full` runs every existing native group and is used by CI. These commands complement the 11 Boot CTests, strict ARM links and specialized conditional/safety gates; neither mode claims complete milestone coverage. Compiler identity is printed.
