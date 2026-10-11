@@ -18,7 +18,8 @@
     !defined(AM13E_BOARD_SERIAL_RX_UC_INDEX) || \
     !defined(AM13E_BOARD_SERIAL_RX_PINCM) || \
     !defined(AM13E_BOARD_SERIAL_RX_PIN_FUNCTION) || \
-    !defined(AM13E_BOARD_SERIAL_RX_BUSCLK_HZ)
+    !defined(AM13E_BOARD_SERIAL_RX_BUSCLK_HZ) || \
+    !defined(AM13E_BOARD_SERIAL_SBUS_PIN_INVERT)
 #error "Board UART RX requires dedicated UC, RX pin/function, verified BUSCLK"
 #endif
 _Static_assert(AM13E_BOARD_SERIAL_RX_PINCM>0U &&
@@ -26,7 +27,8 @@ _Static_assert(AM13E_BOARD_SERIAL_RX_PINCM>0U &&
                AM13E_BOARD_SERIAL_RX_PIN_FUNCTION>0U &&
                AM13E_BOARD_SERIAL_RX_PIN_FUNCTION<8U &&
                AM13E_BOARD_SERIAL_RX_BUSCLK_HZ>=UINT32_C(2000000) &&
-               AM13E_BOARD_SERIAL_RX_BUSCLK_HZ<=UINT32_C(200000000),
+               AM13E_BOARD_SERIAL_RX_BUSCLK_HZ<=UINT32_C(200000000) &&
+               AM13E_BOARD_SERIAL_SBUS_PIN_INVERT<=1U,
                "Native UART RX board route/function/clock invalid");
 _Static_assert(AM13E_BOARD_SERIAL_RX_PINCM!=IOMUX_PINCM_PB14 &&
                AM13E_BOARD_SERIAL_RX_PINCM!=IOMUX_PINCM_PB15 &&
@@ -81,8 +83,14 @@ _Static_assert(AM13E_BOARD_SERIAL_RX_PINCM!=IOMUX_PINCM_PB14 &&
 #error "Select AM13E UNICOMM0..UNICOMM5, with no other owner"
 #endif
 
-#define RX_ERRORS (DL_UART_ERROR_OVERRUN | DL_UART_ERROR_FRAMING | \
-                   DL_UART_ERROR_PARITY | DL_UART_ERROR_BREAK)
+/* SDK 26.01's DL_UART_ERROR_OVERRUN references an undefined
+ * RXDATA_OVRERR_SET; real overrun is a separate IIDX IRQ, not a
+ * per-byte RXDATA flag. Inspect RXDATA only for defined byte errors.
+ */
+#define RX_ERRORS (UNICOMMUART_RXDATA_FRMERR_SET | \
+                   UNICOMMUART_RXDATA_PARERR_SET | \
+                   UNICOMMUART_RXDATA_BRKERR_SET | \
+                   UNICOMMUART_RXDATA_NERR_SET)
 #define RX_IRQ_ERRORS (DL_UART_INTERRUPT_OVERRUN_ERROR | \
                        DL_UART_INTERRUPT_FRAMING_ERROR | \
                        DL_UART_INTERRUPT_PARITY_ERROR | \
@@ -105,7 +113,8 @@ bool am13e_app_serial_rx_init(unsigned mode)
     DL_GPIO_initPeripheralInputFunctionFeatures(
         AM13E_BOARD_SERIAL_RX_PINCM,
         AM13E_BOARD_SERIAL_RX_PIN_FUNCTION,
-        mode==4U ? DL_GPIO_INVERSION_ENABLE : DL_GPIO_INVERSION_DISABLE,
+        (mode==4U && AM13E_BOARD_SERIAL_SBUS_PIN_INVERT) ?
+            DL_GPIO_INVERSION_ENABLE : DL_GPIO_INVERSION_DISABLE,
         DL_GPIO_RESISTOR_NONE,DL_GPIO_WAKEUP_DISABLE);
     if(!DL_GPIO_isPeripheralConnected(AM13E_BOARD_SERIAL_RX_PINCM)||
        !DL_GPIO_isInputEnabled(AM13E_BOARD_SERIAL_RX_PINCM)||
