@@ -1,4 +1,4 @@
-/* Shared Boot/FW1 AM13E23019 Rel17 v1.4 single-image Flash allocation.
+/* Shared Boot/FW1 AM13E23019 Rel17 / Rev1.6 single-image Flash allocation.
  * Source constants, NOT a new image format or FW2 feature API.
  * Both Boot and FW1 include this file. Linker LD assertions independently
  * guard physical placement; TI protection granularity needs HW review.
@@ -26,4 +26,4 @@ _Static_assert(AM13E_FLASH_APP_BLOCKS==488U &&
                AM13E_FLASH_ERASE_SECTOR==2U*AM13E_FLASH_LOGICAL_BLOCK &&
                AM13E_FLASH_FW1_PARAM_END==AM13E_FLASH_RESERVED_BASE &&
                AM13E_FLASH_RESERVED_END==AM13E_FLASH_APP_BASE,
-               "AM13E v1.4 Boot/Config/Reserved/APP partition contract changed");
+               "AM13E Rev1.6 Boot/Config/Reserved/APP partition contract changed");

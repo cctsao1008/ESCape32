@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rel17 v1.4 flat app packer: no embedded CRC/signature or fixed size."""
+"""Rev1.6 flat app packer: no embedded CRC/signature or fixed size."""
 import json
 from pathlib import Path
 import struct
@@ -82,8 +82,8 @@ def main():
         altered=bytearray(packed)
         altered[0x800]^=1
         (d/"altered.bin").write_bytes(altered)
-        run("verify",d/"altered.bin") # v1.4 has NO image data CRC.
-        print("PASS v1.4 intentionally has no payload CRC guarantee")
+        run("verify",d/"altered.bin") # Rev1.6 has NO image data CRC.
+        print("PASS Rev1.6 intentionally has no payload CRC guarantee")
 
         for label,pc in [("bad_thumb",APP+0x100),
                          ("bad_low",APP-1),

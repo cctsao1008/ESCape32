@@ -3,7 +3,7 @@ project(AM13EFlashHostTests C)
 
 include(CTest)
 add_compile_definitions(AM13E IO_PB14)
-include_directories("${CMAKE_CURRENT_LIST_DIR}/../../src")
+include_directories("${CMAKE_CURRENT_LIST_DIR}/../../src" "${CMAKE_CURRENT_LIST_DIR}/../../src/am13e")
 
 set(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../..")
 add_executable(am13e_flash_transaction_test
@@ -29,7 +29,7 @@ add_test(NAME am13e_flash_transaction COMMAND am13e_flash_transaction_test)
 # Native Boot staging helpers (no Flash writer, no new protocol parser).
 add_executable(am13e_update_staging_test
     "${REPO_ROOT}/boot/tests/am13e_update_staging_test.c"
-    "${REPO_ROOT}/boot/src/update_staging.c")
+    "${REPO_ROOT}/boot/src/am13e/update_staging.c")
 target_compile_features(am13e_update_staging_test PRIVATE c_std_11)
 target_include_directories(am13e_update_staging_test PRIVATE
     "${REPO_ROOT}/boot/mcu/AM13E" "${REPO_ROOT}/boot/mcu/AM13E/hal")
@@ -43,7 +43,7 @@ add_test(NAME am13e_update_staging COMMAND am13e_update_staging_test)
 add_executable(am13e_update_commit_test
     "${REPO_ROOT}/boot/tests/am13e_update_commit_test.c"
     "${REPO_ROOT}/boot/mcu/AM13E/hal/update_commit.c"
-    "${REPO_ROOT}/boot/src/update_staging.c")
+    "${REPO_ROOT}/boot/src/am13e/update_staging.c")
 target_compile_features(am13e_update_commit_test PRIVATE c_std_11)
 target_compile_definitions(am13e_update_commit_test PRIVATE
     AM13E_BOOT_COMMIT_HOST_TEST)
@@ -69,7 +69,7 @@ if(AM13E_HOST_SANITIZERS AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
         -fsanitize=address,undefined)
 endif()
 add_test(NAME am13e_app_validity COMMAND am13e_app_validity_test)
-# Rel17 v1.4 has no image CRC or signature-last early-finalize gate.
+# Rev1.6 has no image CRC or signature-last early-finalize gate.
 # Stage C: packer CLI uses Python's stdlib and a separate temporary image.
 # Keep it under CTest alongside the ARM-independent firmware integrity tests.
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
@@ -96,10 +96,10 @@ if(AM13E_HOST_PACKED_IMAGE)
         "${REPO_ROOT}/boot/src/io.c"
         "${REPO_ROOT}/boot/src/util.c"
         "${REPO_ROOT}/boot/tests/am13e_crcp_mock.c"
-        "${REPO_ROOT}/boot/src/flash_range.c"
+        "${REPO_ROOT}/boot/src/am13e/flash_range.c"
         "${REPO_ROOT}/boot/mcu/AM13E/hal/flash.c"
         "${REPO_ROOT}/boot/mcu/AM13E/hal/app_validity.c"
-        "${REPO_ROOT}/boot/src/update_staging.c"
+        "${REPO_ROOT}/boot/src/am13e/update_staging.c"
         "${REPO_ROOT}/boot/mcu/AM13E/hal/wrp_nonmain.c"
         "${REPO_ROOT}/boot/mcu/AM13E/hal/wrp_nonmain_runtime.c")
     target_compile_features(am13e_boot_protocol_test PRIVATE c_std_11)

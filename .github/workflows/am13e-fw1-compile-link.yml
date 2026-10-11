@@ -6,11 +6,9 @@ on:
       - 'CMakeLists.txt'
       - 'src/**'
       - 'mcu/AM13E/**'
-      - 'tests/AM13E/**'
-      - 'tools/AM13E/**'
-      - 'docs/AM13E/**'
-      - 'cmake/AM13E/**'
+      - 'mcu/_support/AM13E/**'
       - 'boot/mcu/AM13E/**'
+      - 'boot/CMakeLists.txt'
       - 'boot/src/**'
       - 'boot/tests/**'
       - 'boot/tools/**'
@@ -45,7 +43,7 @@ jobs:
         run: |
           mkdir -p am13e-ci-logs
           set -euo pipefail
-          bash tools/AM13E/run_host_regressions.sh full \
+          bash mcu/_support/AM13E/tools/run_host_regressions.sh full \
             2>&1 | tee am13e-ci-logs/host-tests.log
 
       - name: Compile original Rel17 objects and strictly link actual Application and Boot
@@ -55,8 +53,8 @@ jobs:
           set +e
           mkdir -p am13e-ci-logs
           cmake -S . -B am13e-ci-build -G "Unix Makefiles" \
-            -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
-            -DAM13E_ENABLE_FW1_LINK_GATE=ON \
+            -DESCAPE32_BUILD_AM13E=ON -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            -DAM13E_BUILD_DIAGNOSTICS=ON \
             -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/config.ld" \
             -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
             >am13e-ci-logs/configure.log 2>&1
@@ -70,7 +68,7 @@ jobs:
             echo "SKIPPED (CMake configuration failed)" >am13e-ci-logs/compile.log
           fi
           if [ "$compile_rc" -eq 0 ]; then
-            cmake --build am13e-ci-build --target AM13E_FW1_REL17_IMAGE BOOT5_PB14.elf -j 2 \
+            cmake --build am13e-ci-build --target AM13E BOOT5_PB14 -j 2 \
               >am13e-ci-logs/link.log 2>&1
             link_rc=$?
           else
@@ -111,12 +109,8 @@ jobs:
           cmake --build am13e-ci-build --target AM13E_MCU_MOTOR_PAD_BACKEND -j 2 \
             >am13e-ci-logs/mcu-motor-pad-backend-build.log 2>&1
           cat am13e-ci-logs/mcu-motor-pad-backend-build.log
-          # Catch Reference clock-provider/diagnostic linker regressions too.
-          cmake --build am13e-ci-build --target AM13E_CLOCK.elf -j 2 \
-            >am13e-ci-logs/reference-clock-diag-build.log 2>&1
-          cat am13e-ci-logs/reference-clock-diag-build.log
 
-      - name: Link and pack FULL FW1 Rel17-v1.4, verify Boot Flash transaction in host memory
+      - name: Link and pack FULL FW1 Rev1.6, verify Boot Flash transaction in host memory
         id: rel17
         continue-on-error: true
         shell: bash
@@ -124,34 +118,33 @@ jobs:
           set -e
           set -o pipefail
           cp am13e-ci-logs/link.log am13e-ci-logs/fw1-rel17-build.log
-          arm-none-eabi-size am13e-ci-build/AM13E_FW1_REL17.elf \
+          arm-none-eabi-size am13e-ci-build/AM13E-rev17.3.elf \
             2>&1 | tee am13e-ci-logs/fw1-rel17-size.log
-          arm-none-eabi-objdump -h am13e-ci-build/AM13E_FW1_REL17.elf \
+          arm-none-eabi-objdump -h am13e-ci-build/AM13E-rev17.3.elf \
             >am13e-ci-logs/fw1-rel17-sections.log
           cmake -S boot/tests/am13e_host -B am13e-ci-rel17-host -G "Unix Makefiles" \
             -DAM13E_HOST_SANITIZERS=OFF \
-            -DAM13E_HOST_PACKED_IMAGE="$(pwd)/am13e-ci-build/AM13E_FW1_REL17.flat.bin" \
+            -DAM13E_HOST_PACKED_IMAGE="$(pwd)/am13e-ci-build/AM13E-rev17.3.bin" \
             >am13e-ci-logs/rel17-host-configure.log 2>&1
           cmake --build am13e-ci-rel17-host -j 2 \
             >am13e-ci-logs/rel17-host-build.log 2>&1 || { cat am13e-ci-logs/rel17-host-build.log; exit 1; }
           ctest --test-dir am13e-ci-rel17-host --output-on-failure -V \
             2>&1 | tee am13e-ci-logs/rel17-host-test.log
 
-          arm-none-eabi-size am13e-ci-build/boot/BOOT5_PB14.elf \
+          arm-none-eabi-size am13e-ci-build/boot/BOOT5_PB14-rev4.elf \
             | tee am13e-ci-logs/boot-elf-size.log
-          arm-none-eabi-objdump -h am13e-ci-build/boot/BOOT5_PB14.elf \
+          arm-none-eabi-objdump -h am13e-ci-build/boot/BOOT5_PB14-rev4.elf \
             >am13e-ci-logs/boot-elf-sections.log
 
 
-      - name: Audit Rel17-v1.4 linked Boot/FW1 addresses and ELF-to-BIN integrity
+      - name: Audit Rev1.6 linked Boot/FW1 addresses and ELF-to-BIN integrity
         id: static_image
         shell: bash
         run: |
           set -e
           set -o pipefail
-          grep -q 'AM13E_IMAGE_PROFILE:STRING=REL17_V14' am13e-ci-build/CMakeCache.txt
           if cmake -S . -B am13e-ci-image-profile-negative -G "Unix Makefiles" \
-            -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            -DESCAPE32_BUILD_AM13E=ON -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
             -DAM13E_IMAGE_PROFILE=UNVERIFIED_LAYOUT \
             >am13e-ci-logs/image-profile-negative.log 2>&1; then
             echo "FAIL: unsupported image profile accepted"
@@ -159,7 +152,7 @@ jobs:
           fi
           grep -q 'Unsupported AM13E_IMAGE_PROFILE' \
             am13e-ci-logs/image-profile-negative.log
-          python3 tools/AM13E/verify_rel17_image.py --build am13e-ci-build \
+          python3 mcu/_support/AM13E/tools/verify_rel17_image.py --build am13e-ci-build \
             2>&1 | tee am13e-ci-logs/fw1-rel17-static-audit.log
 
       - name: Compile current Reference board IO configuration and reject pin conflicts
@@ -167,7 +160,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python3 tests/AM13E/board_profile_compile_smoke.py am13e-ci-build \
+          python3 mcu/_support/AM13E/tools/board_profile_compile_smoke.py am13e-ci-build \
             2>&1 | tee am13e-ci-logs/board-profile-compile.log
 
       - name: Strict ARM link with synthetic board-selected UNICOMM RX
@@ -178,19 +171,19 @@ jobs:
           # Never flash this ELF to a physical ESC board.
           set -e
           cmake -S . -B am13e-ci-serial-selected -G "Unix Makefiles" \
-            -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            -DESCAPE32_BUILD_AM13E=ON -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
             -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/config.ld" \
-            -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/tests/AM13E/uart_rx_synthetic_profile.cmake" \
+            -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/mcu/_support/AM13E/cmake/test_profiles/uart_rx_synthetic_profile.cmake" \
             >am13e-ci-logs/serial-selected-configure.log 2>&1 || {
               cat am13e-ci-logs/serial-selected-configure.log
               exit 1
             }
-          cmake --build am13e-ci-serial-selected --target AM13E_FW1_REL17.elf -j 2 \
+          cmake --build am13e-ci-serial-selected --target AM13E-rev17.3.elf -j 2 \
             >am13e-ci-logs/serial-selected-link.log 2>&1 || {
               cat am13e-ci-logs/serial-selected-link.log
               exit 1
             }
-          arm-none-eabi-nm am13e-ci-serial-selected/AM13E_FW1_REL17.elf \
+          arm-none-eabi-nm am13e-ci-serial-selected/AM13E-rev17.3.elf \
             >am13e-ci-logs/serial-selected-symbols.txt
           grep -Eq ' [Tt] UC0_IRQHandler$' am13e-ci-logs/serial-selected-symbols.txt
           grep -Eq ' [Tt] am13e_app_serial_rx_init$' am13e-ci-logs/serial-selected-symbols.txt
@@ -202,26 +195,26 @@ jobs:
           echo "PASS synthetic selected UNICOMM RX ARM link; NOT FLASHED"
           # Diagnostic UC TX selected firmware, not a valid PCB pin plan.
           cmake -S . -B am13e-ci-crsf-tx -G "Unix Makefiles" \
-            -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            -DESCAPE32_BUILD_AM13E=ON -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
             -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/config.ld" \
-            -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/tests/AM13E/uart_crsf_tx_synthetic_profile.cmake" \
+            -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/mcu/_support/AM13E/cmake/test_profiles/uart_crsf_tx_synthetic_profile.cmake" \
             >am13e-ci-logs/serial-tx-configure.log 2>&1 || {
               cat am13e-ci-logs/serial-tx-configure.log
               exit 1
             }
-          cmake --build am13e-ci-crsf-tx --target AM13E_FW1_REL17.elf -j 2 \
+          cmake --build am13e-ci-crsf-tx --target AM13E-rev17.3.elf -j 2 \
             >am13e-ci-logs/serial-tx-link.log 2>&1 || {
               cat am13e-ci-logs/serial-tx-link.log
               exit 1
             }
-          arm-none-eabi-nm am13e-ci-crsf-tx/AM13E_FW1_REL17.elf \
+          arm-none-eabi-nm am13e-ci-crsf-tx/AM13E-rev17.3.elf \
             >am13e-ci-logs/serial-tx-symbols.txt
           grep -Eq ' [Tt] UC0_IRQHandler$' am13e-ci-logs/serial-tx-symbols.txt
           grep -Eq ' [Tt] am13e_app_io_crsf_reply$' am13e-ci-logs/serial-tx-symbols.txt
           # Retired parallel formatter is absent; inspect the real Core call path.
           grep -Eq ' [Tt] crsffunc$' am13e-ci-logs/serial-tx-symbols.txt
           arm-none-eabi-objdump -d --disassemble=am13e_app_io_crsf_reply \
-            am13e-ci-crsf-tx/AM13E_FW1_REL17.elf \
+            am13e-ci-crsf-tx/AM13E-rev17.3.elf \
             >am13e-ci-logs/serial-tx-core-reply-disassembly.txt
           grep -q '<execcrsfcmd>' am13e-ci-logs/serial-tx-core-reply-disassembly.txt
           grep -q '<crc8dvbs2>' am13e-ci-logs/serial-tx-core-reply-disassembly.txt
@@ -238,19 +231,19 @@ jobs:
           # EXBUS original 7-descriptor/38B response in selected UART
           # never qualifies real EXBUS half-duplex physical timing.
           cmake -S . -B am13e-ci-exbus-tx -G "Unix Makefiles" \
-            -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            -DESCAPE32_BUILD_AM13E=ON -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
             -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/config.ld" \
-            -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/tests/AM13E/uart_exbus_tx_synthetic_profile.cmake" \
+            -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/mcu/_support/AM13E/cmake/test_profiles/uart_exbus_tx_synthetic_profile.cmake" \
             >am13e-ci-logs/exbus-tx-configure.log 2>&1 || {
               cat am13e-ci-logs/exbus-tx-configure.log
               exit 1
             }
-          cmake --build am13e-ci-exbus-tx --target AM13E_FW1_REL17.elf -j 2 \
+          cmake --build am13e-ci-exbus-tx --target AM13E-rev17.3.elf -j 2 \
             >am13e-ci-logs/exbus-tx-link.log 2>&1 || {
               tail -n 65 am13e-ci-logs/exbus-tx-link.log
               exit 1
             }
-          arm-none-eabi-nm am13e-ci-exbus-tx/AM13E_FW1_REL17.elf \
+          arm-none-eabi-nm am13e-ci-exbus-tx/AM13E-rev17.3.elf \
             >am13e-ci-logs/exbus-tx-symbols.txt
           grep -Eq ' [Tt] am13e_app_io_exbus_telemetry$' \
             am13e-ci-logs/exbus-tx-symbols.txt
@@ -259,19 +252,19 @@ jobs:
           # Source original Rel17 KISS/iBUS/S.Port/CRSF/MSB/HoTT handlers
           # + actual TI UNICOMM IRQ/FIFO/EOT transport; NEVER FLASH.
           cmake -S . -B am13e-ci-telem -G "Unix Makefiles" \
-            -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            -DESCAPE32_BUILD_AM13E=ON -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
             -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/config.ld" \
-            -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/tests/AM13E/uart_telem_synthetic_profile.cmake" \
+            -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/mcu/_support/AM13E/cmake/test_profiles/uart_telem_synthetic_profile.cmake" \
             >am13e-ci-logs/telem-configure.log 2>&1 || {
               cat am13e-ci-logs/telem-configure.log
               exit 1
             }
-          cmake --build am13e-ci-telem --target AM13E_FW1_REL17.elf -j 2 \
+          cmake --build am13e-ci-telem --target AM13E-rev17.3.elf -j 2 \
             >am13e-ci-logs/telem-link.log 2>&1 || {
               cat am13e-ci-logs/telem-link.log
               exit 1
             }
-          arm-none-eabi-nm am13e-ci-telem/AM13E_FW1_REL17.elf \
+          arm-none-eabi-nm am13e-ci-telem/AM13E-rev17.3.elf \
             >am13e-ci-logs/telem-symbols.txt
           grep -Eq ' [Tt] UC1_IRQHandler$' am13e-ci-logs/telem-symbols.txt
           grep -Eq ' [Tt] am13e_telem_hw_init$' am13e-ci-logs/telem-symbols.txt
@@ -299,19 +292,19 @@ jobs:
           # Positive is a SYNTHETIC compile/link fixture, NEVER FLASH.
           # These flags do NOT constitute physical recovery evidence.
           cmake -S . -B am13e-ci-boot-qualified -G "Unix Makefiles" \
-            -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            -DESCAPE32_BUILD_AM13E=ON -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
             -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/config.ld" \
             -DCMAKE_C_FLAGS="-DAM13E_BOOT_RECOVERY_QUALIFIED=1 -DAM13E_BOOT_ROM_BSL_SWD_RECOVERY_TESTED=1 -DAM13E_BOOT_NONMAIN_REVERSIBILITY_TESTED=1 -DAM13E_BOOT_POWERLOSS_RECOVERY_TESTED=1 -DAM13E_BOOT_WEP_BITMAP_READBACK_TESTED=1" \
             >am13e-ci-logs/boot-qualified-configure.log 2>&1 || {
               cat am13e-ci-logs/boot-qualified-configure.log
               exit 1
             }
-          cmake --build am13e-ci-boot-qualified --target BOOT5_PB14.elf -j 2 \
+          cmake --build am13e-ci-boot-qualified --target BOOT5_PB14-rev4.elf -j 2 \
             >am13e-ci-logs/boot-qualified-link.log 2>&1 || {
               tail -n 90 am13e-ci-logs/boot-qualified-link.log
               exit 1
             }
-          arm-none-eabi-nm am13e-ci-boot-qualified/boot/BOOT5_PB14.elf \
+          arm-none-eabi-nm am13e-ci-boot-qualified/boot/BOOT5_PB14-rev4.elf \
             >am13e-ci-logs/boot-qualified-symbols.txt
           grep -Eq ' [Tt] setwrp$' am13e-ci-logs/boot-qualified-symbols.txt
           grep -Eq ' [Tt] boot_am13e_update_commit_quarantined$' \
@@ -331,12 +324,12 @@ jobs:
             if [ "$profile" = erpm ]; then flags="$erpm"; fi
             if [ "$profile" = both ]; then flags="$park $erpm"; fi
             cmake -S . -B "am13e-ci-aux-$profile" \
-              -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk -DCMAKE_C_STANDARD=23 \
-              -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/tests/AM13E/${profile}_synthetic_profile.cmake" \
+              -DESCAPE32_BUILD_AM13E=ON -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk -DCMAKE_C_STANDARD=23 \
+              -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/mcu/_support/AM13E/cmake/test_profiles/${profile}_synthetic_profile.cmake" \
               >"am13e-ci-logs/aux-$profile-configure.log" 2>&1
-            cmake --build "am13e-ci-aux-$profile" --target AM13E_FW1_REL17_IMAGE -j 2 \
+            cmake --build "am13e-ci-aux-$profile" --target AM13E -j 2 \
               >"am13e-ci-logs/aux-$profile-build.log" 2>&1
-            arm-none-eabi-nm "am13e-ci-aux-$profile/AM13E_FW1_REL17.elf" \
+            arm-none-eabi-nm "am13e-ci-aux-$profile/AM13E-rev17.3.elf" \
               >"am13e-ci-logs/aux-$profile-symbols.txt"
             if [ "$profile" != erpm ]; then
               grep -Eq ' [Tt] am13e_app_park_level$' "am13e-ci-logs/aux-$profile-symbols.txt"
@@ -353,7 +346,7 @@ jobs:
             "$park -DERPM_PIN=1 -DAM13E_BOARD_ERPM_GPIO=GPIO1 -DAM13E_BOARD_ERPM_MASK=1U -DAM13E_BOARD_ERPM_PINCM=32U" \
             '-DERPM_PIN=1 -DAM13E_BOARD_ERPM_GPIO=GPIO1 -DAM13E_BOARD_ERPM_MASK=8192U -DAM13E_BOARD_ERPM_PINCM=45U' \
             '-DERPM_PIN=1 -DAM13E_BOARD_ERPM_GPIO=GPIO1 -DAM13E_BOARD_ERPM_MASK=8192U -DAM13E_BOARD_ERPM_PINCM=33U'; do
-            if cc -std=c11 -DAM13E -Imcu/AM13E -Itests/AM13E/aux_mock \
+            if cc -std=c11 -DAM13E -Imcu/AM13E -Isrc/tests/AM13E/aux_mock \
               -fsyntax-only $flags mcu/AM13E/hal/aux_gpio.c \
               >am13e-ci-logs/aux-negative.log 2>&1; then
               echo 'FAIL invalid auxiliary GPIO selection accepted'; exit 1
@@ -367,55 +360,37 @@ jobs:
         id: led_selected
         shell: bash
         run: |
-          bash tests/AM13E/led_profiles_validation.sh /tmp/am13e-ti-sdk am13e-ci-led am13e-ci-logs
+          bash mcu/_support/AM13E/tools/led_profiles_validation.sh /tmp/am13e-ti-sdk am13e-ci-led am13e-ci-logs
 
       - name: Audit actual Rel17 functional software coverage
         id: coverage
         shell: bash
         run: |
           set -e
-          python3 tools/AM13E/verify_rel17_coverage.py \
+          python3 mcu/_support/AM13E/tools/verify_rel17_coverage.py \
             --build am13e-ci-build --logs am13e-ci-logs
 
-      - name: Enforce current Rev1.6 authority and immutable historical Rev1.4 documents
-        id: v14_docs
+      - name: Enforce original Rev1.6 authority and native repository architecture
+        id: authority
         shell: bash
         run: |
           set -e
-          python3 tools/AM13E/verify_v14_docs.py
+          python3 mcu/_support/AM13E/tools/verify_v16_docs.py
 
-      - name: Audit v1.4 upstream source and unresolved Boot interfaces
-        id: v14_scope
+      - name: Audit original Rel17 integration and Boot safety contracts
+        id: source_contract
         shell: bash
         run: |
           set -e
-          python3 tools/AM13E/verify_v14_source_scope.py
+          python3 mcu/_support/AM13E/tools/verify_source_contract.py
 
       - name: Summarize actual undefined symbols
         if: always()
         shell: bash
         run: |
-          python3 - <<'PY'
-          import collections, json, pathlib, re
-          log=pathlib.Path("am13e-ci-logs/link.log")
-          content=log.read_text(errors="replace") if log.exists() else ""
-          pattern=r"undefined reference to [\x60']([^\x60']+)[\x60']"
-          names=re.findall(pattern,content)
-          counts=collections.Counter(names)
-          audio={n:k for n,k in counts.items() if n.startswith("am13e_app_audio_")}
-          other={n:k for n,k in counts.items() if not n.startswith("am13e_app_audio_")}
-          report={
-            "undefined_unique":len(counts),
-            "undefined_references":len(names),
-            "audio_unique":len(audio),
-            "non_audio_unique":len(other),
-            "audio":dict(sorted(audio.items())),
-            "non_audio":dict(sorted(other.items()))
-          }
-          pathlib.Path("am13e-ci-logs/undefined-symbols.json").write_text(
-            json.dumps(report,indent=2)+"\n")
-          print(json.dumps(report,indent=2))
-          PY
+          arm-none-eabi-nm --undefined-only am13e-ci-build/AM13E-rev17.3.elf \
+            | tee am13e-ci-logs/undefined-symbols.log
+          test ! -s am13e-ci-logs/undefined-symbols.log
 
       - name: Upload raw logs and linker map
         if: always()
@@ -424,13 +399,13 @@ jobs:
           name: am13e-am13e-fw1-build-evidence
           path: |
             am13e-ci-logs/
-            am13e-ci-build/boot/BOOT5_PB14.map
-            am13e-ci-build/boot/BOOT5_PB14.elf
-            am13e-ci-build/AM13E_FW1_REL17.map
-            am13e-ci-build/AM13E_FW1_REL17.elf
-            am13e-ci-build/AM13E_FW1_REL17.bin
-            am13e-ci-build/AM13E_FW1_REL17.flat.bin
-            am13e-ci-build/AM13E_FW1_REL17.json
+            am13e-ci-build/boot/BOOT5_PB14-rev4.map
+            am13e-ci-build/boot/BOOT5_PB14-rev4.elf
+            am13e-ci-build/AM13E-rev17.3.map
+            am13e-ci-build/AM13E-rev17.3.elf
+            am13e-ci-build/CMakeFiles/AM13E-rev17.3.elf.dir/image.raw.bin
+            am13e-ci-build/AM13E-rev17.3.bin
+            am13e-ci-build/AM13E-rev17.3.elf.json
           retention-days: 14
           if-no-files-found: warn
 
@@ -446,11 +421,11 @@ jobs:
           echo "Synthetic PARK/ERPM ARM links (NOT FLASHED): ${{ steps.aux_selected.outcome }}"
           echo "Synthetic discrete LED ARM links (NOT FLASHED): ${{ steps.led_selected.outcome }}"
           echo "Rel17 functional coverage evidence: ${{ steps.coverage.outcome }}"
-          echo "Rev1.4 scope audit (open blockers tracked): ${{ steps.v14_scope.outcome }}"
-          echo "Rev1.6 integrity / immutable Rev1.4 audit: ${{ steps.v14_docs.outcome }}"
+          echo "Rev1.6 scope audit (open blockers tracked): ${{ steps.source_contract.outcome }}"
+          echo "Rev1.6 integrity / native architecture audit: ${{ steps.authority.outcome }}"
           echo "Motor/ADC/Flash/BEMF host regression: ${{ steps.host.outcome }}"
-          echo "Actual Rel17 FW1 Rel17-v1.4 ELF/Pack/Flash transaction: ${{ steps.rel17.outcome }}"
-          echo "Rel17-v1.4 linked-image static audit: ${{ steps.static_image.outcome }}"
+          echo "Actual Rel17 FW1 Rev1.6 ELF/Pack/Flash transaction: ${{ steps.rel17.outcome }}"
+          echo "Rev1.6 linked-image static audit: ${{ steps.static_image.outcome }}"
           test "${{ steps.host.outcome }}" = success &&
           test "${{ steps.build.outputs.configure_rc }}" = 0 &&
           test "${{ steps.build.outputs.compile_rc }}" = 0 &&
@@ -460,7 +435,7 @@ jobs:
           test "${{ steps.aux_selected.outcome }}" = success &&
           test "${{ steps.led_selected.outcome }}" = success &&
           test "${{ steps.coverage.outcome }}" = success &&
-          test "${{ steps.v14_scope.outcome }}" = success &&
-          test "${{ steps.v14_docs.outcome }}" = success &&
+          test "${{ steps.source_contract.outcome }}" = success &&
+          test "${{ steps.authority.outcome }}" = success &&
           test "${{ steps.rel17.outcome }}" = success &&
           test "${{ steps.static_image.outcome }}" = success

@@ -84,10 +84,10 @@ AM13E23019 integration design authority
 ----------------------------------------
 
 The AM13E port on `am13e-port-v2` follows the supplied
-**ESCape32 Rel17 Integration Design Rev1.4**, its Integration Mapping
+**ESCape32 Rel17 Integration Design Rev1.6**, its Integration Mapping
 and Interface Contracts, with original ESCape32 Rel17 source as
 the exclusive feature/behavior authority. Consult
-[docs/AM13E/V14_DESIGN_AUTHORITY.md](docs/AM13E/V14_DESIGN_AUTHORITY.md)
+[mcu/_support/AM13E/DESIGN_AUTHORITY.md](mcu/_support/AM13E/DESIGN_AUTHORITY.md)
 for the provenance hashes and the binding design/source precedence.
 
 AM13E implementation and Native Host/ARM CI are partial software

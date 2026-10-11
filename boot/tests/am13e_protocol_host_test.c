@@ -1,7 +1,7 @@
 /*
  * Stage D1: wire-level ESCape32 command framing through the real
  * boot/src/main.c dispatcher, boot/src/io.c framing helpers,
- * boot/src/flash_range.c and production flash.c state machine.
+ * boot/src/am13e/flash_range.c and production flash.c state machine.
  *
  * The receive/send transport and Flash controller are MOCKS, not PB14 hardware.
  * Host CRC is a software model of CRC-32/ISO-HDLC, not TI CRCP qualification.
@@ -544,7 +544,7 @@ static void queue_protocol(size_t image_bytes,const uint8_t *image){
 }
 int main(int argc, char **argv) {
     if (argc != 2) {
-        fprintf(stderr, "Usage: %s path/to/AM13E_APP_SMOKE.am13e-smoke.bin\n", argv[0]);
+        fprintf(stderr, "Usage: %s path/to/AM13E-rev17.3.bin\n", argv[0]);
         return 2;
     }
     /* Reference golden vector, independent of the generated frames. */

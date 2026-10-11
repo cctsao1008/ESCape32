@@ -1,4 +1,4 @@
-/* Rel17 v1.4: Boot Bank0 self-update sector execution experiment.
+/* Rel17 / Rev1.6: Boot Bank0 self-update sector execution experiment.
  *
  * This is NOT wired to CMD_UPDATE. Boot self-update remains unavailable
  * until physical recovery, post-erase SRAM call-graph, watchdog/IRQ,
@@ -12,7 +12,7 @@
  * No new image format, checksum or transport command is introduced.
  */
 #include "update_commit.h"
-#include "../../../src/update_staging.h"
+#include "../../../src/am13e/update_staging.h"
 #include <dl_flash.h>
 #include <stdint.h>
 #ifndef AM13E_BOOT_COMMIT_HOST_TEST
@@ -20,7 +20,7 @@
 #endif
 
 _Static_assert(AM13E_FLASH_BOOT_BASE==UINT32_C(0x00000000),
-               "Rev1.4 Boot starts at MAIN Bank0 0");
+               "Rev1.6 Boot starts at MAIN Bank0 0");
 _Static_assert(AM13E_BOOT_STAGE_BYTES==8U*AM13E_FLASH_ERASE_SECTOR,
                "Boot commit is exactly eight 2KiB sectors");
 _Static_assert((AM13E_FLASH_BOOT_END & 15U)==0U,

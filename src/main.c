@@ -212,8 +212,9 @@ static void nextstep(void) {
 	} else {
 		if (++step > 6) step = 1;
 	}
+	static const uint16_t seq[] = REL17_COMMUTATION_SEQUENCE;
 	static int pcc, val, cnt, buf[6];
-	int x = rel17_commutation_sequence[step - 1];
+	int x = seq[step - 1];
 	int m = x >> 3; // Energized phase mask
 	int p = x & m; // Positive phase
 	int n = ~x & m; // Negative phase

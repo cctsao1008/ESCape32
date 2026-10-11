@@ -18,8 +18,7 @@
 #include "common.h"
 #include "bidir_codec.h"
 static inline __attribute__((always_inline)) int exbus_retry_step(uint8_t *count) {
-    if(!*count)return 0;
-    return --*count&1U ? 1 : 2;
+    return --*count&1U;
 }
 static inline __attribute__((always_inline)) int cli_high_timeout(uint8_t *count) { return ++*count>=16U; }
 #include "exbus_autobaud.h"
@@ -51,7 +50,7 @@ static void serialirq(void);
 static int serialfunc(int len);
 static int ibusfunc(int len);
 static int sbusfunc(int len);
-static void sbuspacket(unsigned n);
+static inline __attribute__((always_inline)) void sbuspacket(int n);
 static int crsffunc(int len);
 static int exbusfunc(int len);
 static int hottfunc(int len);
@@ -74,8 +73,8 @@ static void calibirq(void);
 #endif
 static int serialfunc(int len), ibusfunc(int len), sbusfunc(int len);
 static int crsffunc(int len), exbusfunc(int len), hottfunc(int len), exbusresp(int id);
-static void sbuspacket(unsigned n);
-static inline __attribute__((always_inline)) unsigned crsfresponse(const char *buf, char *res);
+static inline __attribute__((always_inline)) void sbuspacket(int n);
+static inline __attribute__((always_inline)) unsigned crsfresponse(const char *buf, int a, char *res);
 static void io_feed_watchdog(void) {
     ++io_valid_frames;
     am13e_app_io_watchdog_feed();
@@ -668,7 +667,8 @@ unsigned am13e_app_io_crsf_reply(const uint8_t *frame,unsigned length,
      * Keep separate scratch: UART RX can preempt command/config processing.
      */
     static char scratch[1024];
-    const unsigned n=crsfresponse((const char *)frame,scratch);
+    const unsigned payload=crsfresponse((const char *)frame,frame[1],scratch);
+    const unsigned n=payload ? payload+3U : 0U;
     memcpy(reply,scratch,n);
     return n;
 }
@@ -694,7 +694,7 @@ void iotim_dma_isr(void) { // DSHOT
 			dshotval = a | b << 9;
 		}
 		int a = dshotval << 4 | dshotcrc(dshotval, 1);
-		int b=(int)rel17_bidir_gcr((uint16_t)a);
+		int b=(int)rel17_bidir_gcr(a);
 		uint16_t *buf = (uint16_t *)(iobuf + 64);
 		buf[0] = -1;
 		for (int p = -1, i = 19; i >= 0; --i) {
@@ -752,6 +752,73 @@ void iotim_isr(void) {
 void usart2_isr(void) {
 	ioirq();
 }
+#endif /* IO_PA2 */
+#endif /* legacy capture IRQs */
+
+#if defined(IO_PA2) || defined(AM13E)
+static int getchan1(const char *buf, int n) { // SBUS/CRSF
+	if (n < 0 || n >= 16) return -1;
+	int i = (n * 11) >> 3;
+	int a = (n * 3) & 7;
+	int b = ((n + 1) * 3) & 7;
+	int x = a < b ?
+		buf[i] >> a | (buf[i + 1] & ((1 << b) - 1)) << (8 - a):
+		buf[i] >> a | buf[i + 1] << (8 - a) | (buf[i + 2] & ((1 << b) - 1)) << (16 - a);
+	return (x * 5 >> 3) + 880;
+}
+
+static int getchan2(const char *buf, int m, int n, int s) { // EXBUS/HoTT
+	if (s > 0 && n >= 8 && (n -= s) < 8) return -1;
+	if (n < 0 || n >= m) return -1;
+	buf += n << 1;
+	int a = buf[0];
+	int b = buf[1];
+	return (s < 0 ? a | b << 8 : a << 8 | b) >> 3;
+}
+
+static inline __attribute__((always_inline)) void sbuspacket(int n) {
+	static const char slot[] = {
+		0x43, 0xc3, 0x23, 0xa3, 0x63, 0xe3, // 2..7
+		0x53, 0xd3, 0x33, 0xb3, 0x73, 0xf3, // 10..15
+		0x4b, 0xcb, 0x2b, 0xab, 0x6b, 0xeb, // 18..23
+		0x5b, 0xdb, 0x3b, 0xbb, 0x7b, 0xfb, // 26..31
+	};
+	int a = 0, b = 0;
+	switch (n) {
+		case 0: // SBS-01T (ESC temperature)
+			a = temp1 + 100;
+			b = a >> 8 | 0x80;
+			break;
+		case 1: // SBS-01T (motor temperature)
+			a = temp2 + 100;
+			b = a >> 8 | 0x80;
+			break;
+		case 2: // SBS-01C (current)
+			b = curr;
+			a = b >> 8 | 0x40;
+			break;
+		case 3: // SBS-01C (voltage)
+			b = volt;
+			a = b >> 8;
+			break;
+		case 4: // SBS-01C (consumption)
+			b = csum;
+			a = b >> 8;
+			break;
+		case 5: // SBS-01R (RPM)
+			a = min(erpm / (cfg.telem_poles * 3), 0xffff);
+			b = a >> 8;
+			break;
+	}
+	iobuf[0] = slot[n + (telphid - 1) * 6];
+	iobuf[1] = a;
+	iobuf[2] = b;
+}
+
+#endif
+
+#if !defined(AM13E)
+#ifdef IO_PA2
 
 
 
@@ -810,7 +877,7 @@ static void sbusirq1(void) {
 static void sbusirq2(void) {
 	static char n;
 	TIM15_SR = ~TIM_SR_UIF;
-	sbuspacket((unsigned)n);
+	sbuspacket(n);
 	DMA1_CNDTR(USART2_TX_DMA) = 3;
 	DMA1_CCR(USART2_TX_DMA) = DMA_CCR_EN | DMA_CCR_DIR | DMA_CCR_MINC | DMA_CCR_PSIZE_8BIT | DMA_CCR_MSIZE_8BIT;
 	if (++n < 6) return;
@@ -971,27 +1038,9 @@ void am13e_app_io_service_pending_save(void)
 
 #if defined(IO_PA2) || defined(AM13E)
 /* Original Core algorithms; only peripheral operations are target seams. */
+#if defined(AM13E)
 static uint8_t exbus_description_index;
-static int getchan1(const char *buf, int n) { // SBUS/CRSF
-	if (n < 0 || n >= 16) return -1;
-	int i = (n * 11) >> 3;
-	int a = (n * 3) & 7;
-	int b = ((n + 1) * 3) & 7;
-	int x = a < b ?
-		buf[i] >> a | (buf[i + 1] & ((1 << b) - 1)) << (8 - a):
-		buf[i] >> a | buf[i + 1] << (8 - a) | (buf[i + 2] & ((1 << b) - 1)) << (16 - a);
-	return (x * 5 >> 3) + 880;
-}
-
-static int getchan2(const char *buf, int m, int n, int s) { // EXBUS/HoTT
-	if (s > 0 && n >= 8 && (n -= s) < 8) return -1;
-	if (n < 0 || n >= m) return -1;
-	buf += n << 1;
-	int a = buf[0];
-	int b = buf[1];
-	return (s < 0 ? a | b << 8 : a << 8 | b) >> 3;
-}
-
+#endif
 static int serialresp1(int a, int b) {
 	iobuf[0] = 4;
 	iobuf[1] = a;
@@ -1096,45 +1145,6 @@ static int ibusfunc(int len) {
 	return 0;
 }
 
-static void sbuspacket(unsigned n) {
-	static const char slot[] = {
-		0x43, 0xc3, 0x23, 0xa3, 0x63, 0xe3, // 2..7
-		0x53, 0xd3, 0x33, 0xb3, 0x73, 0xf3, // 10..15
-		0x4b, 0xcb, 0x2b, 0xab, 0x6b, 0xeb, // 18..23
-		0x5b, 0xdb, 0x3b, 0xbb, 0x7b, 0xfb, // 26..31
-	};
-	int a = 0, b = 0;
-	switch (n) {
-		case 0: // SBS-01T (ESC temperature)
-			a = temp1 + 100;
-			b = a >> 8 | 0x80;
-			break;
-		case 1: // SBS-01T (motor temperature)
-			a = temp2 + 100;
-			b = a >> 8 | 0x80;
-			break;
-		case 2: // SBS-01C (current)
-			b = curr;
-			a = b >> 8 | 0x40;
-			break;
-		case 3: // SBS-01C (voltage)
-			b = volt;
-			a = b >> 8;
-			break;
-		case 4: // SBS-01C (consumption)
-			b = csum;
-			a = b >> 8;
-			break;
-		case 5: // SBS-01R (RPM)
-			a = min(erpm / (cfg.telem_poles * 3), 0xffff);
-			b = a >> 8;
-			break;
-	}
-	iobuf[0] = slot[n + (telphid - 1) * 6];
-	iobuf[1] = a;
-	iobuf[2] = b;
-}
-
 static int sbusfunc(int len) {
 	if (len != 25 || iobuf[0] != 0x0f) return 0;
 #if !defined(AM13E)
@@ -1179,15 +1189,14 @@ static int sbusfunc(int len) {
 	return -1;
 #endif
 }
-static inline __attribute__((always_inline)) unsigned crsfresponse(const char *buf,char *res) {
-    int a=buf[1];
+static inline __attribute__((always_inline)) unsigned crsfresponse(const char *buf,int a,char *res) {
     if(telmode!=4 || !(a=min(execcrsfcmd(buf+2,a-1,res+2),61)))return 0U;
 #if defined(AM13E)
     if(a<0)return 0U; /* Preserve native failure preflight before any output write. */
 #endif
     res[0]=(char)0xc8;res[1]=(char)(a+1);
     res[a+2]=(char)crc8dvbs2(res+2,a);
-    return (unsigned)a+3U;
+    return (unsigned)a;
 }
 
 static int crsffunc(int len) {
@@ -1216,8 +1225,8 @@ static int crsffunc(int len) {
 			case 0x2c: // Read
 			case 0x2d: // Write
 #if !defined(AM13E)
-                a=(int)crsfresponse(buf,res);
-                if(a)sendtelemdata(res,a);
+                a=(int)crsfresponse(buf,a,res);
+                if(a)sendtelemdata(res,a+3);
 #endif
 				break;
 #endif
@@ -1229,6 +1238,13 @@ static int crsffunc(int len) {
 }
 
 static int exbusresp(int x) {
+#if defined(AM13E)
+#define n exbus_description_index
+#define str1 description_name
+#define str2 description_unit
+#else
+	static uint8_t n;
+#endif
 
 	#if defined(AM13E)
     int a=(int)io_exbus_device_id;
@@ -1245,19 +1261,19 @@ static int exbusresp(int x) {
 	iobuf[10] = a >> 8;
 	iobuf[11] = a >> 16;
 	iobuf[12] = 0x00;
-	if (exbus_description_index < 7) { // Send description
-		static const char *const description_name[] = {"ESCape32", "Temp1", "Temp2", "Volt", "Curr", "Csum", "RPM"};
-		static const char *const description_unit[] = {"", "C", "C", "V", "A", "mAh", ""};
+	if (n < 7) { // Send description
+		static const char *const str1[] = {"ESCape32", "Temp1", "Temp2", "Volt", "Curr", "Csum", "RPM"};
+		static const char *const str2[] = {"", "C", "C", "V", "A", "mAh", ""};
 		char *p = iobuf + 15;
-		char *q = stpcpy(p, description_name[exbus_description_index]);
+		char *q = stpcpy(p, str1[n]);
 		int b = q - p; // len1
-		p = stpcpy(q, description_unit[exbus_description_index]);
+		p = stpcpy(q, str2[n]);
 		int c = p - q; // len2
 		a = b + c;
 		iobuf[2] = a + 18;
 		iobuf[5] = a + 10;
 		iobuf[7] = a + 8;
-		iobuf[13] = exbus_description_index++;
+		iobuf[13] = n++;
 		iobuf[14] = b << 3 | c;
 		p[0] = crc8(iobuf + 7, a + 8);
 		p[1] = b = crc16ccitt(iobuf, a + 16);
@@ -1293,6 +1309,11 @@ static int exbusresp(int x) {
 	iobuf[36] = a = crc16ccitt(iobuf, 36);
 	iobuf[37] = a >> 8;
 	return 38;
+#if defined(AM13E)
+#undef n
+#undef str1
+#undef str2
+#endif
 }
 
 static int exbusfunc(int len) {
@@ -1328,8 +1349,8 @@ static int exbusfunc(int len) {
 		buf += a;
 	}
 #if !defined(AM13E)
-    const int rate=exbus_retry_step(&attempts);
-    if(rate)USART2_BRR=rate==1 ? CLK_CNT(250000) : CLK_CNT(125000);
+    if(!attempts)return 0;
+    USART2_BRR=exbus_retry_step(&attempts) ? CLK_CNT(250000) : CLK_CNT(125000);
 #endif
 	return 0;
 }

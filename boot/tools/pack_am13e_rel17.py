@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare/check a FLAT ESCape32 Rel17 v1.4 AM13E M33 application binary.
+"""Prepare/check a FLAT ESCape32 Rev1.6 AM13E M33 application binary.
 
 APP_BASE=0x6000. Actual image bytes are the linked ELF/objcopy output,
 not a 488KiB fixed container. Only a 4-byte transport alignment pad
@@ -78,7 +78,7 @@ def verify(image:bytes)->dict[str,int|str]:
         raise ImageError("Transport image exceeds APP or is not 4-byte-aligned")
     sp,pc=_vectors(image)
     return {
-        "contract":"Rel17 v1.4 flat APP / Cfg.id boot gate",
+        "contract":"Rev1.6 flat APP / Cfg.id boot gate",
         "app_base":APP_BASE,
         "cfg_marker_address":CFG_ID_ADDR,
         "app_allocation_max_bytes":MAX_LENGTH,
@@ -128,7 +128,7 @@ def main()->int:
         print(json.dumps(meta,indent=2))
         return 0
     except (ImageError,OSError) as exc:
-        print("Rel17 v1.4 flat APP "+a.op+" failed: "+str(exc),file=sys.stderr)
+        print("Rev1.6 flat APP "+a.op+" failed: "+str(exc),file=sys.stderr)
         return 1
 
 if __name__=="__main__":

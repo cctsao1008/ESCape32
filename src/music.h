@@ -1,5 +1,4 @@
-/* Original Rel17 playmusic() tone periods at its 8MHz timer reference.
- * Core score interpretation and target clock translation share this table. */
+/* Original Rel17 playmusic periods at its 8MHz timer reference. */
 #pragma once
 #include <stdint.h>
-static const uint16_t rel17_music_period[13]={15287,14429,13619,12856,12133,11452,10810,10203,9630,9090,8579,8097,7643};
+#define REL17_MUSIC_PERIODS {15287,14429,13619,12856,12133,11452,10810,10203,9630,9090,8579,8097,7643}

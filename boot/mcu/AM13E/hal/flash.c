@@ -1,4 +1,4 @@
-/* Native AM13E23019 original Boot write() for APP — Rel17 v1.4.
+/* Native AM13E23019 original Boot write() for APP — Rel17 / Rev1.6.
  * The original CMD_WRITE accepts a 1KiB logical block (or short tail)
  * and returns ACK/NAK; it DOES NOT enforce a whole-image transfer
  * sequence, flash-resident CRC, or signature-last commit.

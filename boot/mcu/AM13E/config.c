@@ -23,7 +23,7 @@ void init(void) {
 }
 
 #ifndef AM13E_CLOCK_DIAGNOSTIC
-/* ESCape32 Rel17 v1.4 AM13E Boot entry bridge.
+/* ESCape32 Rel17 / Rev1.6 AM13E Boot entry bridge.
  * The single TI SDK Reset_Handler declares extern int main(void);
  * Boot's original protocol dispatcher retains a void-return contract
  * in boot/src/main.c and its legacy MCU entry is not modified.

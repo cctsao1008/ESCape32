@@ -1,5 +1,5 @@
 /*
- * ESCape32 rel17 v1.4: original Cfg.id==0x32EA launch gate.
+ * ESCape32 rel17 Rev1.6: original Cfg.id==0x32EA launch gate.
  * APP_BASE=0x6000 is a relocated native M33 vector table.
  * No v1.6 signature, CRC, header, or fixed image size requirement.
  */

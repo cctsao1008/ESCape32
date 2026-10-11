@@ -654,6 +654,9 @@ static void delayf(void) {
 }
 
 int playmusic(const char *str, int vol) {
+#if !defined(AM13E)
+	static const uint16_t arr[] = REL17_MUSIC_PERIODS;
+#endif
 	char *end;
 	int tmp = strtol(str, &end, 10); // Tempo
 	if (str == end) tmp = 2000; // 120 BPM by default
@@ -706,7 +709,7 @@ int playmusic(const char *str, int vol) {
         /* Pass the Rel17 score semantics; backend computes true timing. */
         am13e_app_audio_music_note(a, b + c, vol);
 #else
-		TIM1_ARR = rel17_music_period[a] >> (b + c); // Frequency
+		TIM1_ARR = arr[a] >> (b + c); // Frequency
 		TIM1_CCR1 = (DEAD_TIME + CLK_MHZ / 8 - 1) * 8 / CLK_MHZ + vol; // Volume
 		TIM1_CCR3 = 0;
 #endif

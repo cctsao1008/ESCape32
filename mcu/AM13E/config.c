@@ -46,12 +46,11 @@ void am13e_app_motor_runtime_tick_init(void)
     DL_SYSTICK_enable();
 }
 
-#ifndef AM13E_CLOCK_DIAGNOSTIC
-/* ESCape32 Rel17 v1.4 AM13E Application entry bridge.
+/* ESCape32 Rel17 / Rev1.6 AM13E Application entry bridge.
  * TI SDK startup_gcc_arm.c declares extern int main(void). Keep one
  * startup/exception vector provider in the TI startup object and
  * preserve Rel17's original void control-loop body in src/main.c.
- * This file does not initialize clocks, peripherals or control policy.
+ * The entry bridge adds no clock, peripheral or control policy.
  */
 void am13e_rel17_app_main(void);
 
@@ -64,5 +63,3 @@ int main(void)
     for (;;) {
     }
 }
-
-#endif

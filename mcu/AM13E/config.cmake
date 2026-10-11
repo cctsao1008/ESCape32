@@ -1,4 +1,5 @@
-# Native Rel17 v1.4 Application source selection and selected Reference board options.
+include("${PROJECT_SOURCE_DIR}/mcu/_support/AM13E/cmake/ti.cmake")
+# Native Rev1.6 Application source selection and selected Reference board options.
         set(am13e_sources
             "${PROJECT_SOURCE_DIR}/src/main.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/config.c"
@@ -20,15 +21,15 @@
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/command_decode.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/crsf_deferred_command.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/serial_tx_queue.c"
-            "${PROJECT_SOURCE_DIR}/src/serial_frame_rx.c"
-            "${PROJECT_SOURCE_DIR}/src/cli_line_rx.c"
-            "${PROJECT_SOURCE_DIR}/src/telem_frame_rx.c"
+            "${PROJECT_SOURCE_DIR}/src/serial/serial_frame_rx.c"
+            "${PROJECT_SOURCE_DIR}/src/serial/cli_line_rx.c"
+            "${PROJECT_SOURCE_DIR}/src/serial/telem_frame_rx.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/telem_tx_progress.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/telem_mode_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/telem_backend.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/serial_uart_rx.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/service_reset.c"
-            "${PROJECT_SOURCE_DIR}/src/bidir_codec.c"
+            "${PROJECT_SOURCE_DIR}/src/serial/bidir_codec.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/bidir_timing.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/command_reply.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_runtime_irq.c"
@@ -61,7 +62,7 @@
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/cfg_flash_runtime.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/input_watchdog.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_event_timer.c"
-            "${PROJECT_SOURCE_DIR}/src/newlib_syscalls.c"
+            "${PROJECT_SOURCE_DIR}/src/runtime/newlib_syscalls.c"
             # Genuine TI DriverLib objects: delayCycles (common) and
             # Flash read wait-state RAMFUNC (FRI); no replacement stubs.
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_common.c"
@@ -122,3 +123,5 @@ function(am13e_configure_reference_board target)
                 ${AM13E_BOARD_BOARD_DEFINITIONS})
         endif()
 endfunction()
+
+set(srcs ${am13e_sources} "${am13e_sdk_compat_dir}/startup_gcc_arm.c")

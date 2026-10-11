@@ -1,7 +1,7 @@
 /*
  * AM13E reference AM13E23019 — real Rel17 savecfg() Flash persistence backend.
  *
- * Rev1.4 architecture / existing firmware profile:
+ * Rev1.6 architecture / existing firmware profile:
  *   ESCape32 config 0x00004000..0x00004fff (two 2KiB erase sectors)
  *   Reserved 0x00005000..0x00005fff (NO writer or reader)
  *

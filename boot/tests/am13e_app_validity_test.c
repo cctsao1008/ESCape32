@@ -1,4 +1,4 @@
-/* Rel17 v1.4 native boot gate: Cfg.id at 0x4000 and APP M33 vectors.
+/* Rel17 / Rev1.6 native boot gate: Cfg.id at 0x4000 and APP M33 vectors.
  * No image header/CRC/special marker. Host mapping does not change the
  * physical Reset Handler PC range used by the device.
  */

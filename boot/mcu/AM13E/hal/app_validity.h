@@ -1,4 +1,4 @@
-/* ESCape32 Rel17 v1.4 application launch gate.
+/* ESCape32 Rel17 / Rev1.6 application launch gate.
  * The original 0x32EA marker belongs to the persistent Cfg region at
  * 0x4000, NOT to application code or an AM13E image header.
  * The 488 KiB APP region is a CAPACITY, never a fixed image length.

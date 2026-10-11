@@ -1,6 +1,6 @@
 /* AM13E FW1 configuration-flash partition and ECC alignment plan.
  * Pure address arithmetic; never erases or programs physical Flash.
- * Rev1.4: ESCape32 config 0x4000..0x4fff; 0x5000..0x5fff RESERVED.
+ * Rev1.6: ESCape32 config 0x4000..0x4fff; 0x5000..0x5fff RESERVED.
  */
 #pragma once
 #include <stdint.h>

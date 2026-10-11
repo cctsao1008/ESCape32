@@ -6,6 +6,7 @@
  * and note duty fraction (without assuming unverified DEAD_TIME).
  */
 #include "../../../src/music.h"
+static const uint16_t rel17_music_period[13]=REL17_MUSIC_PERIODS;
 int am13e_audio_tone(int semitone,int octave,int volume,AM13E_AudioTone *out)
 {
     if (!out || semitone<0 || semitone>12 ||

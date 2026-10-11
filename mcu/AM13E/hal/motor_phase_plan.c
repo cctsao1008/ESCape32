@@ -7,6 +7,7 @@
  * COMP code is m>>3 and is NOT the floating phase one-hot bit.
  */
 #include "../../../src/commutation.h"
+static const uint16_t rel17_commutation_sequence[6]=REL17_COMMUTATION_SEQUENCE;
 
 int am13e_motor_plan_sixstep(int positive_mask, int negative_mask,
                             int comparator_code, int damp, int reverse,
