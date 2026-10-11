@@ -50,6 +50,9 @@ void PendSV_Handler(void)
      * UC RX IRQ only validates/copies the command frame.
      */
     am13e_app_serial_crsf_service_pending();
+#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
+    am13e_app_serial_cli_service_pending();
+#endif
 #endif
 }
 

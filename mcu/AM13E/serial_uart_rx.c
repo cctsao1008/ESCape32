@@ -12,8 +12,16 @@
 #ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
 #include "serial_tx_queue.h"
 #include "crsf_deferred_command.h"
+#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
+#include "cli_line_rx.h"
+#endif
 #endif
 #include "io_backend.h"
+#if defined(AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED) && \
+    (!defined(AM13E_BOARD_SERIAL_TX_CONFIGURED) || \
+     AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED!=1)
+#error "CLI requires board-selected two-wire TX and explicit entry qualification"
+#endif
 /* The original EXBUS single-wire transceiver remains unqualified.
  * A two-wire board-selected response is permitted only with an
  * explicit board-assigned stable identity and separate physical TX.
@@ -190,6 +198,12 @@ void am13e_app_serial_exbus_service_pending(void)
 static AM13E_SerialTxQueue crsf_tx;
 static AM13E_CrsfDeferredCommand crsf_cmd;
 static bool crsf_tx_available;
+#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
+static AM13E_CliLineRx cli_rx;
+static bool cli_active;
+static char cli_reply[AM13E_CLI_LINE_BYTES];
+static unsigned cli_reply_length,cli_reply_offset;
+#endif
 
 /* Original CRSF command execution is deferred to PendSV.
  * Queue writes begin from PendSV, while TX/EOT drain in UART IRQ.
@@ -198,6 +212,9 @@ static bool crsf_tx_available;
  * the same bounded TX queue owned by this UNICOMM instance.
  */
 static void crsf_tx_start(const uint8_t *p,unsigned n);
+#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
+static void cli_start_next_chunk(void);
+#endif
 
 void am13e_app_serial_crsf_service_pending(void)
 {
@@ -241,6 +258,60 @@ static void crsf_tx_start(const uint8_t *p,unsigned n)
     if(!am13e_serial_tx_queue_waiting_eot(&crsf_tx))
         DL_UART_enableInterrupt(RX_UC,DL_UART_INTERRUPT_TX);
 }
+#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
+/* Physical entry requires a board-verified original 1s idle-low signal.
+ * Never selected or auto-inferred by the PB14 Reference profile.
+ * Selected mode2 binary serial and CLI share the UART, not a parser.
+ */
+bool am13e_app_serial_cli_enter(void)
+{
+    if(!initialized||cli_active||rx_state.mode!=2U||
+       __get_PRIMASK()!=1U||!crsf_tx_available||
+       crsf_tx.count!=0U||crsf_cmd.busy||
+       !DL_UART_isRXFIFOEmpty(RX_UC)||DL_UART_isBusy(RX_UC))
+        return false;
+    DL_UART_disable(RX_UC);
+    DL_UART_configBaudRate(RX_UC,AM13E_BOARD_SERIAL_RX_BUSCLK_HZ,38400U);
+    DL_UART_enable(RX_UC);
+    am13e_serial_frame_abort(&rx_state);
+    am13e_cli_line_init(&cli_rx);
+    cli_reply_length=cli_reply_offset=0U;
+    cli_active=true;
+    return true;
+}
+static void cli_start_next_chunk(void)
+{
+    if(cli_reply_offset>=cli_reply_length)return;
+    const unsigned remaining=cli_reply_length-cli_reply_offset;
+    const unsigned count=remaining>AM13E_SERIAL_TX_MAX?
+        AM13E_SERIAL_TX_MAX:remaining;
+    crsf_tx_start((const uint8_t *)cli_reply+cli_reply_offset,count);
+    cli_reply_offset+=count;
+}
+void am13e_app_serial_cli_service_pending(void)
+{
+    if(!cli_active)return;
+    if(cli_rx.reboot){
+        /* Original 00 ff reboot-to-Boot, deferred out of UART IRQ. */
+        NVIC_SystemReset();
+        for(;;){__NOP();}
+    }
+    if(!cli_rx.ready||cli_reply_length!=0U||crsf_tx.count!=0U)
+        return;
+    if(!am13e_cli_line_take(&cli_rx,cli_reply,sizeof cli_reply))
+        return;
+    /* Preserve original execcmd() parser, including save/reset/play.
+     * No stateful command executes in high-priority UART IRQ.
+     */
+    const int length=am13e_app_io_cli_line(cli_reply);
+    if(length<0||length>(int)sizeof cli_reply){
+        __disable_irq();for(;;){__NOP();}
+    }
+    cli_reply_length=(unsigned)length;
+    cli_reply_offset=0U;
+    if(cli_reply_length)cli_start_next_chunk();
+}
+#endif
 #endif
 
 void RX_HANDLER(void);
@@ -320,6 +391,11 @@ bool am13e_app_serial_rx_init(unsigned mode)
 #endif
     am13e_serial_frame_init(&rx_state,mode);
     am13e_exbus_autobaud_init(&exbus_baud);
+#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
+    am13e_cli_line_init(&cli_rx);
+    cli_active=false;
+    cli_reply_length=cli_reply_offset=0U;
+#endif
     exbus_change_requested_tick=0U;
     exbus_change_pending=0U;
     DL_UART_clearInterruptStatus(RX_UC,
@@ -376,6 +452,13 @@ void RX_HANDLER(void)
             DL_UART_disableInterrupt(RX_UC,
                 DL_UART_INTERRUPT_EOT_DONE|DL_UART_INTERRUPT_TX);
             am13e_serial_tx_queue_eot(&crsf_tx);
+#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
+            if(cli_active){
+                if(cli_reply_offset<cli_reply_length)
+                    cli_start_next_chunk();
+                else cli_reply_length=cli_reply_offset=0U;
+            }
+#endif
             continue;
         }
         if(crsf_tx_available && reason==DL_UART_IIDX_TX){
@@ -391,6 +474,9 @@ void RX_HANDLER(void)
            reason==DL_UART_IIDX_NOISE_ERROR ||
            reason==DL_UART_IIDX_BREAK_ERROR){
             am13e_serial_frame_abort(&rx_state);
+#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
+            if(cli_active)am13e_cli_line_abort(&cli_rx);
+#endif
             DL_UART_clearInterruptStatus(RX_UC,RX_IRQ_ERRORS);
             exbus_request_retry();
         }
@@ -398,6 +484,9 @@ void RX_HANDLER(void)
         const uint32_t raw=RX_UC->uart->RXDATA;
         if((raw&RX_ERRORS)!=0U){
             am13e_serial_frame_abort(&rx_state);
+#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
+            if(cli_active)am13e_cli_line_abort(&cli_rx);
+#endif
             exbus_request_retry();
             continue;
         }
@@ -405,6 +494,18 @@ void RX_HANDLER(void)
          * the queued PendSV configuration actually completes.
          */
         if(rx_state.mode==6U && exbus_change_pending)continue;
+#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
+        if(cli_active){
+            /* Legacy half-duplex RX mute while the response is sent.
+             * This is a conditional two-wire software equivalent.
+             */
+            if(cli_reply_length!=0U||crsf_tx.count!=0U)continue;
+            const int ready=am13e_cli_line_byte(&cli_rx,
+                (uint8_t)(raw&UNICOMMUART_RXDATA_DATA_MASK));
+            if(ready==1||ready==2)SCB->ICSR=SCB_ICSR_PENDSVSET_Msk;
+            continue;
+        }
+#endif
         uint8_t bytes[AM13E_SERIAL_MAX_FRAME];
         unsigned len=0U;
         /* Original USART DMA received a complete packet at IDLE.
