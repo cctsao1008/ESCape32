@@ -48,7 +48,7 @@ int main(void){
     assert(!am13e_serial_command(p,n,&s,NULL,12,&got,crc));
     /* Full accepted command length range up to 255, not 64B-only. */
     for(unsigned i=1;i<254U;++i)p[i]=0x02U;
-    n=assemble(p,254U);
+    n=assemble(p,253U);
     assert(n==255U);
     assert(am13e_serial_command(p,n,&s,reply,12,&got,crc));
     puts("PASS original Serial input_mode=2 throttle/brake/direction, CRC and six replies");
