@@ -11,6 +11,7 @@
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/irq_vectors.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/reset_cause.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/fault_input.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/aux_gpio.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/analog_sampling_backend.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/analog_runtime.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/analog_calibration_plan.c"

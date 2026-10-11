@@ -13,6 +13,7 @@
 #include <dl_gpio.h>
 #include "fault_input.h"
 #include "board_configuration.h"
+#include "aux_gpio.h"
 
 #define AM13E_NFAULT_GPIO GPIO1
 #define AM13E_NFAULT_PIN DL_GPIO_PIN(15U)
@@ -88,5 +89,8 @@ void initgpio(void)
 #if AM13E_BOARD_CURRENT_SENSE_PINCM != 0
     /* Current-sense reservation: analog pinmux only. No ADC SOC/ISR. */
     DL_GPIO_initPeripheralAnalogFunction(AM13E_BOARD_CURRENT_SENSE_PINCM);
+#endif
+#if defined(PARK_PIN) || defined(ERPM_PIN)
+    am13e_app_aux_gpio_init();
 #endif
 }

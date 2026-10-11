@@ -34,7 +34,7 @@ commit CI must be checked separately and is not official-SDK provenance evidence
 
 **DESIGN REQUIRED**, pending integration: complete original input-discovery
 sequence; SBUS2 scheduler; original
-half-duplex transports; optional Hall/LED/BEC/PARK/ERPM hooks; broader shared
+half-duplex transports; optional Hall/LED/BEC hooks; broader shared
 motor/config/command production-path traces. Existing codec/model tests and ARM
 links alone do not close these source requirements.
 
@@ -108,6 +108,41 @@ Original single-wire CLI transport and complete discovery state machine remain
 
 Servo milestone CI: run 38154801219, exact HEAD
 `a383147b2597ca54346b06151e9bdf50e27397f3`, job `fw1-build-evidence` SUCCESS,
+all 22 reported steps SUCCESS.
+
+## Conditional PARK/ERPM and shared motor traces
+
+Requirements APP-M01/M04/M08/M17, APP-I19/I21, SYS-10:
+**SOURCE IMPLEMENTED / SOFTWARE VERIFIED** for original shared parking state
+and ERPM source-event integration. `PARK_PIN`/`ERPM_PIN` remain original feature
+selectors. Selection now requires separate explicit TI GPIO/mask/PINCM routing;
+there is no default product pad assignment. Existing Reference owners (including
+crystal pads), auxiliary reservations and selected UART/telemetry pins are
+excluded. Mask/PINCM agreement is checked at compile time, port/PINCM agreement
+before output enable, and initialization requires masked IRQs and power/mux
+readback. PARK remains pull-up input; ERPM initializes low before output enable.
+
+`park_source` includes actual `src/main.c`, executes its private `park()` and
+`nextstep()` and retains the production six-step phase planner. It checks the
+original 800-call transitions, stable HIGH/LOW sequence, reverse change,
+measured return-duration counter, timeout and unstable-input refusal; motor
+forward/reverse/coast/sine calls, delayed comparator selection and original
+step1/step4 or sine step1/step181 ERPM levels. Physical motor/timer/comparator
+and GPIO boundaries are mocked. It does not run the entire main control loop.
+Wrong-port and UART-ownership conflicts halt before any output-enable call.
+PARK-only, ERPM-only and combined synthetic profiles strictly ARM-link with
+real native hook symbols. Five compile negatives cover missing routes,
+overlap, reserved gate pad and mismatched mask. None of these fixtures is a
+product board pin assignment or a flashable hardware-qualified image.
+
+**HARDWARE PENDING**: actual optional pads, pull-up/electrical levels, ERPM load,
+parking physical feedback and motor behavior. Hall hybrid IRQ/capture, discrete
+LED/WS2812 and BEC native adapters remain **DESIGN REQUIRED / NOT IMPLEMENTED**.
+The source-scope gate now also requires all added native host PASS groups and
+the new production integration seams, while retaining every prior safety check.
+
+Production-CRC milestone CI: run 38155597463, exact HEAD
+`39d3c6e64aef90f0df8fa85104030cad96b6c689`, job `fw1-build-evidence` SUCCESS,
 all 22 reported steps SUCCESS.
 
 ## Production Boot CRC framing coverage

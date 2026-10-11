@@ -24,6 +24,7 @@
 #include "motor_bemf_event_plan.h"
 #include "irq_vectors.h"
 #include "analog_runtime.h"
+#include "aux_gpio.h"
 /* Logical microsecond commutation timebase, not a TI register mapping. */
 #define MOTOR_TIME_SHIFT 0
 #else
@@ -166,7 +167,10 @@ static void nextstep(void) {
 		TIM1_CCR3 = DEAD_TIME + (sinedata[c] * p >> 7);
 		TIM1_CR1 = TIM_CR1_CEN | TIM_CR1_ARPE;
 #endif
-#if defined(ERPM_PIN) && !defined(AM13E)
+#if defined(ERPM_PIN) && defined(AM13E)
+        if(step==1)am13e_app_erpm_write(0);
+        else if(step==181)am13e_app_erpm_write(1);
+#elif defined(ERPM_PIN)
 		if (step == 1) GPIO(ERPM_PORT, BSRR) = 1 << (ERPM_PIN + 16);
 		else if (step == 181) GPIO(ERPM_PORT, BSRR) = 1 << ERPM_PIN;
 #endif
@@ -367,7 +371,10 @@ static void nextstep(void) {
 	buf[step - 1] = hall > 4000 ? hall << MOTOR_TIME_SHIFT : ival;
 	if (sync < 6) return;
 	ertm = (buf[0] + buf[1] + buf[2] + buf[3] + buf[4] + buf[5]) >> (MOTOR_TIME_SHIFT + 1); // Electrical revolution time (us)
-#if defined(ERPM_PIN) && !defined(AM13E)
+#if defined(ERPM_PIN) && defined(AM13E)
+    if(step==1)am13e_app_erpm_write(0);
+    else if(step==4)am13e_app_erpm_write(1);
+#elif defined(ERPM_PIN)
 	if (step == 1) GPIO(ERPM_PORT, BSRR) = 1 << (ERPM_PIN + 16);
 	else if (step == 4) GPIO(ERPM_PORT, BSRR) = 1 << ERPM_PIN;
 #endif
@@ -688,7 +695,7 @@ static void beep(void) {
 	beepval = -1;
 }
 
-#if defined(PARK_PIN) && !defined(AM13E)
+#ifdef PARK_PIN
 static uint8_t park1;
 static uint16_t park2, park3;
 
@@ -697,7 +704,11 @@ static int park(void) {
 	if (park1 == 3 || ++park2 < 800) return 1;
 	int x = -1;
 	for (int i = 0, j = 0; j < 4; ++j) {
+#if defined(AM13E)
+        int y=am13e_app_park_level();
+#else
 		int y = GPIO(PARK_PORT, IDR) & (1 << PARK_PIN);
+#endif
 		if (x == y) continue;
 		if (++i == 20) return 0; // Unstable signal
 		x = y;
@@ -899,7 +910,7 @@ void main(void) {
 				if (!running) laststep();
 			}
 			if (sync < 6 || erpm < 800 || lock == 2) { // Drag brake
-#if defined(PARK_PIN) && !defined(AM13E)
+#ifdef PARK_PIN
 				if (cfg.prot_park && running && park()) { // Parking
 					sine = (1000 << MOTOR_TIME_SHIFT) / cfg.prot_park;
 					ertm = 100000000;
@@ -914,7 +925,7 @@ void main(void) {
 			boost = 0; // Coasting
 			goto calcduty;
 		}
-#if defined(PARK_PIN) && !defined(AM13E)
+#ifdef PARK_PIN
 		park1 = 0;
 		park2 = 0;
 		park3 = -1;

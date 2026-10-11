@@ -41,7 +41,9 @@ def main():
                   path+"/"+symbol)
     host=src("am13e-ci-logs/host-tests.log")
     for test in ("command_decode","command_bidir_roundtrip",
-                 "bidir_timing","bemf_commutation","motor_ownership"):
+                 "bidir_timing","bemf_commutation","motor_ownership",
+                 "service_handoff","servo_source","servo_trim_source",
+                 "cli_entry","park_source","aux_wrong_port","aux_serial_conflict"):
         check(re.search(r"(?m)^PASS: "+test+r"\s*$",host),
               "Missing Native regression PASS: "+test)
 
@@ -150,12 +152,40 @@ def main():
     check("am13e_app_io_bidir_telemetry_levels(" in dma,
           "NEXT BiDShot payload must be prepared at TX DMA completion")
     decoder=src("mcu/AM13E/command_decode.c")
+    check("pwm(source_ticks,source_period)" in decoder and
+          "pulse_us>=28U && pulse_us<=32U" in crsf_app and
+          "if(ertm)return;" in crsf_app and
+          "servo_calibration_blocked=!!cfg.throt_cal;" in crsf_app,
+          "Servo source policy/period or explicit clock-trim blocker missing")
+    check("am13e_app_serial_cli_entry_poll(" in rx and
+          "am13e_cli_entry_tick(" in uart and
+          "am13e_app_pb14_service_takeover()" in uart and
+          "!am13e_app_io_service_idle()" in uart,
+          "Conditional HIGH CLI entry must be reachable and idle/capture gated")
+    reset=src("mcu/AM13E/service_reset.c")
+    check(reset.index("am13e_app_motor_fault_shutdown();") <
+          reset.index("NVIC_SystemReset();") and
+          "am13e_app_service_reset();" in uart,
+          "Service reset must shut down native motor before system reset")
+    app_source=src("src/main.c")
+    check("int y=am13e_app_park_level();" in app_source and
+          "am13e_app_erpm_write(0)" in app_source and
+          "PARK_PIN needs explicit AM13E" in src("mcu/AM13E/aux_gpio.c"),
+          "Conditional PARK/ERPM require real native source hooks/routing guards")
     check("AM13E_PB14_RX_ONESHOT" in decoder and
           "1200000U" in src("mcu/AM13E/bidir_timing.c") and
           "rx_mode=AM13E_PB14_RX_UNDECIDED" not in
           decoder.split("void am13e_pb14_decoder_idle(")[1],
           "Missing Oneshot125/DShot1200 or upstream receiver mode semantics")
     gate=src("boot/mcu/AM13E/app.c")
+    check("boot_am13e_quiesce();" in gate and
+          "boot_am13e_release_io();" in src("boot/mcu/AM13E/handoff.c") and
+          "TMU_LVF_INT_IRQn" in src("boot/mcu/AM13E/handoff.c"),
+          "Boot handoff must release IO and clear only implemented IRQ state")
+    check('"${REPO_ROOT}/boot/src/util.c"' in
+          src("boot/tests/am13e_host/CMakeLists.txt") and
+          "uint32_t crc32(" not in src("boot/tests/am13e_protocol_host_test.c"),
+          "Boot protocol tests must exercise production CRC adapter")
     gate_impl=src("boot/mcu/AM13E/app_validity.c")
     flash=src("boot/mcu/AM13E/flash.c")
     build=src("CMakeLists.txt")
@@ -199,9 +229,18 @@ def main():
         "boot_self_update_preflight":"BOUNDED_SRAM_STAGE_RECEIVE_ONLY_BANK0_ERASE_DISABLED",
         "boot_update_recovery":"ROM_BSL_SWD_NONMAIN_DEPENDENT_NOT_VERIFIED",
         "conditional_adapters_pending":[
-            "input_mode_analog","input_mode_serial",
-            "UART_telemetry","Hall_hybrid","LED_BEC_PARK_ERPM",
+            "complete_source_input_discovery","TI_supported_servo_clock_trim",
+            "serial_telemetry_half_duplex_and_SBUS2_scheduler",
+            "Hall_hybrid","LED_BEC_WS2812",
             "current_limit_board_adapter_unqualified"],
+        "convergence_production_host_verified":[
+            "service_reset_order_and_Boot_quiescence",
+            "shared_Servo_special_pulse_and_invalid_signal_policy",
+            "conditional_calibration_with_mocked_trim_actuator",
+            "conditional_HIGH_CLI_entry_policy",
+            "shared_park_and_nextstep_ERPM_policy",
+            "native_auxiliary_GPIO_negative_guards",
+            "production_Boot_CRC_adapter_with_CRCP_model"],
         "boot_abi":"RESOLVED_REL17_V14_CFG_ID_AND_APP_VECTOR",
         "app_image":"FLAT_ELF_DERIVED_VARIABLE_SIZE_MAX_488KIB",
         "torn_update_risk":"Valid Cfg plus vectors may boot incomplete later code",

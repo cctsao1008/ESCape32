@@ -91,6 +91,9 @@ jobs:
             run_test serial_command mcu/AM13E/serial_command.c mcu/AM13E/tests/serial_command_host_test.c
             run_test cli_line_rx mcu/AM13E/cli_line_rx.c mcu/AM13E/tests/cli_line_rx_host_test.c
             run_test cli_entry mcu/AM13E/cli_entry.c mcu/AM13E/tests/cli_entry_host_test.c
+            run_test park_source -DAM13E -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' -DPARK_PIN=1 -DERPM_PIN=1 -DAM13E_BOARD_PARK_GPIO=GPIO1 -DAM13E_BOARD_PARK_MASK=1U -DAM13E_BOARD_PARK_PINCM=32U -DAM13E_BOARD_ERPM_GPIO=GPIO1 -DAM13E_BOARD_ERPM_MASK=2U -DAM13E_BOARD_ERPM_PINCM=33U -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Imcu/AM13E/tests/aux_mock mcu/AM13E/aux_gpio.c mcu/AM13E/motor_phase_plan.c mcu/AM13E/tests/park_source_host_test.c
+            run_test aux_wrong_port -DAM13E -DERPM_PIN=1 -DAM13E_BOARD_ERPM_GPIO=GPIO0 -DAM13E_BOARD_ERPM_MASK=2U -DAM13E_BOARD_ERPM_PINCM=33U -Imcu/AM13E/tests/aux_mock mcu/AM13E/aux_gpio.c mcu/AM13E/tests/aux_route_negative_host_test.c
+            run_test aux_serial_conflict -DAM13E -DERPM_PIN=1 -DAM13E_BOARD_ERPM_GPIO=GPIO1 -DAM13E_BOARD_ERPM_MASK=2U -DAM13E_BOARD_ERPM_PINCM=33U -DAM13E_BOARD_SERIAL_RX_CONFIGURED=1 -DAM13E_BOARD_SERIAL_RX_PINCM=33U -Imcu/AM13E/tests/aux_mock mcu/AM13E/aux_gpio.c mcu/AM13E/tests/aux_route_negative_host_test.c
             run_test service_handoff -DAM13E -Imcu/AM13E/tests/service_mock -Iboot/mcu/AM13E mcu/AM13E/service_reset.c boot/mcu/AM13E/handoff.c mcu/AM13E/tests/service_handoff_host_test.c
             run_test servo_source -DAM13E -DCLK=200000000 -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Imcu/AM13E/tests/service_mock src/io.c src/util.c mcu/AM13E/command_decode.c mcu/AM13E/servo_calibration.c mcu/AM13E/tests/servo_source_host_test.c
             run_test servo_trim_source -DAM13E -DAM13E_BOARD_SERVO_CLOCK_TRIM_CONFIGURED=1 -DCLK=200000000 -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Imcu/AM13E/tests/service_mock src/io.c src/util.c mcu/AM13E/servo_calibration.c mcu/AM13E/tests/servo_trim_source_host_test.c
@@ -421,6 +424,51 @@ jobs:
             am13e-ci-logs/boot-qualified-symbols.txt
           echo "PASS recovery-gated original Boot CMD_UPDATE/WRP strict ARM link; SYNTHETIC NEVER FLASH"
 
+      - name: Strict ARM links and negative guards for conditional PARK and ERPM
+        id: aux_selected
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p am13e-ci-logs
+          park='-DPARK_PIN=1 -DAM13E_BOARD_PARK_GPIO=GPIO1 -DAM13E_BOARD_PARK_MASK=1U -DAM13E_BOARD_PARK_PINCM=32U'
+          erpm='-DERPM_PIN=1 -DAM13E_BOARD_ERPM_GPIO=GPIO1 -DAM13E_BOARD_ERPM_MASK=2U -DAM13E_BOARD_ERPM_PINCM=33U'
+          for profile in park erpm both; do
+            flags="$park"
+            if [ "$profile" = erpm ]; then flags="$erpm"; fi
+            if [ "$profile" = both ]; then flags="$park $erpm"; fi
+            cmake -S . -B "am13e-ci-aux-$profile" \
+              -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk -DCMAKE_C_STANDARD=23 \
+              -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/mcu/AM13E/tests/${profile}_synthetic_profile.cmake" \
+              >"am13e-ci-logs/aux-$profile-configure.log" 2>&1
+            cmake --build "am13e-ci-aux-$profile" --target AM13E_FW1_REL17_IMAGE -j 2 \
+              >"am13e-ci-logs/aux-$profile-build.log" 2>&1
+            arm-none-eabi-nm "am13e-ci-aux-$profile/AM13E_FW1_REL17.elf" \
+              >"am13e-ci-logs/aux-$profile-symbols.txt"
+            if [ "$profile" != erpm ]; then
+              grep -Eq ' [Tt] am13e_app_park_level$' "am13e-ci-logs/aux-$profile-symbols.txt"
+            fi
+            if [ "$profile" != park ]; then
+              grep -Eq ' [Tt] am13e_app_erpm_write$' "am13e-ci-logs/aux-$profile-symbols.txt"
+            fi
+            echo "PASS synthetic selected $profile strict ARM link; NOT FLASHED"
+          done
+          # Native adapter configuration guards; no physical output operation.
+          for flags in \
+            '-DPARK_PIN=1' \
+            '-DERPM_PIN=1' \
+            "$park -DERPM_PIN=1 -DAM13E_BOARD_ERPM_GPIO=GPIO1 -DAM13E_BOARD_ERPM_MASK=1U -DAM13E_BOARD_ERPM_PINCM=32U" \
+            '-DERPM_PIN=1 -DAM13E_BOARD_ERPM_GPIO=GPIO1 -DAM13E_BOARD_ERPM_MASK=8192U -DAM13E_BOARD_ERPM_PINCM=45U' \
+            '-DERPM_PIN=1 -DAM13E_BOARD_ERPM_GPIO=GPIO1 -DAM13E_BOARD_ERPM_MASK=8192U -DAM13E_BOARD_ERPM_PINCM=33U'; do
+            if cc -std=c11 -DAM13E -Imcu/AM13E -Imcu/AM13E/tests/aux_mock \
+              -fsyntax-only $flags mcu/AM13E/aux_gpio.c \
+              >am13e-ci-logs/aux-negative.log 2>&1; then
+              echo 'FAIL invalid auxiliary GPIO selection accepted'; exit 1
+            fi
+            grep -Eq 'needs explicit AM13E|route conflicts|cannot share a pin' \
+              am13e-ci-logs/aux-negative.log
+          done
+          echo 'PASS five conditional auxiliary routing negative guards'
+
       - name: Audit actual Rel17 functional software coverage
         id: coverage
         shell: bash
@@ -496,6 +544,7 @@ jobs:
           echo "Strict link: ${{ steps.build.outputs.link_rc }}"
           echo "Reference board IO compile (physical not qualified): ${{ steps.board_profile.outcome }}"
           echo "Synthetic UNICOMM RX full ARM link (NOT FLASHED): ${{ steps.serial_selected.outcome }}"
+          echo "Synthetic PARK/ERPM ARM links (NOT FLASHED): ${{ steps.aux_selected.outcome }}"
           echo "Rel17 functional coverage evidence: ${{ steps.coverage.outcome }}"
           echo "Rev1.4 scope audit (open blockers tracked): ${{ steps.v14_scope.outcome }}"
           echo "Rev1.4 documentation/legacy-ABI audit: ${{ steps.v14_docs.outcome }}"
@@ -510,6 +559,7 @@ jobs:
           test "${{ steps.build.outputs.link_rc }}" = 0 &&
           test "${{ steps.board_profile.outcome }}" = success &&
           test "${{ steps.serial_selected.outcome }}" = success &&
+          test "${{ steps.aux_selected.outcome }}" = success &&
           test "${{ steps.coverage.outcome }}" = success &&
           test "${{ steps.v14_scope.outcome }}" = success &&
           test "${{ steps.v14_docs.outcome }}" = success &&
