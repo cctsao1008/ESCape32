@@ -31,6 +31,7 @@
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/serial_frame_rx.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/serial_command.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/telem_frame_rx.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/telem_tx_progress.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/telem_mode_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/telem_backend.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/serial_uart_rx.c"

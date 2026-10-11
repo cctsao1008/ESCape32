@@ -28,6 +28,8 @@
 #if !defined(AM13E_PB14_ONLY) || defined(AM13E_BOARD_TELEM_UART_CONFIGURED)
 #if defined(AM13E)
 #include "telem_backend.h"
+#include "telem_tx_progress.h"
+#include "serial_tx_queue.h"
 #else
 #ifndef USART1_DMA_BASE
 #define USART1_DMA_BASE DMA1_BASE
@@ -189,17 +191,24 @@ int am13e_telem_on_rx_frame(unsigned int received) {
  * Backend must provide nonblocking tx_start while IRQs are masked.
  */
 void am13e_telem_on_tx_done(void) {
+    const uint32_t old_primask=__get_PRIMASK();
     __disable_irq();
     if (iopos > ioend) {
-        char *next = ioend;
-        unsigned int length = (unsigned int)(iopos - ioend);
-        ioend = iopos;
-        am13e_telem_hw_tx_start(next, length);
+        char *next=ioend;
+        const unsigned queued=(unsigned)(iopos-iobuf);
+        const unsigned completed=(unsigned)(ioend-iobuf);
+        const unsigned chunk=am13e_telem_tx_chunk(
+            queued,completed,AM13E_SERIAL_TX_MAX);
+        if(chunk!=0U){
+            /* Only expose up to 64B to the IRQ-owned TX/EOT queue. */
+            ioend+=chunk;
+            am13e_telem_hw_tx_start(next,chunk);
+        }
     } else {
-        iopos = iobuf;
-        ioend = iobuf;
+        iopos=iobuf;
+        ioend=iobuf;
     }
-    __enable_irq();
+    __set_PRIMASK(old_primask);
 }
 #endif /* legacy USART/DMA ISR vs AM13E transport callbacks */
 
@@ -494,21 +503,45 @@ void sendtelem(void) {
 
 #if !defined(AM13E_PB14_ONLY) || defined(AM13E_BOARD_TELEM_UART_CONFIGURED)
 void sendtelemdata(const char *buf, int len) {
-	__disable_irq();
-	char *pos = iopos;
-	if (pos + len > iobuf + sizeof iobuf) len = 0; // Packet too big
-	iopos += len;
-	if (pos == iobuf) ioend = iopos;
-	__enable_irq();
-	if (!len) return;
-	memcpy(pos, buf, len);
-	if (pos != iobuf) return;
 #if defined(AM13E)
-    am13e_telem_hw_tx_start(iobuf, (unsigned int)len);
+    /* Original 128B buffer is shared with the EOT IRQ. Finish copying
+     * before publishing iopos/ioend. Avoid a stale-byte TX race when
+     * another response arrives while the previous TX is completing.
+     */
+    const uint32_t old_primask=__get_PRIMASK();
+    __disable_irq();
+    char *pos=iopos;
+    if(!buf || len<=0 ||
+       (unsigned)len>(unsigned)(iobuf+sizeof iobuf-pos)) {
+        __set_PRIMASK(old_primask);
+        return;
+    }
+    const int first=(pos==iobuf);
+    /* Only the INITIAL TX must fit 64B. Pending 128B tails are
+     * segmented at each EOT by am13e_telem_on_tx_done().
+     */
+    if(first && (unsigned)len>AM13E_SERIAL_TX_MAX){
+        __set_PRIMASK(old_primask);
+        return;
+    }
+    memcpy(pos,buf,(unsigned)len);
+    iopos=pos+len;
+    if(first)ioend=iopos;
+    __set_PRIMASK(old_primask);
+    if(first)am13e_telem_hw_tx_start(iobuf,(unsigned)len);
 #else
-	DMA_CMAR(USART1_DMA_BASE, USART1_TX_DMA) = (uint32_t)iobuf;
-	DMA_CNDTR(USART1_DMA_BASE, USART1_TX_DMA) = len;
-	DMA_CCR(USART1_DMA_BASE, USART1_TX_DMA) = DMA_CCR_EN | DMA_CCR_TCIE | DMA_CCR_DIR | DMA_CCR_MINC | DMA_CCR_PSIZE_8BIT | DMA_CCR_MSIZE_8BIT;
+    __disable_irq();
+    char *pos = iopos;
+    if (pos + len > iobuf + sizeof iobuf) len = 0; // Packet too big
+    iopos += len;
+    if (pos == iobuf) ioend = iopos;
+    __enable_irq();
+    if (!len) return;
+    memcpy(pos, buf, len);
+    if (pos != iobuf) return;
+    DMA_CMAR(USART1_DMA_BASE, USART1_TX_DMA) = (uint32_t)iobuf;
+    DMA_CNDTR(USART1_DMA_BASE, USART1_TX_DMA) = len;
+    DMA_CCR(USART1_DMA_BASE, USART1_TX_DMA) = DMA_CCR_EN | DMA_CCR_TCIE | DMA_CCR_DIR | DMA_CCR_MINC | DMA_CCR_PSIZE_8BIT | DMA_CCR_MSIZE_8BIT;
 #endif
 }
 
