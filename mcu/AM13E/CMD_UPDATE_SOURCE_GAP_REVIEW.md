@@ -136,7 +136,14 @@ Boot validity gate. The active FW1 launch remains
 4. **BLOCKED ON HARDWARE:** establish and physically test ROM
    BSL/SWD recovery under exact NONMAIN and board conditions,
    including interruption after the first vector-sector erase.
-5. Only after recovery qualification, connect Boot-only
+5. Also qualify all four static NONMAIN MAIN WRP fields:
+   BANK0 A/B and BANK1 A/B. In 512KiB two-bank configuration the B
+   valid bitmap is bits 4..15, with reserved bits preserved; WRP Full
+   must cover both banks, not only Bank0. TRM 13.4.1 and GSC 15.2.4.1
+   give different lower-bank granularity descriptions: read back the
+   latched protection scope on actual silicon before authorizing Boot
+   or Full modes. A Host bitmap policy is NOT an acceptance test.
+6. Only after recovery qualification, connect Boot-only
    Erase/Program/Verify/Reset to original `CMD_UPDATE` and validate
    the original success-reset/no-final-ACK semantics on AM13E.
 

@@ -20,13 +20,22 @@ static void untouched(void){
         if((i>=AM13E_BOOT_NONMAIN_MAIN_A_OFFSET&&
             i<AM13E_BOOT_NONMAIN_MAIN_A_OFFSET+4U)||
            (i>=AM13E_BOOT_NONMAIN_MAIN_B_OFFSET&&
-            i<AM13E_BOOT_NONMAIN_MAIN_B_OFFSET+4U))continue;
+            i<AM13E_BOOT_NONMAIN_MAIN_B_OFFSET+4U)||
+           (i>=AM13E_BOOT_NONMAIN_BANK1_MAIN_A_OFFSET&&
+            i<AM13E_BOOT_NONMAIN_BANK1_MAIN_A_OFFSET+4U)||
+           (i>=AM13E_BOOT_NONMAIN_BANK1_MAIN_B_OFFSET&&
+            i<AM13E_BOOT_NONMAIN_BANK1_MAIN_B_OFFSET+4U))continue;
         assert(out[i]==original[i]);
     }
 }
 int main(void){
     for(unsigned i=0;i<sizeof original;++i) original[i]=(uint8_t)(i*7U+13U);
     le32(original+AM13E_BOOT_NONMAIN_WEP_CONFIG_OFFSET,UINT32_C(0x1234aabb));
+    /* Reserve high and low bits in both B words: they must survive
+     * Off/Boot/Full modes byte-for-byte, not be erased to zero.
+     */
+    le32(original+AM13E_BOOT_NONMAIN_MAIN_B_OFFSET,0xcaad0007U);
+    le32(original+AM13E_BOOT_NONMAIN_BANK1_MAIN_B_OFFSET,0x559a0005U);
     bool dirty=false;
     for(unsigned mode=0U;mode<3U;++mode){
         assert(boot_am13e_nonmain_wrp_prepare(original,sizeof original,
@@ -34,8 +43,14 @@ int main(void){
         assert(dirty);
         assert(rd32(out+AM13E_BOOT_NONMAIN_MAIN_A_OFFSET)==
                (mode==0U?0U:mode==1U?0xffffU:UINT32_MAX));
+        const uint32_t mask=AM13E_BOOT_NONMAIN_MAIN_B_VALID_MASK;
+        const uint32_t wanted=mode==2U?mask:0U;
         assert(rd32(out+AM13E_BOOT_NONMAIN_MAIN_B_OFFSET)==
+            ((rd32(original+AM13E_BOOT_NONMAIN_MAIN_B_OFFSET)&~mask)|wanted));
+        assert(rd32(out+AM13E_BOOT_NONMAIN_BANK1_MAIN_A_OFFSET)==
                (mode==2U?UINT32_MAX:0U));
+        assert(rd32(out+AM13E_BOOT_NONMAIN_BANK1_MAIN_B_OFFSET)==
+            ((rd32(original+AM13E_BOOT_NONMAIN_BANK1_MAIN_B_OFFSET)&~mask)|wanted));
         untouched();
         uint8_t previous[AM13E_BOOT_NONMAIN_CFG_BYTES];
         memcpy(previous,original,sizeof previous);
@@ -54,6 +69,6 @@ int main(void){
     original[AM13E_BOOT_NONMAIN_WEP_CONFIG_OFFSET]=0U;
     assert(!boot_am13e_nonmain_wrp_prepare(original,sizeof original,
                   AM13E_WRP_BOOT,out,sizeof out,&dirty));
-    puts("PASS NONMAIN Off/Boot/Full policy, 2KiB preserve, no-op, locked BCR reject");
+    puts("PASS NONMAIN Off/Boot/Full BOTH banks, reserved B bits, 2KiB BCR preserve, no-op/locked reject");
     return 0;
 }
