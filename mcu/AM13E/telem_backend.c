@@ -210,6 +210,7 @@ void am13e_telem_hw_tx_byte(uint8_t b,bool last)
 }
 void am13e_telem_hw_pause_rx(void){paused_rx=true;}
 void am13e_telem_hw_systick(void){if(initialized)++ticker;}
+void TEL_HANDLER(void); /* installed M33 vector, required by irq_ready */
 bool am13e_telem_hw_irq_ready(void)
 {
     return initialized&&NVIC_GetEnableIRQ(TEL_IRQ)&&
@@ -217,7 +218,6 @@ bool am13e_telem_hw_irq_ready(void)
            NVIC_GetVector(TEL_IRQ)==
                ((uint32_t)(uintptr_t)TEL_HANDLER|1U);
 }
-void TEL_HANDLER(void);
 void TEL_HANDLER(void)
 {
     if(!initialized)transport_fault();
