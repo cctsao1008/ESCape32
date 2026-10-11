@@ -91,6 +91,20 @@ def main():
           "boot_am13e_commit_sectors" not in boot and
           "update_commit.c" in src("boot/mcu/AM13E/config.cmake"),
           "Boot sector executor must be SRAM-resident and QUARANTINED")
+    # Original CRSF executor/CRC, not replacement command policy;
+    # the real UART TX gate must refuse a busy queue *before* Write.
+    crsf_app=src("src/io.c")
+    uart=src("mcu/AM13E/serial_uart_rx.c")
+    crsf_envelope=src("mcu/AM13E/crsf_command_reply.c")
+    check("execcrsfcmd,crc8dvbs2" in crsf_app and
+          "am13e_crsf_reply_envelope(" in crsf_app and
+          "crsf_tx.count==0U" in uart and
+          "DL_UART_IIDX_EOT_DONE" in uart and
+          "am13e_serial_tx_queue_eot(" in uart and
+          "AM13E_BOARD_SERIAL_TX_TWO_WIRE==1U" in uart and
+          "if(bytes>61)bytes=61;" in crsf_envelope and
+          "crsf_command_reply.c" in src("mcu/AM13E/config.cmake"),
+          "Original CRSF stateful command TX must be gated, bounded and board-selected")
     check("void am13e_rel17_boot_main(void)" in boot and
           "void main(void)" in boot and
           "void am13e_rel17_app_main(void)" in src("src/main.c") and

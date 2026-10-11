@@ -185,6 +185,51 @@
         "command_decode",
         "command_bidir_roundtrip"
       ]
+    },
+    {
+      "id": "analog_receiver_conditional",
+      "label": "Original Rel17 input_mode=1 conditional ADC0 SOC2 analog receiver (board-owned signal path; HW pending)",
+      "sources": [
+        "mcu/AM13E/analog_runtime.c",
+        "mcu/AM13E/analog_calibration_plan.c",
+        "src/main.c"
+      ],
+      "host_tests": [
+        "adc_scaling"
+      ]
+    },
+    {
+      "id": "uart_ibus_sbus_crsf_receive",
+      "label": "Original iBUS/SBUS/CRSF RX via conditional TI UNICOMM IRQ/FIFO (Synthetic Full ARM Link; physical pending)",
+      "sources": [
+        "mcu/AM13E/serial_frame_rx.c",
+        "mcu/AM13E/serial_uart_rx.c",
+        "mcu/AM13E/ibus_receiver.c",
+        "mcu/AM13E/sbus_receiver.c",
+        "mcu/AM13E/crsf_receiver.c",
+        "src/io.c"
+      ],
+      "host_tests": [
+        "ibus_receiver",
+        "sbus_receiver",
+        "crsf_receiver",
+        "serial_frames"
+      ]
+    },
+    {
+      "id": "crsf_command_tx_conditional",
+      "label": "Original Rel17 execcrsfcmd() with bounded CRSF reply and 2-wire UNICOMM TX FIFO/EOT (synthetic ARM link only)",
+      "sources": [
+        "mcu/AM13E/crsf_command_reply.c",
+        "mcu/AM13E/serial_tx_queue.c",
+        "mcu/AM13E/serial_uart_rx.c",
+        "src/io.c",
+        "src/prog.c"
+      ],
+      "host_tests": [
+        "crsf_command_reply",
+        "serial_tx_queue"
+      ]
     }
   ],
   "outside_fw1": [
@@ -197,7 +242,8 @@
     "CMPSS/ECAP1 comparator analog levels, edge filter and hardware zero-cross interrupt jitter",
     "Six MCPWM0 output pad electrical waveforms, dead-band non-overlap and real gate-driver polarity (outputs currently isolated)",
     "VBUS/NTC divider and model calibration plus WWDT LFCLK reset behavior",
-    "Flash erase/program and update endurance under actual supply interruption"
+    "Flash erase/program and update endurance under actual supply interruption",
+    "Board-qualified UNICOMM RXD/TXD mapping, CRSF baud tolerance/FIFO/EOT, 2-wire line levels, collision/turnaround, and original command-response timing"
   ],
   "reference_io_state": [
     {
@@ -256,11 +302,11 @@
     }
   ],
   "conditional_upstream_pending": [
-    "Analog input_mode receiver adaptation",
-    "Serial input_mode and UART-based iBUS/SBUS/SBUS2/CRSF/EXBUS/HoTT",
-    "Conditional KISS/iBUS/S.Port/CRSF/MSB/HoTT telemetry transports",
-    "Hall/hybrid and conditional BEC/LED/ERPM/PARK I/O adaptation",
-    "Board-specific qualified overcurrent/current-sense support where source-enabled",
-    "Boot self-update CMD_UPDATE and reversible persistent CMD_SETWRP"
+    "Original input_mode=2 serial/CLI and UART RX DMA, plus EXBUS/HoTT native receivers",
+    "SBUS2 telemetry response timing and dedicated half-duplex UART physical turnarounds",
+    "General KISS/iBUS/S.Port/CRSF/MSB/HoTT serial telemetry transport; CRSF 0x28/0x2c/0x2d command TX only source/Host/synthetic-ARM",
+    "Hall/hybrid and board-specific BEC/LED/ERPM/PARK I/O adaptation",
+    "Board-calibrated analog receiver input, physical current-sense/overcurrent/nFAULT support where source-enabled",
+    "Boot self-update CMD_UPDATE live Bank0 commit and persistent reversible CMD_SETWRP under qualified recovery"
   ]
 }

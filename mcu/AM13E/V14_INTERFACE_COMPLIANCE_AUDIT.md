@@ -58,7 +58,7 @@ function/semantic path; it does not mean the exact proposed
 | Reuse original `init/initio/compctl/adctrig/adcdata` | Current native implementation defines these entry hooks | MAPPED; conditional modes pending |
 | Original Rel17 Boot `write()` | Production `boot/mcu/AM13E/flash.c` now exports `write`; parser calls it directly | FIXED; native Host only renames to avoid POSIX libc collision |
 | Original Boot `update()` / `setwrp()` | AM13E handlers still return `RES_ERROR` | **MISSING — mandatory source feature gap** |
-| Source-defined conditional input and telemetry | Analog receiver, serial receiver/telemetry, Hall and board-specific routes incomplete | PARTIAL — not excluded from v1.4 |
+| Source-defined conditional input and telemetry | Analog ADC receiver, iBUS/SBUS/CRSF receivers, conditional two-wire CRSF command TX now compiled/Host-tested; original Serial mode 2, EXBUS/HoTT, general telemetry, Hall/GPIO missing | PARTIAL — synthetic ARM evidence, physical board pending; not excluded from v1.4 |
 | Native `add_target()` with MCU-local `config.c/h/cmake/ld` | App/Boot `config.cmake` own real Source lists; `config.c` implement native `init()`; active Rel17 image profile selects their `config.ld` | ALIGNED for selected Reference source/linker; hardware still pending |
 | Native `entry.c` Startup bridge | App `mcu/AM13E/entry.c` and Boot `boot/mcu/AM13E/entry.c` expose TI-compatible `int main(void)`, calling separate original Rel17 `void` control-loop bodies; one TI SDK startup object per ELF | SOURCE + LINK ALIGNED; M33 handoff and physical startup still pending |
 | Additional HAL / parallel control stack | MCU responsibilities in source modules; original Rel17 motor policy retained | No full independent HAL detected |
