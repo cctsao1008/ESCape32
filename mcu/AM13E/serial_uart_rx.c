@@ -6,6 +6,7 @@
  * slot timing or verified physical pin mapping is implied.
  */
 #include "serial_uart_rx.h"
+#include "service_reset.h"
 #ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
 #include "serial_frame_rx.h"
 #include "exbus_autobaud.h"
@@ -293,8 +294,7 @@ void am13e_app_serial_cli_service_pending(void)
     if(!cli_active)return;
     if(cli_rx.reboot){
         /* Original 00 ff reboot-to-Boot, deferred out of UART IRQ. */
-        NVIC_SystemReset();
-        for(;;){__NOP();}
+        am13e_app_service_reset();
     }
     if(!cli_rx.ready||cli_reply_length!=0U||crsf_tx.count!=0U)
         return;

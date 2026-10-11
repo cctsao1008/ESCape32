@@ -36,6 +36,7 @@
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/telem_mode_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/telem_backend.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/serial_uart_rx.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/service_reset.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_codec.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_timing.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/command_reply.c"

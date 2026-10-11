@@ -9,6 +9,7 @@
             "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/io.c"
             "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/device.c"
             "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/app.c"
+            "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/handoff.c"
             "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/flash.c"
             "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/update_staging.c"
             "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/update_commit.c"

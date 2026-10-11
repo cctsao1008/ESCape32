@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <soc.h>
 #include "app_validity.h"
+#include "handoff.h"
 
 extern char __cfg_flash_start__[];
 extern char __app_flash_start__[];
@@ -35,9 +36,7 @@ __attribute__((noreturn)) void boot_am13e_launch_application(void)
     uint32_t sp=0U,pc=0U;
     if(!app_entry(&sp,&pc))for(;;){}
     __disable_irq();
-    SysTick->CTRL=0U;
-    SysTick->LOAD=0U;
-    SysTick->VAL=0U;
+    boot_am13e_quiesce();
     SCB->VTOR=(uint32_t)(uintptr_t)__app_vector_start__;
     __DSB();__ISB();
     __set_MSP(sp);

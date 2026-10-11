@@ -7,6 +7,7 @@
 #include <dl_gpio.h>
 #include <dl_systick.h>
 #include <hw_pinmap.h>
+#include "handoff.h"
 
 /* PB14 is GPIO46: GPIO1, bit 14 (46 - 32). */
 #define BOOT_IO_PORT GPIO1
@@ -36,6 +37,10 @@ static void drive_low(void) {
 
 static void release_line(void) {
     DL_GPIO_disableOutput(BOOT_IO_PORT, BOOT_IO_MASK);
+}
+
+void boot_am13e_release_io(void) {
+    release_line();
 }
 
 /* Protocol IO ID 4 is reserved here for the AM13E PB14 boot service.

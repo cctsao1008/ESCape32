@@ -90,6 +90,7 @@ jobs:
             run_test serial_frames mcu/AM13E/serial_frame_rx.c mcu/AM13E/tests/serial_frame_rx_host_test.c
             run_test serial_command mcu/AM13E/serial_command.c mcu/AM13E/tests/serial_command_host_test.c
             run_test cli_line_rx mcu/AM13E/cli_line_rx.c mcu/AM13E/tests/cli_line_rx_host_test.c
+            run_test service_handoff -DAM13E -Imcu/AM13E/tests/service_mock -Iboot/mcu/AM13E mcu/AM13E/service_reset.c boot/mcu/AM13E/handoff.c mcu/AM13E/tests/service_handoff_host_test.c
             run_test bemf_clock mcu/AM13E/tests/motor_bemf_clock_host_test.c
             run_test bemf_commutation -DAM13E mcu/AM13E/motor_bemf_event_plan.c mcu/AM13E/motor_phase_plan.c mcu/AM13E/motor_aq_plan.c mcu/AM13E/motor_timer_math.c mcu/AM13E/tests/motor_bemf_commutation_host_test.c
             run_test motor_aq mcu/AM13E/motor_phase_plan.c mcu/AM13E/motor_aq_plan.c mcu/AM13E/tests/motor_aq_plan_host_test.c
