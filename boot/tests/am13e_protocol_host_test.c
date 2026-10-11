@@ -313,6 +313,9 @@ static void short_write_regressions(void) {
             ~((uintptr_t)DL_FLASH_SECTOR_SIZE - 1U));
         for (unsigned failure = 0U; failure < 3U; ++failure) {
             memset(sector, 0x5a, DL_FLASH_SECTOR_SIZE);
+            uint8_t recovered_sector[DL_FLASH_SECTOR_SIZE];
+            memcpy(recovered_sector, sector, sizeof recovered_sector);
+            memcpy(recovered_sector + (target-sector), payloads[0], 8U);
             reset_stream();
             fail_next_erase = failure == 0U;
             fail_next_program = failure == 1U;
@@ -324,6 +327,12 @@ static void short_write_regressions(void) {
             queue_read(block, 8U, payloads[0]);
             run_stream();
             CHECK(memcmp(target, payloads[0], 8U) == 0);
+            CHECK(memcmp(sector, recovered_sector, sizeof recovered_sector) == 0);
+            const unsigned verified_erases=erases,verified_programs=programs;
+            reset_stream();
+            queue_write(block, payloads[0], 8U, false, RES_OK);
+            run_stream();
+            CHECK(erases==verified_erases && programs==verified_programs);
         }
     }
     puts("PASS Config blocks0..3 erase/program/readback failures NAK and repair retry");

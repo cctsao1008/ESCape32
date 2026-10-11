@@ -14,13 +14,21 @@
 #include <stdint.h>
 #include "../../../../mcu/AM13E/flash_partition.h"
 
+/* Boot has one synchronous writer. Retain its complete authorized RMW
+ * image across a failed commit for a same-sector software retry. This
+ * is volatile controller recovery, not a programming-session protocol
+ * or a power-loss guarantee. A different sector replaces the cache.
+ */
+static bool retry_pending;
+static uintptr_t retry_sector;
+
 #ifdef AM13E_FLASH_TEST
 extern uintptr_t boot_am13e_test_first;
 extern uintptr_t boot_am13e_test_end;
 #define APP_FIRST boot_am13e_test_first
 #define APP_END boot_am13e_test_end
 /* No volatile signature/session policy in the original Rel17 protocol. */
-void boot_am13e_test_reset_update_state(void) {}
+void boot_am13e_test_reset_update_state(void) { retry_pending=false; }
 #else
 extern char __app_flash_start__[];
 extern char __boot_storage_end__[];
@@ -110,15 +118,20 @@ int AM13E_WRITE_ENTRY(char *dst,const char *source,int length)
         if(old[offset+(unsigned)i]!=(uint8_t)source[i]){
             identical=0;break;
         }
-    if(identical)return 1; /* Retry does not consume another erase cycle. */
-    for(unsigned i=0;i<AM13E_FLASH_ERASE_SECTOR;++i)
-        sector_image[i]=old[i];
+    const bool retry=retry_pending && retry_sector==sector;
+    if(identical && !retry)return 1; /* Verified retry does not wear Flash. */
+    if(!retry)
+        for(unsigned i=0;i<AM13E_FLASH_ERASE_SECTOR;++i)
+            sector_image[i]=old[i];
     for(int i=0;i<length;++i)
         sector_image[offset+(unsigned)i]=(uint8_t)source[i];
+    retry_sector=sector;
+    retry_pending=true;
     if(flash_commit((uint32_t)sector,sector_image)!=DL_FLASH_SUCCESS)
         return 0;
     const volatile uint8_t *actual=(const volatile uint8_t *)sector;
     for(unsigned i=0;i<AM13E_FLASH_ERASE_SECTOR;++i)
         if(actual[i]!=sector_image[i])return 0;
+    retry_pending=false;
     return 1;
 }
