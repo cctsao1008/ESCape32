@@ -137,7 +137,8 @@ void initio(void)
     /* Original cfg has already been restored/validated before initio().
      * Default Reference never selects a UART. RX is IRQ/FIFO-only.
      */
-    if((am13e_app_io_input_mode()==3||am13e_app_io_input_mode()==4||
+    if((am13e_app_io_input_mode()==2||
+        am13e_app_io_input_mode()==3||am13e_app_io_input_mode()==4||
         am13e_app_io_input_mode()==5||
         am13e_app_io_input_mode()==6||
         am13e_app_io_input_mode()==7) &&

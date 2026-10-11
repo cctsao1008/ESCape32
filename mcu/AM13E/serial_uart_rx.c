@@ -234,7 +234,7 @@ void RX_HANDLER(void);
 bool am13e_app_serial_rx_init(unsigned mode)
 {
     if(__get_PRIMASK()!=1U || initialized ||
-       (mode!=3U && mode!=4U && mode!=5U && mode!=6U &&
+       (mode!=2U && mode!=3U && mode!=4U && mode!=5U && mode!=6U &&
         mode!=7U))return false;
     /* UCS are shared with I2C/SPI; board profile must assign a
      * DEDICATED instance that no other owner has initialized.
@@ -260,7 +260,7 @@ bool am13e_app_serial_rx_init(unsigned mode)
     DL_UART_setClockConfig(RX_UC,&clk);
     DL_UART_DIRECTION direction=DL_UART_DIRECTION_RX;
 #ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
-    if(mode==5U) {
+    if(mode==2U || mode==5U) {
         /* Separate, board-reviewed 2-wire full-duplex TX/RX only.
          * Single-wire CRSF turnaround is NOT supported here.
          * Earlier initgpio() left the TX reservation Hi-Z.
@@ -289,6 +289,7 @@ bool am13e_app_serial_rx_init(unsigned mode)
     };
     DL_UART_init(RX_UC,&config);
     DL_UART_configBaudRate(RX_UC,AM13E_BOARD_SERIAL_RX_BUSCLK_HZ,
+                           mode==2U?460800U:
                            mode==4U?100000U:
                            mode==5U?416666U:
                            mode==6U?125000U:115200U);
@@ -408,7 +409,22 @@ void RX_HANDLER(void)
             continue;
         }
         if(complete){
-            if(rx_state.mode==3U)
+            if(rx_state.mode==2U){
+                uint8_t reply[12];unsigned reply_len=0U;
+#ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
+                if(!crsf_tx_available || crsf_tx.count!=0U)
+                    continue; /* No ACK can be queued while busy. */
+#endif
+                const int valid=am13e_app_io_serial_frame(
+                    bytes,len,reply,sizeof reply,&reply_len);
+#ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
+                if(valid && reply_len!=0U)
+                    crsf_tx_start(reply,reply_len);
+#else
+                (void)valid;
+#endif
+            }
+            else if(rx_state.mode==3U)
                 (void)am13e_app_io_ibus_frame(bytes,len);
             else if(rx_state.mode==4U)
                 (void)am13e_app_io_sbus_frame(bytes,len);

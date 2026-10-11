@@ -298,6 +298,7 @@ jobs:
           grep -Eq ' [Tt] am13e_app_io_sbus_frame$' am13e-ci-logs/serial-selected-symbols.txt
           grep -Eq ' [Tt] am13e_app_serial_exbus_service_pending$' am13e-ci-logs/serial-selected-symbols.txt
           grep -Eq ' [Tt] am13e_exbus_autobaud_bad$' am13e-ci-logs/serial-selected-symbols.txt
+          grep -Eq ' [Tt] am13e_app_io_serial_frame$' am13e-ci-logs/serial-selected-symbols.txt
           echo "PASS synthetic selected UNICOMM RX ARM link; NOT FLASHED"
           # Diagnostic UC TX selected firmware, not a valid PCB pin plan.
           cmake -S . -B am13e-ci-crsf-tx -G "Unix Makefiles" \
