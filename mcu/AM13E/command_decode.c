@@ -159,28 +159,38 @@ void am13e_pb14_decoder_pulse(AM13E_PB14_Decoder *d, uint32_t start,
      * This is NOT the 'PWM_ENABLE' motor output option.
      */
     const int servo_candidate=
-        period>=2500U*us_ticks && period<=50000U*us_ticks &&
+        period>=1920U*us_ticks && period<=50000U*us_ticks &&
         d->pending_width>=800U*us_ticks &&
-        d->pending_width<=2200U*us_ticks;
+        d->pending_width<=2200U*us_ticks && d->pending_width<period;
     const int oneshot_candidate=
         period>=250U*us_ticks && period<=50000U*us_ticks &&
         d->pending_width>=100U*us_ticks &&
         d->pending_width<=275U*us_ticks &&
         d->pending_width<period;
-    if(servo_candidate || oneshot_candidate) {
-        const AM13E_PB14_RxMode kind=servo_candidate?
-            AM13E_PB14_RX_PWM:AM13E_PB14_RX_ONESHOT;
+    /* Once Rel17 selects servoirq, special and invalid widths belong
+     * to that policy too. Do not silently filter them in the decoder.
+     * Keep mode selection locked; never reinterpret DShot as Servo.
+     */
+    const int selected_servo=d->rx_mode==AM13E_PB14_RX_PWM &&
+        period>=1920U*us_ticks && period<=50000U*us_ticks;
+    const int selected_oneshot=d->rx_mode==AM13E_PB14_RX_ONESHOT &&
+        period>=250U*us_ticks && period<=50000U*us_ticks;
+    if(servo_candidate || oneshot_candidate || selected_servo || selected_oneshot) {
+        const AM13E_PB14_RxMode kind=selected_servo?AM13E_PB14_RX_PWM:
+            selected_oneshot?AM13E_PB14_RX_ONESHOT:
+            servo_candidate?AM13E_PB14_RX_PWM:AM13E_PB14_RX_ONESHOT;
         clear_frame(d);
         if(d->rx_mode!=AM13E_PB14_RX_UNDECIDED &&
            d->rx_mode!=kind) {
             ++d->rejected; /* Once selected, upstream servoirq
                               * and dshotirq do not auto-reselect. */
         } else {
-            const unsigned pulse_us=(unsigned)(
-                (d->pending_width+us_ticks/2U)/us_ticks);
-            const unsigned source_ticks=servo_candidate?
-                pulse_us:pulse_us*8U;
-            if(pwm!=NULL) pwm(source_ticks);
+            const unsigned scale=kind==AM13E_PB14_RX_ONESHOT?8U:1U;
+            const unsigned source_ticks=(unsigned)(
+                ((uint64_t)d->pending_width*scale+us_ticks/2U)/us_ticks);
+            const unsigned source_period=(unsigned)(
+                ((uint64_t)period*scale+us_ticks/2U)/us_ticks);
+            if(pwm!=NULL) pwm(source_ticks,source_period);
             ++d->good_pwm;
             d->rx_mode=(uint8_t)kind;
         }

@@ -63,7 +63,9 @@ int am13e_pb14_capture_group_valid(uint32_t start1, uint32_t end1,
                                    uint32_t tick_hz);
 
 /* Protocol dispatch owns the original ESCape32 policy, not this decoder. */
-typedef void (*AM13E_PB14_PwmCallback)(unsigned int pulse_us);
+/* Rel17 timer counts: 1/us Servo, 8/us Oneshot, including period. */
+typedef void (*AM13E_PB14_PwmCallback)(unsigned int pulse_ticks,
+                                       unsigned int period_ticks);
 typedef int (*AM13E_PB14_DshotCallback)(uint16_t frame, int inverted);
 
 void am13e_pb14_decoder_reset(AM13E_PB14_Decoder *d, uint32_t tick_hz, int inverted);

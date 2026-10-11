@@ -32,8 +32,8 @@ commit CI must be checked separately and is not official-SDK provenance evidence
 
 ## Remaining design obligations
 
-**DESIGN REQUIRED**, pending integration: period-aware Servo calibration/special
-pulse semantics; reachable HIGH-level CLI entry; SBUS2 scheduler; original
+**DESIGN REQUIRED**, pending integration: complete original input-discovery
+sequence; reachable HIGH-level CLI entry; SBUS2 scheduler; original
 half-duplex transports; optional Hall/LED/BEC/PARK/ERPM hooks; broader shared
 motor/config/command production-path traces. Existing codec/model tests and ARM
 links alone do not close these source requirements.
@@ -44,3 +44,37 @@ channels/scales; TI-supported receiver clock trim; full SRAM indirect/literal/da
 closure and post-erase failure/recovery policy for Bank0 self-update; reversible
 NONMAIN protection/reload and ROM BSL/SWD/power-loss recovery qualification.
 All recovery gates remain fail closed. No physical operations were performed.
+
+## Servo/Oneshot source integration
+
+Requirements APP-I01/I02/I06/I14/I20/I26, C05, A11/A12:
+**SOURCE IMPLEMENTED / SOFTWARE VERIFIED** for retained width+period,
+500Hz Servo admission, original timer-domain normalization, selected-mode
+28..32 telemetry requests, throttle conversion, running invalid-width refusal
+without watchdog feed, and safe-off reset on idle invalid width.
+Fractional Oneshot widths are converted before rounding (3.5us -> 28 counts).
+Mode locking, CRC handling and prior-response DShot ordering remain unchanged.
+
+`servo_source` links the real decoder, `src/io.c` and `src/util.c`, using section
+garbage collection only for unrelated uncalled source functions. Host unsigned
+char matches the ARM ABI. Hardware watchdog/reset boundaries are mocked.
+`servo_trim_source` invokes the real shared callback with a mocked actuator.
+Nine original strict calibration period windows, accumulated-error correction,
+every-fourth capture, counter wrap and transition to Servo are tested.
+Existing decoder/BiDShot regressions and all 11 CTests pass; default/selected
+Application and Boot strict ARM links, six recovery negatives, image and
+immutable-document audits pass with official GCC/SDK.
+
+Calibration actuation is **BLOCKED** until a real, TI-supported clock provider
+is supplied. Explicit selection `AM13E_BOARD_SERVO_CLOCK_TRIM_CONFIGURED=1`
+requires `am13e_app_servo_clock_trim(int)`; there is no weak/no-op implementation.
+Without that provider, reception retains its previous uncalibrated behavior,
+and `am13e_app_io_servo_calibration_blocked()` reports configured calibration
+as unavailable. Mocked correction direction is not an on-target trim proof.
+Original discovery capture counts, polarity re-selection and immediate handling
+of incoherent/out-of-budget/over-2500us capture groups remain pending; those
+groups are still rejected before policy and do not refresh the watchdog.
+
+Service/handoff milestone CI: run 38154306786, exact HEAD
+`d81d1d450618bb101f75a74a5b9e79e1fc1a0025`, job `fw1-build-evidence` SUCCESS,
+all 22 reported steps SUCCESS. This does not establish full Rel17 parity.

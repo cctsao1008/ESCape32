@@ -30,6 +30,8 @@
 #include "exbus_telemetry_reply.h" /* Preserve original exbusresp fields */
 #include "hott_receiver.h" /* Original HoTT/SUMDv1/SUMDv3 and XMODEM CRC */
 #include "crsf_command_reply.h" /* Preserve original execcrsfcmd response */
+#include "servo_calibration.h"
+#include "service_reset.h"
 #else
 #ifdef AT32F4
 #define USART2_TDR USART2_DR
@@ -560,13 +562,43 @@ int am13e_app_io_dshot_packet(uint16_t frame, int bidirectional_invert) {
     return 1;
 }
 
-/* A valid capture, in microseconds, from the AM13E input backend. */
-void am13e_app_io_servo_pulse(unsigned int pulse_us) {
+static int servo_calibration_blocked;
+int am13e_app_io_servo_calibration_blocked(void) {
+    return servo_calibration_blocked;
+}
+/* Original servoirq policy; the decoder retains its selected timer domain. */
+void am13e_app_io_servo_pulse(unsigned int pulse_us,unsigned int period_ticks) {
     if(cfg.input_mode!=0)return;
-    if (pulse_us >= 800 && pulse_us <= 2200) {
+#ifdef AM13E_BOARD_SERVO_CLOCK_TRIM_CONFIGURED
+    static AM13E_ServoCalibration calibration;
+    const int was_finished=calibration.finished;
+    const int action=am13e_servo_calibration_step(&calibration,
+                                                 period_ticks,cfg.throt_cal);
+    if(action!=AM13E_SERVO_CAL_DONE) {
         am13e_app_io_watchdog_feed();
-        setthrot((int)pulse_us);
+        if(action==AM13E_SERVO_CAL_SLOW)am13e_app_servo_clock_trim(-1);
+        else if(action==AM13E_SERVO_CAL_FAST)am13e_app_servo_clock_trim(1);
+        return;
     }
+    if(!was_finished)return; /* calibirq switches handler; next capture is Servo. */
+#else
+    (void)period_ticks;
+    servo_calibration_blocked=!!cfg.throt_cal;
+#endif
+    if(pulse_us>=28U && pulse_us<=32U) {
+        am13e_app_io_watchdog_feed();
+        telreq=1;
+        return;
+    }
+    if(pulse_us<800U || pulse_us>2200U) {
+        if(ertm)return;
+        /* Original idle invalid-signal WWDG reset, with native safe-off
+         * ordering; running invalid input must not feed the watchdog.
+         */
+        am13e_app_service_reset();
+    }
+    am13e_app_io_watchdog_feed();
+    setthrot((int)pulse_us);
 }
 unsigned am13e_app_io_input_mode(void)
 {

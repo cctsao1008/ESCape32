@@ -26,8 +26,8 @@
  * am13e_app_io_watchdog_feed() starts/restarts real WWDT0 only when
  * original Rel17 callbacks accept a physical PWM/DSHOT frame. Do not
  * refresh from SysTick or pass CRC-invalid frames.
- * am13e_app_io_servo_pulse() is passed a *validated* 800..2200us width;
- * caller must qualify timing/faults and feed watchdog as required.
+ * Servo callback receives coherent captured width/period in original
+ * timer counts, including telemetry/invalid widths after mode selection.
  * Other physical PWM/Oneshot/serial input event surfaces are pending.
  */
 #pragma once
@@ -45,7 +45,17 @@ void am13e_app_io_bidir_telemetry_levels(
     uint8_t levels[AM13E_BIDIR_DMA_LEVELS]);
 
 int am13e_app_io_dshot_packet(uint16_t frame, int bidirectional_invert);
-void am13e_app_io_servo_pulse(unsigned int pulse_us);
+void am13e_app_io_servo_pulse(unsigned int pulse_ticks,unsigned int period_ticks);
+/* Explicit observable gap: configured calibration without a native trim
+ * provider retains previous uncalibrated reception, never claims trim.
+ */
+int am13e_app_io_servo_calibration_blocked(void);
+#ifdef AM13E_BOARD_SERVO_CLOCK_TRIM_CONFIGURED
+#if AM13E_BOARD_SERVO_CLOCK_TRIM_CONFIGURED != 1
+#error "Servo clock trim requires an explicitly selected real board provider"
+#endif
+void am13e_app_servo_clock_trim(int direction);
+#endif
 /* Valid original 32-byte iBUS receiver frame; selected UART transport
  * owns clock/pinmux, parity, frame acquisition and resynchronization.
  */

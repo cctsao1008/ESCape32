@@ -5,7 +5,8 @@
 
 static unsigned seen_pwm, last_pwm, seen_dshot, last_inverse;
 static uint16_t last_frame;
-static void on_pwm(unsigned width_us) { ++seen_pwm; last_pwm = width_us; }
+static void on_pwm(unsigned width_us,unsigned period_ticks)
+{ ++seen_pwm; last_pwm = width_us; assert(period_ticks>width_us); }
 static int on_dshot(uint16_t frame, int inverted)
 {
     /* Same XOR-nibble CRC relation used by original Rel17 callback. */

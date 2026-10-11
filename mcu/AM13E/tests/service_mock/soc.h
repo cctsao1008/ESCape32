@@ -18,4 +18,6 @@ void test_reset(void);
 #define __DSB() test_dsb()
 #define __ISB() test_isb()
 #define __NOP() ((void)0)
+#define __disable_irq() ((void)0)
+#define __enable_irq() ((void)0)
 #define NVIC_SystemReset() test_reset()

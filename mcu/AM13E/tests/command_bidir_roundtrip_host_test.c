@@ -13,9 +13,10 @@ static unsigned dshot_delivered, pwm_delivered;
 static uint16_t last_dshot;
 static int last_inverted;
 
-static void on_pwm(unsigned int width)
+static void on_pwm(unsigned int width,unsigned int period)
 {
     (void)width;
+    (void)period;
     ++pwm_delivered;
 }
 static int on_dshot(uint16_t frame,int inverted)
