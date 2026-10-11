@@ -19,6 +19,7 @@
 #include "fault_input.h"
 #include "command_capture.h"
 #include "command_reply.h"
+#include "serial_uart_rx.h"
 #include "clock_backend.h"
 #include <soc.h>
 #include <dl_mcpwm.h>
@@ -85,6 +86,11 @@ void am13e_app_motor_runtime_enable_interrupts(void)
         NVIC_GetPriority(ADC0_INT1_INT_IRQn)!=1U)
         irq_barrier_fault();
 
+#ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
+    if((cfg.input_mode==3||cfg.input_mode==4) &&
+       !am13e_app_serial_rx_irq_ready())
+        irq_barrier_fault();
+#endif
     if (!NVIC_GetEnableIRQ(ECAP0_INT_IRQn) ||
         !NVIC_GetEnableIRQ(ECAP1_INT_IRQn) ||
         !NVIC_GetEnableIRQ(TIMG12_0_INT_IRQn) ||

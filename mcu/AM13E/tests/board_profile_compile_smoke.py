@@ -19,7 +19,7 @@ commands=json.loads((build/"compile_commands.json").read_text())
 
 targets={"motor_safety.c","motor_power_stage.c","motor_runtime_irq.c",
          "analog_runtime.c","main.c","util.c","fault_input.c",
-         "irq_vectors.c"}
+         "irq_vectors.c","serial_uart_rx.c"}
 observed={}
 
 def syntax_check(obj,flags,should_pass=True,expected_error=None):
@@ -95,6 +95,27 @@ syntax_check(observed["analog_runtime.c"],
              ["-DAM13E_BOARD_ANALOG_INPUT_PINCM=46"],
              False,"Analog receiver conflicts")
 print("PASS: conditional Analog input_mode=1 ADC0 SOC2 build and board pin guards")
+
+# Explicit hardware routing requirements; the positive profile is a
+# synthetic compile fixture, not an actual valid UC-to-pin assignment.
+uart=["-DAM13E_BOARD_SERIAL_RX_CONFIGURED=1",
+      "-DAM13E_BOARD_SERIAL_RX_UC_INDEX=0",
+      "-DAM13E_BOARD_SERIAL_RX_PINCM=50",
+      "-DAM13E_BOARD_SERIAL_RX_PIN_FUNCTION=2",
+      "-DAM13E_BOARD_SERIAL_RX_BUSCLK_HZ=100000000"]
+syntax_check(observed["serial_uart_rx.c"],uart)
+syntax_check(observed["serial_uart_rx.c"],
+             ["-DAM13E_BOARD_SERIAL_RX_CONFIGURED=1"],
+             False,"Board UART RX requires dedicated UC")
+syntax_check(observed["serial_uart_rx.c"],
+             [x for x in uart if not x.startswith("-DAM13E_BOARD_SERIAL_RX_PINCM")] +
+             ["-DAM13E_BOARD_SERIAL_RX_PINCM=46"],
+             False,"Native serial RX pin conflicts")
+syntax_check(observed["serial_uart_rx.c"],
+             [x for x in uart if not x.startswith("-DAM13E_BOARD_SERIAL_RX_UC_INDEX")] +
+             ["-DAM13E_BOARD_SERIAL_RX_UC_INDEX=6"],
+             False,"Select AM13E UNICOMM0..UNICOMM5")
+print("PASS: native UNICOMM RX IRQ/FIFO selected-profile syntax and safety guards")
 
 # Static non-operation checks: actual default firmware must not install
 # a PB15 or OC trip, drive PB13 active, or enable nFAULT interrupts.

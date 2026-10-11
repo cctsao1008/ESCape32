@@ -545,6 +545,7 @@ void am13e_app_io_bidir_telemetry_levels(uint8_t levels[AM13E_BIDIR_DMA_LEVELS])
 }
 
 int am13e_app_io_dshot_packet(uint16_t frame, int bidirectional_invert) {
+    if(cfg.input_mode!=0)return 0;
     int x = frame;
     if (dshotcrc(x, !!bidirectional_invert)) return 0;
     am13e_app_io_watchdog_feed();
@@ -554,6 +555,7 @@ int am13e_app_io_dshot_packet(uint16_t frame, int bidirectional_invert) {
 
 /* A valid capture, in microseconds, from the AM13E input backend. */
 void am13e_app_io_servo_pulse(unsigned int pulse_us) {
+    if(cfg.input_mode!=0)return;
     if (pulse_us >= 800 && pulse_us <= 2200) {
         am13e_app_io_watchdog_feed();
         setthrot((int)pulse_us);

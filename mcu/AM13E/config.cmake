@@ -19,6 +19,8 @@
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/command_decode.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/ibus_receiver.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/sbus_receiver.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/serial_frame_rx.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/serial_uart_rx.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_codec.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_timing.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/command_reply.c"
@@ -65,6 +67,7 @@
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_cmpss_lite.c"
             "${am13e_sdk_compat_dir}/dl_timer.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_dma.c"
+            "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_unicommuart.c"
             "${AM13E_SDK_ROOT}/source/driverlib/am13e230x/dl_mcpwm.c")
         set(am13e_source_dir "${PROJECT_SOURCE_DIR}/src")
 function(am13e_configure_reference_board target)

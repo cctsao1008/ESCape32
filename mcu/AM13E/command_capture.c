@@ -15,6 +15,7 @@
 #include "command_capture.h"
 #include "command_decode.h"
 #include "io_backend.h"
+#include "serial_uart_rx.h"
 #include "input_watchdog.h"
 #include "command_reply.h"
 #include "command_input_route_backend.h"
@@ -131,6 +132,14 @@ void initio(void)
     am13e_app_io_watchdog_prepare();
     am13e_pb14_bidir_tx_init();
     initialized = 1U;
+#ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
+    /* Original cfg has already been restored/validated before initio().
+     * Default Reference never selects a UART. RX is IRQ/FIFO-only.
+     */
+    if((cfg.input_mode==3||cfg.input_mode==4) &&
+       !am13e_app_serial_rx_init((unsigned)(uint8_t)cfg.input_mode))
+        input_fail_closed();
+#endif
     /* Equal to 16 kHz SysTick priority (0): neither exception may
      * preempt the other while mutating the decoder.
      */
