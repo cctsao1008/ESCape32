@@ -14,7 +14,7 @@ unsigned am13e_crsf_reply_envelope(const uint8_t *frame,unsigned n,
                                    AM13E_CrsfCrc8 crc)
 {
     if(!frame||!out||!scratch||!exec||!crc||
-       cap<4U||scratch_bytes<1024U||n<4U||n>64U||
+       cap<64U||scratch_bytes<1024U||n<4U||n>64U||
        frame[1]<2U||frame[1]>62U||
        (unsigned)frame[1]+2U!=n ||
        (frame[2]!=0x28U&&frame[2]!=0x2cU&&frame[2]!=0x2dU))

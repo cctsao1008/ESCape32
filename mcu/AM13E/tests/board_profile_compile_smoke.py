@@ -117,6 +117,20 @@ syntax_check(observed["serial_uart_rx.c"],
              ["-DAM13E_BOARD_SERIAL_RX_UC_INDEX=6"],
              False,"Select AM13E UNICOMM0..UNICOMM5")
 print("PASS: native UNICOMM RX IRQ/FIFO selected-profile syntax and safety guards")
+# TX-positive case remains a COMPILE-ONLY synthetic fixture.
+tx=uart+["-DAM13E_BOARD_SERIAL_TX_CONFIGURED=1",
+         "-DAM13E_BOARD_SERIAL_TX_PINCM=51",
+         "-DAM13E_BOARD_SERIAL_TX_PIN_FUNCTION=2",
+         "-DAM13E_BOARD_SERIAL_TX_TWO_WIRE=1"]
+syntax_check(observed["serial_uart_rx.c"],tx)
+syntax_check(observed["serial_uart_rx.c"],
+             [x for x in tx if not x.startswith("-DAM13E_BOARD_SERIAL_TX_TWO_WIRE")],
+             False,"CRSF TX requires explicit TX")
+syntax_check(observed["serial_uart_rx.c"],
+             [x for x in tx if not x.startswith("-DAM13E_BOARD_SERIAL_TX_PINCM")] +
+             ["-DAM13E_BOARD_SERIAL_TX_PINCM=50"],
+             False,"CRSF TX must own a distinct")
+print("PASS: optional CRSF TX IRQ/EOT board route and fail-closed contract")
 
 # Static non-operation checks: actual default firmware must not install
 # a PB15 or OC trip, drive PB13 active, or enable nFAULT interrupts.
