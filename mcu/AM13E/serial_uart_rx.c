@@ -7,6 +7,7 @@
  */
 #include "serial_uart_rx.h"
 #include "service_reset.h"
+#include "command_capture.h"
 #ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
 #include "serial_frame_rx.h"
 #include "exbus_autobaud.h"
@@ -15,6 +16,7 @@
 #include "crsf_deferred_command.h"
 #ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
 #include "cli_line_rx.h"
+#include "cli_entry.h"
 #endif
 #endif
 #include "io_backend.h"
@@ -202,6 +204,7 @@ static bool crsf_tx_available;
 #ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
 static AM13E_CliLineRx cli_rx;
 static bool cli_active;
+static AM13E_CliEntry cli_entry;
 static char cli_reply[AM13E_CLI_LINE_BYTES];
 static unsigned cli_reply_length,cli_reply_offset;
 #endif
@@ -260,24 +263,34 @@ static void crsf_tx_start(const uint8_t *p,unsigned n)
         DL_UART_enableInterrupt(RX_UC,DL_UART_INTERRUPT_TX);
 }
 #ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
-/* Physical entry requires a board-verified original 1s idle-low signal.
+/* Physical entry requires the original HIGH timeout signal on PB14.
  * Never selected or auto-inferred by the PB14 Reference profile.
  * Selected mode2 binary serial and CLI share the UART, not a parser.
  */
 bool am13e_app_serial_cli_enter(void)
 {
-    if(!initialized||cli_active||rx_state.mode!=2U||
+    if(!initialized||cli_active||cli_entry.selected||!cli_entry.requested||
        __get_PRIMASK()!=1U||!crsf_tx_available||
        crsf_tx.count!=0U||crsf_cmd.busy||
+       !am13e_app_io_service_idle() ||
        !DL_UART_isRXFIFOEmpty(RX_UC)||DL_UART_isBusy(RX_UC))
         return false;
+    if(!am13e_app_pb14_service_takeover())return false;
     DL_UART_disable(RX_UC);
+    /* SBUS receiver parity/stop bits must not leak into text CLI. */
+    DL_UART_Config config={
+        .mode=DL_UART_MODE_NORMAL,.direction=DL_UART_DIRECTION_TX_RX,
+        .flowControl=DL_UART_FLOW_CONTROL_NONE,.parity=DL_UART_PARITY_NONE,
+        .wordLength=DL_UART_WORD_LENGTH_8_BITS,.stopBits=DL_UART_STOP_BITS_ONE
+    };
+    DL_UART_init(RX_UC,&config);
     DL_UART_configBaudRate(RX_UC,AM13E_BOARD_SERIAL_RX_BUSCLK_HZ,38400U);
     DL_UART_enable(RX_UC);
     am13e_serial_frame_abort(&rx_state);
     am13e_cli_line_init(&cli_rx);
     cli_reply_length=cli_reply_offset=0U;
     cli_active=true;
+    am13e_cli_entry_select_receiver(&cli_entry);
     return true;
 }
 static void cli_start_next_chunk(void)
@@ -291,6 +304,15 @@ static void cli_start_next_chunk(void)
 }
 void am13e_app_serial_cli_service_pending(void)
 {
+    if(!cli_active && cli_entry.requested){
+        const uint32_t primask=__get_PRIMASK();
+        __disable_irq();
+        /* No waiting for UART idle with interrupts masked. Retry later
+         * only while entry remains eligible; RX/capture cancels it.
+         */
+        (void)am13e_app_serial_cli_enter();
+        __set_PRIMASK(primask);
+    }
     if(!cli_active)return;
     if(cli_rx.reboot){
         /* Original 00 ff reboot-to-Boot, deferred out of UART IRQ. */
@@ -311,6 +333,12 @@ void am13e_app_serial_cli_service_pending(void)
     cli_reply_offset=0U;
     if(cli_reply_length)cli_start_next_chunk();
 }
+void am13e_app_serial_cli_entry_poll(int high,int edge,int selected)
+{
+    if(!initialized||cli_active)return;
+    if(am13e_cli_entry_tick(&cli_entry,high,edge,selected))
+        SCB->ICSR=SCB_ICSR_PENDSVSET_Msk;
+}
 #endif
 #endif
 
@@ -318,6 +346,12 @@ void RX_HANDLER(void);
 
 bool am13e_app_serial_rx_init(unsigned mode)
 {
+#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
+    /* cfg.input_mode=0 still needs the explicitly selected CLI UART.
+     * Binary frames on it are refused by the real source mode check.
+     */
+    if(mode==0U)mode=2U;
+#endif
     if(__get_PRIMASK()!=1U || initialized ||
        (mode!=2U && mode!=3U && mode!=4U && mode!=5U && mode!=6U &&
         mode!=7U))return false;
@@ -346,6 +380,9 @@ bool am13e_app_serial_rx_init(unsigned mode)
     DL_UART_DIRECTION direction=DL_UART_DIRECTION_RX;
 #ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
     if(mode==2U || mode==5U
+#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
+       || mode==3U || mode==4U || mode==6U || mode==7U
+#endif
 #ifdef AM13E_BOARD_EXBUS_REPLY_ENABLED
        || mode==6U
 #endif
@@ -394,6 +431,7 @@ bool am13e_app_serial_rx_init(unsigned mode)
 #ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
     am13e_cli_line_init(&cli_rx);
     cli_active=false;
+    cli_entry=(AM13E_CliEntry){0};
     cli_reply_length=cli_reply_offset=0U;
 #endif
     exbus_change_requested_tick=0U;
@@ -482,6 +520,12 @@ void RX_HANDLER(void)
         }
         if(DL_UART_isRXFIFOEmpty(RX_UC))break;
         const uint32_t raw=RX_UC->uart->RXDATA;
+#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
+        /* Rel17 has selected serial input before it validates a frame.
+         * Even malformed received bytes must cancel deferred CLI entry.
+         */
+        if(!cli_active)am13e_cli_entry_select_receiver(&cli_entry);
+#endif
         if((raw&RX_ERRORS)!=0U){
             am13e_serial_frame_abort(&rx_state);
 #ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED

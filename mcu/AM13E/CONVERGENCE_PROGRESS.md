@@ -78,3 +78,34 @@ groups are still rejected before policy and do not refresh the watchdog.
 Service/handoff milestone CI: run 38154306786, exact HEAD
 `d81d1d450618bb101f75a74a5b9e79e1fc1a0025`, job `fw1-build-evidence` SUCCESS,
 all 22 reported steps SUCCESS. This does not establish full Rel17 parity.
+
+## Reachable conditional CLI entry
+
+Requirements APP-I01/I07/I24/I31, SYS-10:
+**SOURCE IMPLEMENTED / SOFTWARE VERIFIED (policy + ARM links)**.
+The existing explicitly selected CLI board capability now connects PB14's
+HIGH timeout observations through the 16kHz input service to PendSV. The
+production entry policy preserves Rel17's cumulative sixteen HIGH timeouts
+(LOW does not reset source counter c); edges restart the timeout, and a
+selected receiver or received UART byte cancels entry. Mode0 may initialize
+the selected CLI UART without accepting binary commands in the wrong source
+mode. CLI selects 38400/8N1 even after an SBUS parity/stop-bit configuration.
+An occupied TX queue, pending CRSF command, active motor, busy UART or RX bytes
+refuses takeover without a blocking idle wait. Masked capture takeover checks
+receiver selection/BiDShot ownership again, stops ECAP0 and clears its pending
+state; input calibration and callbacks stop while CLI owns service.
+
+`cli_entry` tests the production policy's exact threshold/polarity, interrupted
+timeouts, LOW observations and receiver-selection race cancellation. Existing
+CLI editing/overflow/deferred-00ff tests remain. Selected CLI/CRSF and other
+UART/telemetry ARM links, default Application/Boot and 11 CTests pass. These
+tests do not emulate the entire UNICOMM register backend or prove physical
+PB14 bias, entry timing, UART inversion, queue races or line topology.
+**HARDWARE PENDING**: reviewed PB14 entry electrical condition and selected UART
+pad/topology; measured entry/receiver arbitration. Default UART remains disabled.
+Original single-wire CLI transport and complete discovery state machine remain
+**DESIGN REQUIRED**, not closed by the conditional two-wire implementation.
+
+Servo milestone CI: run 38154801219, exact HEAD
+`a383147b2597ca54346b06151e9bdf50e27397f3`, job `fw1-build-evidence` SUCCESS,
+all 22 reported steps SUCCESS.

@@ -82,6 +82,7 @@ static uint32_t calib_counter;
 static uint32_t calib_start;
 static uint32_t calib_ticks_per_us;
 static uint8_t inverted_rx;
+static uint8_t service_owns_input;
 
 static void input_fail_closed(void)
 {
@@ -138,6 +139,9 @@ void initio(void)
      * Default Reference never selects a UART. RX is IRQ/FIFO-only.
      */
     if((am13e_app_io_input_mode()==2||
+#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
+        am13e_app_io_input_mode()==0||
+#endif
         am13e_app_io_input_mode()==3||am13e_app_io_input_mode()==4||
         am13e_app_io_input_mode()==5||
         am13e_app_io_input_mode()==6||
@@ -255,7 +259,18 @@ void am13e_app_pb14_systick(void)
     if (!initialized) return;
 #ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
     am13e_app_serial_rx_systick();
+#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
+    static unsigned last_level;
+    const unsigned level=DL_GPIO_readPins(PB14_GPIO,PB14_GPIO_PIN)!=0U;
+    const int edge=level!=last_level ||
+        (DL_ECAP_getInterruptSource(PB14_ECAP)&PB14_CAPTURE_GROUP_FLAGS)!=0U;
+    last_level=level;
+    am13e_app_serial_cli_entry_poll((int)level,edge,
+        decoder.rx_mode!=AM13E_PB14_RX_UNDECIDED ||
+        am13e_app_io_input_mode()==1U);
 #endif
+#endif
+    if(service_owns_input)return;
     am13e_pb14_bidir_tx_systick();
     if (++calib_counter == 16U) {
         const uint32_t now = DL_ECAP_getTimeStampCounter(PB14_ECAP);
@@ -277,9 +292,25 @@ void am13e_app_pb14_systick(void)
     }
 }
 
+bool am13e_app_pb14_service_takeover(void)
+{
+    if(!initialized || __get_PRIMASK()!=1U || service_owns_input ||
+       decoder.rx_mode!=AM13E_PB14_RX_UNDECIDED ||
+       am13e_pb14_bidir_tx_busy())return false;
+    NVIC_DisableIRQ(ECAP0_INT_IRQn);
+    DL_ECAP_disableTimeStampCapture(PB14_ECAP);
+    DL_ECAP_stopCounter(PB14_ECAP);
+    DL_ECAP_clearInterrupt(PB14_ECAP,PB14_ECAP_EXPECTED_FLAGS);
+    DL_ECAP_clearGlobalInterrupt(PB14_ECAP);
+    NVIC_ClearPendingIRQ(ECAP0_INT_IRQn);
+    am13e_pb14_decoder_abort(&decoder);
+    service_owns_input=1U;
+    return true;
+}
+
 void am13e_pb14_resume_rx(void)
 {
-    if (!initialized) input_fail_closed();
+    if (!initialized || service_owns_input) input_fail_closed();
     DL_ECAP_stopCounter(PB14_ECAP);
     DL_ECAP_resetCounters(PB14_ECAP);
     DL_ECAP_clearInterrupt(PB14_ECAP, PB14_ECAP_EXPECTED_FLAGS);

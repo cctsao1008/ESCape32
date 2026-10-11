@@ -604,6 +604,7 @@ unsigned am13e_app_io_input_mode(void)
 {
     return (unsigned)(uint8_t)cfg.input_mode;
 }
+int am13e_app_io_service_idle(void) { return ertm==0; }
 /* Original Rel17 input_mode=2 binary Serial Command. The stateful
  * policy variables remain those owned by the upstream shared io.c.
  * No fake LED GPIO support is introduced by this native adapter.

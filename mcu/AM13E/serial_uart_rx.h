@@ -19,10 +19,12 @@ void am13e_app_serial_exbus_service_pending(void);
  */
 void am13e_app_serial_crsf_service_pending(void);
 #ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
-/* Only a qualified original 1s idle-low board detector may enter CLI.
- * Requires PRIMASK=1, mode2, an idle full-duplex UART and TX pin.
+/* Original HIGH timeout entry before receiver selection. Board selection
+ * qualifies the existing PB14 entry input and separate UART TX/RX pads.
+ * Requires PRIMASK=1 and an idle full-duplex UART and TX pin.
  */
 bool am13e_app_serial_cli_enter(void);
+void am13e_app_serial_cli_entry_poll(int high,int edge,int selected);
 void am13e_app_serial_cli_service_pending(void);
 #endif
 #endif

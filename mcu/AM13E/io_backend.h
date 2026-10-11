@@ -103,6 +103,7 @@ unsigned am13e_app_io_crsf_reply(const uint8_t *frame,unsigned length,
  * duplicate shared/MCU platform declarations in native IRQ modules.
  */
 unsigned am13e_app_io_input_mode(void);
+int am13e_app_io_service_idle(void);
 int am13e_app_io_cli_line(char *line);
 
 /* Must be implemented by the AM13E board backend. */

@@ -6,11 +6,14 @@
 #error "AM13E-only PB14 input driver"
 #endif
 #include <stdint.h>
+#include <stdbool.h>
 
 void initio(void); /* Original Rel17 entry, real MCU initialization. */
 void am13e_pb14_resume_rx(void);
 void am13e_app_pb14_systick(void); /* 16 kHz clock reference & timeout */
 void ECAP0_IRQHandler(void);
+/* Masked-IRQ, idle-only handover from undecided capture to service CLI. */
+bool am13e_app_pb14_service_takeover(void);
 
 typedef struct {
     uint32_t capture_pairs;
