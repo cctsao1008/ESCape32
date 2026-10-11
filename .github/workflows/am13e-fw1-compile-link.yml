@@ -345,6 +345,43 @@ jobs:
           grep -Eq ' [Tt] am13e_telem_on_rx_frame$' am13e-ci-logs/telem-symbols.txt
           grep -Eq ' [Tt] am13e_telem_hw_tx_start$' am13e-ci-logs/telem-symbols.txt
           echo "PASS synthetic selected Rel17 telemetry full ARM link; NOT FLASHED"
+          # Recovery qualification flags must fail CLOSED if incomplete.
+          for flags in \
+            '-DAM13E_BOOT_RECOVERY_QUALIFIED=1' \
+            '-DAM13E_BOOT_RECOVERY_QUALIFIED=1 -DAM13E_BOOT_ROM_BSL_SWD_RECOVERY_TESTED=1' \
+            '-DAM13E_BOOT_RECOVERY_QUALIFIED=1 -DAM13E_BOOT_ROM_BSL_SWD_RECOVERY_TESTED=1 -DAM13E_BOOT_NONMAIN_REVERSIBILITY_TESTED=1' \
+            '-DAM13E_BOOT_RECOVERY_QUALIFIED=1 -DAM13E_BOOT_ROM_BSL_SWD_RECOVERY_TESTED=0 -DAM13E_BOOT_NONMAIN_REVERSIBILITY_TESTED=1 -DAM13E_BOOT_POWERLOSS_RECOVERY_TESTED=1'; do
+            if cc -std=c11 -Iboot/mcu/AM13E -fsyntax-only $flags \
+              boot/mcu/AM13E/wrp_nonmain_runtime.c \
+              >am13e-ci-logs/boot-gate-negative.log 2>&1; then
+              echo 'FAIL unsafe recovery flags accepted' >&2
+              exit 1
+            fi
+            grep -q 'Boot NONMAIN WRP requires verified ROM BSL/SWD' \
+              am13e-ci-logs/boot-gate-negative.log
+          done
+          echo 'PASS Boot NONMAIN recovery flag negative compile guards'
+          # Positive is a SYNTHETIC compile/link fixture, NEVER FLASH.
+          # These flags do NOT constitute physical recovery evidence.
+          cmake -S . -B am13e-ci-boot-qualified -G "Unix Makefiles" \
+            -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/config.ld" \
+            -DCMAKE_C_FLAGS="-DAM13E_BOOT_RECOVERY_QUALIFIED=1 -DAM13E_BOOT_ROM_BSL_SWD_RECOVERY_TESTED=1 -DAM13E_BOOT_NONMAIN_REVERSIBILITY_TESTED=1 -DAM13E_BOOT_POWERLOSS_RECOVERY_TESTED=1" \
+            >am13e-ci-logs/boot-qualified-configure.log 2>&1 || {
+              cat am13e-ci-logs/boot-qualified-configure.log
+              exit 1
+            }
+          cmake --build am13e-ci-boot-qualified --target BOOT5_PB14.elf -j 2 \
+            >am13e-ci-logs/boot-qualified-link.log 2>&1 || {
+              tail -n 90 am13e-ci-logs/boot-qualified-link.log
+              exit 1
+            }
+          arm-none-eabi-nm am13e-ci-boot-qualified/boot/BOOT5_PB14.elf \
+            >am13e-ci-logs/boot-qualified-symbols.txt
+          grep -Eq ' [Tt] setwrp$' am13e-ci-logs/boot-qualified-symbols.txt
+          grep -Eq ' [Tt] boot_am13e_update_commit_quarantined$' \
+            am13e-ci-logs/boot-qualified-symbols.txt
+          echo "PASS recovery-gated original Boot CMD_UPDATE/WRP strict ARM link; SYNTHETIC NEVER FLASH"
 
       - name: Audit actual Rel17 functional software coverage
         id: coverage
