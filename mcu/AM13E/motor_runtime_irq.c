@@ -90,7 +90,9 @@ void am13e_app_motor_runtime_enable_interrupts(void)
 
 #ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
     if((am13e_app_io_input_mode()==3||am13e_app_io_input_mode()==4||
-        am13e_app_io_input_mode()==5) &&
+        am13e_app_io_input_mode()==5||
+        am13e_app_io_input_mode()==6||
+        am13e_app_io_input_mode()==7) &&
        !am13e_app_serial_rx_irq_ready())
         irq_barrier_fault();
 #endif

@@ -52,7 +52,7 @@ int main(void){
     p[n-2U]=(uint8_t)(crc>>8U);p[n-1U]=(uint8_t)crc;
     assert(am13e_hott_decode_frame(p,n,1U,9U,ref_crc,
                        &a,&b,&channels));
-    assert(channels&&a==1000&&b==-1);
+    assert(channels&&a==1000&&b==(8000+8*72)/8);
     p[23U]=8U;
     crc=ref_crc((const char *)p,(int)(n-2U));
     p[n-2U]=(uint8_t)(crc>>8U);p[n-1U]=(uint8_t)crc;

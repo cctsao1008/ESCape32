@@ -230,6 +230,34 @@
         "crsf_command_reply",
         "serial_tx_queue"
       ]
+    },
+    {
+      "id": "exbus_receiver",
+      "label": "Original Rel17 EXBUS mode=6 CRC16ccitt/channel decode on board-selected UART RX (telemetry reply/adaptive baud pending)",
+      "sources": [
+        "mcu/AM13E/exbus_receiver.c",
+        "mcu/AM13E/serial_frame_rx.c",
+        "mcu/AM13E/serial_uart_rx.c",
+        "src/io.c"
+      ],
+      "host_tests": [
+        "exbus_receiver",
+        "serial_frames"
+      ]
+    },
+    {
+      "id": "hott_sumd_receiver",
+      "label": "Original Rel17 HoTT/SUMDv1/v3 mode=7 crc16xmodem/channel mapping on board-selected UART RX (idle/timing pending)",
+      "sources": [
+        "mcu/AM13E/hott_receiver.c",
+        "mcu/AM13E/serial_frame_rx.c",
+        "mcu/AM13E/serial_uart_rx.c",
+        "src/io.c"
+      ],
+      "host_tests": [
+        "hott_receiver",
+        "serial_frames"
+      ]
     }
   ],
   "outside_fw1": [
@@ -243,7 +271,8 @@
     "Six MCPWM0 output pad electrical waveforms, dead-band non-overlap and real gate-driver polarity (outputs currently isolated)",
     "VBUS/NTC divider and model calibration plus WWDT LFCLK reset behavior",
     "Flash erase/program and update endurance under actual supply interruption",
-    "Board-qualified UNICOMM RXD/TXD mapping, CRSF baud tolerance/FIFO/EOT, 2-wire line levels, collision/turnaround, and original command-response timing"
+    "Board-qualified UNICOMM RXD/TXD mapping, CRSF baud tolerance/FIFO/EOT, 2-wire line levels, collision/turnaround, and original command-response timing",
+    "Physical EXBUS idle-boundary framing at 125000/250000 and HoTT SUMD at 115200, UART error/line turnaround, telemetry timing, board-level CRC fixture verification"
   ],
   "reference_io_state": [
     {
@@ -302,7 +331,7 @@
     }
   ],
   "conditional_upstream_pending": [
-    "Original input_mode=2 serial/CLI and UART RX DMA, plus EXBUS/HoTT native receivers",
+    "Original input_mode=2 serial/CLI and UART RX DMA; EXBUS telemetry response/adaptive baud, HoTT physical UART frame-idle boundary still pending",
     "SBUS2 telemetry response timing and dedicated half-duplex UART physical turnarounds",
     "General KISS/iBUS/S.Port/CRSF/MSB/HoTT serial telemetry transport; CRSF 0x28/0x2c/0x2d command TX only source/Host/synthetic-ARM",
     "Hall/hybrid and board-specific BEC/LED/ERPM/PARK I/O adaptation",
