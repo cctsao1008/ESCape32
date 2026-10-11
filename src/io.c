@@ -17,6 +17,7 @@
 
 #include "common.h"
 #include "bidir_codec.h"
+#include "receiver_entry.h"
 static inline __attribute__((always_inline)) int exbus_retry_step(uint8_t *count) {
     return --*count&1U;
 }
@@ -281,8 +282,8 @@ static void entryirq(void) {
 	}
 #endif
 	if (TIM_PSC(IOTIM)) {
-		if (t > 2000) { // Servo/Oneshot125
-			if (n < 8) return;
+		if (rel17_receiver_servo_period(t)) { // Servo/Oneshot125
+			if (n < REL17_SERVO_ENTRY_CAPTURES) return;
 			ioirq = calibirq;
 			TIM_DIER(IOTIM) = TIM_DIER_CC1IE;
 			TIM_CR1(IOTIM) = TIM_CR1_CEN;
@@ -294,14 +295,13 @@ static void entryirq(void) {
 		n = 0;
 		return;
 	}
-	int m = 2;
-	while (t >= CLK_CNT(800000)) t >>= 1, --m;
+	int m = rel17_receiver_dshot_rate(t,CLK_CNT(800000));
 	if (d != m) {
 		d = m;
 		n = 1;
 		return;
 	}
-	if (m < 0 || n < 4) return;
+	if (m < 0 || n < REL17_DSHOT_ENTRY_CAPTURES) return;
 	ioirq = dshotirq;
 	dshotarr1 = CLK_CNT(150000 << m) - 1;
 	dshotarr2 = CLK_CNT(375000 << m) - 1;

@@ -5,6 +5,7 @@
 #include "../../util.c"
 #include "io_backend.h"
 #include "command_reply.h"
+#include "command_decode.h"
 #include "cfg_flash_writer.h"
 #include <assert.h>
 #include <stdio.h>
@@ -57,6 +58,39 @@ static void receive(unsigned value,unsigned telemetry)
     in_capture=1U;
     assert(am13e_app_io_dshot_packet(packet(value,telemetry),0));
     in_capture=0U;
+}
+static void captured(AM13E_PB14_Decoder *d,uint16_t value,unsigned period,uint32_t start)
+{
+    in_capture=1U;
+    for(unsigned i=0;i<16U;++i) {
+        const unsigned width=(value&(1U<<(15U-i)))?period*3U/4U:period*3U/8U;
+        am13e_pb14_decoder_pulse(d,start,start+width,NULL,am13e_app_io_dshot_packet);
+        start+=period;
+    }
+    in_capture=0U;
+}
+static void discovery_regressions(void)
+{
+    const unsigned periods[]={667U,333U,167U};
+    cfg.input_mode=0;cfg.throt_mode=0;ertm=0;
+    for(unsigned r=0;r<3U;++r) {
+        AM13E_PB14_Decoder d;am13e_pb14_decoder_reset(&d,200000000U,0);
+        throt=0;const unsigned before=feeds;
+        captured(&d,packet(512U,0U)^1U,periods[r],100000U);
+        assert(d.rx_mode==AM13E_PB14_RX_DSHOT && feeds==before && throt==0);
+        am13e_pb14_decoder_idle(&d,20000000U,am13e_app_io_dshot_packet);
+        assert(d.rx_mode==AM13E_PB14_RX_DSHOT);
+        captured(&d,packet(512U,0U),periods[r],21000000U);
+        assert(feeds==before+1U && throt==465 && d.good_dshot==1U);
+        const unsigned other=periods[(r+1U)%3U];
+        captured(&d,packet(700U,0U),other,22000000U);
+        assert(feeds==before+1U && throt==465 && d.good_dshot==1U);
+    }
+    AM13E_PB14_Decoder d;am13e_pb14_decoder_reset(&d,200000000U,0);
+    const unsigned before=feeds;throt=0;
+    captured(&d,packet(512U,0U),1333U,100000U);
+    assert(d.rx_mode==AM13E_PB14_RX_UNDECIDED && feeds==before && throt==0);
+    puts("PASS production capture discovery -> original DShot CRC/throttle, locked rate and unsupported-rate rejection");
 }
 static void command(unsigned value)
 {
@@ -181,6 +215,7 @@ int main(void)
     const char reset_confirm[]={0x2d,0x90,0xea,49,4};
     len=execcrsfcmd(reset_confirm,sizeof reset_confirm,reply);
     assert(len>6 && !memcmp(&cfg,&defaults,sizeof cfg));
+    discovery_regressions();
     puts("PASS production DShot deferred Save/Reset, CLI/CRSF config guards and Flash writer failures");
     return 0;
 }

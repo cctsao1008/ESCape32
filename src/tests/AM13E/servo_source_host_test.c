@@ -4,6 +4,7 @@
 #include "io_backend.h"
 #include "command_decode.h"
 #include "servo_calibration.h"
+#include "receiver_entry.h"
 #include <assert.h>
 #include <setjmp.h>
 #include <stdio.h>
@@ -62,7 +63,8 @@ int main(void)
     cfg.throt_min=1000; cfg.throt_mid=1500; cfg.throt_max=2000;
     AM13E_PB14_Decoder d;
     am13e_pb14_decoder_reset(&d,200000000U,0);
-    pulses(&d,1500,2000); pulses(&d,1500,2000); /* 500Hz */
+    for(unsigned n=0;n<REL17_SERVO_ENTRY_CAPTURES;++n)
+        pulses(&d,1500,2500); /* Period >2000us selects Servo. */
     assert(d.rx_mode==AM13E_PB14_RX_PWM && feeds==1U && throt==947);
     for(unsigned width=28U;width<=32U;++width){
         pulses(&d,width,20000); pulses(&d,width,20000);
@@ -82,7 +84,8 @@ int main(void)
     }
     assert(resets==1U && feeds==old+1U);
     am13e_pb14_decoder_reset(&d,200000000U,0);
-    pulses(&d,150,500); pulses(&d,150,500);
+    for(unsigned n=0;n<REL17_SERVO_ENTRY_CAPTURES;++n)
+        pulses(&d,150,500);
     assert(d.rx_mode==AM13E_PB14_RX_ONESHOT && throt==315);
     /* 3.5us Oneshot capture is 28 logical counts, not rounded to 4us*8. */
     uint32_t start=d.last_start+100000U;
@@ -97,6 +100,35 @@ int main(void)
     const unsigned before=feeds;
     am13e_app_io_servo_pulse(30,20000);
     assert(feeds==before);
+    cfg.input_mode=0;cfg.throt_cal=0;
+    /* Width must never choose the timer domain. A 150us pulse at
+     * 20ms selects Servo and reaches original invalid-width handling,
+     * rather than applying Oneshot throttle (150*8=1200). */
+    am13e_pb14_decoder_reset(&d,200000000U,0);
+    const unsigned rejected_feeds=feeds;
+    throt=0;
+    if(!setjmp(reset_return)) {
+        for(unsigned n=0;n<REL17_SERVO_ENTRY_CAPTURES;++n)
+            pulses(&d,150,20000);
+        assert(0);
+    }
+    assert(resets==2U && feeds==rejected_feeds && throt==0);
+    /* A transient valid pulse cannot lock discovery or feed WWDT. */
+    am13e_pb14_decoder_reset(&d,200000000U,0);
+    for(unsigned n=0;n<REL17_SERVO_ENTRY_CAPTURES-1U;++n)
+        pulses(&d,1500,20000);
+    assert(d.rx_mode==AM13E_PB14_RX_UNDECIDED && feeds==rejected_feeds);
+    am13e_pb14_decoder_idle(&d,d.last_end+11000000U,NULL);
+    for(unsigned n=0;n<REL17_SERVO_ENTRY_CAPTURES-1U;++n)
+        pulses(&d,1500,20000);
+    assert(d.rx_mode==AM13E_PB14_RX_UNDECIDED && feeds==rejected_feeds);
+    pulses(&d,1500,20000);
+    assert(d.rx_mode==AM13E_PB14_RX_PWM && feeds==rejected_feeds+1U);
+    /* Source period boundary: 2000us takes the 8MHz domain. */
+    am13e_pb14_decoder_reset(&d,200000000U,0);
+    for(unsigned n=0;n<REL17_SERVO_ENTRY_CAPTURES;++n)
+        pulses(&d,150,2000);
+    assert(d.rx_mode==AM13E_PB14_RX_ONESHOT && throt==315);
     calibration();
     puts("PASS production Servo/Oneshot/telemetry/invalid-input source policy and calibration traces");
     return 0;

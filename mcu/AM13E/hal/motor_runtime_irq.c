@@ -93,6 +93,9 @@ void am13e_app_motor_runtime_enable_interrupts(void)
 
 #ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
     if((am13e_app_io_input_mode()==2||
+#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
+        am13e_app_io_input_mode()==0||
+#endif
         am13e_app_io_input_mode()==3||am13e_app_io_input_mode()==4||
         am13e_app_io_input_mode()==5||
         am13e_app_io_input_mode()==6||

@@ -1,8 +1,8 @@
 /* AM13E23019 WWDT0 command-link supervisor.
  *
- * Rel17 starts independent watchdog after accepted receiver activity.
- * Pre-initialize WWDT power without starting the counter; after a valid
- * PWM/DShot packet the original src/io.c callback starts then feeds it.
+ * Rel17 starts independent watchdog at receiver selection, before CRC.
+ * Startup prepares power without starting the counter. Native capture/UART
+ * selection arms it; only accepted original Core frames restart it.
  */
 #pragma once
 #if !defined(AM13E)

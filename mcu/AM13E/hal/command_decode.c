@@ -3,6 +3,7 @@
  * This decoder does not fabricate a watchdog feed, telemetry or PWM output.
  */
 #include "command_decode.h"
+#include "receiver_entry.h"
 #include <stddef.h>
 
 /* Require plausible, forward-ordered edges in one four-event ECAP0
@@ -68,6 +69,7 @@ void am13e_pb14_decoder_abort(AM13E_PB14_Decoder *d)
     d->last_start = 0U;
     d->last_end = 0U;
     d->pending_width = 0U;
+    d->entry_mode = d->entry_captures = 0U;
     clear_frame(d);
 }
 
@@ -101,8 +103,7 @@ static void finish_frame(AM13E_PB14_Decoder *d, AM13E_PB14_DshotCallback cb)
         }
     }
     if (d->decoded_bits == 16U &&
-        d->rx_mode!=AM13E_PB14_RX_PWM &&
-        d->rx_mode!=AM13E_PB14_RX_ONESHOT &&
+        d->rx_mode==AM13E_PB14_RX_DSHOT &&
         cb != NULL && cb(d->bits, d->inverted)) {
         ++d->good_dshot;
         d->rx_mode=AM13E_PB14_RX_DSHOT;
@@ -118,8 +119,7 @@ int am13e_pb14_decoder_bidir_reply_due(
 {
     if (d==NULL || !d->active || d->decoded_bits!=13U ||
         !d->last_bit_period || !d->tick_hz ||
-        d->rx_mode==AM13E_PB14_RX_PWM ||
-        d->rx_mode==AM13E_PB14_RX_ONESHOT)
+        d->rx_mode!=AM13E_PB14_RX_DSHOT)
         return 0;
     const uint32_t p=pulse16_start-pulse15_start;
     const uint32_t gap=pulse15_start-d->last_start;
@@ -127,7 +127,9 @@ int am13e_pb14_decoder_bidir_reply_due(
     /* Confirm that the final two incoming bit periods belong to
      * the captured DShot timing epoch, independent of CRC value.
      */
-    return p && (uint64_t)p*5U>=old*4U &&
+    return p && rel17_receiver_dshot_rate((int)p,
+                   (int)((d->tick_hz+400000U)/800000U))==d->dshot_rate &&
+           (uint64_t)p*5U>=old*4U &&
            (uint64_t)p*5U<=old*6U &&
            (uint64_t)gap*5U>=old*4U &&
            (uint64_t)gap*5U<=old*6U;
@@ -158,23 +160,19 @@ void am13e_pb14_decoder_pulse(AM13E_PB14_Decoder *d, uint32_t start,
      * physical microseconds to Rel17's eight-count-per-us timer domain.
      * This is NOT the 'PWM_ENABLE' motor output option.
      */
-    const int servo_candidate=
-        period>=1920U*us_ticks && period<=50000U*us_ticks &&
-        d->pending_width>=800U*us_ticks &&
-        d->pending_width<=2200U*us_ticks && d->pending_width<period;
-    const int oneshot_candidate=
-        period>=250U*us_ticks && period<=50000U*us_ticks &&
-        d->pending_width>=100U*us_ticks &&
-        d->pending_width<=275U*us_ticks &&
-        d->pending_width<period;
+    const int servo_candidate=period>=2000U*us_ticks && period<=50000U*us_ticks &&
+        rel17_receiver_servo_period(period/us_ticks);
+    const int oneshot_candidate=!servo_candidate && period>=250U*us_ticks &&
+        period<=50000U*us_ticks &&
+        rel17_receiver_servo_period((int)((uint64_t)period*8U/us_ticks));
     /* Once Rel17 selects servoirq, special and invalid widths belong
      * to that policy too. Do not silently filter them in the decoder.
      * Keep mode selection locked; never reinterpret DShot as Servo.
      */
     const int selected_servo=d->rx_mode==AM13E_PB14_RX_PWM &&
-        period>=1920U*us_ticks && period<=50000U*us_ticks;
+        period>9U*us_ticks && period<=50000U*us_ticks;
     const int selected_oneshot=d->rx_mode==AM13E_PB14_RX_ONESHOT &&
-        period>=250U*us_ticks && period<=50000U*us_ticks;
+        period>9U*us_ticks && period<=50000U*us_ticks;
     if(servo_candidate || oneshot_candidate || selected_servo || selected_oneshot) {
         const AM13E_PB14_RxMode kind=selected_servo?AM13E_PB14_RX_PWM:
             selected_oneshot?AM13E_PB14_RX_ONESHOT:
@@ -185,6 +183,19 @@ void am13e_pb14_decoder_pulse(AM13E_PB14_Decoder *d, uint32_t start,
             ++d->rejected; /* Once selected, upstream servoirq
                               * and dshotirq do not auto-reselect. */
         } else {
+            /* Preserve entryirq's first invalid capture and eight-capture
+             * qualification. Width validation belongs to servoirq, even
+             * when the selected frame contains an invalid/special width. */
+            if(d->rx_mode==AM13E_PB14_RX_UNDECIDED) {
+                if(d->entry_mode!=(uint8_t)kind) {
+                    d->entry_mode=(uint8_t)kind;
+                    d->entry_captures=2U;
+                } else if(d->entry_captures<REL17_SERVO_ENTRY_CAPTURES) {
+                    ++d->entry_captures;
+                }
+                if(d->entry_captures<REL17_SERVO_ENTRY_CAPTURES)
+                    goto next_pulse;
+            }
             const unsigned scale=kind==AM13E_PB14_RX_ONESHOT?8U:1U;
             const unsigned source_ticks=(unsigned)(
                 ((uint64_t)d->pending_width*scale+us_ticks/2U)/us_ticks);
@@ -199,6 +210,30 @@ void am13e_pb14_decoder_pulse(AM13E_PB14_Decoder *d, uint32_t start,
                (d->last_bit_period == 0U ||
                 ((uint64_t)period * 5U >= (uint64_t)d->last_bit_period * 4U &&
                  (uint64_t)period * 5U <= (uint64_t)d->last_bit_period * 6U))) {
+        const int rate=rel17_receiver_dshot_rate((int)period,
+                            (int)((d->tick_hz+400000U)/800000U));
+        if(rate<0 || (d->rx_mode==AM13E_PB14_RX_DSHOT &&
+                     rate!=d->dshot_rate)) {
+            ++d->rejected;
+            d->entry_mode=d->entry_captures=0U;
+            clear_frame(d);
+            goto next_pulse;
+        }
+        if(d->rx_mode==AM13E_PB14_RX_UNDECIDED) {
+            const uint8_t candidate=(uint8_t)(4+rate);
+            /* DShot selection precedes CRC, as in entryirq(). Invalid
+             * CRC must neither feed WWDT nor make CLI eligible again. */
+            if(d->entry_mode!=candidate) {
+                clear_frame(d);
+                d->entry_mode=candidate;d->entry_captures=2U;
+            } else if(d->entry_captures<REL17_DSHOT_ENTRY_CAPTURES) {
+                ++d->entry_captures;
+            }
+            if(d->entry_captures>=REL17_DSHOT_ENTRY_CAPTURES) {
+                d->rx_mode=AM13E_PB14_RX_DSHOT;
+                d->dshot_rate=(uint8_t)rate;
+            }
+        }
         if (!bit_push(d, d->pending_width, period)) {
             ++d->rejected;
             clear_frame(d);
@@ -207,9 +242,11 @@ void am13e_pb14_decoder_pulse(AM13E_PB14_Decoder *d, uint32_t start,
         /* DShot packet ended, or input timing changed. A frame has 16
          * pulses; accept nothing without a full frame and Rel17 CRC.
          */
+        d->entry_mode=d->entry_captures=0U;
         if (d->decoded_bits) finish_frame(d, dshot);
         else clear_frame(d);
     }
+next_pulse:
     d->last_start = start;
     d->last_end = end;
     d->pending_width = width;
@@ -240,6 +277,7 @@ void am13e_pb14_decoder_idle(AM13E_PB14_Decoder *d, uint32_t now,
         d->last_start=0U;
         d->last_end=0U;
         d->pending_width=0U;
+        d->entry_mode=d->entry_captures=0U;
         clear_frame(d);
         return;
     }

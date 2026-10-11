@@ -6,7 +6,7 @@
  * TI SDK 26.01.00.03 dl_wwdt.h:
  *   WWDT0 clock = LFCLK. Period 2^15 / 32768Hz = nominal 1 second.
  *   0% closed window permits repeated DShot600 valid-command feeding.
- *   Watchdog starts on FIRST VALID INPUT, not early during startup,
+ *   Watchdog starts on RECEIVER SELECTION, not early during startup,
  *   and is NEVER restarted from SysTick/housekeeping.
  *
  * Precise LFCLK frequency, Boot watchdog ownership, reset behavior and
@@ -56,20 +56,14 @@ void am13e_app_io_watchdog_prepare(void)
     prepared = 1U; /* WWDT is powered, intentionally NOT started. */
 }
 
-void am13e_app_io_watchdog_feed(void)
+void am13e_app_io_watchdog_arm(void)
 {
-    /* This function is called only after original Rel17 verifies DShot
-     * CRC or the decoder verifies the receiver PWM width and period.
-     * In particular a repeated CRC-bad command CANNOT prevent reset.
-     */
     if (!prepared || !DL_WWDT_isPowerEnabled(WWDT0))
         watchdog_fail_closed();
 
     if (!armed) {
-        /* The TI driver starts the real WWDT automatically here. The
-         * first accepted command establishes timeout supervision.
-         * Nominal one-second hardware expiry if valid frames stop.
-         */
+        /* Original entryirq starts IWDG before frame validation. An
+         * exclusively CRC-bad selected stream must still expire. */
         DL_WWDT_initWatchdogMode(WWDT0,
                                 DL_WWDT_CLOCK_DIVIDE_1,
                                 DL_WWDT_TIMER_PERIOD_15_BITS,
@@ -77,11 +71,15 @@ void am13e_app_io_watchdog_feed(void)
                                 DL_WWDT_WINDOW_PERIOD_0,
                                 DL_WWDT_WINDOW_PERIOD_0);
         armed = 1U;
-    } else {
-        /* Full-open window: legal to restart on every accepted packet. */
-        if (!DL_WWDT_isRunning(WWDT0)) watchdog_fail_closed();
-        DL_WWDT_restart(WWDT0);
     }
+    if (!DL_WWDT_isRunning(WWDT0)) watchdog_fail_closed();
+}
+
+void am13e_app_io_watchdog_feed(void)
+{
+    /* Only original Core CRC/width acceptance can restart WWDT. */
+    am13e_app_io_watchdog_arm();
+    DL_WWDT_restart(WWDT0);
     ++valid_frame_feeds;
 }
 

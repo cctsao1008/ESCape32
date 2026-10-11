@@ -26,7 +26,7 @@
     },
     {
       "id": "dshot_rx_capture",
-      "label": "PB14 ECAP0 PWM/DShot150/300/600 RX, capture-race rejection",
+      "label": "PB14 ECAP0 PWM/DShot300/600/1200 RX, capture-race rejection",
       "sources": [
         "mcu/AM13E/hal/command_capture.c",
         "mcu/AM13E/hal/command_decode.c",
@@ -315,7 +315,7 @@
     "DroneCAN and independent TI FOC are not part of upstream ESCape32 Rel17 six-step firmware; no new feature is imposed by this MCU port"
   ],
   "hardware_pending": [
-    "PB14 external 3.3V/5V bidirectional interface and physical DShot150/300/600 capture loss rate",
+    "PB14 external 3.3V/5V bidirectional interface and physical DShot300/600/1200 capture loss rate",
     "ECAP0 worst-case IRQ latency, complete four-event capture overwrite, and optional DMA capture implementation",
     "PB14 BiDShot 30us oscilloscope turnaround, DMA event-timer period and TX->RX recovery",
     "CMPSS/ECAP1 comparator analog levels, edge filter and hardware zero-cross interrupt jitter",

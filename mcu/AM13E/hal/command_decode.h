@@ -25,6 +25,8 @@ typedef struct {
     uint8_t active;
     uint8_t inverted;
     uint8_t rx_mode; /* One logical mode at a time. */
+    uint8_t entry_mode, entry_captures;
+    uint8_t dshot_rate; /* Original rate selector: 0=300, 1=600, 2=1200. */
 } AM13E_PB14_Decoder;
 
 /* Conservative four-edge capture sanity check. Uses calibrated eCAP Hz.

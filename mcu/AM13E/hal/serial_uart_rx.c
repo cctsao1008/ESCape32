@@ -144,6 +144,7 @@ _Static_assert(AM13E_BOARD_SERIAL_TX_TWO_WIRE==1U &&
                        DL_UART_INTERRUPT_NOISE_ERROR)
 static AM13E_SerialFrameRx rx_state;
 static unsigned initialized;
+static bool receiver_selected;
 /* 16 kHz MCU SysTick timebase. IRQ/PendSV share only an atomic
  * 32-bit snapshot; no serial state is reset from high-priority
  * SysTick while UART IRQ might be in flight.
@@ -252,8 +253,16 @@ static void crsf_tx_fill_fifo(void)
 }
 static void crsf_tx_start(const uint8_t *p,unsigned n)
 {
+    /* PendSV can be preempted by this UART. Publish queue/FIFO/EOT
+     * state as one transaction; keep motor and SysTick IRQs live. */
+    const uint32_t enabled=NVIC_GetEnableIRQ(RX_IRQ);
+    NVIC_DisableIRQ(RX_IRQ);
+    __DSB();
     if(!crsf_tx_available ||
-       !am13e_serial_tx_queue_begin(&crsf_tx,p,n))return;
+       !am13e_serial_tx_queue_begin(&crsf_tx,p,n)) {
+        if(enabled)NVIC_EnableIRQ(RX_IRQ);
+        return;
+    }
     DL_UART_clearInterruptStatus(RX_UC,
                                  DL_UART_INTERRUPT_TX |
                                  DL_UART_INTERRUPT_EOT_DONE);
@@ -261,6 +270,7 @@ static void crsf_tx_start(const uint8_t *p,unsigned n)
     crsf_tx_fill_fifo();
     if(!am13e_serial_tx_queue_waiting_eot(&crsf_tx))
         DL_UART_enableInterrupt(RX_UC,DL_UART_INTERRUPT_TX);
+    if(enabled)NVIC_EnableIRQ(RX_IRQ);
 }
 #ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
 /* Physical entry requires the original HIGH timeout signal on PB14.
@@ -299,8 +309,9 @@ static void cli_start_next_chunk(void)
     const unsigned remaining=cli_reply_length-cli_reply_offset;
     const unsigned count=remaining>AM13E_SERIAL_TX_MAX?
         AM13E_SERIAL_TX_MAX:remaining;
-    crsf_tx_start((const uint8_t *)cli_reply+cli_reply_offset,count);
+    const unsigned offset=cli_reply_offset;
     cli_reply_offset+=count;
+    crsf_tx_start((const uint8_t *)cli_reply+offset,count);
 }
 void am13e_app_serial_cli_service_pending(void)
 {
@@ -427,6 +438,7 @@ bool am13e_app_serial_rx_init(unsigned mode)
                                    DL_UART_TX_FIFO_LEVEL_NOT_FULL);
 #endif
     am13e_serial_frame_init(&rx_state,mode);
+    receiver_selected=false;
     am13e_exbus_autobaud_init(&exbus_baud);
 #ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
     am13e_cli_line_init(&cli_rx);
@@ -520,6 +532,14 @@ void RX_HANDLER(void)
         }
         if(DL_UART_isRXFIFOEmpty(RX_UC))break;
         const uint32_t raw=RX_UC->uart->RXDATA;
+        if(!receiver_selected && am13e_app_io_input_mode()>=2U
+#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
+           && !cli_active
+#endif
+           ) {
+            am13e_app_io_watchdog_arm();
+            receiver_selected=true;
+        }
 #ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
         /* Rel17 has selected serial input before it validates a frame.
          * Even malformed received bytes must cancel deferred CLI entry.

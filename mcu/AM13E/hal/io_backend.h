@@ -108,6 +108,8 @@ int am13e_app_io_cli_line(char *line);
 
 /* Must be implemented by the AM13E board backend. */
 void am13e_app_io_watchdog_feed(void);
+/* Rel17 starts input-loss supervision at receiver selection, before CRC. */
+void am13e_app_io_watchdog_arm(void);
 
 /* GPIO1 vector sharing contract: called ONLY for enabled non-PB15
  * GPIO1 interrupts. The physical PB14 input backend must identify and

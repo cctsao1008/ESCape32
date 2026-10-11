@@ -1,5 +1,6 @@
 /* AM13E reference PB14 independent host test: timestamps and Rel17 callback handoff. */
 #include "command_decode.h"
+#include "receiver_entry.h"
 #include <assert.h>
 #include <stdio.h>
 
@@ -43,16 +44,18 @@ int main(void)
 {
     AM13E_PB14_Decoder d;
     am13e_pb14_decoder_reset(&d,200000000U,0);
-    am13e_pb14_decoder_pulse(&d,1000000U,1200000U,on_pwm,on_dshot);
-    am13e_pb14_decoder_pulse(&d,5000000U,5220000U,on_pwm,on_dshot);
+    for(unsigned n=0;n<REL17_SERVO_ENTRY_CAPTURES;++n)
+        am13e_pb14_decoder_pulse(&d,1000000U+n*4000000U,
+                                 1200000U+n*4000000U,on_pwm,on_dshot);
     assert(seen_pwm==1 && last_pwm==1000U && d.good_pwm==1U);
     am13e_pb14_decoder_reset(&d,200000000U,0);
     /* Native Rel17 Oneshot125: 150us measured pulse at eCAP,
      * 8MHz servoirq timer equivalents = 1200 logical counts.
      */
     const unsigned pwm_before=seen_pwm;
-    am13e_pb14_decoder_pulse(&d,200000U,230000U,on_pwm,on_dshot);
-    am13e_pb14_decoder_pulse(&d,300000U,330000U,on_pwm,on_dshot);
+    for(unsigned n=0;n<REL17_SERVO_ENTRY_CAPTURES;++n)
+        am13e_pb14_decoder_pulse(&d,200000U+n*100000U,
+                                 230000U+n*100000U,on_pwm,on_dshot);
     assert(seen_pwm==pwm_before+1U && last_pwm==1200U);
     assert(d.good_pwm==1U && d.rx_mode==AM13E_PB14_RX_ONESHOT);
     am13e_pb14_decoder_idle(&d,20000000U,on_dshot);
@@ -70,8 +73,9 @@ int main(void)
     feed_frame(&d,inv,800000U,667U,1); /* inverted DShot300 RX, no TX */
     assert(seen_dshot==3 && last_frame==inv && last_inverse==1);
     am13e_pb14_decoder_reset(&d,200000000U,0);
-    feed_frame(&d,(uint16_t)(valid^1U),1400000U,1333U,0); /* bad CRC */
+    feed_frame(&d,(uint16_t)(valid^1U),1400000U,333U,0); /* bad CRC */
     assert(seen_dshot==3 && d.good_dshot==0U && d.rejected>0U);
+    assert(d.rx_mode==AM13E_PB14_RX_DSHOT); /* CRC does not reopen discovery. */
     /* Simulate capture phase advancing during a four-event read:
      * an aborted partial packet must not reach the Rel17 callback.
      * Subsequent complete, CRC-valid packets must still be accepted.
@@ -154,8 +158,9 @@ int main(void)
      */
     AM13E_PB14_Decoder mix;
     am13e_pb14_decoder_reset(&mix,200000000U,0);
-    am13e_pb14_decoder_pulse(&mix,1000000U,1200000U,on_pwm,on_dshot);
-    am13e_pb14_decoder_pulse(&mix,5000000U,5220000U,on_pwm,on_dshot);
+    for(unsigned n=0;n<REL17_SERVO_ENTRY_CAPTURES;++n)
+        am13e_pb14_decoder_pulse(&mix,1000000U+n*4000000U,
+                                 1200000U+n*4000000U,on_pwm,on_dshot);
     assert(mix.rx_mode==AM13E_PB14_RX_PWM);
     const unsigned prior_dshot=seen_dshot;
     feed_frame(&mix,valid,6000000U,333U,0);
@@ -176,8 +181,9 @@ int main(void)
     am13e_pb14_decoder_idle(&mix,50000000U,on_dshot);
     assert(mix.rx_mode==AM13E_PB14_RX_DSHOT);
     am13e_pb14_decoder_reset(&mix,200000000U,0);
-    am13e_pb14_decoder_pulse(&mix,60000000U,60200000U,on_pwm,on_dshot);
-    am13e_pb14_decoder_pulse(&mix,64000000U,64200000U,on_pwm,on_dshot);
+    for(unsigned n=0;n<REL17_SERVO_ENTRY_CAPTURES;++n)
+        am13e_pb14_decoder_pulse(&mix,60000000U+n*4000000U,
+                                 60200000U+n*4000000U,on_pwm,on_dshot);
     assert(seen_pwm==prior_pwm+1U && mix.rx_mode==AM13E_PB14_RX_PWM);
     puts("PB14 PWM/DShot RX + capture-abort/group-validation host test PASS");
     return 0;

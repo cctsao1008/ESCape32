@@ -212,7 +212,7 @@ void ECAP0_IRQHandler(void)
         am13e_pb14_decoder_abort(&decoder);
         return;
     }
-    /* DShot150/300/600 arrives in two-pulse/four-edge groups.
+    /* DShot300/600/1200 arrives in two-pulse/four-edge groups.
      * CPU snapshot must finish before the NEXT CEVT4 can overwrite
      * these four CAP registers, even when flag/phase checks passed.
      * A deadline miss MUST NOT feed Rel17 throttle/WWDT/BiDShot.
@@ -235,7 +235,7 @@ void ECAP0_IRQHandler(void)
      * Only source-equivalent DShot framing (not Servo/Oneshot)
      * is permitted to borrow PB14 for physical TX.
      */
-    if (inverted_rx &&
+    if (am13e_app_io_input_mode()==0U && inverted_rx &&
         am13e_pb14_decoder_bidir_reply_due(&decoder,start1,start2)) {
         (void)am13e_pb14_bidir_tx_start(end2,start2-start1,
                                         decoder.tick_hz);
@@ -243,12 +243,17 @@ void ECAP0_IRQHandler(void)
     /* Decide CRC, WWDT and Rel17 throttle AFTER physical reply
      * is armed. A bad CRC cannot apply a command or feed WWDT.
      */
+    const unsigned previous_mode=decoder.rx_mode;
     am13e_pb14_decoder_pulse(&decoder,start1,end1,
                              am13e_app_io_servo_pulse,
                              am13e_app_io_dshot_packet);
     am13e_pb14_decoder_pulse(&decoder,start2,end2,
                              am13e_app_io_servo_pulse,
                              am13e_app_io_dshot_packet);
+    if(am13e_app_io_input_mode()==0U &&
+       previous_mode==AM13E_PB14_RX_UNDECIDED &&
+       decoder.rx_mode!=AM13E_PB14_RX_UNDECIDED)
+        am13e_app_io_watchdog_arm();
 }
 
 /* Called by the real 16kHz TI SysTick vector only after GPIO + eCAP

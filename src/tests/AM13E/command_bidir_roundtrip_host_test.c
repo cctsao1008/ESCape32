@@ -86,9 +86,9 @@ static void reply_wiring_check(uint32_t final_edge,uint32_t raw_period)
 }
 int main(void)
 {
-    const unsigned rates[4]={150000U,300000U,600000U,1200000U};
-    const uint32_t periods[4]={1333U,667U,333U,167U};
-    for(unsigned i=0U;i<4U;++i){
+    const unsigned rates[3]={300000U,600000U,1200000U};
+    const uint32_t periods[3]={667U,333U,167U};
+    for(unsigned i=0U;i<3U;++i){
         AM13E_PB14_Decoder decoder;
         am13e_pb14_decoder_reset(&decoder,CAPTURE_HZ,1);
         assert(am13e_bidir_tx_period_ticks(periods[i],CAPTURE_HZ,TIMER_HZ)>0U);
@@ -101,10 +101,17 @@ int main(void)
         assert(dshot_delivered==before+1U &&
                last_dshot==packet && last_inverted==1);
         reply_wiring_check(final_edge,periods[i]);
-        assert(rates[i]>=150000U); /* all three speed selections */
+        assert(rates[i]>=300000U); /* Original three speed selections. */
     }
+    AM13E_PB14_Decoder unsupported;
+    am13e_pb14_decoder_reset(&unsupported,CAPTURE_HZ,1);
+    const unsigned before_unsupported=dshot_delivered;
+    feed(&unsupported,frame_for(700U,1),100000U,1333U,16U);
+    assert(dshot_delivered==before_unsupported && !unsupported.decoded_bits &&
+           unsupported.rx_mode==AM13E_PB14_RX_UNDECIDED);
+    assert(!am13e_pb14_decoder_bidir_reply_due(&unsupported,120000U,121333U));
     /* Capture snapshot race must abort before reaching the decoder.
-     * Valid complete groups still forward all DShot150/300/600 bits.
+     * Valid complete groups still forward DShot300/600/1200 bits.
      */
     assert(am13e_pb14_capture_budget_ok(100U,433U,600U,1265U,
                                          CAPTURE_HZ));
@@ -166,6 +173,6 @@ int main(void)
     assert(d.good_dshot==0U && dshot_delivered==before_bad);
     feed(&d,frame_for(601U,1),2000000U,667U,16U);
     assert(d.good_dshot==1U && dshot_delivered==before_bad+1U);
-    puts("PASS: PB14 DShot150/300/600/1200 -> CRC -> BiDShot plan (HOST ONLY)");
+    puts("PASS: PB14 DShot300/600/1200 -> CRC -> BiDShot plan; unsupported rate rejected (HOST ONLY)");
     return 0;
 }
