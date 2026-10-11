@@ -48,7 +48,7 @@ def main():
                  "receiver_config_serial","receiver_config_disabled",
                  "led_source","led_inverted_source","led_four_source",
                  "led_wrong_port","led_serial_conflict","led_erpm_conflict",
-                 "aux_led_conflict"):
+                 "aux_led_conflict","motor_source"):
         check(re.search(r"(?m)^PASS: "+test+r"\s*$",host),
               "Missing Native regression PASS: "+test)
 
@@ -248,7 +248,8 @@ def main():
             "production_Boot_CRC_adapter_with_CRCP_model",
             "DShot_deferred_Reset_Save_and_source_CLI_CRSF_config",
             "selected_config_to_native_receiver_callbacks",
-            "discrete_LED_DShot_PendSV_GPIO_and_ownership_guards"],
+            "discrete_LED_DShot_PendSV_GPIO_and_ownership_guards",
+            "source_laststep_PRIMASK_drag_lock_desync_and_BEMF_callbacks"],
         "boot_abi":"RESOLVED_REL17_V14_CFG_ID_AND_APP_VECTOR",
         "app_image":"FLAT_ELF_DERIVED_VARIABLE_SIZE_MAX_488KIB",
         "torn_update_risk":"Valid Cfg plus vectors may boot incomplete later code",

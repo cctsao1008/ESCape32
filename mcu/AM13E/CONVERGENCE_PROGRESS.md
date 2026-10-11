@@ -310,3 +310,39 @@ UART/CRSF+CLI/EXBUS/telemetry and PARK/ERPM links, five auxiliary and six Boot
 safety negatives, layout/docs/functional/source-scope audits and 52 legacy
 ELF links. Separate discrete 3/4-LED links and six LED compile negatives PASS.
 Hardware outputs were not exercised. Existing safety checks remain mandatory.
+
+## Round 2: real shared motor stop and BEMF runtime verification
+
+Discrete LED milestone published as `707bd7540b81659dbf946d5e4f4e9f44940b84e8`,
+matching GitHub Actions run 38160953157 / job 114533558121: SUCCESS, all 24 steps.
+
+`motor_source` executes actual main.c laststep(), commutation/BEMF callbacks
+and source private state, actual util.c resetcom(), plus native BEMF/phase
+planners. CMSIS PRIMASK is observed, not fixed to always-masked: both initial
+0 and 1 are restored, and all stop-path backend calls must occur under mask.
+Tests cover reset -> drag or sixstep/lock -> commit -> comparator disable
+ordering, soft/hard lock selection, sine-to-sixstep rounding/wrap, actual
+commutation from step0, source six-event desync reset, ival/2 early rejection
+without scheduling/state mutation, fast threshold and accepted delay, sync
+saturation, timeout reset and invalid timing safe-off-before-fault-reset.
+Fixed expected values and call order are tested through production functions,
+not a duplicated simplified motor controller. No production motor policy changes.
+
+**SOFTWARE VERIFIED (bounded)**: source control-state/ordering only. Physical
+MCPWM/comparator/timer/reset boundaries are mocked; actual motor_safety.c
+register execution, ECAP/TIMG ISR arbitration, loaded interrupt races, brushed
+main loop, startup/arming/audio ownership and all physical power-stage behavior
+remain incomplete coverage or hardware pending. These source tests do not
+substitute for those backends or demonstrate live motor readiness.
+
+Final Round 2 local motor milestone replay PASS: 65 native Host executables
+(63 run_test entries plus two standalone executables; 79 emitted PASS lines
+include descriptive subgroups and are not 79 independent executables),
+startup/smoke/full-image suites each 11/11, all Application/Boot/historical
+strict links and portable/backends/clock targets, selected serial/telemetry
+and PARK/ERPM links, six Boot recovery negatives, five auxiliary routing
+negatives, image/layout, immutable-document, functional/source-scope audits
+and all 52 legacy ELF links. Previously validated discrete LED 3/4 links and
+six routing/capability negatives remain unchanged by this test-only milestone.
+All 73 requirement IDs are preserved; every hardware state remains pending
+or blocked. Full Rev1.4 functional convergence remains incomplete.
