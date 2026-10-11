@@ -8,6 +8,7 @@
 #include "fault_input.h"
 #include "io_backend.h"
 #include "command_capture.h"
+#include "serial_uart_rx.h"
 #include "motor_bemf.h"
 #include <dl_gpio.h>
 
@@ -31,6 +32,13 @@ void PendSV_Handler(void)
      * WWDT feeding between individual Flash commands.
      */
     am13e_app_io_service_pending_save();
+#if defined(AM13E_BOARD_SERIAL_RX_CONFIGURED) && \
+    defined(AM13E_BOARD_SERIAL_TX_CONFIGURED)
+    /* CRSF Write/Save/Reset executes in preemptible PendSV.
+     * UC RX IRQ only validates/copies the command frame.
+     */
+    am13e_app_serial_crsf_service_pending();
+#endif
 }
 
 void HardFault_Handler(void)

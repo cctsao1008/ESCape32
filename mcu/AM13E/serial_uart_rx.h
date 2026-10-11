@@ -9,4 +9,10 @@
 #include <stdbool.h>
 bool am13e_app_serial_rx_init(unsigned mode);
 bool am13e_app_serial_rx_irq_ready(void);
+#ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
+/* PendSV-only, never from UART RX ISR. Original CRSF command executor
+ * may perform Flash operations and requires preemptible context.
+ */
+void am13e_app_serial_crsf_service_pending(void);
+#endif
 #endif

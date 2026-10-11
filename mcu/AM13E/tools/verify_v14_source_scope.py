@@ -99,6 +99,13 @@ def main():
     check("execcrsfcmd,crc8dvbs2" in crsf_app and
           "am13e_crsf_reply_envelope(" in crsf_app and
           "crsf_tx.count==0U" in uart and
+          "SCB->ICSR=SCB_ICSR_PENDSVSET_Msk" in uart and
+          "am13e_crsf_deferred_begin(" in uart and
+          "am13e_app_serial_crsf_service_pending(" in uart and
+          "am13e_app_serial_crsf_service_pending();" in
+              src("mcu/AM13E/irq_vectors.c") and
+          "am13e_app_io_crsf_reply(" not in
+              uart.split("void RX_HANDLER(void)\n{")[1] and
           "DL_UART_IIDX_EOT_DONE" in uart and
           "am13e_serial_tx_queue_eot(" in uart and
           "AM13E_BOARD_SERIAL_TX_TWO_WIRE==1U" in uart and

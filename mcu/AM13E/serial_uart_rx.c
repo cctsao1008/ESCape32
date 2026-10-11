@@ -10,6 +10,7 @@
 #include "serial_frame_rx.h"
 #ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
 #include "serial_tx_queue.h"
+#include "crsf_deferred_command.h"
 #endif
 #include "io_backend.h"
 #include "board_reference_io.h"
@@ -119,11 +120,34 @@ static AM13E_SerialFrameRx rx_state;
 static unsigned initialized;
 #ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
 static AM13E_SerialTxQueue crsf_tx;
+static AM13E_CrsfDeferredCommand crsf_cmd;
 static bool crsf_tx_available;
 
 /* Called solely from this UNICOMM IRQ. Nonblocking, single-packet
  * transaction: queue copy finishes before TX IRQ can drain it.
  */
+void am13e_app_serial_crsf_service_pending(void)
+{
+    if(!crsf_tx_available||!crsf_cmd.busy||
+       crsf_cmd.length==0U||crsf_tx.count!=0U)return;
+    uint8_t packet[AM13E_CRSF_PENDING_MAX];
+    uint8_t reply[AM13E_SERIAL_TX_MAX];
+    unsigned packet_len=0U;
+    if(!am13e_crsf_deferred_take(&crsf_cmd,packet,sizeof packet,
+                                 &packet_len))return;
+    /* This is PendSV, not the UC RX interrupt: original
+     * execcrsfcmd() may execute savecfg()/resetcfg() and Flash.
+     * High priority RX remains interruptible while this runs.
+     */
+    const unsigned n=am13e_app_io_crsf_reply(
+        packet,packet_len,reply,sizeof reply);
+    if(n)crsf_tx_start(reply,n);
+    am13e_crsf_deferred_finish(&crsf_cmd);
+}
+
+/* forward declaration: PendSV worker submits a ready UART TX */
+static void crsf_tx_start(const uint8_t *p,unsigned n);
+
 static void crsf_tx_fill_fifo(void)
 {
     for(unsigned budget=0U;budget<AM13E_SERIAL_TX_MAX;++budget){
@@ -306,11 +330,15 @@ void RX_HANDLER(void)
                  * busy TX queue could mutate cfg without a response.
                  * The TX queue is owned by this single UC IRQ.
                  */
-                if(valid && crsf_tx_available && crsf_tx.count==0U){
-                    uint8_t reply[AM13E_SERIAL_TX_MAX];
-                    const unsigned n=am13e_app_io_crsf_reply(
-                        bytes,len,reply,sizeof reply);
-                    if(n)crsf_tx_start(reply,n);
+                if(valid && crsf_tx_available && crsf_tx.count==0U &&
+                   !crsf_cmd.busy &&
+                   (bytes[2]==0x28U || bytes[2]==0x2cU ||
+                    bytes[2]==0x2dU) &&
+                   am13e_crsf_deferred_begin(&crsf_cmd,bytes,len)){
+                    /* NVIC dispatches PendSV only after UART ISR exit.
+                     * Never execute stateful Rel17 command here.
+                     */
+                    SCB->ICSR=SCB_ICSR_PENDSVSET_Msk;
                 }
 #else
                 (void)valid;
