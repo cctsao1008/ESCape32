@@ -20,6 +20,7 @@
 #include "command_capture.h"
 #include "command_reply.h"
 #include "serial_uart_rx.h"
+#include "io_backend.h" /* native access to original cfg.input_mode */
 /* Input mode is queried through original io.c policy owner. */
 #include "clock_backend.h"
 #include <soc.h>
