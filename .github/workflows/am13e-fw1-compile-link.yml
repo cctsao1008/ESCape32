@@ -323,6 +323,27 @@ jobs:
           grep -Eq ' [Tt] am13e_crsf_reply_envelope$' am13e-ci-logs/serial-tx-symbols.txt
           grep -Eq ' [Tt] am13e_serial_tx_queue_begin$' am13e-ci-logs/serial-tx-symbols.txt
           echo "PASS selected 2-wire CRSF TX strict ARM link (synthetic, NOT FLASHED)"
+          # EXBUS original 7-descriptor/38B response in selected UART
+          # never qualifies real EXBUS half-duplex physical timing.
+          cmake -S . -B am13e-ci-exbus-tx -G "Unix Makefiles" \
+            -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/config.ld" \
+            -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/mcu/AM13E/tests/uart_exbus_tx_synthetic_profile.cmake" \
+            >am13e-ci-logs/exbus-tx-configure.log 2>&1 || {
+              cat am13e-ci-logs/exbus-tx-configure.log
+              exit 1
+            }
+          cmake --build am13e-ci-exbus-tx --target AM13E_FW1_REL17.elf -j 2 \
+            >am13e-ci-logs/exbus-tx-link.log 2>&1 || {
+              tail -n 65 am13e-ci-logs/exbus-tx-link.log
+              exit 1
+            }
+          arm-none-eabi-nm am13e-ci-exbus-tx/AM13E_FW1_REL17.elf \
+            >am13e-ci-logs/exbus-tx-symbols.txt
+          grep -Eq ' [Tt] am13e_app_io_exbus_telemetry$' \
+            am13e-ci-logs/exbus-tx-symbols.txt
+          grep -Eq ' [Tt] UC0_IRQHandler$' am13e-ci-logs/exbus-tx-symbols.txt
+          echo "PASS synthetic EXBUS reply TX FIFO/EOT ARM link; NOT FLASHED"
           # Source original Rel17 KISS/iBUS/S.Port/CRSF/MSB/HoTT handlers
           # + actual TI UNICOMM IRQ/FIFO/EOT transport; NEVER FLASH.
           cmake -S . -B am13e-ci-telem -G "Unix Makefiles" \

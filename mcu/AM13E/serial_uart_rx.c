@@ -14,6 +14,20 @@
 #include "crsf_deferred_command.h"
 #endif
 #include "io_backend.h"
+/* The original EXBUS single-wire transceiver remains unqualified.
+ * A two-wire board-selected response is permitted only with an
+ * explicit board-assigned stable identity and separate physical TX.
+ */
+#if defined(AM13E_BOARD_EXBUS_REPLY_ENABLED)
+#if AM13E_BOARD_EXBUS_REPLY_ENABLED != 1 || \
+    !defined(AM13E_BOARD_SERIAL_TX_CONFIGURED) || \
+    !defined(AM13E_BOARD_EXBUS_STABLE_DEVICE_ID)
+#error "EXBUS telemetry needs explicit board TX topology and stable UID"
+#endif
+_Static_assert(AM13E_BOARD_EXBUS_STABLE_DEVICE_ID!=0U &&
+               AM13E_BOARD_EXBUS_STABLE_DEVICE_ID!=UINT32_MAX,
+               "EXBUS reply cannot use placeholder device identity");
+#endif
 #include "board_reference_io.h"
 #include "board_configuration.h"
 #include <soc.h>
@@ -260,7 +274,11 @@ bool am13e_app_serial_rx_init(unsigned mode)
     DL_UART_setClockConfig(RX_UC,&clk);
     DL_UART_DIRECTION direction=DL_UART_DIRECTION_RX;
 #ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
-    if(mode==2U || mode==5U) {
+    if(mode==2U || mode==5U
+#ifdef AM13E_BOARD_EXBUS_REPLY_ENABLED
+       || mode==6U
+#endif
+       ) {
         /* Separate, board-reviewed 2-wire full-duplex TX/RX only.
          * Single-wire CRSF turnaround is NOT supported here.
          * Earlier initgpio() left the TX reservation Hi-Z.
@@ -430,6 +448,21 @@ void RX_HANDLER(void)
                 (void)am13e_app_io_sbus_frame(bytes,len);
             else if(rx_state.mode==6U){
                 const int valid=am13e_app_io_exbus_frame(bytes,len);
+#ifdef AM13E_BOARD_EXBUS_REPLY_ENABLED
+                if(valid&&bytes[4]==0x3aU&&bytes[5]==0U &&
+                   crsf_tx_available&&crsf_tx.count==0U){
+                    /* This uses the ACTUAL original EXBUS payload/CRC,
+                     * with a BOARD-OWNED stable UID. Request ID echo.
+                     * Two-wire external electrical topology is
+                     * conditional and NOT qualified on Reference.
+                     */
+                    uint8_t reply[AM13E_SERIAL_TX_MAX];
+                    const unsigned response=am13e_app_io_exbus_telemetry(
+                        bytes[3],AM13E_BOARD_EXBUS_STABLE_DEVICE_ID,
+                        reply,sizeof reply);
+                    if(response)crsf_tx_start(reply,response);
+                }
+#endif
                 if(valid){
                     /* Upstream n=0 ONLY when 0x31 channel data
                      * arrives. CRC-valid unknown and telemetry
