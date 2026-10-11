@@ -44,7 +44,8 @@ def main():
                  "bidir_timing","bemf_commutation","motor_ownership",
                  "service_handoff","servo_source","servo_trim_source",
                  "cli_entry","park_source","aux_wrong_port","aux_serial_conflict",
-                 "config_command_source"):
+                 "config_command_source","receiver_config_default",
+                 "receiver_config_serial","receiver_config_disabled"):
         check(re.search(r"(?m)^PASS: "+test+r"\s*$",host),
               "Missing Native regression PASS: "+test)
 

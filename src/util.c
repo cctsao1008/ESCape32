@@ -463,8 +463,15 @@ void checkcfg(void) {
 	cfg.throt_mid = clamp(cfg.throt_mid, cfg.throt_min + 100, cfg.throt_max - 100);
 	cfg.analog_min = clamp(cfg.analog_min, 0, 3200);
 	cfg.analog_max = clamp(cfg.analog_max, cfg.analog_min + 200, 3400);
-#ifdef IO_PA2
+#if defined(IO_PA2) || (defined(AM13E) && defined(AM13E_BOARD_SERIAL_RX_CONFIGURED))
 	cfg.input_mode = clamp(cfg.input_mode, 0, 7);
+#if defined(AM13E) && !defined(ANALOG_CHAN)
+    /* Native UART capability does not imply a board analog-input route.
+     * Keep selected serial modes through startup validation without
+     * pretending this TI board has the legacy PA2 pin configuration.
+     */
+    if (cfg.input_mode == 1) cfg.input_mode = 0;
+#endif
 #ifdef DISABLE_EXBUS
 	if (cfg.input_mode == 6) cfg.input_mode = 0;
 #endif

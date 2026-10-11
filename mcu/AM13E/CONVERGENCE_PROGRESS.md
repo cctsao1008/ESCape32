@@ -237,3 +237,33 @@ functional coverage and source-scope audits; all 52 legacy ELF links PASS.
 The added test fails against the baseline capture-context Reset implementation
 at the hardware commit boundary, and passes after the fix. All physical
 recovery/self-update/WRP operations remain gated and were not executed.
+
+## Round 2: reachable selected native serial modes
+
+First Round 2 milestone published as `f6c11b099bd3342ca64e1cb86ce318cd7ab682f0`,
+matching GitHub Actions run 38160041985 / job 114530847737: SUCCESS, all 23 steps.
+
+Production `checkcfg()` previously forced input modes 2..7 to zero because
+AM13E has no legacy `IO_PA2`. A board-selected native serial RX capability
+now retains the original 0..7 range and original DISABLE_EXBUS/HOTT checks
+and channel limits. Analog mode 1 remains unavailable without ANALOG_CHAN;
+no legacy pin alias or fabricated analog route is introduced. Unselected
+Reference still validates to mode0. Default initialization, CLI/CRSF writes,
+and restored configuration now reach the existing native UART selectors.
+
+`receiver_config_default`, `receiver_config_serial`, `receiver_config_disabled`
+execute real defaults and production checkcfg(), io callbacks and util throttle,
+brake and CRC functions with the native serial/receiver decoders. Coverage:
+mode 0..7 and disabled-capability validation, channel limits; binary serial
+throttle; iBUS, SBUS, CRSF, EXBUS and SUMD throttle/brake/aux updates; actual
+SBUS2 six-payload/delay-request generation and arbitrary end-byte admission;
+malformed length, checksum failure and wrong-mode zero watchdog refresh.
+The selected test fails against baseline checkcfg() and passes after the fix.
+Only watchdog hardware is replaced in this receiver test; UART registers,
+FIFO/interrupt arbitration and physical transport timing are not exercised.
+SBUS2 still lacks actual timed TX/RX mute, and payload/delay tests do not close it.
+
+Official default/selected Application and Boot links, 11 startup CTests,
+smoke/full suites, complete native block, six recovery negatives, all existing
+profile links/audits and all 52 legacy links PASS in the current milestone replay.
+Original legacy checkcfg branches and immutable Rev1.4 documents remain intact.
