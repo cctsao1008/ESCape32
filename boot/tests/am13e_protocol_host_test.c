@@ -17,6 +17,8 @@
 #include <sys/mman.h>
 
 #include "dl_flash.h"
+#include "common.h"
+#include "dl_crcp.h"
 #include "app_validity.h"
 #include "update_staging.h"
 
@@ -163,11 +165,7 @@ void sendbuf(const char *buf, int len) {
     memcpy(transmitted + transmitted_length, buf, (size_t)len);
     transmitted_length += (size_t)len;
 }
-/* The host emulates ESCape32 command CRC; hardware CRCP still unqualified. */
-uint32_t crc32(const char *buf, int len) {
-    CHECK(buf != NULL && len >= 0);
-    return software_crc((const uint8_t *)(const void *)buf, (size_t)len);
-}
+/* Production boot/src/util.c supplies crc32; only CRCP is modeled. */
 void init(void) {}
 void initio(void) {}
 bool boot_am13e_take_reboot_ack(void) { return false; }
@@ -494,6 +492,17 @@ int main(int argc, char **argv) {
     /* Reference golden vector, independent of the generated frames. */
     CHECK(software_crc((const uint8_t *)"123456789", 9U) ==
           UINT32_C(0xcbf43926));
+    CHECK(crc32("1234",4)==UINT32_C(0x9be3e0a3));
+    CHECK(crc32("12345678",8)==UINT32_C(0x9ae0daaf));
+    CHECK(crc32("",0)==0U);
+    const uint32_t crc_inits=am13e_test_crcp.initializations;
+    CHECK(crc32(NULL,4)==0U && crc32("1234",-4)==0U &&
+          crc32("123456789",9)==0U);
+    CHECK(am13e_test_crcp.initializations==crc_inits);
+    uint8_t crc_vector[1024];
+    for(unsigned i=0;i<sizeof crc_vector;++i)crc_vector[i]=(uint8_t)i;
+    for(unsigned n=4U;n<=sizeof crc_vector;n+=4U)
+        CHECK(crc32((const char *)crc_vector,(int)n)==software_crc(crc_vector,n));
     size_t image_length = 0U;
     uint8_t *image = load_image(argv[1], &image_length);
     void *mapped = mmap((void *)(uintptr_t)MAP_ADDRESS, MAP_LENGTH,

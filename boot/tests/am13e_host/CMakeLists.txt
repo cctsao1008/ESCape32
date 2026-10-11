@@ -94,6 +94,8 @@ if(AM13E_HOST_PACKED_IMAGE)
         "${REPO_ROOT}/boot/tests/am13e_protocol_host_test.c"
         "${REPO_ROOT}/boot/tests/am13e_protocol_entry.c"
         "${REPO_ROOT}/boot/src/io.c"
+        "${REPO_ROOT}/boot/src/util.c"
+        "${REPO_ROOT}/boot/tests/am13e_crcp_mock.c"
         "${REPO_ROOT}/boot/mcu/AM13E/flash_range.c"
         "${REPO_ROOT}/boot/mcu/AM13E/flash.c"
         "${REPO_ROOT}/boot/mcu/AM13E/app_validity.c"

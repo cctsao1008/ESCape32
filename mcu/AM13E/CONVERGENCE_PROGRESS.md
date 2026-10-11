@@ -33,7 +33,7 @@ commit CI must be checked separately and is not official-SDK provenance evidence
 ## Remaining design obligations
 
 **DESIGN REQUIRED**, pending integration: complete original input-discovery
-sequence; reachable HIGH-level CLI entry; SBUS2 scheduler; original
+sequence; SBUS2 scheduler; original
 half-duplex transports; optional Hall/LED/BEC/PARK/ERPM hooks; broader shared
 motor/config/command production-path traces. Existing codec/model tests and ARM
 links alone do not close these source requirements.
@@ -108,4 +108,28 @@ Original single-wire CLI transport and complete discovery state machine remain
 
 Servo milestone CI: run 38154801219, exact HEAD
 `a383147b2597ca54346b06151e9bdf50e27397f3`, job `fw1-build-evidence` SUCCESS,
+all 22 reported steps SUCCESS.
+
+## Production Boot CRC framing coverage
+
+Requirements BOOT-M01..M04, BOOT-I01/I02, B01/B02:
+**SOFTWARE VERIFIED** for production CRC adapter configuration and wire framing.
+All three existing protocol CTests now link actual `boot/src/util.c::crc32()`
+instead of replacing it with a host CRC implementation. Only DriverLib CRCP
+is mocked: power/init, 32-bit polynomial 0x04c11db7, reversed bit order,
+little-endian input, no output-byte swap, all-one seed and byte feeding are
+asserted. A separate MSB-first polynomial/bit-reversal boundary model is
+checked against the existing reflected wire oracle, fixed CRC golden vectors
+and every 4-byte quantum through 1024 bytes. Invalid pointer/length inputs
+perform no modeled CRCP initialization. Existing malformed/CRC-failure parser
+tests retain zero Flash-operation assertions and original ACK/NAK expectations.
+
+Startup, smoke-image and full-image host suites each PASS 11/11; Application
+and Boot official-toolchain strict links, layout/docs audits and six recovery
+negatives PASS. **HARDWARE PENDING**: CRCP register behavior/result equivalence
+on AM13E and captured host/target wire interoperability. The model is not a
+verification of TI's actual peripheral. Production protocol/CRC code is unchanged.
+
+CLI milestone CI: run 38155216282, exact HEAD
+`ebcfe735072392449548e5373a87206437b59f01`, job `fw1-build-evidence` SUCCESS,
 all 22 reported steps SUCCESS.
