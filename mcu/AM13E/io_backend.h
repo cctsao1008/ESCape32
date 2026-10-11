@@ -59,6 +59,11 @@ int am13e_app_io_sbus_frame(const uint8_t *frame,unsigned length);
  * updates original throttle/brake. Command response TX still missing.
  */
 int am13e_app_io_crsf_frame(const uint8_t *frame,unsigned length);
+/* Invoke the real Rel17 execcrsfcmd()/crc8dvbs2() only for a validated
+ * CRSF input_mode=5 command, telmode=4; return completed wire bytes.
+ */
+unsigned am13e_app_io_crsf_reply(const uint8_t *frame,unsigned length,
+                                 uint8_t *reply,unsigned capacity);
 /* Read original Rel17 cfg.input_mode from src/io.c, avoiding
  * duplicate shared/MCU platform declarations in native IRQ modules.
  */

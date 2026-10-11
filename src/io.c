@@ -24,6 +24,7 @@
 #include "ibus_receiver.h" /* Native frame inspection uses original iBUS semantics */
 #include "sbus_receiver.h" /* Packed 11-bit SBUS channel extraction */
 #include "crsf_receiver.h" /* Original CRSF CRC8-DVB-S2 channel RX */
+#include "crsf_command_reply.h" /* Preserve original execcrsfcmd response */
 #else
 #ifdef AT32F4
 #define USART2_TDR USART2_DR
@@ -606,6 +607,20 @@ int am13e_app_io_sbus_frame(const uint8_t *frame,unsigned length)
  * changes throttle/brake only for channel data (type 0x16).
  * 0x28/0x2c/0x2d telemetry command TX is a separate pending gap.
  */
+unsigned am13e_app_io_crsf_reply(const uint8_t *frame,unsigned length,
+                                 uint8_t *reply,unsigned capacity)
+{
+    if(cfg.input_mode!=5||telmode!=4)return 0U;
+    /* In upstream src/io.c::crsffunc() the 1024-byte shared iobuf
+     * also holds the constructed response after the received frame.
+     * Use a separate 1024-byte scratch area here; no stack overflow.
+     * Caller must first accept this frame through original CRC path.
+     */
+    static char scratch[1024];
+    return am13e_crsf_reply_envelope(frame,length,reply,capacity,
+                                    scratch,sizeof scratch,
+                                    execcrsfcmd,crc8dvbs2);
+}
 int am13e_app_io_crsf_frame(const uint8_t *frame,unsigned length)
 {
     int throttle_us=-1,brake_us=-1;
