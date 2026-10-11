@@ -43,12 +43,16 @@ uintptr_t boot_am13e_test_first;
 uintptr_t boot_am13e_test_end;
 extern void boot_am13e_protocol_entry(void);
 extern void boot_am13e_test_reset_update_state(void);
+extern bool boot_am13e_write_range(unsigned block, unsigned length, char **address);
+extern int boot_am13e_flash_write(char *dst, const char *source, int length);
 
 static uint8_t incoming[RX_CAPACITY];
 static uint8_t transmitted[TX_CAPACITY];
 static uint8_t expected_reply[TX_CAPACITY];
 static size_t incoming_length, read_position, transmitted_length, expected_length;
 static unsigned erases, programs;
+static bool corrupt_readback;
+static bool receive_timeout;
 static jmp_buf end_of_stream;
 
 static void input_bytes(const uint8_t *bytes, size_t n) {
@@ -139,8 +143,16 @@ static void queue_read(unsigned block, unsigned length,
 /* The next two functions are the actual framing layer's physical backend. */
 int recvbuf(char *buf, int len) {
     CHECK(buf != NULL && len >= 0);
-    if (read_position == incoming_length) longjmp(end_of_stream, 1);
-    CHECK((size_t)len <= incoming_length - read_position);
+    if (read_position == incoming_length) {
+        if (receive_timeout) longjmp(end_of_stream, 1);
+        receive_timeout = true;
+        return 0; /* Let the parser reject the timed-out frame first. */
+    }
+    if ((size_t)len > incoming_length - read_position) {
+        read_position = incoming_length; /* Truncated physical receive. */
+        receive_timeout = true;
+        return 0;
+    }
     memcpy(buf, incoming + read_position, (size_t)len);
     read_position += (size_t)len;
     return 1;
@@ -169,15 +181,16 @@ __attribute__((noreturn)) void boot_am13e_launch_application(void) {
 
 /* Physical Flash model: 2 KiB sector erase, irreversible 1->0 program. */
 uint32_t DL_Flash_eraseSector(uint32_t addr) {
+    ++erases; /* Count every controller call, including illegal attempts. */
     if ((addr & (DL_FLASH_SECTOR_SIZE - 1U)) ||
         addr < boot_am13e_test_first ||
         addr > boot_am13e_test_end - DL_FLASH_SECTOR_SIZE)
         return DL_FLASH_ERROR;
-    ++erases;
     memset((void *)(uintptr_t)addr, 0xff, DL_FLASH_SECTOR_SIZE);
     return DL_FLASH_SUCCESS;
 }
 uint32_t DL_Flash_program(uint32_t addr, uint8_t *src, uint32_t length) {
+    ++programs;
     if (!src || !length || (addr & 15U) || (length & 15U) ||
         addr < boot_am13e_test_first ||
         addr > boot_am13e_test_end - length)
@@ -186,9 +199,184 @@ uint32_t DL_Flash_program(uint32_t addr, uint8_t *src, uint32_t length) {
     for (uint32_t i = 0U; i < length; ++i)
         if ((uint8_t)(dst[i] & src[i]) != src[i])
             return DL_FLASH_ERROR;
-    ++programs;
     for (uint32_t i = 0U; i < length; ++i) dst[i] &= src[i];
+    if (corrupt_readback) {
+        dst[0] ^= 1U;
+        corrupt_readback = false;
+    }
     return DL_FLASH_SUCCESS;
+}
+
+static void reset_stream(void) {
+    incoming_length = read_position = transmitted_length = expected_length = 0U;
+    receive_timeout = false;
+}
+static void run_stream(void) {
+    if (setjmp(end_of_stream) == 0) {
+        boot_am13e_protocol_entry();
+        CHECK(false && "boot protocol unexpectedly returned");
+    }
+    CHECK(read_position == incoming_length);
+    CHECK(transmitted_length == expected_length);
+    for (size_t i = 0U; i < expected_length; ++i) {
+        if (transmitted[i] != expected_reply[i]) {
+            fprintf(stderr, "FAIL reply byte %zu: actual=%02x expected=%02x\n",
+                    i, transmitted[i], expected_reply[i]);
+            break;
+        }
+    }
+    CHECK(memcmp(transmitted, expected_reply, expected_length) == 0);
+}
+static void rejected_stream(void) {
+    const unsigned old_erases = erases, old_programs = programs;
+    uint8_t snapshot[MAP_LENGTH];
+    memcpy(snapshot, (const void *)(uintptr_t)MAP_ADDRESS, sizeof snapshot);
+    run_stream();
+    CHECK(erases == old_erases && programs == old_programs);
+    CHECK(memcmp(snapshot, (const void *)(uintptr_t)MAP_ADDRESS,
+                 sizeof snapshot) == 0);
+}
+
+/* R01: real dispatcher -> CRC framing -> range -> original writer body.
+ * Each short write starts with non-erased bytes in BOTH sector halves.
+ */
+static void short_write_regressions(void) {
+    const unsigned blocks[] = {0U, 1U, 2U, 256U, 487U};
+    const uint8_t payloads[2][8] = {
+        {0x12U, 0x34U, 0x56U, 0x78U, 0x9aU, 0xbcU, 0xdeU, 0xf0U},
+        {0xffU, 0xffU, 0xffU, 0xffU, 0xffU, 0xffU, 0xffU, 0xffU}
+    };
+    for (unsigned k = 0U; k < sizeof blocks / sizeof blocks[0]; ++k) {
+        const unsigned block = blocks[k];
+        uint8_t *dst = (uint8_t *)(boot_am13e_test_first + block * BLOCK_BYTES);
+        uint8_t *sector = (uint8_t *)((uintptr_t)dst &
+                                    ~((uintptr_t)DL_FLASH_SECTOR_SIZE - 1U));
+        const size_t offset = (size_t)(dst - sector);
+        for (unsigned p = 0U; p < 2U; ++p) {
+            uint8_t expected_sector[DL_FLASH_SECTOR_SIZE];
+            memset(sector, 0x5a, DL_FLASH_SECTOR_SIZE);
+            memset(sector + (offset ? 0U : BLOCK_BYTES), 0xc3, BLOCK_BYTES);
+            memcpy(expected_sector, sector, sizeof expected_sector);
+            memcpy(expected_sector + offset, payloads[p], 8U);
+            const unsigned old_erases = erases, old_programs = programs;
+            reset_stream();
+            queue_window(block >> 8U, RES_OK);
+            queue_write(block & 255U, payloads[p], 8U, false, RES_OK);
+            queue_read(block & 255U, 8U, payloads[p]);
+            /* Illegal window must leave the selected window unchanged. */
+            queue_window(2U, RES_ERROR);
+            queue_write(block & 255U, payloads[p], 8U, false, RES_OK);
+            queue_read(block & 255U, 8U, payloads[p]);
+            /* Transition back to window0 and check its addressing. */
+            queue_window(0U, RES_OK);
+            queue_read(0U, 8U, block == 0U ? payloads[p] :
+                       (const uint8_t *)boot_am13e_test_first);
+            run_stream();
+            CHECK(erases == old_erases + 1U && programs == old_programs + 1U);
+            CHECK(memcmp(sector, expected_sector, sizeof expected_sector) == 0);
+            printf("PASS R01 block %u eight-byte %s write/read/retry\n",
+                   block, p ? "FF" : "non-FF");
+        }
+    }
+    puts("PASS R01 blocks 0/1/2/256/487: FF/non-FF, windows, sector preservation, read/retry");
+
+    /* A successful controller status with corrupted data must NAK,
+     * then a clean retry must repair and verify the sector.
+     */
+    uint8_t *dst = (uint8_t *)(boot_am13e_test_first + 2U * BLOCK_BYTES);
+    uint8_t expected_sector[DL_FLASH_SECTOR_SIZE];
+    memset(dst, 0x5a, sizeof expected_sector);
+    memcpy(expected_sector, dst, sizeof expected_sector);
+    memcpy(expected_sector, payloads[0], 8U);
+    reset_stream();
+    corrupt_readback = true;
+    queue_write(2U, payloads[0], 8U, false, RES_ERROR);
+    run_stream();
+    CHECK(dst[0] != payloads[0][0]);
+    reset_stream();
+    queue_write(2U, payloads[0], 8U, false, RES_OK);
+    queue_read(2U, 8U, payloads[0]);
+    run_stream();
+    CHECK(memcmp(dst, expected_sector, sizeof expected_sector) == 0);
+    puts("PASS R01 readback corruption NAK and verified repair retry");
+
+    for (unsigned block = 488U; block < 512U; ++block) {
+        reset_stream();
+        queue_window(1U, RES_OK);
+        queue_write(block & 255U, payloads[0], 8U, false, RES_ERROR);
+        rejected_stream();
+    }
+    reset_stream();
+    queue_window(1U, RES_OK);
+    queue_write(231U, payloads[0], 8U, true, -1);
+    input_val(CMD_PROBE); expected_val(RES_OK);
+    rejected_stream();
+    reset_stream();
+    input_val(CMD_WRITE); input_val(2U);
+    const uint8_t bad_count[2] = {0xffU, 0xffU};
+    input_bytes(bad_count, sizeof bad_count);
+    input_val(CMD_PROBE); expected_val(RES_OK);
+    rejected_stream();
+    /* Empty payload, partial payload and partial CRC after a valid8B count. */
+    for (unsigned bytes = 0U; bytes <= 11U; ++bytes) {
+        const uint8_t truncated[11] = {0U};
+        reset_stream();
+        input_val(CMD_WRITE); input_val(2U); input_val(1U);
+        input_bytes(truncated, bytes);
+        rejected_stream();
+    }
+    puts("PASS R01 blocks 488..511, CRC/count/empty/truncated frames: no Flash calls");
+
+    /* Wire count encodes ONLY 4..1024 bytes; zero/nonmultiple/oversize
+     * lengths and arbitrary pointers cannot be represented by CMD_WRITE.
+     * Exercise the actual range and writer guards directly for those cases.
+     */
+    const unsigned bad_lengths[] = {0U, 1U, 3U, 7U, 1025U, 1028U, UINT32_MAX};
+    const unsigned old_erases = erases, old_programs = programs;
+    uint8_t snapshot[MAP_LENGTH];
+    memcpy(snapshot, (const void *)(uintptr_t)MAP_ADDRESS, sizeof snapshot);
+    char *address = NULL;
+    for (unsigned i = 0U; i < sizeof bad_lengths / sizeof bad_lengths[0]; ++i) {
+        CHECK(!boot_am13e_write_range(487U, bad_lengths[i], &address));
+        if (bad_lengths[i] != UINT32_MAX)
+            CHECK(!boot_am13e_flash_write((char *)dst,
+                  (const char *)payloads[0], (int)bad_lengths[i]));
+    }
+    CHECK(!boot_am13e_flash_write((char *)dst, (const char *)payloads[0], -1));
+    CHECK(!boot_am13e_write_range(2U, 8U, NULL));
+    CHECK(!boot_am13e_write_range(UINT32_MAX, 8U, &address));
+    CHECK(!boot_am13e_flash_write((char *)dst, NULL, 8));
+    const uintptr_t illegal[] = {
+        MAP_ADDRESS, MAP_ADDRESS + 0x4000U, MAP_ADDRESS + 0x5000U,
+        boot_am13e_test_first - 16U, boot_am13e_test_first + 1U,
+        boot_am13e_test_first + 16U, boot_am13e_test_end - 16U,
+        boot_am13e_test_end, boot_am13e_test_end + 16U
+    };
+    for (unsigned i = 0U; i < sizeof illegal / sizeof illegal[0]; ++i)
+        CHECK(!boot_am13e_flash_write((char *)illegal[i],
+                                      (const char *)payloads[0], 8));
+    CHECK(!boot_am13e_flash_write((char *)(boot_am13e_test_end - 16U),
+                                  (const char *)payloads[0], 32));
+    /* Test end-overflow and physical-sector containment independently
+     * of logical-block/alignment failures using narrowed mock bounds.
+     */
+    const uintptr_t saved_end = boot_am13e_test_end;
+    boot_am13e_test_end = boot_am13e_test_first + 487U * BLOCK_BYTES + 4U;
+    CHECK(!boot_am13e_write_range(487U, 8U, &address));
+    CHECK(!boot_am13e_flash_write((char *)(boot_am13e_test_first + 487U * BLOCK_BYTES),
+                                  (const char *)payloads[0], 8));
+    boot_am13e_test_end = boot_am13e_test_first + BLOCK_BYTES;
+    CHECK(boot_am13e_write_range(0U, 8U, &address));
+    CHECK(!boot_am13e_flash_write(address, (const char *)payloads[0], 8));
+    boot_am13e_test_end = saved_end;
+    const uintptr_t saved_first = boot_am13e_test_first;
+    boot_am13e_test_first += 1U;
+    CHECK(!boot_am13e_write_range(0U, 8U, &address));
+    boot_am13e_test_first = saved_first;
+    CHECK(erases == old_erases && programs == old_programs);
+    CHECK(memcmp(snapshot, (const void *)(uintptr_t)MAP_ADDRESS, sizeof snapshot) == 0);
+    puts("PASS R01 length/address/alignment/end/sector guards: Boot/CFG/Reserved unchanged, no Flash calls");
+    reset_stream();
 }
 
 static uint8_t *load_image(const char *filename, size_t *size_out) {
@@ -315,6 +503,8 @@ int main(int argc, char **argv) {
     if (mapped == MAP_FAILED) { perror("mmap"); free(image); return 2; }
     boot_am13e_test_first = MAP_ADDRESS + APP_OFFSET;
     boot_am13e_test_end = MAP_ADDRESS + MAP_LENGTH;
+    memset(mapped, 0xff, MAP_LENGTH);
+    short_write_regressions();
     memset((void *)(uintptr_t)boot_am13e_test_first, 0xff,
            (size_t)(boot_am13e_test_end - boot_am13e_test_first));
     /* Boot, original ESCape32 Cfg and the Reserved 4KiB must

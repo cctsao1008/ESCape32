@@ -43,11 +43,7 @@ bool boot_am13e_write_range(unsigned block, unsigned length, char **address) {
     uintptr_t start;
     if (!address || !flash_range(block, length, &start) ||
         (start & 15U)) return false;
-    /* WiFi-Link invalidates the image with two eight-byte 0xff writes.
-     * These are handled as a special erase transaction in flash.c.
-     */
     if ((length & 3U) != 0U) return false;
-    if (length == 8U && block > 1U) return false;
     *address = (char *)start;
     return true;
 }
