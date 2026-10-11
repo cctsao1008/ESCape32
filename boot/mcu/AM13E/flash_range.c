@@ -20,13 +20,19 @@ extern char __boot_storage_end__[];
 #endif
 
 static bool flash_range(unsigned block, unsigned length, uintptr_t *start) {
-    const uintptr_t first = BOOT_APP_FIRST;
+    const uintptr_t app = BOOT_APP_FIRST;
     const uintptr_t limit = BOOT_APP_END;
-    const uintptr_t offset = (uintptr_t)block * UINT32_C(1024);
-    if (!length || length > AM13E_FLASH_LOGICAL_BLOCK || (length & 3U) || block >= AM13E_FLASH_APP_BLOCKS || limit <= first ||
-        block > UINT32_MAX / UINT32_C(1024) ||
-        offset > limit - first ||
-        (uintptr_t)length > limit - first - offset)
+    if (app < AM13E_FLASH_APP_BASE-AM13E_FLASH_FW1_PARAM_BASE ||
+        block >= AM13E_FLASH_STREAM_BLOCKS) return false;
+    const bool config = block < AM13E_FLASH_CFG_BLOCKS;
+    const uintptr_t first = config ?
+        app-(AM13E_FLASH_APP_BASE-AM13E_FLASH_FW1_PARAM_BASE) : app;
+    const uintptr_t end = config ? first+AM13E_FLASH_CFG_BLOCKS*1024U : limit;
+    const uintptr_t offset = (uintptr_t)(config ? block :
+        block-AM13E_FLASH_CFG_BLOCKS)*UINT32_C(1024);
+    if (!length || length > AM13E_FLASH_LOGICAL_BLOCK || (length & 3U) || end <= first ||
+        offset > end - first ||
+        (uintptr_t)length > end - first - offset)
         return false;
     *start = first + offset;
     return true;

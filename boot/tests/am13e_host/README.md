@@ -1,3 +1,5 @@
+> Current authority is Rev1.6. The historical flat APP image contract below remains, but wire blocks now map 0–3 Config, 4–491 APP, 492–511 invalid. APP-only transfers start at block4 and preserve Config. `pack_am13e_rel17.py stream` requires an explicit 4096-byte Config input and `--authorize-config`; it produces a logical Config+APP stream, not an APP-linked binary. Invalid READ sends RES_ERROR and stays in Boot. Static protected banks are conservatively rejected before controller calls because exact protection granularity remains unqualified. No physical operation is authorized by Host validation.
+
 # AM13E Host Validation — ESCape32 Rel17 v1.4 (CURRENT)
 
 **Status:** executable native-GCC/ARM software evidence only; not silicon or motor-drive qualification.

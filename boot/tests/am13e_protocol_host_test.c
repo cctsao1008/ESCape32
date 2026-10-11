@@ -54,7 +54,14 @@ static uint8_t expected_reply[TX_CAPACITY];
 static size_t incoming_length, read_position, transmitted_length, expected_length;
 static unsigned erases, programs;
 static bool corrupt_readback;
+static bool fail_next_erase, fail_next_program;
 static bool receive_timeout;
+static bool eligible_application;
+extern bool boot_am13e_test_protected;
+static uintptr_t logical_address(unsigned n) {
+    return n < 4U ? MAP_ADDRESS + 0x4000U + n * BLOCK_BYTES :
+        boot_am13e_test_first + (n - 4U) * BLOCK_BYTES;
+}
 static jmp_buf end_of_stream;
 
 static void input_bytes(const uint8_t *bytes, size_t n) {
@@ -146,7 +153,7 @@ static void queue_read(unsigned block, unsigned length,
 int recvbuf(char *buf, int len) {
     CHECK(buf != NULL && len >= 0);
     if (read_position == incoming_length) {
-        if (receive_timeout) longjmp(end_of_stream, 1);
+        if (receive_timeout || eligible_application) longjmp(end_of_stream, 1);
         receive_timeout = true;
         return 0; /* Let the parser reject the timed-out frame first. */
     }
@@ -171,7 +178,7 @@ void initio(void) {}
 bool boot_am13e_take_reboot_ack(void) { return false; }
 uint32_t boot_am13e_device_id(void) { return UINT32_C(0x12345678); }
 uint8_t boot_am13e_io_id(void) { return 4U; }
-bool boot_am13e_application_valid(void) { return false; }
+bool boot_am13e_application_valid(void) { return eligible_application; }
 __attribute__((noreturn)) void boot_am13e_launch_application(void) {
     fprintf(stderr, "FAIL unexpected application jump during protocol test\n");
     exit(1);
@@ -180,8 +187,9 @@ __attribute__((noreturn)) void boot_am13e_launch_application(void) {
 /* Physical Flash model: 2 KiB sector erase, irreversible 1->0 program. */
 uint32_t DL_Flash_eraseSector(uint32_t addr) {
     ++erases; /* Count every controller call, including illegal attempts. */
+    if (fail_next_erase) { fail_next_erase = false; return DL_FLASH_ERROR; }
     if ((addr & (DL_FLASH_SECTOR_SIZE - 1U)) ||
-        addr < boot_am13e_test_first ||
+        addr < MAP_ADDRESS + 0x4000U ||
         addr > boot_am13e_test_end - DL_FLASH_SECTOR_SIZE)
         return DL_FLASH_ERROR;
     memset((void *)(uintptr_t)addr, 0xff, DL_FLASH_SECTOR_SIZE);
@@ -189,8 +197,9 @@ uint32_t DL_Flash_eraseSector(uint32_t addr) {
 }
 uint32_t DL_Flash_program(uint32_t addr, uint8_t *src, uint32_t length) {
     ++programs;
+    if (fail_next_program) { fail_next_program = false; return DL_FLASH_ERROR; }
     if (!src || !length || (addr & 15U) || (length & 15U) ||
-        addr < boot_am13e_test_first ||
+        addr < MAP_ADDRESS + 0x4000U ||
         addr > boot_am13e_test_end - length)
         return DL_FLASH_ERROR;
     uint8_t *dst = (uint8_t *)(uintptr_t)addr;
@@ -239,14 +248,14 @@ static void rejected_stream(void) {
  * Each short write starts with non-erased bytes in BOTH sector halves.
  */
 static void short_write_regressions(void) {
-    const unsigned blocks[] = {0U, 1U, 2U, 256U, 487U};
+    const unsigned blocks[] = {0U, 1U, 2U, 3U, 4U, 5U, 6U, 256U, 260U, 491U};
     const uint8_t payloads[2][8] = {
         {0x12U, 0x34U, 0x56U, 0x78U, 0x9aU, 0xbcU, 0xdeU, 0xf0U},
         {0xffU, 0xffU, 0xffU, 0xffU, 0xffU, 0xffU, 0xffU, 0xffU}
     };
     for (unsigned k = 0U; k < sizeof blocks / sizeof blocks[0]; ++k) {
         const unsigned block = blocks[k];
-        uint8_t *dst = (uint8_t *)(boot_am13e_test_first + block * BLOCK_BYTES);
+        uint8_t *dst = (uint8_t *)logical_address(block);
         uint8_t *sector = (uint8_t *)((uintptr_t)dst &
                                     ~((uintptr_t)DL_FLASH_SECTOR_SIZE - 1U));
         const size_t offset = (size_t)(dst - sector);
@@ -268,7 +277,7 @@ static void short_write_regressions(void) {
             /* Transition back to window0 and check its addressing. */
             queue_window(0U, RES_OK);
             queue_read(0U, 8U, block == 0U ? payloads[p] :
-                       (const uint8_t *)boot_am13e_test_first);
+                       (const uint8_t *)logical_address(0U));
             run_stream();
             CHECK(erases == old_erases + 1U && programs == old_programs + 1U);
             CHECK(memcmp(sector, expected_sector, sizeof expected_sector) == 0);
@@ -276,7 +285,7 @@ static void short_write_regressions(void) {
                    block, p ? "FF" : "non-FF");
         }
     }
-    puts("PASS R01 blocks 0/1/2/256/487: FF/non-FF, windows, sector preservation, read/retry");
+    puts("PASS R01 CFG 0..3 and APP 4/5/6/256/260/491: FF/non-FF, windows, sector preservation, read/retry");
 
     /* A successful controller status with corrupted data must NAK,
      * then a clean retry must repair and verify the sector.
@@ -288,25 +297,65 @@ static void short_write_regressions(void) {
     memcpy(expected_sector, payloads[0], 8U);
     reset_stream();
     corrupt_readback = true;
-    queue_write(2U, payloads[0], 8U, false, RES_ERROR);
+    queue_write(6U, payloads[0], 8U, false, RES_ERROR);
     run_stream();
     CHECK(dst[0] != payloads[0][0]);
     reset_stream();
-    queue_write(2U, payloads[0], 8U, false, RES_OK);
-    queue_read(2U, 8U, payloads[0]);
+    queue_write(6U, payloads[0], 8U, false, RES_OK);
+    queue_read(6U, 8U, payloads[0]);
     run_stream();
     CHECK(memcmp(dst, expected_sector, sizeof expected_sector) == 0);
     puts("PASS R01 readback corruption NAK and verified repair retry");
 
-    for (unsigned block = 488U; block < 512U; ++block) {
+    for (unsigned block = 0U; block < 4U; ++block) {
+        uint8_t *target = (uint8_t *)logical_address(block);
+        uint8_t *sector = (uint8_t *)((uintptr_t)target &
+            ~((uintptr_t)DL_FLASH_SECTOR_SIZE - 1U));
+        for (unsigned failure = 0U; failure < 3U; ++failure) {
+            memset(sector, 0x5a, DL_FLASH_SECTOR_SIZE);
+            reset_stream();
+            fail_next_erase = failure == 0U;
+            fail_next_program = failure == 1U;
+            corrupt_readback = failure == 2U;
+            queue_write(block, payloads[0], 8U, false, RES_ERROR);
+            run_stream();
+            reset_stream();
+            queue_write(block, payloads[0], 8U, false, RES_OK);
+            queue_read(block, 8U, payloads[0]);
+            run_stream();
+            CHECK(memcmp(target, payloads[0], 8U) == 0);
+        }
+    }
+    puts("PASS Config blocks0..3 erase/program/readback failures NAK and repair retry");
+
+    for (unsigned block = 492U; block < 512U; ++block) {
         reset_stream();
         queue_window(1U, RES_OK);
         queue_write(block & 255U, payloads[0], 8U, false, RES_ERROR);
         rejected_stream();
     }
+    for (unsigned block = 492U; block < 512U; ++block) {
+        reset_stream();
+        queue_window(1U, RES_OK);
+        input_val(CMD_READ); input_val((uint8_t)(block & 255U)); input_val(255U);
+        expected_val(RES_ERROR);
+        input_val(CMD_PROBE); expected_val(RES_OK);
+        eligible_application = true;
+        rejected_stream();
+        eligible_application = false;
+    }
+    boot_am13e_test_protected = true;
+    for (unsigned block = 0U; block < 492U; ++block) {
+        reset_stream();
+        queue_window(block >> 8U, RES_OK);
+        queue_write(block & 255U, payloads[0], 8U, false, RES_ERROR);
+        rejected_stream();
+    }
+    boot_am13e_test_protected = false;
+    puts("PASS invalid READ NAK/stay Boot with eligible App; all 492 protected writes: zero Flash calls");
     reset_stream();
     queue_window(1U, RES_OK);
-    queue_write(231U, payloads[0], 8U, true, -1);
+    queue_write(235U, payloads[0], 8U, true, -1);
     input_val(CMD_PROBE); expected_val(RES_OK);
     rejected_stream();
     reset_stream();
@@ -323,7 +372,7 @@ static void short_write_regressions(void) {
         input_bytes(truncated, bytes);
         rejected_stream();
     }
-    puts("PASS R01 blocks 488..511, CRC/count/empty/truncated frames: no Flash calls");
+    puts("PASS R01 blocks 492..511, CRC/count/empty/truncated frames: no Flash calls");
 
     /* Wire count encodes ONLY 4..1024 bytes; zero/nonmultiple/oversize
      * lengths and arbitrary pointers cannot be represented by CMD_WRITE.
@@ -335,7 +384,7 @@ static void short_write_regressions(void) {
     memcpy(snapshot, (const void *)(uintptr_t)MAP_ADDRESS, sizeof snapshot);
     char *address = NULL;
     for (unsigned i = 0U; i < sizeof bad_lengths / sizeof bad_lengths[0]; ++i) {
-        CHECK(!boot_am13e_write_range(487U, bad_lengths[i], &address));
+        CHECK(!boot_am13e_write_range(491U, bad_lengths[i], &address));
         if (bad_lengths[i] != UINT32_MAX)
             CHECK(!boot_am13e_flash_write((char *)dst,
                   (const char *)payloads[0], (int)bad_lengths[i]));
@@ -345,7 +394,7 @@ static void short_write_regressions(void) {
     CHECK(!boot_am13e_write_range(UINT32_MAX, 8U, &address));
     CHECK(!boot_am13e_flash_write((char *)dst, NULL, 8));
     const uintptr_t illegal[] = {
-        MAP_ADDRESS, MAP_ADDRESS + 0x4000U, MAP_ADDRESS + 0x5000U,
+        MAP_ADDRESS, MAP_ADDRESS + 0x3c00U, MAP_ADDRESS + 0x5000U,
         boot_am13e_test_first - 16U, boot_am13e_test_first + 1U,
         boot_am13e_test_first + 16U, boot_am13e_test_end - 16U,
         boot_am13e_test_end, boot_am13e_test_end + 16U
@@ -360,20 +409,20 @@ static void short_write_regressions(void) {
      */
     const uintptr_t saved_end = boot_am13e_test_end;
     boot_am13e_test_end = boot_am13e_test_first + 487U * BLOCK_BYTES + 4U;
-    CHECK(!boot_am13e_write_range(487U, 8U, &address));
+    CHECK(!boot_am13e_write_range(491U, 8U, &address));
     CHECK(!boot_am13e_flash_write((char *)(boot_am13e_test_first + 487U * BLOCK_BYTES),
                                   (const char *)payloads[0], 8));
     boot_am13e_test_end = boot_am13e_test_first + BLOCK_BYTES;
-    CHECK(boot_am13e_write_range(0U, 8U, &address));
+    CHECK(boot_am13e_write_range(4U, 8U, &address));
     CHECK(!boot_am13e_flash_write(address, (const char *)payloads[0], 8));
     boot_am13e_test_end = saved_end;
     const uintptr_t saved_first = boot_am13e_test_first;
     boot_am13e_test_first += 1U;
-    CHECK(!boot_am13e_write_range(0U, 8U, &address));
+    CHECK(!boot_am13e_write_range(4U, 8U, &address));
     boot_am13e_test_first = saved_first;
     CHECK(erases == old_erases && programs == old_programs);
     CHECK(memcmp(snapshot, (const void *)(uintptr_t)MAP_ADDRESS, sizeof snapshot) == 0);
-    puts("PASS R01 length/address/alignment/end/sector guards: Boot/CFG/Reserved unchanged, no Flash calls");
+    puts("PASS R01 length/address/alignment/end/sector guards: Boot/Reserved unchanged, no Flash calls");
     reset_stream();
 }
 
@@ -407,32 +456,32 @@ static void queue_protocol(size_t image_bytes,const uint8_t *image){
 
     queue_window(1U,RES_OK);
     queue_read(0U,16U,probe_upper); /* Effective block256 */
-    queue_read(231U,16U,erased16); /* Last valid block487 */
+    queue_read(235U,16U,erased16); /* Last valid logical block491 */
     queue_window(2U,RES_ERROR);    /* Remain window1 */
     queue_read(0U,16U,probe_upper);
-    queue_write(232U,synthetic,16U,false,RES_ERROR);
-    input_val(CMD_READ);input_val(232U);input_val(3U);
+    queue_write(236U,synthetic,16U,false,RES_ERROR);
+    input_val(CMD_READ);input_val(236U);input_val(3U);expected_val(RES_ERROR);
     input_val(CMD_PROBE);expected_val(RES_OK);
     queue_window(0U,RES_OK);
-    queue_read(0U,16U,erased16);
+    queue_read(4U,16U,erased16);
 
     /* Original Rel17 CMD_WRITE is not a new all-image state machine:
      * arbitrary APP 1KiB blocks are legal, independent of prior
      * CMD_WINDOW selection and of firmware linked size.
      */
-    queue_write(2U,synthetic,16U,false,RES_OK);
-    queue_write(2U,synthetic,16U,false,RES_OK);
-    queue_read(2U,16U,synthetic);
-    queue_write(2U,synthetic,16U,true,-1); /* Bad wire CRC: no Flash */
-    queue_read(2U,16U,synthetic);
+    queue_write(6U,synthetic,16U,false,RES_OK);
+    queue_write(6U,synthetic,16U,false,RES_OK);
+    queue_read(6U,16U,synthetic);
+    queue_write(6U,synthetic,16U,true,-1); /* Bad wire CRC: no Flash */
+    queue_read(6U,16U,synthetic);
 
     /* Old host's invalidation frames are still ordinary FF writes. */
-    queue_write(0U,erased,8U,false,RES_OK);
-    queue_write(1U,erased,8U,false,RES_OK);
+    queue_write(4U,erased,8U,false,RES_OK);
+    queue_write(5U,erased,8U,false,RES_OK);
 
     unsigned window=0U;
     for(size_t offset=0U;offset<image_bytes;offset+=BLOCK_BYTES){
-        const unsigned absolute=(unsigned)(offset/BLOCK_BYTES);
+        const unsigned absolute=4U+(unsigned)(offset/BLOCK_BYTES);
         if((absolute>>8U)!=window){
             window=absolute>>8U;
             queue_window(window,RES_OK);
@@ -440,7 +489,7 @@ static void queue_protocol(size_t image_bytes,const uint8_t *image){
         unsigned n=(unsigned)((image_bytes-offset>BLOCK_BYTES)?
                                BLOCK_BYTES:image_bytes-offset);
         queue_write(absolute&255U,image+offset,n,false,RES_OK);
-        if(absolute==0U)queue_write(0U,image,n,false,RES_OK);
+        if(absolute==4U)queue_write(4U,image,n,false,RES_OK);
     }
     if(window)queue_window(0U,RES_OK);
     /* Short ELF-link smoke binaries can be smaller than the 32-byte
@@ -452,7 +501,7 @@ static void queue_protocol(size_t image_bytes,const uint8_t *image){
     const size_t available=image_bytes<sizeof first32?
                            image_bytes:sizeof first32;
     memcpy(first32,image,available);
-    queue_read(0U,32U,first32);
+    queue_read(4U,32U,first32);
     /* Original CRC frames and per-block ACKs now reach a bounded SRAM
      * stage. Always reject final Boot update: Bank0 erase is DISABLED.
      */
@@ -523,7 +572,7 @@ int main(int argc, char **argv) {
     memset((void *)(uintptr_t)(MAP_ADDRESS+0x4000U),0x43,0x1000U);
     *(uint16_t *)(uintptr_t)(MAP_ADDRESS+0x4000U)=AM13E_BOOT_CFG_ID;
     memset((void *)(uintptr_t)(MAP_ADDRESS+0x5000U),0x44,0x1000U);
-    memset((void *)(uintptr_t)(boot_am13e_test_first+256U*1024U),0xa5,16U);
+    memset((void *)(uintptr_t)(logical_address(256U)),0xa5,16U);
     boot_am13e_test_reset_update_state();
 
     queue_protocol(image_length, image);
@@ -547,7 +596,7 @@ int main(int argc, char **argv) {
         CHECK(false && "framed Boot reply mismatch");
     }
     puts("PASS CMD_PROBE/INFO 32byte, complements and CRC32 wire framing");
-    puts("PASS CMD_WINDOW0/1 and 488KiB APP physical bounds");
+    puts("PASS CMD_WINDOW0/1: 4KiB Config prefix + max488KiB APP, Reserved skipped");
     puts("PASS original random/duplicate/short CMD_WRITE, no signature gate");
     CHECK(erases>=1U && programs>=1U);
     CHECK(memcmp((const void *)boot_am13e_test_first,image,

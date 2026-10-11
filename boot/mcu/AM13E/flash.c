@@ -31,6 +31,28 @@ extern char __boot_storage_end__[];
 static uint8_t sector_image[AM13E_FLASH_ERASE_SECTOR]
     __attribute__((aligned(16)));
 
+/* Do not infer static WRP from the temporary CMDWEPROT registers,
+ * which DriverLib intentionally unprotects. The SDK exposes latched
+ * GSC attributes, but the documented page granularities conflict.
+ * Until silicon-qualified, conservatively reject a bank with ANY
+ * static MAIN protection. This is deliberately stricter than the
+ * desired Boot-only mode; SETWRP qualification remains blocked.
+ */
+#ifdef AM13E_FLASH_TEST
+bool boot_am13e_test_protected;
+#endif
+static bool bank_writable(uintptr_t address)
+{
+#ifdef AM13E_FLASH_TEST
+    (void)address;
+    return !boot_am13e_test_protected;
+#else
+    return address < UINT32_C(0x40000) ?
+        !(GSC->FPC_WEPROTA0 || (GSC->FPC_WEPROTB0 & UINT32_C(0xfff0))) :
+        !(GSC->FPC_WEPROTA1 || (GSC->FPC_WEPROTB1 & UINT32_C(0xfff0)));
+#endif
+}
+
 /* On AM13E this function and the entire Flash Controller busy path are
  * placed in SRAM_C; linker and MAP checks verify DriverLib placement.
  * Do NOT access or execute code from the affected Flash bank while busy.
@@ -59,15 +81,20 @@ static uint32_t flash_commit(uint32_t address,uint8_t *data)
 #endif
 int AM13E_WRITE_ENTRY(char *dst,const char *source,int length)
 {
-    const uintptr_t first=APP_FIRST,end=APP_END,addr=(uintptr_t)dst;
+    const uintptr_t app=APP_FIRST,addr=(uintptr_t)dst;
+    if(app<AM13E_FLASH_APP_BASE-AM13E_FLASH_FW1_PARAM_BASE)return 0;
+    const uintptr_t cfg=app-(AM13E_FLASH_APP_BASE-AM13E_FLASH_FW1_PARAM_BASE);
+    const bool config=addr>=cfg && addr<cfg+AM13E_FLASH_CFG_BLOCKS*1024U;
+    const uintptr_t first=config?cfg:app;
+    const uintptr_t end=config?cfg+AM13E_FLASH_CFG_BLOCKS*1024U:APP_END;
     if(!source || length<=0 || length>(int)AM13E_FLASH_LOGICAL_BLOCK ||
        (length&3) || first>=end
 #ifndef AM13E_FLASH_TEST
-       || first!=AM13E_FLASH_APP_BASE || end!=AM13E_FLASH_APP_END
+       || app!=AM13E_FLASH_APP_BASE || APP_END!=AM13E_FLASH_APP_END
 #endif
        || addr<first || addr>=end || (addr&15U) ||
        ((addr-first)%AM13E_FLASH_LOGICAL_BLOCK)!=0U ||
-       (unsigned)length>end-addr)
+       (unsigned)length>end-addr || !bank_writable(addr))
         return 0;
     const uintptr_t sector=addr&
         ~((uintptr_t)AM13E_FLASH_ERASE_SECTOR-1U);

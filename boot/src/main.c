@@ -26,7 +26,7 @@
 #define CMD_UPDATE 4
 #define CMD_SETWRP 5
 #if defined(AM13E)
-#define CMD_WINDOW 6 /* Rel17 v1.4: 2 windows of 256 logical 1KiB blocks */
+#define CMD_WINDOW 6 /* Rev1.6: Config-prefix stream, 492 logical 1KiB blocks */
 #include "../../mcu/AM13E/flash_partition.h"
 #include "update_staging.h"
 #include "update_commit.h"
@@ -47,7 +47,7 @@ void main(void) {
 #endif
 #if defined(AM13E)
     /* Boot entry/reboot session always begins at legacy window 0.
-     * Old CMD_READ/WRITE clients remain binary compatible up to 256KiB.
+     * Host packaging must account for the new 4KiB Config prefix.
      */
     unsigned app_window=0U;
 #endif
@@ -95,11 +95,13 @@ void main(void) {
 				const void *read_addr = 0;
                 const unsigned read_len=(unsigned)(cnt+1)<<2;
                 const unsigned block=(app_window<<8U)|(unsigned)num;
-                /* Invalid READ has no rel17 error data frame; abort
-                 * current command instead of sending ambiguous bytes.
+                /* Rev1.6 invalid READ sends a value error and stays in
+                 * programming mode, even with an eligible Application.
                  */
-                if (!boot_am13e_read_range(block,read_len,&read_addr))
-                    goto done;
+                if (!boot_am13e_read_range(block,read_len,&read_addr)) {
+                    sendval(RES_ERROR);
+                    break;
+                }
 				senddata(read_addr, (int)read_len);
 #else
 				senddata(_rom_end + (num << 10), (cnt + 1) << 2);

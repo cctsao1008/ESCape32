@@ -21,6 +21,8 @@ APP_END=0x80000
 CFG_ID_ADDR=0x4000
 MAX_LENGTH=APP_END-APP_BASE
 TRANSPORT_ALIGN=4
+CFG_LENGTH=4096
+APP_FIRST_BLOCK=4
 
 class ImageError(ValueError):
     """Invalid flat Rel17 AM13E application image."""
@@ -44,6 +46,32 @@ def pack(raw:bytes)->bytes:
     if len(raw)+pad>MAX_LENGTH:
         raise ImageError("4-byte transport padding exceeds APP allocation")
     return raw+b"\xff"*pad
+
+def programming_blocks(app:bytes, config:bytes|None=None,
+                       *, authorize_config:bool=False):
+    """Yield original CMD_WRITE block/payload pairs; APP-only by default.
+
+    Config comes from an explicit host-owned snapshot/image. Never infer
+    defaults or fill persistent Config with FF during an ordinary update.
+    CMD_WINDOW is selected by block >> 8; wire block is block & 255.
+    """
+    app=pack(app)
+    if config is not None:
+        if not authorize_config or len(config)!=CFG_LENGTH:
+            raise ImageError("Config programming requires explicit authorization and exactly 4096 bytes")
+        stream=config+app
+        first=0
+    else:
+        if authorize_config:
+            raise ImageError("Config authorization requires an explicit Config image")
+        stream=app
+        first=APP_FIRST_BLOCK
+    for offset in range(0,len(stream),1024):
+        yield first+offset//1024,stream[offset:offset+1024]
+
+def config_app_stream(config:bytes, app:bytes, *, authorize_config:bool=False)->bytes:
+    return b"".join(data for _,data in programming_blocks(
+        app,config,authorize_config=authorize_config))
 
 def verify(image:bytes)->dict[str,int|str]:
     if len(image)>MAX_LENGTH or len(image)%TRANSPORT_ALIGN:
@@ -69,6 +97,11 @@ def main()->int:
     pk.add_argument("--manifest",type=Path)
     vr=sub.add_parser("verify",help="Check flat transport bounds and M33 vectors")
     vr.add_argument("image",type=Path)
+    st=sub.add_parser("stream",help="Explicit Config+APP logical stream; never an APP-linked binary")
+    st.add_argument("raw",type=Path)
+    st.add_argument("output",type=Path)
+    st.add_argument("--config",type=Path,required=True)
+    st.add_argument("--authorize-config",action="store_true")
     a=p.parse_args()
     try:
         if a.op=="pack":
@@ -82,6 +115,15 @@ def main()->int:
             meta["padding_bytes"]=len(image)-len(raw)
             if a.manifest:
                 a.manifest.write_text(json.dumps(meta,indent=2)+"\n")
+        elif a.op=="stream":
+            if a.output.resolve() in (a.raw.resolve(),a.config.resolve()):
+                raise ImageError("Source and output paths must differ")
+            image=config_app_stream(a.config.read_bytes(),a.raw.read_bytes(),
+                                    authorize_config=a.authorize_config)
+            a.output.write_bytes(image)
+            meta={"contract":"Rev1.6 explicitly authorized Config+APP logical stream",
+                  "config_bytes":CFG_LENGTH,"app_bytes":len(image)-CFG_LENGTH,
+                  "stream_bytes":len(image),"reserved_bytes":0}
         else:meta=verify(a.image.read_bytes())
         print(json.dumps(meta,indent=2))
         return 0
