@@ -1,11 +1,16 @@
 /* Native TI AM13E UNICOMM IRQ/FIFO RX for Rel17 input_mode 3/4/5.
  * Reference has no assigned UART, so this implementation is selected
  * ONLY by explicit AM13E_BOARD_SERIAL_RX_CONFIGURED board definitions.
- * No DMA/telemetry TX/SBUS2 slot behavior is claimed in this stage.
+ * Optional board-selected 2-wire CRSF command TX uses UNICOMM FIFO,
+ * TX interrupt and EOT; NO DMA, single-wire half-duplex bus, SBUS2
+ * slot timing or verified physical pin mapping is implied.
  */
 #include "serial_uart_rx.h"
 #ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
 #include "serial_frame_rx.h"
+#ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
+#include "serial_tx_queue.h"
+#endif
 #include "io_backend.h"
 #include "board_reference_io.h"
 #include "board_configuration.h"
@@ -55,6 +60,21 @@ _Static_assert(AM13E_BOARD_SERIAL_RX_PINCM!=IOMUX_PINCM_PB14 &&
                 AM13E_BOARD_SERIAL_RX_PINCM!=AM13E_BOARD_CURRENT_SENSE_PINCM),
                "Native serial RX pin conflicts with board-reserved IO");
 
+#ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
+#if AM13E_BOARD_SERIAL_TX_CONFIGURED != 1 || \
+    !defined(AM13E_BOARD_SERIAL_TX_PIN_FUNCTION) || \
+    !defined(AM13E_BOARD_SERIAL_TX_TWO_WIRE)
+#error "CRSF TX requires explicit TX pin function and 2-wire board topology"
+#endif
+_Static_assert(AM13E_BOARD_SERIAL_TX_TWO_WIRE==1U &&
+               AM13E_BOARD_SERIAL_TX_PINCM>0U &&
+               AM13E_BOARD_SERIAL_TX_PINCM<64U &&
+               AM13E_BOARD_SERIAL_TX_PIN_FUNCTION>0U &&
+               AM13E_BOARD_SERIAL_TX_PIN_FUNCTION<8U &&
+               AM13E_BOARD_SERIAL_TX_PINCM!=AM13E_BOARD_SERIAL_RX_PINCM,
+               "CRSF TX must own a distinct board-assigned two-wire pin");
+#endif
+
 #if AM13E_BOARD_SERIAL_RX_UC_INDEX==0
 #define RX_UC UC0_INST_PTR
 #define RX_IRQ UC0_INT_IRQn
@@ -97,6 +117,37 @@ _Static_assert(AM13E_BOARD_SERIAL_RX_PINCM!=IOMUX_PINCM_PB14 &&
                        DL_UART_INTERRUPT_NOISE_ERROR)
 static AM13E_SerialFrameRx rx_state;
 static unsigned initialized;
+#ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
+static AM13E_SerialTxQueue crsf_tx;
+static bool crsf_tx_available;
+
+/* Called solely from this UNICOMM IRQ. Nonblocking, single-packet
+ * transaction: queue copy finishes before TX IRQ can drain it.
+ */
+static void crsf_tx_fill_fifo(void)
+{
+    for(unsigned budget=0U;budget<AM13E_SERIAL_TX_MAX;++budget){
+        if(DL_UART_isTXFIFOFull(RX_UC))break;
+        uint8_t b;
+        if(!am13e_serial_tx_queue_next(&crsf_tx,&b))break;
+        DL_UART_transmitData(RX_UC,b);
+    }
+    if(am13e_serial_tx_queue_waiting_eot(&crsf_tx))
+        DL_UART_disableInterrupt(RX_UC,DL_UART_INTERRUPT_TX);
+}
+static void crsf_tx_start(const uint8_t *p,unsigned n)
+{
+    if(!crsf_tx_available ||
+       !am13e_serial_tx_queue_begin(&crsf_tx,p,n))return;
+    DL_UART_clearInterruptStatus(RX_UC,
+                                 DL_UART_INTERRUPT_TX |
+                                 DL_UART_INTERRUPT_EOT_DONE);
+    DL_UART_enableInterrupt(RX_UC,DL_UART_INTERRUPT_EOT_DONE);
+    crsf_tx_fill_fifo();
+    if(!am13e_serial_tx_queue_waiting_eot(&crsf_tx))
+        DL_UART_enableInterrupt(RX_UC,DL_UART_INTERRUPT_TX);
+}
+#endif
 
 void RX_HANDLER(void);
 
@@ -126,9 +177,29 @@ bool am13e_app_serial_rx_init(unsigned mode)
         .divideRatio=DL_UART_CLOCK_DIVIDE_RATIO_1
     };
     DL_UART_setClockConfig(RX_UC,&clk);
+    DL_UART_DIRECTION direction=DL_UART_DIRECTION_RX;
+#ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
+    if(mode==5U) {
+        /* Separate, board-reviewed 2-wire full-duplex TX/RX only.
+         * Single-wire CRSF turnaround is NOT supported here.
+         * Earlier initgpio() left the TX reservation Hi-Z.
+         */
+        DL_GPIO_initPeripheralOutputFunction(
+            AM13E_BOARD_SERIAL_TX_PINCM,
+            AM13E_BOARD_SERIAL_TX_PIN_FUNCTION);
+        if(!DL_GPIO_isPeripheralConnected(
+                 AM13E_BOARD_SERIAL_TX_PINCM)||
+           DL_GPIO_getPeripheralFunctionBits(
+                 AM13E_BOARD_SERIAL_TX_PINCM)!=
+                 AM13E_BOARD_SERIAL_TX_PIN_FUNCTION)
+            return false;
+        direction=DL_UART_DIRECTION_TX_RX;
+        crsf_tx_available=true;
+    }
+#endif
     DL_UART_Config config={
         .mode=DL_UART_MODE_NORMAL,
-        .direction=DL_UART_DIRECTION_RX,
+        .direction=direction,
         .flowControl=DL_UART_FLOW_CONTROL_NONE,
         .parity=mode==4U ? DL_UART_PARITY_EVEN : DL_UART_PARITY_NONE,
         .wordLength=DL_UART_WORD_LENGTH_8_BITS,
@@ -141,6 +212,11 @@ bool am13e_app_serial_rx_init(unsigned mode)
                            mode==5U?416666U:115200U);
     DL_UART_enableFIFOs(RX_UC);
     DL_UART_setRXFIFOThreshold(RX_UC,DL_UART_RX_FIFO_LEVEL_NOT_EMPTY);
+#ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
+    if(crsf_tx_available)
+        DL_UART_setTXFIFOThreshold(RX_UC,
+                                   DL_UART_TX_FIFO_LEVEL_NOT_FULL);
+#endif
     am13e_serial_frame_init(&rx_state,mode);
     DL_UART_clearInterruptStatus(RX_UC,
                   DL_UART_INTERRUPT_RX|RX_IRQ_ERRORS);
@@ -173,6 +249,23 @@ void RX_HANDLER(void)
      */
     for(unsigned budget=0U;budget<64U;++budget){
         const DL_UART_IIDX reason=DL_UART_getPendingInterrupt(RX_UC);
+#ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
+        if(crsf_tx_available && reason==DL_UART_IIDX_EOT_DONE){
+            /* Shift register finished, not merely FIFO-filled. */
+            if(!am13e_serial_tx_queue_waiting_eot(&crsf_tx)){
+                __disable_irq();
+                for(;;){__NOP();}
+            }
+            DL_UART_disableInterrupt(RX_UC,
+                DL_UART_INTERRUPT_EOT_DONE|DL_UART_INTERRUPT_TX);
+            am13e_serial_tx_queue_eot(&crsf_tx);
+            continue;
+        }
+        if(crsf_tx_available && reason==DL_UART_IIDX_TX){
+            crsf_tx_fill_fifo();
+            continue;
+        }
+#endif
         if(reason==DL_UART_IIDX_NO_INTERRUPT &&
            DL_UART_isRXFIFOEmpty(RX_UC))break;
         if(reason==DL_UART_IIDX_OVERRUN_ERROR ||
@@ -198,8 +291,19 @@ void RX_HANDLER(void)
                 (void)am13e_app_io_ibus_frame(bytes,len);
             else if(rx_state.mode==4U)
                 (void)am13e_app_io_sbus_frame(bytes,len);
-            else
-                (void)am13e_app_io_crsf_frame(bytes,len);
+            else {
+                const int valid=am13e_app_io_crsf_frame(bytes,len);
+#ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
+                if(valid && crsf_tx_available){
+                    uint8_t reply[AM13E_SERIAL_TX_MAX];
+                    const unsigned n=am13e_app_io_crsf_reply(
+                        bytes,len,reply,sizeof reply);
+                    if(n)crsf_tx_start(reply,n);
+                }
+#else
+                (void)valid;
+#endif
+            }
         }
     }
 }
