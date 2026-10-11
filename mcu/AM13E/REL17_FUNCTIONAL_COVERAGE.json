@@ -241,11 +241,13 @@
         "mcu/AM13E/exbus_receiver.c",
         "mcu/AM13E/serial_frame_rx.c",
         "mcu/AM13E/serial_uart_rx.c",
-        "src/io.c"
+        "src/io.c",
+        "mcu/AM13E/exbus_autobaud.c"
       ],
       "host_tests": [
         "exbus_receiver",
-        "serial_frames"
+        "serial_frames",
+        "exbus_autobaud"
       ]
     },
     {

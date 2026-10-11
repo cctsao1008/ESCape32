@@ -21,6 +21,7 @@
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/sbus_receiver.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/crsf_receiver.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/exbus_receiver.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/exbus_autobaud.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hott_receiver.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/crsf_command_reply.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/crsf_deferred_command.c"
