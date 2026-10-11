@@ -218,17 +218,20 @@
     },
     {
       "id": "crsf_command_tx_conditional",
-      "label": "Original Rel17 execcrsfcmd() with bounded CRSF reply and 2-wire UNICOMM TX FIFO/EOT (synthetic ARM link only)",
+      "label": "Original Rel17 execcrsfcmd() in preemptible PendSV with bounded UART IRQ mailbox, 2-wire UNICOMM FIFO/EOT (synthetic ARM only)",
       "sources": [
         "mcu/AM13E/crsf_command_reply.c",
         "mcu/AM13E/serial_tx_queue.c",
         "mcu/AM13E/serial_uart_rx.c",
         "src/io.c",
-        "src/prog.c"
+        "src/prog.c",
+        "mcu/AM13E/crsf_deferred_command.c",
+        "mcu/AM13E/irq_vectors.c"
       ],
       "host_tests": [
         "crsf_command_reply",
-        "serial_tx_queue"
+        "serial_tx_queue",
+        "crsf_deferred_command"
       ]
     },
     {

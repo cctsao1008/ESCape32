@@ -652,7 +652,9 @@ int am13e_app_io_exbus_frame(const uint8_t *frame,unsigned length)
 }
 /* Rel17 crsffunc() refreshes WWDT for CRC-valid CRSF frames, and
  * changes throttle/brake only for channel data (type 0x16).
- * 0x28/0x2c/0x2d telemetry command TX is a separate pending gap.
+ * The optional two-wire 0x28/0x2c/0x2d reply is executed in
+ * preemptible PendSV, NOT in the UNICOMM RX IRQ; its electrical
+ * bus ownership and physical timing remain unqualified.
  */
 unsigned am13e_app_io_crsf_reply(const uint8_t *frame,unsigned length,
                                  uint8_t *reply,unsigned capacity)

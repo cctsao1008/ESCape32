@@ -123,8 +123,8 @@ static AM13E_SerialTxQueue crsf_tx;
 static AM13E_CrsfDeferredCommand crsf_cmd;
 static bool crsf_tx_available;
 
-/* Called solely from this UNICOMM IRQ. Nonblocking, single-packet
- * transaction: queue copy finishes before TX IRQ can drain it.
+/* Original CRSF command execution is deferred to PendSV.
+ * Queue writes begin from PendSV, while TX/EOT drain in UART IRQ.
  */
 /* PendSV calls this worker; both worker and UART IRQ use
  * the same bounded TX queue owned by this UNICOMM instance.
