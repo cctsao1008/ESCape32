@@ -112,7 +112,7 @@ all 22 reported steps SUCCESS.
 
 ## Conditional PARK/ERPM and shared motor traces
 
-Requirements APP-M01/M04/M08/M17, APP-I19/I21, SYS-10:
+Requirements APP-M01/M04/M08/M17, APP-I18, SYS-10:
 **SOURCE IMPLEMENTED / SOFTWARE VERIFIED** for original shared parking state
 and ERPM source-event integration. `PARK_PIN`/`ERPM_PIN` remain original feature
 selectors. Selection now requires separate explicit TI GPIO/mask/PINCM routing;
@@ -144,6 +144,36 @@ the new production integration seams, while retaining every prior safety check.
 Production-CRC milestone CI: run 38155597463, exact HEAD
 `39d3c6e64aef90f0df8fa85104030cad96b6c689`, job `fw1-build-evidence` SUCCESS,
 all 22 reported steps SUCCESS.
+
+## Final local convergence replay
+
+At firmware HEAD `20d3a10a9b19d466f98038c66d53791d9f176d92`, all 67 emitted
+native Host PASS groups succeed (60 baseline groups plus seven additions).
+Startup, smoke and full-image CTest suites each pass 11/11. Replayed gates:
+image-profile positive/negative; all FW1 objects and historical strict diagnostic
+link (configure/object/link return codes all zero); portable/backends/clock;
+smoke and full flat images; Boot strict link; linked-image/layout;
+Reference IO conflicts; selected UART/CRSF+CLI/EXBUS/telemetry ARM links;
+functional coverage; original-document/ABI audit; strengthened source-scope
+audit. Added PARK/ERPM profile links and five routing negatives pass. Six Boot
+recovery-negative combinations pass. The fully recovery-qualified synthetic
+positive Boot fixture is deliberately not enabled locally; existing CI retains
+that fixture, which does not demonstrate hardware recovery.
+
+PARK/ERPM milestone CI: run 38156533297, exact HEAD above,
+job `fw1-build-evidence` SUCCESS, all 23 reported steps SUCCESS. All five
+firmware/test milestones were published through normal non-force pushes with
+matching successful CI; local platform branch remains `work`.
+
+`CONVERGENCE_REQUIREMENTS.csv` covers all 73 original APP/BOOT/SYS IDs. It
+retains clearly labeled historical audit evidence and lists current bounded
+implementation/test deltas and remaining gaps. No row claims hardware
+qualification. A source-scope/document PASS is traceability, not complete parity.
+The pipeline still selects its Git SDK comparison and action-installed compiler;
+official release provenance is established by the separate local validation.
+Full legacy-platform builds and complete original command/main-loop regression
+remain unexecuted. SDK-source compatibility corrections remain generated outside
+the repository/installed SDK, as in the existing build infrastructure.
 
 ## Production Boot CRC framing coverage
 
