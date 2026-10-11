@@ -561,6 +561,10 @@ void am13e_app_io_servo_pulse(unsigned int pulse_us) {
         setthrot((int)pulse_us);
     }
 }
+unsigned am13e_app_io_input_mode(void)
+{
+    return (unsigned)(uint8_t)cfg.input_mode;
+}
 /* Native UART RX callback for complete original Rel17 iBUS packet.
  * No UART pinmux is automatically selected by the PB14 Reference.
  * Only a valid checksum in original input_mode=3 may refresh WWDT.

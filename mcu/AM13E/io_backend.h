@@ -55,6 +55,10 @@ int am13e_app_io_ibus_frame(const uint8_t *frame,unsigned length);
  * SBUS2 telemetry request/slot scheduling is a separate MCU gap.
  */
 int am13e_app_io_sbus_frame(const uint8_t *frame,unsigned length);
+/* Read original Rel17 cfg.input_mode from src/io.c, avoiding
+ * duplicate shared/MCU platform declarations in native IRQ modules.
+ */
+unsigned am13e_app_io_input_mode(void);
 int am13e_app_io_cli_line(char *line);
 
 /* Must be implemented by the AM13E board backend. */

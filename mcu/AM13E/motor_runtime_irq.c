@@ -20,7 +20,7 @@
 #include "command_capture.h"
 #include "command_reply.h"
 #include "serial_uart_rx.h"
-#include "common.h" /* original Rel17 cfg.input_mode / Cfg declaration */
+/* Input mode is queried through original io.c policy owner. */
 #include "clock_backend.h"
 #include <soc.h>
 #include <dl_mcpwm.h>
@@ -88,7 +88,7 @@ void am13e_app_motor_runtime_enable_interrupts(void)
         irq_barrier_fault();
 
 #ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
-    if((cfg.input_mode==3||cfg.input_mode==4) &&
+    if((am13e_app_io_input_mode()==3||am13e_app_io_input_mode()==4) &&
        !am13e_app_serial_rx_irq_ready())
         irq_barrier_fault();
 #endif
