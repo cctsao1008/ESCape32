@@ -49,7 +49,11 @@ int main(void)
         assert(p[10]==0xcdU&&p[11]==0xabU);
         assert(p[13]==i);
         assert(c16((const char *)p,(int)n)==0U);
-        assert(c8((const char *)p+7,(int)n-10)==0U);
+        /* Original exbusresp covers n-10 bytes to FORM the
+         * CRC, then appends it at n-3; including CRC has residue 0.
+         */
+        assert(p[n-3U]==c8((const char *)p+7,(int)n-10));
+        assert(c8((const char *)p+7,(int)n-9)==0U);
         assert(state.description_index==i+1U);
     }
     for(unsigned j=0U;j<32U;++j){
