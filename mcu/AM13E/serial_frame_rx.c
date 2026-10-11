@@ -61,7 +61,7 @@ bool am13e_serial_frame_byte(AM13E_SerialFrameRx *rx,uint8_t b,
          * not require a fixed start address: idle-framed packets
          * must be synchronized by the board transport.
          */
-        if(b<8U||b>AM13E_SERIAL_MAX_FRAME){
+        if(b<8U||b>64U){
             am13e_serial_frame_abort(rx);
             return false;
         }
