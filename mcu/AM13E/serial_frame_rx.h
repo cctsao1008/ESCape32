@@ -4,7 +4,7 @@
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
-#define AM13E_SERIAL_MAX_FRAME 64U
+#define AM13E_SERIAL_MAX_FRAME 256U /* original serial length is uint8_t */
 typedef struct {
     uint8_t bytes[AM13E_SERIAL_MAX_FRAME];
     unsigned used;

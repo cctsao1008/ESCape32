@@ -24,6 +24,7 @@
 #include "ibus_receiver.h" /* Native frame inspection uses original iBUS semantics */
 #include "sbus_receiver.h" /* Packed 11-bit SBUS channel extraction */
 #include "crsf_receiver.h" /* Original CRSF CRC8-DVB-S2 channel RX */
+#include "serial_command.h" /* Original binary serialfunc commands */
 #include "exbus_receiver.h" /* Original EXBUS CRC16 and channel semantics */
 #include "exbus_telemetry_reply.h" /* Preserve original exbusresp fields */
 #include "hott_receiver.h" /* Original HoTT/SUMDv1/SUMDv3 and XMODEM CRC */
@@ -569,6 +570,36 @@ void am13e_app_io_servo_pulse(unsigned int pulse_us) {
 unsigned am13e_app_io_input_mode(void)
 {
     return (unsigned)(uint8_t)cfg.input_mode;
+}
+/* Original Rel17 input_mode=2 binary Serial Command. The stateful
+ * policy variables remain those owned by the upstream shared io.c.
+ * No fake LED GPIO support is introduced by this native adapter.
+ */
+int am13e_app_io_serial_frame(const uint8_t *frame,unsigned length,
+                              uint8_t *reply,unsigned reply_capacity,
+                              unsigned *reply_length)
+{
+    if(cfg.input_mode!=2)return 0;
+    AM13E_SerialCommandState s={
+        .throttle=throt,.brake=brake,.auxup=auxup,
+        .flipdir=flipdir,.led=cfg.led,.duty_drag=cfg.duty_drag,
+        .temp1=temp1,.temp2=temp2,.volt=volt,.curr=curr,
+        .csum=csum,.ertm=ertm,
+#ifdef LED_CNT
+        .led_count=LED_CNT
+#else
+        .led_count=0
+#endif
+    };
+    if(!am13e_serial_command(frame,length,&s,reply,reply_capacity,
+                             reply_length,crc8))return 0;
+    am13e_app_io_watchdog_feed();
+    throt=s.throttle;break=s.brake;auxup=s.auxup;
+    flipdir=s.flipdir;
+#ifdef LED_CNT
+    cfg.led=s.led;
+#endif
+    return 1;
 }
 /* Native UART RX callback for complete original Rel17 iBUS packet.
  * No UART pinmux is automatically selected by the PB14 Reference.

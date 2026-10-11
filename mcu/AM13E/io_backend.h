@@ -55,6 +55,12 @@ int am13e_app_io_ibus_frame(const uint8_t *frame,unsigned length);
  * SBUS2 telemetry request/slot scheduling is a separate MCU gap.
  */
 int am13e_app_io_sbus_frame(const uint8_t *frame,unsigned length);
+/* Original input_mode=2 binary serial control (not text CLI).
+ * Return 1 only if wire CRC accepted; 0/4/12 response bytes.
+ */
+int am13e_app_io_serial_frame(const uint8_t *frame,unsigned length,
+                              uint8_t *reply,unsigned reply_capacity,
+                              unsigned *reply_length);
 /* Original CRSF input_mode=5. Valid CRC refreshes WWDT; type 0x16
  * updates original throttle/brake. Command response TX still missing.
  */
