@@ -594,7 +594,7 @@ int am13e_app_io_serial_frame(const uint8_t *frame,unsigned length,
     if(!am13e_serial_command(frame,length,&s,reply,reply_capacity,
                              reply_length,crc8))return 0;
     am13e_app_io_watchdog_feed();
-    throt=s.throttle;break=s.brake;auxup=s.auxup;
+    throt=s.throttle;brake=s.brake;auxup=s.auxup;
     flipdir=s.flipdir;
 #ifdef LED_CNT
     cfg.led=s.led;
