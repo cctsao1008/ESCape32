@@ -45,7 +45,10 @@ def main():
                  "service_handoff","servo_source","servo_trim_source",
                  "cli_entry","park_source","aux_wrong_port","aux_serial_conflict",
                  "config_command_source","receiver_config_default",
-                 "receiver_config_serial","receiver_config_disabled"):
+                 "receiver_config_serial","receiver_config_disabled",
+                 "led_source","led_inverted_source","led_four_source",
+                 "led_wrong_port","led_serial_conflict","led_erpm_conflict",
+                 "aux_led_conflict"):
         check(re.search(r"(?m)^PASS: "+test+r"\s*$",host),
               "Missing Native regression PASS: "+test)
 
@@ -233,7 +236,7 @@ def main():
         "conditional_adapters_pending":[
             "complete_source_input_discovery","TI_supported_servo_clock_trim",
             "serial_telemetry_half_duplex_and_SBUS2_scheduler",
-            "Hall_hybrid","LED_BEC_WS2812",
+            "Hall_hybrid","LED_open_drain_BEC_WS2812",
             "current_limit_board_adapter_unqualified"],
         "convergence_production_host_verified":[
             "service_reset_order_and_Boot_quiescence",
@@ -242,7 +245,10 @@ def main():
             "conditional_HIGH_CLI_entry_policy",
             "shared_park_and_nextstep_ERPM_policy",
             "native_auxiliary_GPIO_negative_guards",
-            "production_Boot_CRC_adapter_with_CRCP_model"],
+            "production_Boot_CRC_adapter_with_CRCP_model",
+            "DShot_deferred_Reset_Save_and_source_CLI_CRSF_config",
+            "selected_config_to_native_receiver_callbacks",
+            "discrete_LED_DShot_PendSV_GPIO_and_ownership_guards"],
         "boot_abi":"RESOLVED_REL17_V14_CFG_ID_AND_APP_VECTOR",
         "app_image":"FLAT_ELF_DERIVED_VARIABLE_SIZE_MAX_488KIB",
         "torn_update_risk":"Valid Cfg plus vectors may boot incomplete later code",

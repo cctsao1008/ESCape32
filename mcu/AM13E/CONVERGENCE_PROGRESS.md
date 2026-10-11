@@ -267,3 +267,46 @@ Official default/selected Application and Boot links, 11 startup CTests,
 smoke/full suites, complete native block, six recovery negatives, all existing
 profile links/audits and all 52 legacy links PASS in the current milestone replay.
 Original legacy checkcfg branches and immutable Rev1.4 documents remain intact.
+
+## Round 2: conditional discrete LED production backend
+
+Receiver milestone published as `0c6f4e55817b4296f1e8a36257d96725980d862c`,
+matching GitHub Actions run 38160396948 / job 114531896510: SUCCESS, all 23 steps.
+
+Native `aux_gpio.c` now provides original `initled()` / `ledctl(int)` hooks
+when upstream LED_MAP selects 1..4 discrete push-pull LEDs. Every selected
+LED requires independent TI GPIO/mask/PINCM definitions. The original count,
+logical bit and LED1..4_INV policies are retained; global LED_INV applies to
+the first three LEDs exactly as upstream. Default Reference selects no LED.
+All routes validate before output setup; inactive latches and GPIO muxes are
+established before any LED output enable. Initialization requires masked IRQs
+and refuses repeated calls; ledctl refuses use before initialization. Native
+reservations, GPIO/bit/PINCM agreement, selected serial/telemetry/analog,
+PARK/ERPM and inter-LED conflicts are rejected. Auxiliary initialization also
+rejects a LED-owned pin before enabling ERPM, regardless of initialization order.
+
+`led_source`, `led_inverted_source`, `led_four_source` link actual main.c and
+io.c with the native GPIO implementation, mocked TI/CMSIS boundaries only.
+They execute real DShot LED commands, source PendSV 1kHz divider, status
+fallback/config override and shutdown-before-fault-indication ordering. All
+16 bit patterns, inactive-before-enable, individual/global inversion, 3/4
+LED counts, stopped-motor command policy and repeated/uninitialized refusal
+are tested. Wrong GPIO port, selected UART owner, LED/ERPM conflicts in both
+initialization directions cause zero output-enable calls. Two nonflash ARM
+profiles link the real hooks. Six compile negatives reject missing routes,
+reserved gate pad, mismatched bit mask, duplicate routes, open-drain and WS2812.
+
+**SOFTWARE INCOMPLETE**: open-drain and WS2812 native electrical/timer backends
+remain absent and selection fails clearly rather than pretending push-pull
+provides their semantics. **HARDWARE PENDING**: actual pad assignment, external
+resistor/voltage/current/load and GPIO polarity/timing qualification. Synthetic
+profiles never establish Reference wiring or physical applicability. Hall/BEC
+remain unimplemented, and the LED work does not alter motor/recovery gates.
+
+LED milestone local replay PASS: full native Host block (including seven LED
+source/ownership groups), default startup and smoke/full CTests each 11/11,
+Application/Boot/historical strict links, portable/backends/clock, selected
+UART/CRSF+CLI/EXBUS/telemetry and PARK/ERPM links, five auxiliary and six Boot
+safety negatives, layout/docs/functional/source-scope audits and 52 legacy
+ELF links. Separate discrete 3/4-LED links and six LED compile negatives PASS.
+Hardware outputs were not exercised. Existing safety checks remain mandatory.

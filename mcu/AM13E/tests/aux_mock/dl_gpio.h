@@ -8,8 +8,16 @@ extern unsigned test_read_toggle;
 static inline void DL_GPIO_enablePower(GPIO_Regs *g) { g->power=1U; }
 static inline bool DL_GPIO_isPowerEnabled(GPIO_Regs *g) { return g->power!=0U; }
 static inline void DL_GPIO_disableOutput(GPIO_Regs *g,uint32_t mask) { g->output&=~mask; }
+#ifdef AM13E_TEST_GPIO_ENABLE_OBSERVER
+void test_output_enable(GPIO_Regs *g,uint32_t mask);
+#endif
 static inline void DL_GPIO_enableOutput(GPIO_Regs *g,uint32_t mask)
-{ ++test_enable_calls; g->output|=mask; }
+{
+#ifdef AM13E_TEST_GPIO_ENABLE_OBSERVER
+    test_output_enable(g,mask);
+#endif
+    ++test_enable_calls; g->output|=mask;
+}
 static inline void DL_GPIO_initDigitalInputFeatures(unsigned p,unsigned inv,unsigned r,unsigned w)
 { (void)inv;(void)r;(void)w;test_function[p]=1U;test_input[p]=1U; }
 static inline unsigned DL_GPIO_isInputEnabled(unsigned p) { return test_input[p]; }
