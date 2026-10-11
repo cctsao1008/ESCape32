@@ -27,8 +27,8 @@ The v1.4 documents are design rules, not completed implementation proof.
 | BiDShot and extended telemetry | **Host-tested** prepared reply before CRC, next frame prepared at TX DMA completion | Electrical bidirectional turnaround, scope waveforms |
 | Motor Sine/Brushed/Brake/Music/PCM | **Host-tested internal MCPWM0 ownership** | Power pads physically disconnected |
 | Analog input mode | **Conditional ADC0 SOC2 native adapter now implemented**; Board profile must define physical Pinmux/Channel/VREF/fullscale, delivered through original Rel17 `adcdata(...,a)` | Reference has no assigned third ADC; only Host conversion + conditional ARM syntax coverage, hardware pending |
-| Serial/iBUS/SBUS/SBUS2/CRSF/EXBUS/HoTT input | **iBUS input_mode=3, SBUS input_mode=4, CRSF input_mode=5 receive adapters + original throttle/brake callbacks Host-tested**; EXBUS (mode=6) and HoTT/SUMD (mode=7) original CRC/channel receive adapters added; EXBUS retry planner n=10 and guarded PendSV UART baud switching now source/Host/synthetic-ARM integrated; EXBUS original telemetry packet formatter now source/Host-tested with explicit stable board UID; actual half-duplex transport, physical 125/250 kbaud timing and SBUS2 slot TX remain pending; physical CRSF two-wire/single-wire qualification pending; conditional CRSF command FIFO/EOT TX Source/Host/ARM integration now available | Optional real TI UNICOMM IRQ/FIFO RX route now builds under explicit Board Profile, but Reference pinmux and physical UART timing remain unqualified; RX DMA not implemented |
-| KISS/iBUS/S.Port/CRSF/MSB/HoTT telemetry | **PARTIAL:** original CRSF 0x28/0x2c/0x2d `execcrsfcmd()` response envelope + conditional two-wire UNICOMM FIFO/EOT TX now Host-tested and synthetic ARM-linked, with stateful original command execution deferred out of UC IRQ to PendSV; remaining KISS/iBUS/S.Port/CRSF telemetry stream/MSB/HoTT TX pending | No Reference UART TX pin assigned; collision, EOT timing and single-wire hardware not qualified |
+| Serial Mode2/iBUS/SBUS/SBUS2/CRSF/EXBUS/HoTT input | Conditional native Source/Host/ARM input-mode 2/3/4/5/6/7 RX, original channel policies, EXBUS adaptive baud and conditional two-wire request reply, SBUS2 response **packet/timing plan** | Board Pinmux/clock, line levels, real one-wire turnaround, SBUS2 live TX/slot timing, RX DMA and silicon validation pending |
+| KISS/iBUS/S.Port/CRSF/MSB/HoTT telemetry | Original `src/telem.c` handlers with optional selected real TI UNICOMM **two-wire** TX/RX IRQ/FIFO/EOT; bounded pending-tail split, CRSF stateful writes execute in PendSV | Host/synthetic ARM only. Actual single-wire half-duplex, S.Port 26-bit gap and HoTT deferred timing not qualified |
 | Hall/hybrid commutation | **Conditional native Hall adapter missing** | Original `HALL_MAP` branches retained in non-AM13E source |
 | BEC/LED/ERPM/PARK/Beacon | **Conditional board adapter missing** | Original guarded source remains; no fabricated pinout |
 | Current sensing/limiting | **Reference backend not physically qualified** | Preserve original `SENS_MAP`-conditional behavior; actual current channel/pin and protection remain target/board gaps |
@@ -47,16 +47,16 @@ nor their compile guards may be deleted merely to make this table shorter.
 | 1 | `CMD_INFO` | Host-tested, native ID and 32-byte CRC frame | Preserved |
 | 2 | `CMD_READ` | Host-tested, APP-only | Preserved |
 | 3 | `CMD_WRITE` | Host-tested, 1KiB logical / 2KiB SRAM RMW | Preserved, HW pending |
-| 4 | `CMD_UPDATE` | **Original CRC-framed receive + per-block RES_OK, bounded 16 KiB SRAM; final RES_ERROR, no Flash commit** | **PARTIAL staging + quarantined Host-tested SRAM executor; MISSING live Bank0 self-update/verify/reset** |
-| 5 | `CMD_SETWRP` | **Returns RES_ERROR** | **MISSING mandatory reversible static WRP** |
+| 4 | `CMD_UPDATE` | **Reference:** 16KiB CRC/ACK SRAM staging, final RES_ERROR and no erase. **Qualified synthetic:** nonreturning SRAM_C Bank0 erase/program/verify/reset call gated by Recovery flags | No silicon ROM BSL/SWD recovery, power-loss, reset/call graph validation; NEVER FLASH synthetic build |
+| 5 | `CMD_SETWRP` | **Reference:** final RES_ERROR. **Qualified synthetic:** Off/Boot/Full Bank0+Bank1 NONMAIN planner/writer, preserves BCR reserved bits, guarded by 4 Recovery/bitmap gates | On-device WEP granularity/BSL reversibility and brownout acceptance NOT proven |
 | 6 | `CMD_WINDOW` | AM13E-specific, Host-tested up to 488KiB | Additive, not original |
 
 **CMD_UPDATE review:** Original receive-only staging is now linked and Host-tested. Complete Boot erase/program/verify/reset remains deliberately disabled, so this is **not** functional parity. Detailed evidence in
 [CMD_UPDATE_SOURCE_GAP_REVIEW.md](CMD_UPDATE_SOURCE_GAP_REVIEW.md).
-The current AM13E parser deliberately rejects before receiving a
-Boot update image or erasing Bank0; this behavior is covered by native
-Boot protocol regression for command resynchronization. The review
-does **not** implement the required command.
+The active Reference receives CRC-validated Boot update blocks into SRAM,
+sends original frame ACKs, then returns final NAK without Bank0 erase.
+The separate Recovery-gated synthetic build compiles the nonreturning
+SRAM_C sector executor; physical qualification is still missing.
 
 **The six original Boot commands are NOT all complete.** In particular
 command-ID recognition is not functional preservation. Self-update
@@ -128,7 +128,7 @@ interface gaps against source.
 
 ## Evidence classification
 
-Current CI `verify_rel17_coverage.py` establishes 13
+Current CI `verify_rel17_coverage.py` establishes declared
 selected FW1 software groups and five **observed Reference I/O states**
 (no permanent feature exclusions), ARM strict link
 and Host regression coverage. The separate v1.4 contract audit does

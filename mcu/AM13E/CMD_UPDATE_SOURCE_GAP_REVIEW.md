@@ -1,5 +1,16 @@
 # AM13E23019 — ESCape32 Rel17 CMD_UPDATE Source Gap Review
 
+> **Current source clarification (2026-10-11):** The original
+> `CMD_UPDATE` dispatcher has an explicitly recovery-gated call to
+> `boot_am13e_update_commit_quarantined()`; the default Reference
+> performs CRC/ACK SRAM staging then final `RES_ERROR`, with **zero
+> Bank0 erase operations**. A synthetic qualified build is link-tested
+> **NEVER FLASH**, not recovery evidence. `CMD_SETWRP` is separately
+> conditional with four required gates (ROM BSL/SWD, NONMAIN rollback,
+> power-loss, and actual Bank0+Bank1 WEP Bitmap readback). Historical
+> gap descriptions below refer to the *default unqualified Reference*.
+>
+
 **Status: BOUNDED SRAM STAGING IMPLEMENTED / BOOT COMMIT NOT IMPLEMENTED.**
 **Active profile:** Rel17 v1.4, `am13e-port-v2`. The real Boot command
 receives CRC-checked blocks and sends original per-block `RES_OK` but

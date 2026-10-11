@@ -15,8 +15,8 @@ APP signature/header/CRC and Signature-last requirements are
 | Actual FW1 image | `AM13E_FW1_REL17.elf` → raw BIN → flat BIN + 0–3 byte alignment pad | Silicon startup pending |
 | Legacy block framing | Original `CMD_READ/WRITE` CRC, 1 KiB logical / 2 KiB RMW | 1KiB frame CRC is not image CRC |
 | Extended addressing | `CMD_WINDOW=6`; Host tests blocks 256–487 | Real WiFi-Link updater extension unverified |
-| Boot self-update `CMD_UPDATE` | **Not implemented; RES_ERROR** | Must be implemented/qualified |
-| Persistent `CMD_SETWRP` | **Not implemented; RES_ERROR** | TI NONMAIN and reversible WRP qualification |
+| Boot self-update `CMD_UPDATE` | **Reference:** CRC/ACK SRAM stage, final RES_ERROR. **Recovery-gated synthetic:** RAM_C Bank0 update/reset commit linked | On-device ROM BSL/SWD, recovery, power-loss, RAM call graph acceptance mandatory |
+| Persistent `CMD_SETWRP` | **Reference:** final RES_ERROR. **Recovery-gated synthetic:** Bank0+Bank1 Off/Boot/Full NONMAIN BCR plan/program/readback | Real WEP bit mapping, BSL reversibility and power-loss qualification mandatory |
 | Gate/Trip/UART/current | Reference hardware paths remain disconnected/unqualified | Conditional upstream functionality is NOT waived; no physical motor enable |
 
 **Update risk:** Partial APP writes can leave the original Cfg ID

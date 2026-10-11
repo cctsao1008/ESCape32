@@ -236,7 +236,7 @@
     },
     {
       "id": "exbus_receiver",
-      "label": "Original Rel17 EXBUS mode=6 CRC16ccitt/channel decode on board-selected UART RX (telemetry reply/adaptive baud pending)",
+      "label": "Rel17 EXBUS mode6 CRC/channel, 125/250k n=10 adaptive baud, seven-description/38B board-ID reply and conditional two-wire TX, actual half-duplex unqualified",
       "sources": [
         "mcu/AM13E/exbus_receiver.c",
         "mcu/AM13E/serial_frame_rx.c",
@@ -265,6 +265,49 @@
       "host_tests": [
         "hott_receiver",
         "serial_frames"
+      ]
+    },
+    {
+      "id": "native_serial_mode2",
+      "label": "Rel17 Serial input_mode=2 460800 baud CRC8 command/reply and original throttle/brake policy, conditional UART (hardware pending)",
+      "sources": [
+        "mcu/AM13E/serial_uart_rx.c",
+        "mcu/AM13E/serial_frame_rx.c",
+        "mcu/AM13E/serial_command.c",
+        "src/io.c"
+      ],
+      "host_tests": [
+        "serial_frames",
+        "serial_command"
+      ]
+    },
+    {
+      "id": "native_serial_telem",
+      "label": "Rel17 KISS/iBUS/S.Port/CRSF/MSB/HoTT source telemetry, optional two-wire UNICOMM FIFO/EOT and bounded 128B queue, physical PHY unqualified",
+      "sources": [
+        "src/telem.c",
+        "mcu/AM13E/telem_backend.c",
+        "mcu/AM13E/telem_frame_rx.c",
+        "mcu/AM13E/telem_tx_progress.c",
+        "mcu/AM13E/serial_tx_queue.c"
+      ],
+      "host_tests": [
+        "telem_modes",
+        "telem_frame_rx",
+        "telem_tx_progress",
+        "serial_tx_queue"
+      ]
+    },
+    {
+      "id": "sbus2_packet_formatter",
+      "label": "Rel17 SBUS2 24 slot identifiers, six original 3-byte responses, 3200/660us slot plan only; live TX not qualified",
+      "sources": [
+        "mcu/AM13E/sbus2_reply.c",
+        "mcu/AM13E/sbus_receiver.c"
+      ],
+      "host_tests": [
+        "sbus2_reply",
+        "sbus_receiver"
       ]
     }
   ],
@@ -339,11 +382,12 @@
     }
   ],
   "conditional_upstream_pending": [
-    "Original input_mode=2 serial/CLI and UART RX DMA; EXBUS half-duplex reply UART and physical baud timing, HoTT physical UART frame-idle boundary still pending",
-    "SBUS2 telemetry response timing and dedicated half-duplex UART physical turnarounds",
-    "General KISS/iBUS/S.Port/CRSF/MSB/HoTT serial telemetry transport; CRSF 0x28/0x2c/0x2d command TX only source/Host/synthetic-ARM",
-    "Hall/hybrid and board-specific BEC/LED/ERPM/PARK I/O adaptation",
-    "Board-calibrated analog receiver input, physical current-sense/overcurrent/nFAULT support where source-enabled",
-    "Boot self-update CMD_UPDATE live Bank0 commit and persistent reversible CMD_SETWRP under qualified recovery"
+    "Conditional physical Serial/Telemetry UART route, actual pinmux, idle/baud/inversion and original single-wire bus turnaround must be qualified",
+    "SBUS2 24 slot ID/six packet/3200-660us timing-plan Host coverage only; physical timed TX/half-duplex not implemented",
+    "Native general Telemetry KISS/iBUS/S.Port/CRSF/MSB/HoTT selected two-wire transport linked; S.Port inversion/26-bit gap, HoTT delayed slots and original single-wire PHY not qualified",
+    "UART RX/TX DMA unavailable; currently conditional IRQ/FIFO transport only",
+    "Hall/Hybrid and board-specific BEC/LED/ERPM/PARK I/O adapters pending",
+    "Board-calibrated analog receiver, current sense and physical nFAULT/OC hardware trip pending",
+    "Boot CMD_UPDATE SRAM_C self-programmer and CMD_SETWRP NONMAIN static bitmap planner/writer are software implemented behind recovery gates; current Reference ALWAYS NAKs destructive commands"
   ]
 }
