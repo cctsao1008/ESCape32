@@ -154,7 +154,8 @@ void RX_HANDLER(void);
 bool am13e_app_serial_rx_init(unsigned mode)
 {
     if(__get_PRIMASK()!=1U || initialized ||
-       (mode!=3U && mode!=4U && mode!=5U && mode!=6U))return false;
+       (mode!=3U && mode!=4U && mode!=5U && mode!=6U &&
+        mode!=7U))return false;
     /* UCS are shared with I2C/SPI; board profile must assign a
      * DEDICATED instance that no other owner has initialized.
      */
@@ -294,6 +295,8 @@ void RX_HANDLER(void)
                 (void)am13e_app_io_sbus_frame(bytes,len);
             else if(rx_state.mode==6U)
                 (void)am13e_app_io_exbus_frame(bytes,len);
+            else if(rx_state.mode==7U)
+                (void)am13e_app_io_hott_frame(bytes,len);
             else {
                 const int valid=am13e_app_io_crsf_frame(bytes,len);
 #ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED

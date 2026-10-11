@@ -25,17 +25,25 @@ bool am13e_serial_frame_byte(AM13E_SerialFrameRx *rx,uint8_t b,
 {
     if(!rx||!out||!length||capacity==0U||
        (rx->mode!=3U&&rx->mode!=4U&&rx->mode!=5U&&
-        rx->mode!=6U))
+        rx->mode!=6U&&rx->mode!=7U))
         return false;
     if(rx->used==0U){
         if((rx->mode==3U&&b!=0x20U)||
-           (rx->mode==4U&&b!=0x0fU))return false;
+           (rx->mode==4U&&b!=0x0fU)||
+           (rx->mode==7U&&b!=0xa8U))return false;
         rx->expected=rx->mode==3U?32U:
                      rx->mode==4U?25U:0U;
     } else if(rx->mode==3U&&rx->used==1U&&b!=0x40U){
         rx->used=0U;
         rx->expected=32U;
         if(b!=0x20U)return false;
+    } else if(rx->mode==7U&&rx->used==2U){
+        /* Original SUMD length = 5 + channel_count*2. */
+        if(b>29U){
+            am13e_serial_frame_abort(rx);
+            return false;
+        }
+        rx->expected=5U+((unsigned)b<<1U);
     } else if(rx->mode==6U&&rx->used==2U){
         /* EXBUS length byte at offset 2. The original parser does
          * not require a fixed start address: idle-framed packets

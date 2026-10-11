@@ -69,6 +69,46 @@ static void crsf(void){
     am13e_serial_frame_abort(&rx);
     assert(rx.used==0U&&rx.expected==0U);
 }
-int main(void){ibus();sbus();crsf();
-    puts("PASS iBUS/SBUS/CRSF native UART framing, explicit buffer bounds and abort");
+static void exbus(void){
+    AM13E_SerialFrameRx rx;uint8_t out[64]={0};unsigned len=0;
+    am13e_serial_frame_init(&rx,6U);
+    const uint8_t packet[]={0x3eU,0x01U,12U,0x10U,0x31U,4U,
+                            0x40U,0x1fU,0xe0U,0x2eU,0x12U,0x23U};
+    for(unsigned i=0;i<11U;++i)
+        assert(!am13e_serial_frame_byte(&rx,packet[i],out,sizeof out,&len));
+    assert(am13e_serial_frame_byte(&rx,packet[11],out,sizeof out,&len));
+    assert(len==12U&&memcmp(out,packet,12U)==0);
+    assert(!am13e_serial_frame_byte(&rx,0x3eU,out,sizeof out,&len));
+    assert(!am13e_serial_frame_byte(&rx,1U,out,sizeof out,&len));
+    assert(!am13e_serial_frame_byte(&rx,65U,out,sizeof out,&len));
+    assert(rx.used==0U&&rx.frame_errors==1U);
+    /* A valid 8-byte telemetry request can be emitted without
+     * enabling any unqualified physical TX route.
+     */
+    const uint8_t request[]={0x3eU,1U,8U,0x44U,0x3aU,0U,0U,0U};
+    for(unsigned i=0;i<7U;++i)
+        assert(!am13e_serial_frame_byte(&rx,request[i],out,sizeof out,&len));
+    assert(am13e_serial_frame_byte(&rx,request[7],out,sizeof out,&len));
+    assert(len==8U);
+}
+static void hott(void){
+    AM13E_SerialFrameRx rx;uint8_t out[64]={0};unsigned len=0;
+    am13e_serial_frame_init(&rx,7U);
+    assert(!am13e_serial_frame_byte(&rx,0U,out,sizeof out,&len));
+    assert(!am13e_serial_frame_byte(&rx,0xa8U,out,sizeof out,&len));
+    assert(!am13e_serial_frame_byte(&rx,1U,out,sizeof out,&len));
+    assert(!am13e_serial_frame_byte(&rx,30U,out,sizeof out,&len));
+    assert(rx.used==0U&&rx.frame_errors==1U);
+    const uint8_t packet[]={0xa8U,1U,2U,0x20U,0x40U,
+                            0x30U,0x50U,0x00U,0x00U};
+    for(unsigned i=0;i<8U;++i)
+        assert(!am13e_serial_frame_byte(&rx,packet[i],out,sizeof out,&len));
+    assert(am13e_serial_frame_byte(&rx,packet[8],out,sizeof out,&len));
+    assert(len==9U&&memcmp(out,packet,9U)==0);
+    assert(!am13e_serial_frame_byte(&rx,0xa8U,out,sizeof out,&len));
+    am13e_serial_frame_abort(&rx);
+    assert(rx.used==0U);
+}
+int main(void){ibus();sbus();crsf();exbus();hott();
+    puts("PASS iBUS/SBUS/CRSF/EXBUS/HoTT native UART framing, bounds and abort");
     return 0;}

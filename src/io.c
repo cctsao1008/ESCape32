@@ -25,6 +25,7 @@
 #include "sbus_receiver.h" /* Packed 11-bit SBUS channel extraction */
 #include "crsf_receiver.h" /* Original CRSF CRC8-DVB-S2 channel RX */
 #include "exbus_receiver.h" /* Original EXBUS CRC16 and channel semantics */
+#include "hott_receiver.h" /* Original HoTT/SUMDv1/SUMDv3 and XMODEM CRC */
 #include "crsf_command_reply.h" /* Preserve original execcrsfcmd response */
 #else
 #ifdef AT32F4
@@ -602,6 +603,27 @@ int am13e_app_io_sbus_frame(const uint8_t *frame,unsigned length)
     am13e_app_io_watchdog_feed();
     setthrot(throttle_us);
     setbrake(brake_us);
+    return 1;
+}
+/* HoTT/SUMD original input_mode=7. The native decoder passes
+ * through src/util.c::crc16xmodem, preserving original v1/v3
+ * channel mapping and setthrot/setbrake handling.
+ */
+int am13e_app_io_hott_frame(const uint8_t *frame,unsigned length)
+{
+    int throttle_us=-1,brake_us=-1;
+    bool channels=false;
+    if(cfg.input_mode!=7 ||
+       !am13e_hott_decode_frame(frame,length,
+         (unsigned)(uint8_t)cfg.input_ch1,
+         (unsigned)(uint8_t)cfg.input_ch2,
+         crc16xmodem,&throttle_us,&brake_us,&channels))
+        return 0;
+    am13e_app_io_watchdog_feed();
+    if(channels){
+        setthrot(throttle_us);
+        setbrake(brake_us);
+    }
     return 1;
 }
 /* EXBUS original input_mode=6. The native decoder invokes the

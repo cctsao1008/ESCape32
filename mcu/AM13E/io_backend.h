@@ -63,6 +63,10 @@ int am13e_app_io_crsf_frame(const uint8_t *frame,unsigned length);
  * Valid telemetry request is recognized but never falsely ACKed/TX.
  */
 int am13e_app_io_exbus_frame(const uint8_t *frame,unsigned length);
+/* HoTT/SUMD original mode=7 v1/v3 channel maps, physical timing
+ * still requires board-qualified UNICOMM RX.
+ */
+int am13e_app_io_hott_frame(const uint8_t *frame,unsigned length);
 /* Invoke the real Rel17 execcrsfcmd()/crc8dvbs2() only for a validated
  * CRSF input_mode=5 command, telmode=4; return completed wire bytes.
  */
