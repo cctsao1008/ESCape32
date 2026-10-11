@@ -325,7 +325,12 @@ jobs:
           grep -Eq ' [Tt] am13e_app_io_crsf_reply$' am13e-ci-logs/serial-tx-symbols.txt
           grep -Eq ' [Tt] am13e_crsf_reply_envelope$' am13e-ci-logs/serial-tx-symbols.txt
           grep -Eq ' [Tt] am13e_serial_tx_queue_begin$' am13e-ci-logs/serial-tx-symbols.txt
-          grep -Eq ' [Tt] am13e_app_serial_cli_enter$' am13e-ci-logs/serial-tx-symbols.txt
+          # The board-triggered CLI entry hook has NO Reference caller:
+          # --gc-sections correctly discards it from this synthetic ELF.
+          # Assert that the real hook compiled in the selected object.
+          cli_obj="$(find am13e-ci-crsf-tx -type f -name 'serial_uart_rx.c.obj' -print -quit)"
+          test -n "$cli_obj"
+          arm-none-eabi-nm "$cli_obj" | grep -Eq ' [Tt] am13e_app_serial_cli_enter$'
           grep -Eq ' [Tt] am13e_app_serial_cli_service_pending$' am13e-ci-logs/serial-tx-symbols.txt
           grep -Eq ' [Tt] am13e_app_io_cli_line$' am13e-ci-logs/serial-tx-symbols.txt
           echo "PASS selected 2-wire CRSF TX strict ARM link (synthetic, NOT FLASHED)"
