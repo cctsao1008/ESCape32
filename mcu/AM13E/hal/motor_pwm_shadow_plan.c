@@ -23,7 +23,14 @@ int am13e_motor_pwm_shadow_plan(const AM13E_MotorPwmShadowInputs *input,
      */
     AM13E_MotorShadowPlan p={.period=duty.period_register_ticks};
     for(unsigned i=0U;i<6U;++i)p.compare[i]=duty.compare_ticks;
-    if (!am13e_motor_shadow_validate(&p)) return 0;
+    /* Rel17 FULL_DUTY decrements ARR after scaling CCR. Its 100% image
+     * intentionally has CCR=ARR+1, so no falling compare event occurs.
+     * Keep the generic shadow validator strict; authorize only this exact
+     * source-defined full-duty image produced by the duty formatter.
+     */
+    if (!am13e_motor_shadow_validate(&p) &&
+        !(input->full_duty && p.period>=2U &&
+          (uint32_t)duty.compare_ticks==(uint32_t)p.period+1U)) return 0;
     *out=p;
     return 1;
 }

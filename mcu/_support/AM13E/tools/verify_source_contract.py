@@ -220,9 +220,11 @@ def main():
           "image_crc32" not in packer and
           "SIGNATURE_OFFSET" not in packer,
           "Flat packer must use actual linked size, without embedded CRC")
-    check("am13e_power_stage_attach(" not in
-          src("mcu/AM13E/hal/motor_power_stage.c"),
-          "Unqualified Reference power-stage attach unexpectedly enabled")
+    check("#if AM13E_MOTOR_OUTPUT_CONFIGURED" in
+          src("mcu/AM13E/hal/motor_power_stage.c") and
+          "Motor outputs require explicit" in
+          src("mcu/AM13E/hal/motor_output_configuration.h"),
+          "Physical motor enable requires explicit electrical board definitions")
 
     print("PASS current Rel17/Rev1.6 source integration and fail-closed safety checks")
     print("LIMIT: source checks do not establish complete runtime or hardware parity")

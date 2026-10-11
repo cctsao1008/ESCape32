@@ -10,6 +10,8 @@
 #include "motor_backend.h"
 #include "motor_fault_route.h"
 #include "fault_trip_backend.h"
+#include "board_configuration.h"
+#include <dl_gpio.h>
 
 #define AM13E_REF_NFAULT_GPIO_INDEX 47U
 #define AM13E_REF_NFAULT_INPUTXBAR DL_XBAR_INPUT2
@@ -31,13 +33,23 @@ static const AM13E_FaultTripRoute reference_nfault_route = {
     .pwm_source = AM13E_REF_NFAULT_SOURCE,
     .ost_signal = AM13E_REF_NFAULT_TZ_SIGNAL,
     .ost_flag = DL_MCPWM_TZ_FLAG_OST_TZ1,
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    .active_low = AM13E_MOTOR_NFAULT_ACTIVE_LOW!=0
+#else
     .active_low = true
+#endif
 };
 
 static volatile uint32_t hardware_trip_installed;
 
 int am13e_app_motor_nfault_trip_ready(void)
 {
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    if(!NVIC_GetEnableIRQ(MCPWM0_INT_IRQn) || NVIC_GetPriority(MCPWM0_INT_IRQn)!=0U ||
+       !(MCPWM0->INTEN&DL_MCPWM_INT_TZ_OST) || !DL_GPIO_isInputEnabled(IOMUX_PINCM_PB15) ||
+       DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PB15)!=IOMUX_PB15_GPIO47 ||
+       (((GPIO1->DIN31_0&DL_GPIO_PIN(15U))!=0U)==(AM13E_MOTOR_NFAULT_ACTIVE_LOW==0)))return 0;
+#endif
     return hardware_trip_installed &&
            am13e_mcu_fault_trip_ready(&reference_nfault_route);
 }

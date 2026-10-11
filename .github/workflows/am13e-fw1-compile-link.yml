@@ -43,7 +43,7 @@ jobs:
         run: |
           mkdir -p am13e-ci-logs
           set -euo pipefail
-          bash mcu/_support/AM13E/tools/run_host_regressions.sh full \
+          AM13E_SDK_ROOT=/tmp/am13e-ti-sdk bash mcu/_support/AM13E/tools/run_host_regressions.sh full \
             2>&1 | tee am13e-ci-logs/host-tests.log
 
       - name: Compile original Rel17 objects and strictly link actual Application and Boot

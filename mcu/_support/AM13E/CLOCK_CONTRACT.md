@@ -26,7 +26,10 @@ accepted detailed implementation choices**:
 | VCO | 400 MHz |
 | SYSPLL CLK0 RDIV | ÷2 |
 | Cortex-M33 MCLK | **200 MHz** |
-| MCLK2 | 100 MHz |
+| MCLKDIV2 / TIMG4 / TIMG12 | 100 MHz |
+| MCPWM0 source / ECAP0/1 source | MCLK, 200 MHz (TRM clock tree) |
+| MCPWM0 motor / PCM TBCLK | MCLK ÷2, 100 MHz |
+| MCPWM0 music TBCLK | MCLK ÷32, 6.25 MHz |
 | MCLK4 / ULPCLK | 50 MHz |
 | Flash read wait states | 3 before MCLK switch |
 | Rel17 SysTick | 16 kHz, 12,500 MCLK cycles |

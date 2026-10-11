@@ -1,12 +1,12 @@
-/* AM13E reference PB13 Gate Enable: IO INITIALIZATION ONLY.
+/* PB13 Gate Enable: inactive at init/reset/fault; Rel17 owns runtime enable.
  *
  * PB13 is driven to the configured INACTIVE level before its GPIO
- * output driver is enabled, then stays inactive. No arming/driver-enable
- * transitions, pinmux attach, or OC Trip routing are implemented.
+ * output driver is enabled. A complete electrical board configuration
+ * permits the original Core motor/audio lifecycle to activate it.
  *
  * The actual MCPWM0 six-phase PWM and RED/FED software pipeline lives
  * in motor_safety.c; its physical pads remain disconnected as GPIO
- * inputs. This source is deliberately NOT a working motor power stage.
+ * inputs until a board supplies the required electrical definitions.
  */
 #include "motor_power_stage.h"
 #include "board_configuration.h"
@@ -59,3 +59,22 @@ void am13e_power_stage_force_off(void)
         __DSB();
     }
 }
+
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+int am13e_power_stage_inactive(void)
+{
+    return initialized && (((GPIO1->DOUT31_0&GATE_EN_PIN)!=0U)!=(AM13E_BOARD_PB13_ACTIVE_LEVEL!=0));
+}
+int am13e_power_stage_enable(void)
+{
+    if(!initialized || __get_PRIMASK()!=1U)return 0;
+#if AM13E_BOARD_PB13_ACTIVE_LEVEL == 1
+    DL_GPIO_setPins(GPIO1,GATE_EN_PIN);
+#else
+    DL_GPIO_clearPins(GPIO1,GATE_EN_PIN);
+#endif
+    __DSB();
+    return (GPIO1->DOE31_0&GATE_EN_PIN)!=0U &&
+        (((GPIO1->DOUT31_0&GATE_EN_PIN)!=0U)==(AM13E_BOARD_PB13_ACTIVE_LEVEL!=0));
+}
+#endif

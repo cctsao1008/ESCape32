@@ -11,3 +11,7 @@
 #include <stdint.h>
 void am13e_app_io_watchdog_prepare(void);
 void am13e_app_io_watchdog_status(uint32_t *armed, uint32_t *feeds);
+
+/* Post-shutdown fault reset: may initialize an otherwise unprepared WWDT.
+ * Returns zero on register failure; never feeds or recurses into Core. */
+int am13e_app_io_watchdog_fault_arm(void);

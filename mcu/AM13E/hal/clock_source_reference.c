@@ -84,7 +84,8 @@ uint32_t am13e_app_clock_configure_xtal25(void)
     if (DL_FRI_getReadWaitStates() < 3U) {
         return 0U;
     }
-    /* Keep PD0 ULPCLK <=50MHz and PD1 peripheral clock <=100MHz. */
+    /* PD0 ULPCLK<=50MHz and MCLKDIV2 peripherals<=100MHz.
+     * MCPWM/ECAP use MCLK200MHz (TRM3.4.1); MCPWM sets its own /2. */
     DL_SYSCTL_setMCLKDivider(DL_SYSCTL_MCLK_DIV_2_DIV_4);
 
     /* Ensure the XTAL is off and a prior retained digital HFCLK_IN

@@ -88,3 +88,21 @@ void am13e_app_io_watchdog_status(uint32_t *is_armed, uint32_t *feeds)
     if (is_armed != (void *)0) *is_armed = armed;
     if (feeds != (void *)0) *feeds = valid_frame_feeds;
 }
+
+int am13e_app_io_watchdog_fault_arm(void)
+{
+    if(__get_PRIMASK()!=1U)return 0;
+    /* A fault may precede initio(), or occur in an analog-input build.
+     * Do not enter watchdog_fail_closed -> hard_fault -> fault-reset again.
+     * This is only called after the motor bridge has been disabled.
+     */
+    DL_WWDT_enablePower(WWDT0);
+    if(!DL_WWDT_isPowerEnabled(WWDT0))return 0;
+    DL_SYSCTL_setWWDT0ErrorBehavior(DL_SYSCTL_ERROR_BEHAVIOR_RESET);
+    if(DL_SYSCTL_getWWDT0ErrorBehavior()!=DL_SYSCTL_ERROR_BEHAVIOR_RESET)return 0;
+    if(!DL_WWDT_isRunning(WWDT0))
+        DL_WWDT_initWatchdogMode(WWDT0,DL_WWDT_CLOCK_DIVIDE_1,
+            DL_WWDT_TIMER_PERIOD_15_BITS,DL_WWDT_RUN_IN_SLEEP,
+            DL_WWDT_WINDOW_PERIOD_0,DL_WWDT_WINDOW_PERIOD_0);
+    return DL_WWDT_isRunning(WWDT0);
+}

@@ -1,10 +1,6 @@
-/* ESCape32 Rel17 on AM13E23019: first physical MCPWM0 foundation.
- *
- * PURPOSE: provide full Rel17 MCU PWM/RED/FED scheduling and Motor Audio
- * while physical phase pins and PB13 gate remain inactive and isolated.
- * PB15 nFAULT, independent OC Trip and Gate Enable are IO ONLY; they
- * are not integrated into the motor control/IRQ/fault path.
- */
+/* Original Rel17 motor policy -> native MCPWM0 AQ/compare/DB and pins.
+ * A complete electrical board definition selects physical output operation.
+ * Without those inputs the Reference remains isolated and unqualified. */
 #include "motor_backend.h"
 #include "motor_audio_hw.h" /* Exclusive MCPWM Motor/Audio resource owner */
 #include "motor_output_backend.h"
@@ -15,6 +11,9 @@
 #include "motor_power_stage.h" /* PB13 GPIO inactive-only initializer */
 #include "motor_ownership_plan.h" /* Active MPCWM0 Motor/Music/PCM owner */
 #include "motor_safety.h"
+#include "motor_output_runtime.h"
+#include "motor_fault_route.h"
+#include "input_watchdog.h"
 #include "motor_shadow_plan.h"
 #include "motor_aq_plan.h"
 #include "motor_pwm_shadow_plan.h"
@@ -35,8 +34,8 @@ _Static_assert(DL_MCPWM_COUNTER_MODE_STOP_FREEZE == 2U,
 
 static volatile uint32_t safety_initialized;
 static volatile uint32_t fault_latched;
-static volatile uint32_t motor_timebase_running; /* MCPWM0 internal counter ONLY */
-/* 0=Drive/idle, 1=Rel17 Music, 2=Rel17 AU/PCM. Audio never muxes pads. */
+static volatile uint32_t motor_timebase_running; /* Native MCPWM0 counter state */
+/* 0=Drive/idle, 1=Rel17 Music, 2=Rel17 AU/PCM. Configured audio uses the same physical output adapter. */
 static volatile uint32_t audio_owner;
 static volatile AM13E_MotorOwner motor_owner_mode;
 static volatile uint32_t audio_period_valid;
@@ -46,11 +45,81 @@ uint32_t am13e_app_motor_audio_mode(void)
     return audio_owner;
 }
 
+
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+/* Register transaction cache only: all phase/duty decisions stay in Core.
+ * Shadow writes inhibit global loads until the complete electrical image
+ * is committed. PRIMASK alone cannot exclude a peripheral ZERO event.
+ */
+static uint16_t logical_aq[6],logical_compare[6];
+static unsigned physical_shadow_dirty,physical_runtime_image;
+/* Exclude inactive diagnostic proofs from runtime electrical conversion.
+ * This is register transaction bookkeeping, not motor authorization. */
+static void output_aq_shadow(MCPWM_Regs *p,DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE o,uint16_t a)
+{
+    if(!physical_runtime_image){DL_MCPWM_setActionQualifierActionCompleteShadow(p,o,a);return;}
+    if(!physical_shadow_dirty)am13e_motor_output_update_begin();
+    logical_aq[(unsigned)o]=a;physical_shadow_dirty=1U;
+    DL_MCPWM_setActionQualifierActionCompleteShadow(p,o,a);
+}
+static void output_compare_shadow(MCPWM_Regs *p,DL_MCPWM_COUNTER_COMPARE_MODULE c,uint16_t value)
+{
+    if(!physical_runtime_image){DL_MCPWM_setCounterCompareShadowValue(p,c,value);return;}
+    if(!physical_shadow_dirty)am13e_motor_output_update_begin();
+    logical_compare[(unsigned)c]=value;physical_shadow_dirty=1U;
+    DL_MCPWM_setCounterCompareShadowValue(p,c,value);
+}
+static void output_period_shadow(MCPWM_Regs *p,uint16_t value)
+{
+    if(!physical_runtime_image){DL_MCPWM_setTimeBasePeriodShadow(p,value);return;}
+    if(!physical_shadow_dirty)am13e_motor_output_update_begin();
+    physical_shadow_dirty=1U;
+    DL_MCPWM_setTimeBasePeriodShadow(p,value);
+}
+static void output_commit_shadow(void)
+{
+    if(physical_shadow_dirty && safety_initialized && !fault_latched){
+        physical_shadow_dirty=0U;
+        am13e_motor_output_stage(logical_aq,logical_compare,DL_MCPWM_getTimeBasePeriodShadow(MCPWM0));
+    }
+}
+static void output_active_begin(void)
+{
+    if((MCPWM0->TBCTL&MCPWM_TBCTL_CTRMODE_MASK)!=DL_MCPWM_COUNTER_MODE_STOP_FREEZE ||
+       !am13e_power_stage_inactive()){
+        am13e_app_motor_fault_shutdown();am13e_app_motor_fault_reset();
+    }
+    DL_MCPWM_disableGlobalLoad(MCPWM0);
+    physical_shadow_dirty=1U;
+}
+static void output_aq_active(MCPWM_Regs *p,DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE o,uint16_t a)
+{ output_active_begin();DL_MCPWM_setActionQualifierActionCompleteActive(p,o,a); }
+static void output_compare_active(MCPWM_Regs *p,DL_MCPWM_COUNTER_COMPARE_MODULE c,uint16_t a)
+{ output_active_begin();DL_MCPWM_setCounterCompareActiveValue(p,c,a); }
+static void output_period_active(MCPWM_Regs *p,uint16_t a)
+{ output_active_begin();DL_MCPWM_setTimeBasePeriodActive(p,a); }
+static void output_restore_irq(uint32_t mask)
+{
+    output_commit_shadow();
+    __set_PRIMASK(mask);
+}
+#undef DL_MCPWM_setActionQualifierActionCompleteShadow
+#define DL_MCPWM_setActionQualifierActionCompleteShadow output_aq_shadow
+#undef DL_MCPWM_setCounterCompareShadowValue
+#define DL_MCPWM_setCounterCompareShadowValue output_compare_shadow
+#undef DL_MCPWM_setTimeBasePeriodShadow
+#define DL_MCPWM_setTimeBasePeriodShadow output_period_shadow
+#define DL_MCPWM_setActionQualifierActionCompleteActive output_aq_active
+#define DL_MCPWM_setCounterCompareActiveValue output_compare_active
+#define DL_MCPWM_setTimeBasePeriodActive output_period_active
+#define __set_PRIMASK output_restore_irq
+#endif
+
 static volatile uint32_t motor_timebase_starts;
 static volatile uint32_t motor_timebase_stops;
 static volatile uint32_t sine_entry_pending;
 static volatile uint32_t sine_mode_active;
-static volatile uint32_t drag_brake_aq_staged; /* brake AQ, never physical enable */
+static volatile uint32_t drag_brake_aq_staged; /* original drag-brake AQ staged */
 static volatile uint32_t lock_brake_aq_staged; /* stopped Rel17 hold image */
 static volatile uint32_t sine_write_count;
 static volatile uint32_t last_trip_irq_flags;
@@ -78,6 +147,9 @@ static void force_pwm_inactive(void)
      * disconnect, and only then freeze the internal PWM timebase.
      */
     am13e_power_stage_force_off();
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    am13e_motor_output_cancel();
+#endif
     /* The timebase is stopped and each AQ output continuously low.
      * This is complementary to pad disconnect, not a proven physical
      * gate-driver disable or a substitute for hardware Trip Zone.
@@ -103,7 +175,13 @@ static int pwm_io_for_runtime(void)
     /* Supports live Motor/Audio AQ and Compare updates on a qualified
      * bridge. Default IO Plan still accepts GPIO INPUT/Hi-Z only.
      */
-    return pwm_pads_disconnected(); /* No physical output attachment. */
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    return pwm_pads_disconnected() ||
+        (am13e_app_motor_nfault_trip_ready() &&
+         am13e_mcu_motor_pads_pwm_matches(am13e_board_motor_pad_route(),AM13E_MOTOR_PAD_INVERT_MASK));
+#else
+    return pwm_pads_disconnected();
+#endif
 }
 
 static int pwm_registers_inactive(void)
@@ -141,7 +219,7 @@ static int pwm_registers_inactive(void)
 #endif
 _Static_assert(AM13E_MOTOR_DB_RED_TICKS > 0 &&
                AM13E_MOTOR_DB_RED_TICKS < 0x4000 &&
-               AM13E_MOTOR_DB_FED_TICKS > 0 &&
+               AM13E_MOTOR_DB_FED_TICKS >= 0 &&
                AM13E_MOTOR_DB_FED_TICKS < 0x4000 &&
                AM13E_MOTOR_DB_COMPARE_OFFSET_TICKS >= 0 &&
                AM13E_MOTOR_DB_COMPARE_OFFSET_TICKS < 0x4000 &&
@@ -264,6 +342,9 @@ void am13e_app_motor_init(void)
     DL_MCPWM_Config config;
     DL_MCPWM_initParamsSetDefault(&config);
     config.timeBaseConfig.counterMode = DL_MCPWM_COUNTER_MODE_STOP_FREEZE;
+    /* TRM3.4.1: MCPWMCLK=MCLK200MHz, not MCLKDIV2/BUSCLK. */
+    config.timeBaseConfig.clockDivider = DL_MCPWM_CLOCK_DIVIDER_2;
+    config.timeBaseConfig.periodValue=(uint16_t)((AM13E_APP_MCLK_HZ/2U)/24000U-1U);
     config.actionQualifierConfig.aqPwm1A.pwmSwForceAction =
         DL_MCPWM_AQ_SW_CONTINUOUS_LOW;
     config.actionQualifierConfig.aqPwm1B.pwmSwForceAction =
@@ -289,6 +370,13 @@ void am13e_app_motor_init(void)
      */
     am13e_power_stage_init();
     configure_motor_deadband_isolated();
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    DL_MCPWM_enableInterrupt(MCPWM0,DL_MCPWM_INT_TZ_OST);
+    NVIC_SetPriority(MCPWM0_INT_IRQn,0U);
+    NVIC_ClearPendingIRQ(MCPWM0_INT_IRQn);
+    NVIC_EnableIRQ(MCPWM0_INT_IRQn);
+    am13e_app_motor_nfault_trip_init();
+#endif
     if (!pwm_pads_disconnected() || !pwm_registers_inactive()) {
         am13e_app_motor_fault_shutdown();
         am13e_app_motor_fault_reset();
@@ -537,6 +625,9 @@ static void owner_move(AM13E_OwnerEvent action)
 void am13e_app_motor_sixstep_write(int positive_mask,int negative_mask,
                                    int floating_phase,int damp,int reverse)
 {
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    physical_runtime_image=1U;
+#endif
     if (audio_owner) runtime_fault();
     AM13E_SixstepPlan phase;
     AM13E_MotorAQShadowPlan aq;
@@ -547,7 +638,7 @@ void am13e_app_motor_sixstep_write(int positive_mask,int negative_mask,
     /* Preserve actual Rel17 cfg.damp and generate the complementary
      * active-freewheel AQ image ONLY with an explicit board-configured
      * hardware dead-band. Without it remain fail-closed, not downgraded.
-     * No power-stage output is connected even in a qualified DB build.
+     * Physical output requires the complete electrical board definitions.
      */
 #ifndef AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED
     if (phase.damp && (positive_mask || negative_mask)) runtime_fault();
@@ -589,6 +680,9 @@ void am13e_app_motor_pwm_apply(int duty,int freq_min_khz,int freq_max_khz,
                                 int ertm_us,int damp,int lock,int brushed,
                                 int running)
 {
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    physical_runtime_image=1U;
+#endif
     if (audio_owner) runtime_fault();
     if (!safety_initialized || fault_latched)runtime_fault();
     AM13E_MotorPwmShadowInputs input={
@@ -681,6 +775,9 @@ void am13e_app_motor_pwm_apply(int duty,int freq_min_khz,int freq_max_khz,
  */
 void am13e_app_motor_brushed_write(int reverse,int damp)
 {
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    physical_runtime_image=1U;
+#endif
     if (audio_owner) runtime_fault();
     if (!safety_initialized || fault_latched ||
         (reverse != 0 && reverse != 1) || (damp != 0 && damp != 1))
@@ -730,15 +827,15 @@ void am13e_app_motor_brushed_write(int reverse,int damp)
  * directly from STM32G431/preset.c and uses (sinedata[idx]*power)>>7,
  * on a fixed ~24 kHz carrier, independent of six-step frequency ramp.
  *
- * Unlike the STM32 timer there is no qualified DEAD_TIME count yet.
- * Compare here is the exact ORIGINAL modulation component, excluding
- * the unverified board-specific offset. Both legs carry the intended
- * inverse logical AQ but are held software-FORCED LOW and isolated by
- * GPIO input pinmux. No complementary gates can reach the power stage
- * until external polarity, MCPWM deadband, and OC hardware Trip qualify.
+ * Compare uses the original modulation plus the explicit board dead-time
+ * offset. The configured electrical adapter drives separate A/B AQ paths;
+ * an unconfigured Reference keeps software force and GPIO isolation.
  */
 void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
 {
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    physical_runtime_image=1U;
+#endif
     if (audio_owner) runtime_fault();
     if (!safety_initialized || fault_latched ||
         (unsigned)a>=360U || (unsigned)b>=360U || (unsigned)c>=360U ||
@@ -883,16 +980,10 @@ void am13e_app_motor_commutation_commit(void)
     __set_PRIMASK(primask);
 }
 
-/* Rel17 run/stop counter lifecycle.  This starts/stops the REAL MCPWM0
- * timebase and controls the shared MCPWM TBCLKSYNC (all MCPWMs share it).
- * Do not equate a running counter with authorization to energize the motor:
- * all six MCU pads deliberately remain GPIO inputs and AQ is forced LOW.
- *
- * Board-dependent gate enable, complement/dead-band, hardware OC trip and
- * fault polarity routing remain unsatisfied. Never set PB13 or select the
- * output pin mux here. Those require an independently verified board-owned
- * arming path; internal timebase start is not power-stage enable.
- */
+/* Original Core run/stop lifecycle. A configured board connects the six
+ * MCPWM pads, releases continuous force and enables PB13 after carrier
+ * startup. Stop/fault deassert the driver first. Brake/lock are restarted
+ * by the original laststep/setduty hooks, not replaced by permanent Hi-Z. */
 void am13e_app_motor_commutation_enable(int enable)
 {
     if (audio_owner) runtime_fault();
@@ -915,16 +1006,18 @@ void am13e_app_motor_commutation_enable(int enable)
             (SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
             runtime_fault();
     } else {
-        /* Functional MCPWM timebase is allowed to run internally;
-         * the IO-only profile NEVER connects six physical phase pins
-         * or changes PB13 to the ACTIVE gate level.
-         */
+        /* Core requested motor or active brake operation. The unconfigured
+         * Reference stays isolated; an electrical board build attaches PWM. */
         if (!pwm_io_for_runtime())
             runtime_fault();
         if (!motor_timebase_running) {
             if (!pwm_registers_inactive() ||
                 (SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
                 runtime_fault();
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+            output_commit_shadow();
+            if(!am13e_motor_output_start())runtime_fault();
+#endif
             DL_MCPWM_setTimeBaseCounter(MCPWM0,0U);
             DL_MCPWM_setTimeBaseCounterMode(MCPWM0,
                                             DL_MCPWM_COUNTER_MODE_UP);
@@ -939,16 +1032,15 @@ void am13e_app_motor_commutation_enable(int enable)
                      (uint32_t)DL_MCPWM_COUNTER_MODE_UP ||
                    !(SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
             runtime_fault();
-        /* Motor algorithms run; external power stage stays inactive. */
+        /* Carrier startup ISR handles the configured driver's enable. */
     }
     __set_PRIMASK(irqmask);
 }
 
 
 /* Rel17 Motor Audio borrows MCPWM0, never a separate beeper GPIO.
- * All six pads stay GPIO INPUT; continuous software force LOW remains
- * mandatory even while the internal AUDIO waveform/counter is active.
- * Physical sound and its gate polarity/deadtime require board signoff.
+ * A configured board connects the same six output pads for audio.
+ * The unconfigured Reference remains isolated; no electrical values are guessed.
  */
 static void audio_stage_compare_locked(uint16_t u, uint16_t w,int active)
 {
@@ -959,7 +1051,16 @@ static void audio_stage_compare_locked(uint16_t u, uint16_t w,int active)
     const uint16_t sink=(uint16_t)DL_MCPWM_AQ_OUTPUT_HIGH_ZERO;
     const uint16_t wave[6]={u?pwm:0U,u?inverse:0U,0U,
                              (u||w)?sink:0U,w?pwm:0U,w?inverse:0U};
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    /* Audio formatters supply modulation counts without the hardware DT.
+     * Preserve pulse width after RED at the actual selected clock divider. */
+    const uint16_t dead=(uint16_t)(MCPWM0->DBRED&MCPWM_DBRED_DBRED_MASK);
+    if((uint32_t)u+dead>UINT16_MAX || (uint32_t)w+dead>UINT16_MAX)runtime_fault();
+    const uint16_t cu=u?(uint16_t)(u+dead):0U,cw=w?(uint16_t)(w+dead):0U;
+    const uint16_t compare[6]={cu,cu,0U,0U,cw,cw};
+#else
     const uint16_t compare[6]={u,u,0U,0U,w,w};
+#endif
     for (unsigned i=0U;i<6U;++i) {
         DL_MCPWM_setActionQualifierShadowLoadMode(
             MCPWM0,runtime_aq_modules[i],DL_MCPWM_AQ_LOAD_ON_CNTR_ZERO);
@@ -983,10 +1084,13 @@ static void audio_stage_compare_locked(uint16_t u, uint16_t w,int active)
 
 /* Must be called only after Rel17 util.c::resetcom() and its ertm/busy
  * admission check. Drive callbacks reject audio_owner from this point.
- * Preserve PB14 RX/TIMG4, PB15 OST, 16kHz SysTick and GPIO Hi-Z.
+ * Preserve PB14 RX/TIMG4, PB15 OST and the 16kHz SysTick.
  */
 void am13e_app_motor_audio_begin(int mode)
 {
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    physical_runtime_image=1U;
+#endif
     if (mode!=1 && mode!=2) runtime_fault();
     const uint32_t mask=__get_PRIMASK();
     __disable_irq();
@@ -1007,11 +1111,17 @@ void am13e_app_motor_audio_begin(int mode)
     audio_owner=(uint32_t)mode;
     audio_period_valid=0U;
     DL_MCPWM_setClockPrescaler(MCPWM0,
-         mode==1?DL_MCPWM_CLOCK_DIVIDER_16:DL_MCPWM_CLOCK_DIVIDER_1);
+         mode==1?DL_MCPWM_CLOCK_DIVIDER_32:DL_MCPWM_CLOCK_DIVIDER_2);
     if ((MCPWM0->TBCTL & MCPWM_TBCTL_CLKDIV_MASK) !=
-       (uint32_t)(mode==1?DL_MCPWM_CLOCK_DIVIDER_16:
-                  DL_MCPWM_CLOCK_DIVIDER_1)<<MCPWM_TBCTL_CLKDIV_OFS)
+       (uint32_t)(mode==1?DL_MCPWM_CLOCK_DIVIDER_32:
+                  DL_MCPWM_CLOCK_DIVIDER_2)<<MCPWM_TBCTL_CLKDIV_OFS)
         runtime_fault();
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    const uint16_t audio_red=(uint16_t)(mode==1 ?
+        (AM13E_MOTOR_OUTPUT_RED_TICKS+15U)/16U:AM13E_MOTOR_OUTPUT_RED_TICKS);
+    DL_MCPWM_setRisingEdgeDelayCountActive(MCPWM0,audio_red);
+    DL_MCPWM_setRisingEdgeDelayCountShadow(MCPWM0,audio_red);
+#endif
     audio_stage_compare_locked(0U,0U,1);
     for (unsigned i=0U;i<6U;++i) runtime_aq_last[i]=0U;
     __set_PRIMASK(mask);
@@ -1028,6 +1138,9 @@ void am13e_app_motor_audio_period(uint16_t period)
      * the next period. No previous DRIVE/PCM waveform can leak through.
      */
     force_pwm_inactive();
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    disconnect_pwm_pads();
+#endif
     motor_timebase_running=0U;
     DL_MCPWM_setPeriodLoadMode(MCPWM0,DL_MCPWM_PERIOD_SHADOW_LOAD_ENABLE);
     DL_MCPWM_setTimeBasePeriodShadow(MCPWM0,period);
@@ -1054,15 +1167,19 @@ void am13e_app_motor_audio_compare(uint16_t u,uint16_t w)
     if (frozen && !pwm_registers_inactive()) runtime_fault();
     audio_stage_compare_locked(u,w,frozen);
     if(frozen){
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+        output_commit_shadow();
+        if(!am13e_motor_output_start())runtime_fault();
+#endif
         DL_MCPWM_setTimeBaseCounter(MCPWM0,0U);
         DL_MCPWM_setTimeBaseCounterMode(MCPWM0,DL_MCPWM_COUNTER_MODE_UP);
         DL_MCPWM_enableTBCLK();
         motor_timebase_running=1U;
-        if (!pwm_pads_disconnected() ||
+        if (!pwm_io_for_runtime() ||
             !(SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
             runtime_fault();
     }
-    /* Motor music/PCM runs on MCPWM0, without gate enable/output pins. */
+    /* Configured music/PCM uses MCPWM0 pins and the same gate lifecycle. */
     __set_PRIMASK(mask);
 }
 
@@ -1085,11 +1202,15 @@ void am13e_app_motor_audio_end(void)
     force_pwm_inactive();
     disconnect_pwm_pads();
     motor_timebase_running=0U;
-    /* Restore the unqualified DRIVE staging default: divider 1,
+    /* Restore the inactive DRIVE staging default: divider 2,
      * 24kHz carrier, zero compare/AQ in both active and shadow banks.
      * The normal six-step PWM Apply will seed exact running settings.
      */
-    DL_MCPWM_setClockPrescaler(MCPWM0,DL_MCPWM_CLOCK_DIVIDER_1);
+    DL_MCPWM_setClockPrescaler(MCPWM0,DL_MCPWM_CLOCK_DIVIDER_2);
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    DL_MCPWM_setRisingEdgeDelayCountActive(MCPWM0,AM13E_MOTOR_OUTPUT_RED_TICKS);
+    DL_MCPWM_setRisingEdgeDelayCountShadow(MCPWM0,AM13E_MOTOR_OUTPUT_RED_TICKS);
+#endif
     DL_MCPWM_setPeriodLoadMode(MCPWM0,DL_MCPWM_PERIOD_SHADOW_LOAD_ENABLE);
     const uint16_t period=(uint16_t)
         ((AM13E_APP_MCLK_HZ/2U)/UINT32_C(24000)-1U);
@@ -1109,8 +1230,8 @@ void am13e_app_motor_audio_end(void)
 
 /* Rel17 laststep() with lock==0 switches all three TIM1 channels
  * to PWM1 while the complementary N gates remain selected. Mirror
- * that exact LOGICAL three-low-side brake AQ image with physical pads
- * still disconnected. The compare/duty bank is driven separately by
+ * that three-low-side brake AQ image; the configured adapter drives
+ * physical pins when Core starts braking. Compare/duty is driven by
  * Rel17 setduty -> am13e_app_motor_pwm_apply().
  *
  * This prepares Drag and Proportional Braking images; it does NOT arm
@@ -1118,6 +1239,9 @@ void am13e_app_motor_audio_end(void)
  */
 void am13e_app_motor_drag_brake_write(void)
 {
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    physical_runtime_image=1U;
+#endif
     if (audio_owner) runtime_fault();
     if (!safety_initialized || fault_latched) runtime_fault();
     AM13E_MotorAQShadowPlan aq;
@@ -1176,8 +1300,8 @@ void am13e_app_motor_lock_brake_stage(int lock,int phase_step)
 }
 
 /* Original Rel17 setduty stage: control MCPWM0 internal counter for
- * Drag/Proportional (lock=0) and Lock Hold (lock=1/2). All six physical
- * pads remain GPIO INPUT, software-forced LOW; PB13 is untouched.
+ * Drag/Proportional (lock=0) and Lock Hold (lock=1/2), including the
+ * configured physical output/gate lifecycle.
  * Motor-running and brushed startup retain their own counter owner.
  */
 void am13e_app_motor_brake_counter_update(int running,int step,
@@ -1256,8 +1380,7 @@ void am13e_app_motor_sixstep_idle(void)
  * a Software AQ command for the independent overcurrent hardware trip.
  *
  * Real output writes plus read-back, not a dummy link-only callback.
- * Other audio functions remain missing until their actual hardware
- * timing/output ownership is implemented.
+ * Audio borrows the same native output and timing ownership.
  */
 void am13e_app_commutation_reset(void)
 {
@@ -1288,7 +1411,8 @@ void am13e_app_commutation_reset(void)
 void am13e_app_motor_fault_shutdown(void)
 {
     /* This is a real software shutdown fallback; MCPWM HW Trip Zone
-     * must be implemented separately for bounded-latency overcurrent.
+     * independently overrides PWM when PB15 is configured. Dedicated
+     * overcurrent routing/threshold remains a board integration gap.
      * Unknown gate-enable polarity means this does not establish
      * hardware gate-off proof and cannot authorize motor operation.
      */
@@ -1316,6 +1440,23 @@ void MCPWM0_IRQHandler(void)
 {
     last_trip_irq_flags = DL_MCPWM_getInterruptSource(MCPWM0);
     last_trip_zone_flags = DL_MCPWM_getTripZoneFlagStatus(MCPWM0);
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    /* Asynchronous TZ overrides ET startup even when both are pending. */
+    if(last_trip_zone_flags==0U && last_trip_irq_flags==DL_MCPWM_INT_ET_1 && !fault_latched){
+        /* Acknowledge before starting the driver: a later OST keeps its
+         * own global/pending interrupt and is not accidentally consumed. */
+        DL_MCPWM_clearInterrupt(MCPWM0,DL_MCPWM_INT_ET_1);
+        DL_MCPWM_clearGlobalInterrupt(MCPWM0);
+        if(am13e_motor_output_zero_irq())return;
+    }
+    if(last_trip_zone_flags==0U && (last_trip_irq_flags&~DL_MCPWM_INT_ET_1)==0U &&
+       !motor_timebase_running && !(MCPWM0->INTEN&DL_MCPWM_INT_ET_1)){
+        /* A stop may have cleared the source after NVIC latched it. */
+        DL_MCPWM_clearInterrupt(MCPWM0,DL_MCPWM_INT_ET_1);
+        DL_MCPWM_clearGlobalInterrupt(MCPWM0);
+        return;
+    }
+#endif
     DL_MCPWM_clearInterrupt(MCPWM0, (uint16_t)last_trip_irq_flags);
     DL_MCPWM_clearGlobalInterrupt(MCPWM0);
     am13e_app_motor_fault_shutdown();
@@ -1324,13 +1465,19 @@ void MCPWM0_IRQHandler(void)
 
 void am13e_app_motor_fault_reset(void)
 {
-    /* No auto-reset until board-specific gate-off polarity and hardware
-     * trip routing are implemented. An unconditional reset could re-arm
-     * an already unsafe power stage. Leave an inspectable latched fault.
-     * Rel17 hard_fault_handler() expects this function not to return.
+    /* Rel17 hard_fault_handler expects a nonreturning shutdown/reset.
+     * The unconfigured Reference leaves an inspectable latched fault.
+     * A configured board requires externally reset-inactive gate wiring.
      */
     __disable_irq();
     fault_latched = 1U;
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    am13e_app_motor_fault_shutdown(); /* Also safe for direct fault callers. */
+    /* Original hard_fault_handler resets after watchdog shutdown. The
+     * externally reset-inactive gate circuit is a required board input.
+     * Never clear OST or feed the watchdog from this nonreturning path. */
+    (void)am13e_app_io_watchdog_fault_arm();
+#endif
     for (;;) { __NOP(); }
 }
 

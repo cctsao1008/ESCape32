@@ -2,6 +2,7 @@
 #include "fault_trip_route_plan.h"
 #include <soc.h>
 #include <stddef.h>
+#include "board_configuration.h"
 
 _Static_assert(DL_XBAR_PWM_INPUTXBAR1 == 0x14U &&
                DL_XBAR_PWM_INPUTXBAR12 == 0x1FU &&
@@ -44,10 +45,18 @@ void am13e_mcu_fault_trip_install(const AM13E_FaultTripRoute *route)
     DL_XBAR_invertPWMXBARSignal(route->pwm_trip, route->active_low);
     DL_MCPWM_setTripZoneAction(route->mcpwm,
                               DL_MCPWM_TZ_ACTION_EVENT_TZA,
+                              #if AM13E_MOTOR_OUTPUT_CONFIGURED
+                              DL_MCPWM_TZ_ACTION_LOW);
+#else
                               DL_MCPWM_TZ_ACTION_HIGH_Z);
+#endif
     DL_MCPWM_setTripZoneAction(route->mcpwm,
                               DL_MCPWM_TZ_ACTION_EVENT_TZB,
+                              #if AM13E_MOTOR_OUTPUT_CONFIGURED
+                              DL_MCPWM_TZ_ACTION_LOW);
+#else
                               DL_MCPWM_TZ_ACTION_HIGH_Z);
+#endif
     DL_MCPWM_enableTripZoneSignals(route->mcpwm, route->ost_signal);
 }
 
@@ -69,5 +78,11 @@ int am13e_mcu_fault_trip_ready(const AM13E_FaultTripRoute *route)
            (route->mcpwm->TZSEL & route->ost_signal) != 0U &&
            (flags & route->ost_flag) == 0U &&
            (route->mcpwm->TZCTL &
-               (MCPWM_TZCTL_TZA_MASK | MCPWM_TZCTL_TZB_MASK)) == 0U;
+               (MCPWM_TZCTL_TZA_MASK | MCPWM_TZCTL_TZB_MASK)) ==
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+                ((uint32_t)DL_MCPWM_TZ_ACTION_LOW<<MCPWM_TZCTL_TZA_OFS |
+                 (uint32_t)DL_MCPWM_TZ_ACTION_LOW<<MCPWM_TZCTL_TZB_OFS);
+#else
+                0U;
+#endif
 }

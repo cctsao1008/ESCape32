@@ -118,17 +118,23 @@ def main():
     cfg=(root/"mcu/AM13E/hal/board_configuration.h").read_text()
     for item in ("mcu/AM13E/hal/motor_fault_route.c",
                  "mcu/AM13E/hal/fault_trip_backend.c",
-                 "mcu/AM13E/hal/telem_uc2_preflight.c"):
-        require(item not in app,"Excluded physical protection/UART linked "+item)
+                 "mcu/AM13E/hal/motor_output_runtime.c"):
+        require(item in app,"Native motor output/trip backend missing "+item)
+    require("mcu/AM13E/hal/telem_uc2_preflight.c" not in app,
+            "Unselected telemetry preflight linked")
+    require("PASS: motor_physical_sdk" in host,
+            "Production Core/native motor register regression missing")
+    board_log=(args.logs/"board-profile-compile.log").read_text()
+    for proof in ("PASS: PB13 active enable IO-only","PASS: Fault Trip IO-only"):
+        require(proof in board_log,"Default Reference isolation proof missing: "+proof)
     # Current Reference hardware is deliberately unqualified. This is
     # an evidence gate, not a permanent exception to source-defined
     # conditional features under Integration Design ReRev1.6.
     require("AM13E_BOARD_POWER_STAGE_PROFILE=1" not in cmake,
             "Unqualified Reference physical power-stage path enabled")
-    require("am13e_power_stage_attach(" not in motor and
-            "am13e_power_stage_attach(" not in stage and
+    require("#if AM13E_MOTOR_OUTPUT_CONFIGURED" in stage and
             "DL_XBAR_selectPWMXBARSource(" not in stage,
-            "Physical gate attach or OC trip activated")
+            "Gate lifecycle must use explicit electrical board definitions")
     require("DL_GPIO_enableInterrupt(" not in fault and
             "DL_GPIO_disableInterrupt(" in fault and
             "am13e_app_nfault_asserted(" not in vectors,

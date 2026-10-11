@@ -69,6 +69,7 @@ int am13e_mcu_motor_pads_pwm_matches(const AM13E_MotorPadRoute *route,
         if (DL_GPIO_getPeripheralFunctionBits(route->pincm[i]) !=
                 route->pwm_functions[i] ||
             actual != expected ||
+            (IOMUX->SECCFG.PINCM[route->pincm[i]]&IOMUX_PINCM_HIZ1_MASK)!=0U ||
             !DL_GPIO_isPeripheralConnected(route->pincm[i])) return 0;
     }
     return 1;

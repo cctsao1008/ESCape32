@@ -132,22 +132,37 @@ syntax_check(observed["serial_uart_rx.c"],
              False,"CRSF TX must own a distinct")
 print("PASS: optional CRSF TX IRQ/EOT board route and fail-closed contract")
 
-# Static non-operation checks: actual default firmware must not install
-# a PB15 or OC trip, drive PB13 active, or enable nFAULT interrupts.
+# Verify the preprocessed default firmware, rather than banning the
+# configured production implementation from the same source file.
 source_root=pathlib.Path(__file__).resolve().parents[4]
 power=(source_root/"mcu/AM13E/hal/motor_power_stage.c").read_text()
 nfault=(source_root/"mcu/AM13E/hal/fault_input.c").read_text()
 runtime=(source_root/"mcu/AM13E/hal/motor_safety.c").read_text()
 vectors=(source_root/"mcu/AM13E/hal/irq_vectors.c").read_text()
 ref_cmake=(source_root/"CMakeLists.txt").read_text()
+def default_preprocessed(name):
+    args=shlex.split(observed[name]["command"])
+    out=[]
+    skip=False
+    for word in args:
+        if skip:
+            skip=False
+            continue
+        if word=="-o":
+            skip=True
+        elif word!="-c":
+            out.append(word)
+    return subprocess.run(out+["-E","-P"],cwd=observed[name]["directory"],
+                          capture_output=True,text=True,check=True).stdout
+power_default=default_preprocessed("motor_power_stage.c")
+runtime_default=default_preprocessed("motor_safety.c")
 checks=[
     ("PB13 active enable", "gate_hold_inactive" in power and
-     "am13e_power_stage_attach(" not in power and
-     "am13e_power_stage_attach(" not in runtime),
+     "int am13e_power_stage_enable(void)" not in power_default and
+     "am13e_motor_output_start()" not in runtime_default),
     ("nFAULT IRQ", "DL_GPIO_enableInterrupt(" not in nfault and
      "am13e_app_nfault_asserted(" not in vectors),
-    ("Fault Trip", "am13e_app_motor_nfault_trip_init(" not in runtime and
-     '"/mcu/AM13E/hal/motor_fault_route.c"' not in ref_cmake),
+    ("Fault Trip", "am13e_app_motor_nfault_trip_init();" not in runtime_default),
     ("Independent OC", "DL_XBAR_selectPWMXBARSource(" not in power),
     ("GPIO-only serial", "DL_GPIO_initDigitalInput(AM13E_BOARD_SERIAL_TX_PINCM)" in nfault),
     ("Analog-only current sense", "DL_GPIO_initPeripheralAnalogFunction(AM13E_BOARD_CURRENT_SENSE_PINCM)" in nfault)

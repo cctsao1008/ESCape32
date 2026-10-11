@@ -38,6 +38,9 @@ include("${PROJECT_SOURCE_DIR}/mcu/_support/AM13E/cmake/ti.cmake")
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/board_clock_reference.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_output_route_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_output_backend.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_output_runtime.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/fault_trip_backend.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_fault_route.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/board_motor_output_reference.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_safety.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_power_stage.c"
@@ -45,8 +48,8 @@ include("${PROJECT_SOURCE_DIR}/mcu/_support/AM13E/cmake/ti.cmake")
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_audio_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_ownership_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/fault_trip_route_plan.c"
-            # Unqualified Reference physical fault route not linked;
-            # conditional safety support remains a porting gap.
+            # Physical nFAULT route is installed only with complete
+            # board electrical definitions; Reference remains isolated.
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_bemf.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_bemf_event_plan.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/preset.c"
@@ -104,8 +107,8 @@ function(am13e_configure_reference_board target)
         # Production Board Electrical Configuration is supplied as an
         # externally owned CMake file with an explicit definitions LIST:
         #   set(AM13E_BOARD_BOARD_DEFINITIONS
-        #       AM13E_BOARD_PB13_ACTIVE_LEVEL=<board value>
-        #       ...RED/FED/OC pin/phase inversion/sensing...)
+        #       AM13E_MOTOR_GATE_ACTIVE_LEVEL=<board value>
+        #       ...explicit pad polarity/RED/FED/minimum/nFAULT/reset wiring...)
         # Reference numeric values are not qualified board settings.
         set(AM13E_BOARD_BOARD_PROFILE_FILE "" CACHE FILEPATH
             "Reviewed AM13E reference gate driver/dead-band/independent OC definitions")

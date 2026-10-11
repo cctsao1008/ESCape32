@@ -32,7 +32,8 @@ int main(void)
             input.freq_min_khz,input.freq_max_khz,ertm,&f));
         assert(am13e_motor_duty_plan(f.period_ticks,input.clock_hz,
             duty,input.board_dead_ticks,lock,running,damp,brushed,fd,&d));
-        const int representable=d.compare_ticks<=d.period_register_ticks;
+        const int representable=d.compare_ticks<=d.period_register_ticks ||
+            (fd && (uint32_t)d.compare_ticks==(uint32_t)d.period_register_ticks+1U);
         assert(am13e_motor_pwm_shadow_plan(&input,&result)==representable);
         if(representable){
             assert(result.period==d.period_register_ticks);

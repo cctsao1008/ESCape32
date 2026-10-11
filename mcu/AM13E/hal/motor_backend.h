@@ -12,7 +12,8 @@
  * - PWM duty: Rel17 logical 0..2000 range (not a TI compare register value).
  * - Hardware backend is responsible for break/dead-time, shoot-through
  *   protection, comparator routing, interrupt priorities and fail-safe state.
- * - No power-stage output may be enabled before hardware qualification.
+ * - Physical board operation requires hardware qualification; software
+ *   supports outputs only with explicit electrical board definitions.
  * - Hardware backend owns IRQ ACK before invoking on_* event callbacks.
  * - bemf_interval_select() selects the filter and arms physical BEMF events.
  * - sine_write(): a/b/c are 0..359 phase indexes into Rel17 sinedata[],
@@ -46,7 +47,7 @@ void am13e_app_motor_bemf_sine_exit_us(int delay_us);
 void am13e_app_motor_sixstep_idle(void);
 /* Rel17 lock=0 Drag/Proportional Brake: 3-phase low-side PWM staging. */
 void am13e_app_motor_drag_brake_write(void);
-/* Internal MCPWM counter for nonzero Drag/Proportional brake only; no pads. */
+/* Core brake counter lifecycle also controls configured physical outputs. */
 void am13e_app_motor_lock_brake_stage(int lock,int phase_step);
 void am13e_app_motor_brake_counter_update(int running,int step,
                                            int brushed,int lock,int duty);

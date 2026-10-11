@@ -13,3 +13,38 @@ Rev1.6 alone governs current integration. The three originals in v1.6 remain byt
 Config-prefix wire blocks0–3 map4000–4fff; APP blocks4–491 map6000–7ffff;492–511 are invalid and Reserved5000–5fff is never mapped. APP-only uploads start at4; Config+APP streams require explicit Config input/authorization. Real parser/range/writer tests retain short-write, CRC, sector companion preservation, failure/retry, protection and readback coverage.
 
 Reference pin/clock/gate values remain unqualified. Physical motor and Flash operations, Bank0 self-update and NONMAIN programming are prohibited during software review. Existing recovery and fail-closed protection gates remain mandatory. Static WRP conservatively rejects protected banks; exact reversible permissions need TI/silicon resolution. SBUS2/soft-UART timing, loaded IRQ equivalence, receiver discovery/reselection, Hall routing and board electrical/resource topology remain pending. Build/mock PASS is neither complete Rel17 parity nor hardware qualification.
+
+## Board-defined physical motor outputs
+
+The existing board-provider profile supplies `AM13E_MOTOR_GATE_ACTIVE_LEVEL`,
+`AM13E_MOTOR_PAD_INVERT_MASK` (UH/UL/VH/VL/WH/WL bits 0–5),
+`AM13E_MOTOR_OUTPUT_RED_TICKS`, `AM13E_MOTOR_OUTPUT_FED_TICKS`,
+`AM13E_MOTOR_MIN_DEAD_TICKS`, `AM13E_MOTOR_NFAULT_ACTIVE_LOW` and
+`AM13E_MOTOR_GATE_RESET_INACTIVE`. Partial/invalid definitions fail compilation.
+These describe electrical wiring, not another application arming policy.
+No complete production-board definition is currently supplied.
+
+The six-independent-input adapter preserves Core phase selection using separate
+A/B AQ sources. RED delays A rising; FED is zero; compare-delayed B rising
+provides the opposite switching gap. RED must meet the explicitly defined minimum
+at the motor/PCM 100 MHz TBCLK. Music rescales RED upwards to whole 6.25 MHz ticks.
+Nonzero FED and `PWM_ENABLE` gate-driver topologies need a separate electrical
+adapter and are rejected rather than guessed. No production dead-time is inferred
+from the provisional 92-tick reference.
+
+Rel17 requests start/stop/brake/audio through existing native hooks. The driver
+seeds an inactive first image, connects real peripheral pads, releases AQ software
+force, and activates PB13 after two carrier ZERO observations. Running AQ/compare/
+period images transfer together through one-shot global loading. Stop/fault disables
+the gate before stopping the clock and disconnecting pins. Configured PB15 trips
+force both logical gate outputs LOW and remain latched until watchdog reset.
+PB15 electrical routing, external reset-inactive gate wiring, pin inversion and
+independent overcurrent protection still need board signoff.
+
+With `AM13E_SDK_ROOT` set, the existing full native runner additionally executes
+actual Core `nextstep()` and native HAL with official TI register definitions in
+anonymous host RAM, using three synthetic electrical fixtures. These fixtures are
+never production-board parameters. Observe all six physical pins with the power
+stage safely isolated before qualifying polarity, duty/frequency, dead time,
+commutation transitions or asynchronous trip timing; register-model PASS does not
+establish physical waveforms or power-stage safety.

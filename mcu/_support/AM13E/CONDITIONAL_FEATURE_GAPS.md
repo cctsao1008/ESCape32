@@ -15,7 +15,7 @@ approved exclusion. See [DESIGN_AUTHORITY.md](DESIGN_AUTHORITY.md).
 | BEC/LED/ERPM/PARK/beacon | Existing original guards retained; selected board GPIO implementations pending |
 | Current/voltage/temperature | Original `SENS_MAP`/board-dependent channels; reference NTC/VBUS numeric model tested, current route unqualified |
 | Boot self-update and write-protection | `CMD_UPDATE=4`: bounded original CRC/ACK reception and Recovery-gated SRAM_C eight-sector erase/program/verify/reset. `CMD_SETWRP=5`: conditional NONMAIN WRP Off/Boot/Full for **both Bank0 and Bank1**, preserves BCR and reserved bits, guarded by ROM BSL/SWD, reversibility, power-loss and WEP Bitmap readback. **Default Reference: final RES_ERROR for both, zero destructive Boot/NONMAIN operations.** Positive CI fixture NEVER FLASH; hardware recovery NOT qualified |
-| Six-step physical power stage | Pads/gate physically disabled in Reference; no motor-drive hardware approval |
+| Six-step physical power stage | Native six-pin MCPWM/gate/AQ/independent DB path implemented for explicit board electrical definitions; unconfigured Reference isolated; physical measurements pending |
 
 The Rev1.6 mapping's `hal_motor.c`, `hal_input.c`, etc. are
 ownership examples for MCU-local hardware adaptation. They are

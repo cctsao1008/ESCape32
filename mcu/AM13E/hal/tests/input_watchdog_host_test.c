@@ -24,6 +24,11 @@ void DL_WWDT_initWatchdogMode(void *w,int divide,int bits,int sleep,int w0,int w
 void DL_WWDT_restart(void *w){assert(w==WWDT0 && running);++restarts;}
 int main(void)
 {
+    assert(am13e_app_io_watchdog_fault_arm());
+    assert(powered && running && starts==1U && !restarts);
+    assert(am13e_app_io_watchdog_fault_arm() && starts==1U && !restarts);
+    test_primask=0U;assert(!am13e_app_io_watchdog_fault_arm());test_primask=1U;
+    powered=running=starts=0U; /* New independent normal-startup fixture. */
     if(!setjmp(fault)){am13e_app_io_watchdog_arm();assert(0);}
     assert(!starts && !restarts && !powered);
     am13e_app_io_watchdog_prepare();assert(powered && !running && !starts);

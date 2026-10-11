@@ -107,3 +107,8 @@ run_test sine_carrier mcu/AM13E/preset.c src/tests/AM13E/test_sine_carrier_host.
 cc $flags -DAM13E mcu/AM13E/hal/tests/test_bemf_timeout_host.c -o /tmp/am13e_bemf_timeout
 /tmp/am13e_bemf_timeout
 echo "PASS: bemf_timeout"
+
+if [ "$mode" = full ]; then
+  bash mcu/_support/AM13E/tools/run_motor_register_regression.sh
+  echo "PASS: motor_physical_sdk (three electrical fixtures)"
+fi
