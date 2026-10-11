@@ -62,6 +62,13 @@ def main():
             "--authorize-config",success=False)
         assert not (d/"bad-stream.bin").exists()
         print("PASS Rev1.6 APP-only blocks start at4; explicit 4KiB Config+APP, actual size, no Reserved")
+        if len(sys.argv)>1:
+            tiny=bytearray(b"\xff"*12)
+            vector(tiny,APP+9)
+            fixture=d/"tiny-app.bin";fixture.write_bytes(tiny)
+            subprocess.run([sys.argv[1],str(fixture)],check=True,
+                           stdout=subprocess.PIPE,text=True)
+            print("PASS tiny12-byte APP through production parser/writer; READ32 erased-tail padding")
         info=json.loads(meta.read_text())
         assert info["linked_raw_bytes"]==len(raw)
         assert info["image_length"]==len(packed)

@@ -52,9 +52,12 @@ def main():
                  "boot/BOOT5_PB14.elf"):
         require((args.build/path).stat().st_size>0,
                 "Real Rel17 v1.4 image/boot artifact missing: "+path)
-    for log in ("rel17-host-test.log","boot-host-test.log"):
-        require("100% tests passed" in (args.logs/log).read_text(),
-                "Rel17 v1.4 pack/Boot transaction host test failed: "+log)
+    transaction_log=(args.logs/"rel17-host-test.log").read_text()
+    require("100% tests passed" in transaction_log and
+            "0 tests failed out of 11" in transaction_log,
+            "Full-image production Boot transaction 11-test suite failed")
+    require("PASS tiny12-byte APP through production parser/writer" in transaction_log,
+            "Consolidated tiny-image production parser coverage missing")
 
     host=(args.logs/"host-tests.log").read_text()
     report=[]

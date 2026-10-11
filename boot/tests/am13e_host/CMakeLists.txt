@@ -71,8 +71,6 @@ add_test(NAME am13e_app_validity COMMAND am13e_app_validity_test)
 # Stage C: packer CLI uses Python's stdlib and a separate temporary image.
 # Keep it under CTest alongside the ARM-independent firmware integrity tests.
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
-add_test(NAME am13e_image_packer
-    COMMAND "${Python3_EXECUTABLE}" "${REPO_ROOT}/boot/tests/am13e_image_packer_test.py")
 
 # Stage C3 is optional because the ARM-linked smoke image lives in a
 # separate CMake build directory, not in this native-GCC CTest tree.
@@ -149,4 +147,12 @@ if(AM13E_HOST_PACKED_IMAGE)
         COMMAND am13e_boot_protocol_test "${AM13E_FULL_IMAGE}")
     set_tests_properties(am13e_boot_protocol_full488 PROPERTIES
         FIXTURES_REQUIRED am13e_full488_fixture)
+    # Tiny-image READ padding is checked through the same production
+    # parser executable; no second smoke build or duplicate 11-test run.
+    add_test(NAME am13e_image_packer
+        COMMAND "${Python3_EXECUTABLE}" "${REPO_ROOT}/boot/tests/am13e_image_packer_test.py"
+            $<TARGET_FILE:am13e_boot_protocol_test>)
+else()
+    add_test(NAME am13e_image_packer
+        COMMAND "${Python3_EXECUTABLE}" "${REPO_ROOT}/boot/tests/am13e_image_packer_test.py")
 endif()

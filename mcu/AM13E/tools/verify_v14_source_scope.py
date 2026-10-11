@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import re
 import sys
+import argparse
 
 ROOT=Path(__file__).resolve().parents[3]
 LOG=ROOT/"am13e-ci-logs"
@@ -39,7 +40,7 @@ def main():
         for symbol in symbols:
             check(symbol in content, "Original Rel17 feature absent: "+
                   path+"/"+symbol)
-    host=src("am13e-ci-logs/host-tests.log")
+    host=(LOG/"host-tests.log").read_text()
     for test in ("command_decode","command_bidir_roundtrip",
                  "bidir_timing","bemf_commutation","motor_ownership",
                  "service_handoff","servo_source","servo_trim_source",
@@ -236,7 +237,7 @@ def main():
         "conditional_adapters_pending":[
             "complete_source_input_discovery","TI_supported_servo_clock_trim",
             "serial_telemetry_half_duplex_and_SBUS2_scheduler",
-            "Hall_hybrid","LED_open_drain_BEC_WS2812",
+            "Hall_hybrid","WS2812_BEC_debug_pin_override",
             "current_limit_board_adapter_unqualified"],
         "convergence_production_host_verified":[
             "service_reset_order_and_Boot_quiescence",
@@ -248,7 +249,7 @@ def main():
             "production_Boot_CRC_adapter_with_CRCP_model",
             "DShot_deferred_Reset_Save_and_source_CLI_CRSF_config",
             "selected_config_to_native_receiver_callbacks",
-            "discrete_LED_DShot_PendSV_GPIO_and_ownership_guards",
+            "discrete_LED_open_drain_DShot_PendSV_GPIO_and_ownership_guards",
             "source_laststep_PRIMASK_drag_lock_desync_and_BEMF_callbacks"],
         "boot_abi":"RESOLVED_REL17_V14_CFG_ID_AND_APP_VECTOR",
         "app_image":"FLAT_ELF_DERIVED_VARIABLE_SIZE_MAX_488KIB",
@@ -267,6 +268,9 @@ def main():
     print("LIMIT: interrupted APP updates have no whole-image commit gate")
 
 if __name__=="__main__":
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--logs",type=Path,default=LOG)
+    LOG=parser.parse_args().logs
     try: main()
     except (OSError,RuntimeError,ValueError,IndexError) as exc:
         sys.exit("FAIL v1.4 scope audit: "+str(exc))
