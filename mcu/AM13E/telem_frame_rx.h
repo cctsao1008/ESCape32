@@ -12,5 +12,8 @@ typedef struct {
 } AM13E_TelemFrameRx;
 void am13e_telem_frame_init(AM13E_TelemFrameRx *,unsigned mode);
 void am13e_telem_frame_abort(AM13E_TelemFrameRx *);
+/* Drop only an incomplete request after elapsed UART idle ticks. */
+void am13e_telem_frame_gap(AM13E_TelemFrameRx *,
+                           uint32_t elapsed_ticks,unsigned min_ticks);
 bool am13e_telem_frame_push(AM13E_TelemFrameRx *,uint8_t b,
                             uint8_t *out,unsigned capacity,unsigned *len);

@@ -61,7 +61,8 @@ bool boot_am13e_stage_vector_plausible(void)
      */
     return msp>=UINT32_C(0x20000008)&&msp<=UINT32_C(0x20018000)&&
            (msp&7U)==0U&&(reset&1U)!=0U&&
-           pc<AM13E_FLASH_BOOT_END&&
+           /* A Thumb entry into the MSP/Reset words is not code. */
+           pc>=8U&&pc<AM13E_FLASH_BOOT_END&&
            pc<length_bytes;
 }
 

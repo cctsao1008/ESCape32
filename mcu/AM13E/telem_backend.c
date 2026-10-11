@@ -257,9 +257,9 @@ void TEL_HANDLER(void)
         }
         if(paused_rx||active_mode==0U||active_mode==1U||
            active_mode==4U)continue;
-        if(seen_rx_tick&&(uint32_t)(ticker-previous_rx_tick)>=8U &&
-           rx.used!=0U)
-            am13e_telem_frame_abort(&rx);
+        if(seen_rx_tick)
+            am13e_telem_frame_gap(&rx,
+                (uint32_t)(ticker-previous_rx_tick),8U);
         previous_rx_tick=ticker;
         seen_rx_tick=true;
         uint8_t request[4]={0};unsigned n=0U;

@@ -130,6 +130,22 @@ static void invalid_image_tests(void)
     TEST_ASSERT(erase_attempts==0U);
     check_outside_boot();
     boot_am13e_stage_abort();
+    /* A syntactically complete, CRC-framed update can still carry
+     * a reset PC pointing into the vector words: reject BEFORE erase.
+     */
+    boot_am13e_stage_begin();
+    data=boot_am13e_stage_next(0U);
+    TEST_ASSERT(data!=NULL);
+    memset(data,0xff,16U);
+    put_u32(data,UINT32_C(0x20018000));
+    put_u32(data+4,UINT32_C(0x00000001));
+    TEST_ASSERT(boot_am13e_stage_accept(0U,16U));
+    TEST_ASSERT(!boot_am13e_stage_vector_plausible());
+    TEST_ASSERT(boot_am13e_update_commit_host_run(TEST_BASE)==
+                AM13E_BOOT_COMMIT_BAD_IMAGE);
+    TEST_ASSERT(erase_attempts==0U&&program_attempts==0U);
+    check_outside_boot();
+    boot_am13e_stage_abort();
     puts("PASS invalid/incomplete Boot transfer rejected before Flash");
 }
 static void injected_failure_tests(void)
