@@ -27,7 +27,7 @@
 #define CMD_SETWRP 5
 #if defined(AM13E)
 #define CMD_WINDOW 6 /* Rev1.6: Config-prefix stream, 492 logical 1KiB blocks */
-#include "../../mcu/AM13E/flash_partition.h"
+#include "../../mcu/AM13E/hal/flash_partition.h"
 #include "update_staging.h"
 #include "update_commit.h"
 #endif
@@ -36,7 +36,7 @@
 #define RES_ERROR 1
 
 #if defined(AM13E)
-/* The TI Reset_Handler calls int main(void) in boot/mcu/AM13E/entry.c.
+/* The TI Reset_Handler calls int main(void) in boot/mcu/AM13E/config.c.
  * Rel17's command dispatcher remains a void function, without a
  * duplicate vector/Reset_Handler or a new protocol implementation.
  */

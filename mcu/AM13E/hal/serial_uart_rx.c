@@ -5,21 +5,21 @@
  * TX interrupt and EOT; NO DMA, single-wire half-duplex bus, SBUS2
  * slot timing or verified physical pin mapping is implied.
  */
-#include "../serial_uart_rx.h"
-#include "../service_reset.h"
-#include "../command_capture.h"
+#include "serial_uart_rx.h"
+#include "service_reset.h"
+#include "command_capture.h"
 #ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
-#include "../serial_frame_rx.h"
-#include "../exbus_autobaud.h"
+#include "serial_frame_rx.h"
+#include "../../../src/exbus_autobaud.h"
 #ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
-#include "../serial_tx_queue.h"
-#include "../crsf_deferred_command.h"
+#include "serial_tx_queue.h"
+#include "crsf_deferred_command.h"
 #ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
-#include "../cli_line_rx.h"
-#include "../cli_entry.h"
+#include "cli_line_rx.h"
+#include "../../../src/cli_entry.h"
 #endif
 #endif
-#include "../io_backend.h"
+#include "io_backend.h"
 #if defined(AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED) && \
     (!defined(AM13E_BOARD_SERIAL_TX_CONFIGURED) || \
      AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED!=1)
@@ -39,8 +39,8 @@ _Static_assert(AM13E_BOARD_EXBUS_STABLE_DEVICE_ID!=0U &&
                AM13E_BOARD_EXBUS_STABLE_DEVICE_ID!=UINT32_MAX,
                "EXBUS reply cannot use placeholder device identity");
 #endif
-#include "../board_reference_io.h"
-#include "../board_configuration.h"
+#include "board_reference_io.h"
+#include "board_configuration.h"
 #include <soc.h>
 #include <dl_gpio.h>
 #include <dl_unicommuart.h>

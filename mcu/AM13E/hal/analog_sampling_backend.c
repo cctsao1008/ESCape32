@@ -1,4 +1,4 @@
-#include "../analog_sampling_backend.h"
+#include "analog_sampling_backend.h"
 #include <soc.h>
 #include <dl_gpio.h>
 #include <dl_common.h>

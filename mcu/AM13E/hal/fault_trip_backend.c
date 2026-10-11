@@ -1,5 +1,5 @@
-#include "../fault_trip_backend.h"
-#include "../fault_trip_route_plan.h"
+#include "fault_trip_backend.h"
+#include "fault_trip_route_plan.h"
 #include <soc.h>
 #include <stddef.h>
 

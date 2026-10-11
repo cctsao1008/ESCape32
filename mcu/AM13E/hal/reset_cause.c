@@ -15,7 +15,7 @@
  * (SYSFLASHECC, BOOTCLKFAIL, etc.) needs a formal platform decision
  * before actual motor operation; this is not a fault classifier.
  */
-#include "../motor_backend.h"
+#include "motor_backend.h"
 #include <dl_sysctl.h>
 
 int am13e_app_motor_reset_flags(void)

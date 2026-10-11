@@ -3,11 +3,11 @@
  * The 100MHz BUSCLK is the accepted XTAL/PLL/MCLK divider contract.
  * A final board must measure peripheral tick rate/IRQ jitter.
  */
-#include "../motor_event_timer.h"
-#include "../motor_timer_math.h"
-#include "../motor_backend.h"
-#include "../motor_audio_hw.h"
-#include "../clock_backend.h"
+#include "motor_event_timer.h"
+#include "motor_timer_math.h"
+#include "motor_backend.h"
+#include "motor_audio_hw.h"
+#include "clock_backend.h"
 #include <limits.h>
 #include <soc.h>
 #include <dl_timer.h>

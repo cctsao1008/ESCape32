@@ -2,11 +2,11 @@
  * PB14 requires a contention-safe external 3.3V/5V bidirectional front end.
  * Board timing/physical signaling is pending oscilloscope qualification.
  */
-#include "../command_reply.h"
-#include "../bidir_timing.h"
-#include "../io_backend.h"
-#include "../clock_backend.h"
-#include "../command_capture.h"
+#include "command_reply.h"
+#include "bidir_timing.h"
+#include "io_backend.h"
+#include "clock_backend.h"
+#include "command_capture.h"
 #include <soc.h>
 #include <dl_timer.h>
 #include <dl_dma.h>

@@ -5,7 +5,7 @@
 > current** and **MUST NOT** be used to implement, validate, or update
 > the Rel17 v1.4 firmware. Current contract:
 > [README.md](README.md),
-> [APP_LINK_CONTRACT.md](../../../mcu/AM13E/APP_LINK_CONTRACT.md).
+> [APP_LINK_CONTRACT.md](../../../docs/AM13E/APP_LINK_CONTRACT.md).
 > Original text follows unchanged; statements in present tense below
 > describe historical states, not today's active branch.
 
@@ -18,9 +18,9 @@
 This host test now compiles the **real production sources**:
 `boot/src/main.c` (entry renamed only in the host wrapper),
 `boot/src/io.c` (recvval/recvdata/senddata),
-`boot/mcu/AM13E/flash_range.c`,
+`boot/src/flash_range.c`,
 `boot/mcu/AM13E/hal/flash.c` and
-`boot/mcu/AM13E/image_integrity.c`.
+`tests/AM13E/fixtures/image_integrity.c`.
 
 The mocked boundary is **only** the PB14 byte-stream transport, TI Flash
 controller and CRCP engine. Host CRC-32/ISO-HDLC software emulates protocol
@@ -140,7 +140,7 @@ header `0x6100`, actual M33 vectors `0x6800`, ARM code after the
 vectors) and compares ELF/objcopy/packed image bytes and CRCs. It must
 not be reported as PASS until the actual WSL command succeeds.
 
-The smoke uses `boot/mcu/AM13E/linker_app_smoke.ld` and
+The smoke uses `cmake/AM13E/boot/linker_app_smoke.ld` and
 `boot/tests/am13e_app_link_smoke.c`. It contains a dummy WFI
 `Reset_Handler`, deliberately **not** an initialized application or
 a motor-control program. Do not flash or execute it as firmware.
@@ -200,7 +200,7 @@ qualified by this host-only packer.
 ## Stage B: production image integrity integration
 
 The current `am13e-port-v2` build links the **same portable validator**
-(`boot/mcu/AM13E/image_integrity.c`) into all three relevant paths:
+(`tests/AM13E/fixtures/image_integrity.c`) into all three relevant paths:
 
 1. Host validator fixture (`am13e_image_validator`): validates the header,
    signature, M33 vector, length and CRC-32/ISO-HDLC.

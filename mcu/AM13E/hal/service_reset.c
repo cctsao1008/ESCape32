@@ -1,5 +1,5 @@
-#include "../service_reset.h"
-#include "../motor_backend.h"
+#include "service_reset.h"
+#include "motor_backend.h"
 #include <soc.h>
 
 void am13e_app_service_reset(void)

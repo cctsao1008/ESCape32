@@ -6,8 +6,8 @@
 #include "common.h"
 #include <stdint.h>
 #include <soc.h>
-#include "../app_validity.h"
-#include "../handoff.h"
+#include "app_validity.h"
+#include "handoff.h"
 
 extern char __cfg_flash_start__[];
 extern char __app_flash_start__[];

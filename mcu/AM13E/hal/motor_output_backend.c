@@ -1,4 +1,4 @@
-#include "../motor_output_backend.h"
+#include "motor_output_backend.h"
 #include <stdint.h>
 #include <stddef.h>
 #include <dl_gpio.h>

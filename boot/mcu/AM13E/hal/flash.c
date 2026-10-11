@@ -12,7 +12,7 @@
 #include <dl_flash.h>
 #include <soc.h>
 #include <stdint.h>
-#include "../../../../mcu/AM13E/flash_partition.h"
+#include "../../../../mcu/AM13E/hal/flash_partition.h"
 
 /* Boot has one synchronous writer. Retain its complete authorized RMW
  * image across a failed commit for a same-sector software retry. This

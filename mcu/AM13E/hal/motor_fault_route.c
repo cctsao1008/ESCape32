@@ -7,9 +7,9 @@
 #include <soc.h>
 #include <dl_xbar.h>
 #include <dl_mcpwm.h>
-#include "../motor_backend.h"
-#include "../motor_fault_route.h"
-#include "../fault_trip_backend.h"
+#include "motor_backend.h"
+#include "motor_fault_route.h"
+#include "fault_trip_backend.h"
 
 #define AM13E_REF_NFAULT_GPIO_INDEX 47U
 #define AM13E_REF_NFAULT_INPUTXBAR DL_XBAR_INPUT2

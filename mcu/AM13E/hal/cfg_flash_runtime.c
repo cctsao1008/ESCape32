@@ -19,13 +19,13 @@
  * configuration sector may be lost after interrupted erase/program.
  * Production requires sector endurance and brownout qualification.
  */
-#include "../util_backend.h"
-#include "../cfg_flash_plan.h"
-#include "../flash_partition.h"
-#include "../cfg_flash_writer.h"
-#include "../motor_backend.h"
-#include "../motor_safety.h"
-#include "../command_reply.h"
+#include "util_backend.h"
+#include "cfg_flash_plan.h"
+#include "flash_partition.h"
+#include "cfg_flash_writer.h"
+#include "motor_backend.h"
+#include "motor_safety.h"
+#include "command_reply.h"
 #include <dl_flash.h>
 #include <stdint.h>
 #include <stddef.h>

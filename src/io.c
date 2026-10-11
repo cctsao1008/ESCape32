@@ -16,21 +16,18 @@
 */
 
 #include "common.h"
+#include "bidir_codec.h"
+static inline __attribute__((always_inline)) int exbus_retry_step(uint8_t *count) {
+    if(!*count)return 0;
+    return --*count&1U ? 1 : 2;
+}
+static inline __attribute__((always_inline)) int cli_high_timeout(uint8_t *count) { return ++*count>=16U; }
+#include "exbus_autobaud.h"
 
 #if defined(AM13E)
 #include "io_backend.h"
 #include "bidir_codec.h"
 #include "command_reply.h" /* DShot save waits for pending BiDShot reply */
-#include "ibus_receiver.h" /* Native frame inspection uses original iBUS semantics */
-#include "sbus_receiver.h" /* Packed 11-bit SBUS channel extraction */
-#include "sbus2_reply.h" /* Original 6x3B SBUS2 telemetry slot payload */
-#include "crsf_receiver.h" /* Original CRSF CRC8-DVB-S2 channel RX */
-#include "serial_command.h" /* Original binary serialfunc commands */
-#include "exbus_receiver.h" /* Original EXBUS CRC16 and channel semantics */
-#include "exbus_telemetry_reply.h" /* Preserve original exbusresp fields */
-#include "hott_receiver.h" /* Original HoTT/SUMDv1/SUMDv3 and XMODEM CRC */
-#include "crsf_command_reply.h" /* Preserve original execcrsfcmd response */
-#include "servo_calibration.h"
 #include "service_reset.h"
 #else
 #ifdef AT32F4
@@ -54,6 +51,7 @@ static void serialirq(void);
 static int serialfunc(int len);
 static int ibusfunc(int len);
 static int sbusfunc(int len);
+static void sbuspacket(unsigned n);
 static int crsffunc(int len);
 static int exbusfunc(int len);
 static int hottfunc(int len);
@@ -64,8 +62,42 @@ static char dshotinv, iobuf[1024] __attribute__((aligned(2)));
 static uint16_t dshotarr1, dshotarr2;
 #endif /* !AM13E: legacy timer and capture state */
 
+#if defined(AM13E)
+static char iobuf[1024] __attribute__((aligned(2)));
+static unsigned io_valid_frames, sbus2_reply_remaining, sbus2_reply_index;
+static uint32_t io_exbus_device_id;
+#if defined(AM13E_BOARD_SERVO_CLOCK_TRIM_CONFIGURED) || defined(REL17_CALIBRATION_TEST_ADAPTER)
+static struct { uint8_t count; int16_t error,high,low; } servo_calibration_state;
+static unsigned servo_capture_period;
+static int servo_calibration_finished;
+static void calibirq(void);
+#endif
+static int serialfunc(int len), ibusfunc(int len), sbusfunc(int len);
+static int crsffunc(int len), exbusfunc(int len), hottfunc(int len), exbusresp(int id);
+static void sbuspacket(unsigned n);
+static inline __attribute__((always_inline)) unsigned crsfresponse(const char *buf, char *res);
+static void io_feed_watchdog(void) {
+    ++io_valid_frames;
+    am13e_app_io_watchdog_feed();
+}
+#ifdef REL17_IO_TEST_OBSERVER
+static int io_raw_throttle=-1, io_raw_brake=-1;
+static bool io_raw_channels;
+#endif
+static int io_core_frame(const uint8_t *frame,unsigned length,int (*parse)(int)) {
+    if(!frame || length>sizeof iobuf)return 0;
+    memcpy(iobuf,frame,length);
+    const unsigned before=io_valid_frames;
+    (void)parse((int)length);
+    return io_valid_frames!=before;
+}
+#endif
+
 /* Rel17 input PWM throttle conversion is shared. */
 static void setthrot(int x) {
+#if defined(AM13E) && defined(REL17_IO_TEST_OBSERVER)
+    io_raw_throttle=x;io_raw_channels=true;
+#endif
 	if (x < 0) return;
 	throt = cfg.throt_mode ?
 		x < cfg.throt_mid - 50 ? scale(x, cfg.throt_min, cfg.throt_mid - 50, -2000, 0):
@@ -75,6 +107,9 @@ static void setthrot(int x) {
 
 #if defined IO_PA2 || defined IO_AUX || defined(AM13E)
 static void setbrake(int x) {
+#if defined(AM13E) && defined(REL17_IO_TEST_OBSERVER)
+    io_raw_brake=x;io_raw_channels=true;
+#endif
 	if (x < 0) return;
 	brake = scale(x, 1100, 1900, 0, cfg.duty_drag);
 	auxup = 0;
@@ -135,7 +170,8 @@ void initio(void) {
 }
 
 static void entryirq(void) {
-	static char n, c, d;
+	static char n, d;
+    static uint8_t c;
 	if (TIM_SR(IOTIM) & TIM_SR_UIF) { // Timeout ~66ms
 		TIM_SR(IOTIM) = ~TIM_SR_UIF;
 		if (!IOTIM_IDR) { // Low level
@@ -143,7 +179,7 @@ static void entryirq(void) {
 			n = 0;
 			return;
 		}
-		if (++c < 16) return; // Wait for ~1s before entering CLI
+		if (!cli_high_timeout(&c)) return; // Wait for ~1s before entering CLI
 		ioirq = cliirq;
 #ifdef IO_PA2
 		io_serial();
@@ -281,35 +317,7 @@ static void entryirq(void) {
 	DMA1_CMAR(IOTIM_DMA) = (uint32_t)iobuf;
 }
 
-static void calibirq(void) {
-	static uint8_t n;
-	static int16_t q, x, y;
-	int p = TIM_CCR1(IOTIM); // Pulse period
-	if (cfg.throt_cal && // 50/100/125/200/250/333/500Hz 11/22ms servo PWM within 8% margin
-		((p < 22880 && p > 21120) || (p < 20800 && p > 19200) || (p < 11440 && p > 10560) || (p < 10400 && p > 9600) || (p < 8320 && p > 7680) ||
-		(p < 5200 && p > 4800) || (p < 4160 && p > 3840) || (p < 3120 && p > 2880) || (p < 2080 && p > 1920))) {
-		IWDG_KR = IWDG_KR_RESET;
-		q += p - ((p + 500) / 1000) * 1000; // Cumulative error
-		if (++n & 3) return;
-		if (q > x) { // Slow down
-			y = -q;
-			q = 0;
-			hsictl(-1);
-			return;
-		}
-		if (q < y) { // Speed up
-			x = -q;
-			q = 0;
-			hsictl(1);
-			return;
-		}
-	}
-	ioirq = servoirq;
-	TIM_CCMR1(IOTIM) = TIM_CCMR1_CC1S_IN_TI1 | TIM_CCMR1_IC1F_DTF_DIV_8_N_8 | TIM_CCMR1_CC2S_IN_TI1 | TIM_CCMR1_IC2F_DTF_DIV_8_N_8;
-	TIM_CCER(IOTIM) = TIM_CCER_CC2E | TIM_CCER_CC2P; // IC2 on falling edge on TI1
-	TIM_SR(IOTIM) = ~TIM_SR_CC2IF;
-	TIM_DIER(IOTIM) = TIM_DIER_CC2IE;
-}
+
 
 static void servoirq(void) {
 	int x = TIM_CCR2(IOTIM);
@@ -575,17 +583,12 @@ int am13e_app_io_servo_calibration_blocked(void) {
 void am13e_app_io_servo_pulse(unsigned int pulse_us,unsigned int period_ticks) {
     if(cfg.input_mode!=0)return;
 #ifdef AM13E_BOARD_SERVO_CLOCK_TRIM_CONFIGURED
-    static AM13E_ServoCalibration calibration;
-    const int was_finished=calibration.finished;
-    const int action=am13e_servo_calibration_step(&calibration,
-                                                 period_ticks,cfg.throt_cal);
-    if(action!=AM13E_SERVO_CAL_DONE) {
-        am13e_app_io_watchdog_feed();
-        if(action==AM13E_SERVO_CAL_SLOW)am13e_app_servo_clock_trim(-1);
-        else if(action==AM13E_SERVO_CAL_FAST)am13e_app_servo_clock_trim(1);
-        return;
+    if(!servo_calibration_finished) {
+        servo_capture_period=period_ticks;
+        calibirq();
+        return; /* Original IRQ handoff: next capture becomes Servo. */
     }
-    if(!was_finished)return; /* calibirq switches handler; next capture is Servo. */
+
 #else
     (void)period_ticks;
     servo_calibration_blocked=!!cfg.throt_cal;
@@ -615,194 +618,71 @@ int am13e_app_io_service_idle(void) { return ertm==0; }
  * No fake LED GPIO support is introduced by this native adapter.
  */
 int am13e_app_io_serial_frame(const uint8_t *frame,unsigned length,
-                              uint8_t *reply,unsigned reply_capacity,
-                              unsigned *reply_length)
-{
-    if(cfg.input_mode!=2)return 0;
-    AM13E_SerialCommandState s={
-        .throttle=throt,.brake=brake,.auxup=auxup,
-        .flipdir=flipdir,.led=cfg.led,.duty_drag=cfg.duty_drag,
-        .temp1=temp1,.temp2=temp2,.volt=volt,.curr=curr,
-        .csum=csum,.ertm=ertm,
-#ifdef LED_CNT
-        .led_count=LED_CNT
-#else
-        .led_count=0
-#endif
-    };
-    if(!am13e_serial_command(frame,length,&s,reply,reply_capacity,
-                             reply_length,crc8))return 0;
-    am13e_app_io_watchdog_feed();
-    throt=s.throttle;brake=s.brake;auxup=s.auxup;
-    flipdir=s.flipdir;
-#ifdef LED_CNT
-    cfg.led=s.led;
-#endif
+                              uint8_t *reply,unsigned capacity,unsigned *written) {
+    if(cfg.input_mode!=2 || !frame || !reply || !written || capacity<12U ||
+       length<2U || length>255U)return 0;
+    memcpy(iobuf,frame,length);
+    const unsigned before=io_valid_frames;
+    const int n=serialfunc((int)length);
+    *written=(unsigned)n;
+    if(n)memcpy(reply,iobuf,(unsigned)n);
+    return io_valid_frames!=before;
+}
+int am13e_app_io_ibus_frame(const uint8_t *frame,unsigned length) {
+    return cfg.input_mode==3 && length==32U && io_core_frame(frame,length,ibusfunc);
+}
+int am13e_app_io_sbus_frame(const uint8_t *frame,unsigned length) {
+    return cfg.input_mode==4 && length==25U && io_core_frame(frame,length,sbusfunc);
+}
+int am13e_app_io_sbus2_next_slot(uint8_t out[3],unsigned *delay_us) {
+    if(cfg.input_mode!=4 || !out || !delay_us || !sbus2_reply_remaining ||
+       telphid<1 || telphid>4 || cfg.telem_poles<=0)return 0;
+    sbuspacket(sbus2_reply_index);
+    memcpy(out,iobuf,3U);
+    *delay_us=sbus2_reply_index ? 660U : 3200U;
+    ++sbus2_reply_index;--sbus2_reply_remaining;
     return 1;
 }
-/* Native UART RX callback for complete original Rel17 iBUS packet.
- * No UART pinmux is automatically selected by the PB14 Reference.
- * Only a valid checksum in original input_mode=3 may refresh WWDT.
- */
-int am13e_app_io_ibus_frame(const uint8_t *frame,unsigned length)
-{
-    int throttle_us=-1,brake_us=-1;
-    if(cfg.input_mode!=3 ||
-       !am13e_ibus_decode_channels(frame,length,
-          (unsigned)(uint8_t)cfg.input_ch1,
-          (unsigned)(uint8_t)cfg.input_ch2,
-          &throttle_us,&brake_us))
-        return 0;
-    am13e_app_io_watchdog_feed();
-    setthrot(throttle_us);
-    setbrake(brake_us);
-    return 1;
+int am13e_app_io_crsf_frame(const uint8_t *frame,unsigned length) {
+    return cfg.input_mode==5 && frame && length>=4U && length<=64U &&
+           (unsigned)frame[1]+2U==length && io_core_frame(frame,length,crsffunc);
 }
-/* The selected board owns the physical 3200us first-slot delay and
- * 660us slot spacing. Reference NEVER drives UART TX for SBUS2.
- */
-static AM13E_Sbus2ReplyState sbus2_reply_state;
-static unsigned sbus2_reply_remaining;
-int am13e_app_io_sbus2_next_slot(uint8_t out[3],unsigned *delay_us)
-{
-    if(cfg.input_mode!=4||sbus2_reply_remaining==0U)return 0;
-    const AM13E_Sbus2ReplyValues v={
-        .temp1=temp1,.temp2=temp2,.curr=curr,.volt=volt,
-        .csum=csum,.erpm=erpm,.telem_poles=cfg.telem_poles,
-        .telphid=(unsigned)(uint8_t)telphid
-    };
-    if(!am13e_sbus2_next_packet(&sbus2_reply_state,&v,out,delay_us))
-        return 0;
-    --sbus2_reply_remaining;
-    return 1;
+int am13e_app_io_exbus_frame(const uint8_t *frame,unsigned length) {
+    return cfg.input_mode==6 && frame && length>=8U && length<=64U &&
+           frame[2]==length && (unsigned)frame[5]+8U==length &&
+           io_core_frame(frame,length,exbusfunc);
 }
-/* Original Rel17 SBUS input_mode=4 channel values; USART framing,
- * inversion, 8E2 settings and SBUS2 time-slot reply are UART-owned.
- * Frame-level acceptance mirrors upstream sbusfunc() (len/header).
- */
-int am13e_app_io_sbus_frame(const uint8_t *frame,unsigned length)
-{
-    int throttle_us=-1,brake_us=-1;
-    if(cfg.input_mode!=4 ||
-       !am13e_sbus_decode_channels(frame,length,
-           (unsigned)(uint8_t)cfg.input_ch1,
-           (unsigned)(uint8_t)cfg.input_ch2,
-           &throttle_us,&brake_us))
-        return 0;
-    am13e_app_io_watchdog_feed();
-    setthrot(throttle_us);
-    setbrake(brake_us);
-    sbus2_reply_remaining=0U;
-    if(am13e_sbus2_eligible(frame,length,
-              (unsigned)(uint8_t)telmode,(unsigned)(uint8_t)telphid)){
-        sbus2_reply_state.slot_index=0U;
-        sbus2_reply_remaining=6U;
-    }
-    return 1;
+int am13e_app_io_hott_frame(const uint8_t *frame,unsigned length) {
+    return cfg.input_mode==7 && frame && length>=5U && length<=64U &&
+           (unsigned)frame[2]*2U+5U==length &&
+           ((frame[1]&0x7fU)!=3U || frame[2]>=2U) &&
+           io_core_frame(frame,length,hottfunc);
 }
-/* HoTT/SUMD original input_mode=7. The native decoder passes
- * through src/util.c::crc16xmodem, preserving original v1/v3
- * channel mapping and setthrot/setbrake handling.
- */
-int am13e_app_io_hott_frame(const uint8_t *frame,unsigned length)
-{
-    int throttle_us=-1,brake_us=-1;
-    bool channels=false;
-    if(cfg.input_mode!=7 ||
-       !am13e_hott_decode_frame(frame,length,
-         (unsigned)(uint8_t)cfg.input_ch1,
-         (unsigned)(uint8_t)cfg.input_ch2,
-         crc16xmodem,&throttle_us,&brake_us,&channels))
-        return 0;
-    am13e_app_io_watchdog_feed();
-    if(channels){
-        setthrot(throttle_us);
-        setbrake(brake_us);
-    }
-    return 1;
-}
-/* EXBUS original input_mode=6. The native decoder invokes the
- * actual Rel17 util.c::crc16ccitt (not a second CRC algorithm).
- * EXBUS telemetry requests are recognized but cannot be replied
- * to until qualified physical half-duplex TX/switching is added.
- */
-int am13e_app_io_exbus_frame(const uint8_t *frame,unsigned length)
-{
-    int throttle_us=-1,brake_us=-1;
-    bool channels=false,telemetry_request=false;
-    if(cfg.input_mode!=6 ||
-       !am13e_exbus_decode_frame(frame,length,
-         (unsigned)(uint8_t)cfg.input_ch1,
-         (unsigned)(uint8_t)cfg.input_ch2,
-         crc16ccitt,&throttle_us,&brake_us,
-         &channels,&telemetry_request))
-        return 0;
-    am13e_app_io_watchdog_feed();
-    if(channels) {
-        setthrot(throttle_us);
-        setbrake(brake_us);
-    }
-    (void)telemetry_request;
-    return 1;
-}
-/* Packet formatting uses the original sensor/telemetry variables,
- * source-defined EXBUS CRC helpers and caller-owned board identity.
- * It does not enable a UART TX or assume a half-duplex transceiver.
- */
-unsigned am13e_app_io_exbus_telemetry(uint8_t request_id,
-                                      uint32_t device_id,uint8_t *out,
-                                      unsigned capacity)
-{
-    if(cfg.input_mode!=6)return 0U;
-    static AM13E_ExbusTelemetryState state;
-    const AM13E_ExbusTelemetryValues v={
-        .device_id=device_id,.temp1=temp1,.temp2=temp2,
-        .volt=volt,.curr=curr,.csum=csum,.erpm=erpm,
-        .telem_poles=cfg.telem_poles
-    };
-    return am13e_exbus_telemetry_build(&state,&v,request_id,
-                                      out,capacity,crc8,crc16ccitt);
-}
-/* Rel17 crsffunc() refreshes WWDT for CRC-valid CRSF frames, and
- * changes throttle/brake only for channel data (type 0x16).
- * The optional two-wire 0x28/0x2c/0x2d reply is executed in
- * preemptible PendSV, NOT in the UNICOMM RX IRQ; its electrical
- * bus ownership and physical timing remain unqualified.
- */
 unsigned am13e_app_io_crsf_reply(const uint8_t *frame,unsigned length,
-                                 uint8_t *reply,unsigned capacity)
-{
-    if(cfg.input_mode!=5||telmode!=4)return 0U;
-    /* In upstream src/io.c::crsffunc() the 1024-byte shared iobuf
-     * also holds the constructed response after the received frame.
-     * Use a separate 1024-byte scratch area here; no stack overflow.
-     * Caller must first accept this frame through original CRC path.
+                                 uint8_t *reply,unsigned capacity) {
+    if(cfg.input_mode!=5 || telmode!=4 || !frame || !reply || capacity<64U ||
+       length<4U || length>64U || frame[1]<2U || frame[1]>62U ||
+       (unsigned)frame[1]+2U!=length ||
+       (frame[2]!=0x28U && frame[2]!=0x2cU && frame[2]!=0x2dU))return 0U;
+    /* Called only from preemptible service after CRC acceptance and TX preflight.
+     * Keep separate scratch: UART RX can preempt command/config processing.
      */
     static char scratch[1024];
-    return am13e_crsf_reply_envelope(frame,length,reply,capacity,
-                                    scratch,sizeof scratch,
-                                    execcrsfcmd,crc8dvbs2);
+    const unsigned n=crsfresponse((const char *)frame,scratch);
+    memcpy(reply,scratch,n);
+    return n;
 }
-int am13e_app_io_crsf_frame(const uint8_t *frame,unsigned length)
-{
-    int throttle_us=-1,brake_us=-1;
-    bool channels=false;
-    if(cfg.input_mode!=5 ||
-       !am13e_crsf_decode_frame(frame,length,
-           (unsigned)(uint8_t)cfg.input_ch1,
-           (unsigned)(uint8_t)cfg.input_ch2,
-           &throttle_us,&brake_us,&channels))
-        return 0;
-    am13e_app_io_watchdog_feed();
-    if(channels){
-        setthrot(throttle_us);
-        setbrake(brake_us);
-    }
-    return 1;
+unsigned am13e_app_io_exbus_telemetry(uint8_t id,uint32_t device_id,
+                                      uint8_t *out,unsigned capacity) {
+    if(cfg.input_mode!=6 || !out || capacity<64U || cfg.telem_poles<2)return 0U;
+    io_exbus_device_id=device_id;
+    const unsigned n=(unsigned)exbusresp(id);
+    memcpy(out,iobuf,n);
+    return n;
 }
+
 #else
 void iotim_dma_isr(void) { // DSHOT
-	static const char gcr[] = {0x19, 0x1b, 0x12, 0x13, 0x1d, 0x15, 0x16, 0x17, 0x1a, 0x09, 0x0a, 0x0b, 0x1e, 0x0d, 0x0e, 0x0f};
 	DMA1_IFCR = DMA_IFCR_CTCIF(IOTIM_DMA);
 	if (TIM_DIER(IOTIM) & TIM_DIER_UIE) return; // Bad sync
 	if (DMA1_CCR(IOTIM_DMA) & DMA_CCR_DIR) {
@@ -814,8 +694,7 @@ void iotim_dma_isr(void) { // DSHOT
 			dshotval = a | b << 9;
 		}
 		int a = dshotval << 4 | dshotcrc(dshotval, 1);
-		int b = 0;
-		for (int i = 0, j = 0; i < 16; i += 4, j += 5) b |= gcr[a >> i & 0xf] << j;
+		int b=(int)rel17_bidir_gcr((uint16_t)a);
 		uint16_t *buf = (uint16_t *)(iobuf + 64);
 		buf[0] = -1;
 		for (int p = -1, i = 19; i >= 0; --i) {
@@ -874,25 +753,9 @@ void usart2_isr(void) {
 	ioirq();
 }
 
-static int getchan1(const char *buf, int n) { // SBUS/CRSF
-	if (n < 0 || n >= 16) return -1;
-	int i = (n * 11) >> 3;
-	int a = (n * 3) & 7;
-	int b = ((n + 1) * 3) & 7;
-	int x = a < b ?
-		buf[i] >> a | (buf[i + 1] & ((1 << b) - 1)) << (8 - a):
-		buf[i] >> a | buf[i + 1] << (8 - a) | (buf[i + 2] & ((1 << b) - 1)) << (16 - a);
-	return (x * 5 >> 3) + 880;
-}
 
-static int getchan2(const char *buf, int m, int n, int s) { // EXBUS/HoTT
-	if (s > 0 && n >= 8 && (n -= s) < 8) return -1;
-	if (n < 0 || n >= m) return -1;
-	buf += n << 1;
-	int a = buf[0];
-	int b = buf[1];
-	return (s < 0 ? a | b << 8 : a << 8 | b) >> 3;
-}
+
+
 
 static void serialirq(void) {
 	if (USART2_CR1 & USART_CR1_TCIE) {
@@ -925,101 +788,13 @@ reading:
 	DMA1_CCR(USART2_RX_DMA) = DMA_CCR_EN | DMA_CCR_MINC | DMA_CCR_PSIZE_8BIT | DMA_CCR_MSIZE_8BIT;
 }
 
-static int serialresp1(int a, int b) {
-	iobuf[0] = 4;
-	iobuf[1] = a;
-	iobuf[2] = b;
-	iobuf[3] = crc8(iobuf, 3);
-	return 4;
-}
 
-static int serialresp2(int x) {
-	return serialresp1(x, x >> 8);
-}
 
-static int serialfunc(int len) {
-	if (len < 2 || iobuf[0] != len || crc8(iobuf, len)) return 0;
-	IWDG_KR = IWDG_KR_RESET;
-	len -= 2;
-	for (char *buf = iobuf + 1; len--;) {
-		int val = *buf++;
-		char *pos = buf;
-		switch (val) {
-			case 0x00: // Throttle
-				if (len < 2) return 0;
-				val = buf[0] | buf[1] << 8;
-				buf += 2;
-				if (val & 0x8000) val -= 0x10000; // Propagate sign
-				if (val < -2000 || val > 2000) break;
-				throt = val;
-				break;
-			case 0x01: // Drag brake adjustment
-				if (len < 1) return 0;
-				brake = min(*buf++, 100) * cfg.duty_drag * 41 >> 12;
-				auxup = 0;
-				break;
-			case 0x02: // Normal motor direction
-				flipdir = 0;
-				break;
-			case 0x03: // Reversed motor direction
-				flipdir = 1;
-				break;
-			case 0x04: // LED on/off bits
-				if (len < 1) return 0;
-				cfg.led = *buf++ & ((1 << LED_CNT) - 1);
-				break;
-			case 0x80: // Combined telemetry
-				iobuf[0] = 12;
-				iobuf[1] = temp1;
-				iobuf[2] = temp2;
-				iobuf[3] = volt;
-				iobuf[4] = volt >> 8;
-				iobuf[5] = curr;
-				iobuf[6] = curr >> 8;
-				iobuf[7] = csum;
-				iobuf[8] = csum >> 8;
-				iobuf[9] = val = min(ertm, 0xffff);
-				iobuf[10] = val >> 8;
-				iobuf[11] = crc8(iobuf, 11);
-				return 12;
-			case 0x81: return serialresp2(min(ertm, 0xffff)); // Electrical revolution time (us)
-			case 0x82: return serialresp1(temp1, temp2); // Temperature (C)
-			case 0x83: return serialresp2(volt); // Voltage (V/100)
-			case 0x84: return serialresp2(curr); // Current (A/100)
-			case 0x85: return serialresp2(csum); // Consumption (mAh)
-			default:
-				return 0;
-		}
-		len -= buf - pos;
-	}
-	return 0;
-}
 
-static int ibusfunc(int len) {
-	if (len != 32 || iobuf[0] != 0x20 || iobuf[1] != 0x40) return 0;
-	int n1 = cfg.input_ch1;
-	int n2 = cfg.input_ch2;
-	int x1 = -1;
-	int x2 = -1;
-	int u = 0xff9f;
-	for (int i = 1;; ++i) {
-		int j = i << 1;
-		int a = iobuf[j];
-		int b = iobuf[j + 1];
-		int v = a | b << 8;
-		if (i == 15) {
-			if (u != v) return 0; // Invalid checksum
-			break;
-		}
-		u -= a + b;
-		if (i == n1) x1 = v & 0xfff;
-		else if (i == n2) x2 = v & 0xfff;
-	}
-	IWDG_KR = IWDG_KR_RESET;
-	setthrot(x1);
-	setbrake(x2);
-	return 0;
-}
+
+
+
+
 
 static void sbusirq1(void) {
 	TIM15_SR = ~TIM_SR_UIF;
@@ -1033,44 +808,9 @@ static void sbusirq1(void) {
 }
 
 static void sbusirq2(void) {
-	static const char slot[] = {
-		0x43, 0xc3, 0x23, 0xa3, 0x63, 0xe3, // 2..7
-		0x53, 0xd3, 0x33, 0xb3, 0x73, 0xf3, // 10..15
-		0x4b, 0xcb, 0x2b, 0xab, 0x6b, 0xeb, // 18..23
-		0x5b, 0xdb, 0x3b, 0xbb, 0x7b, 0xfb, // 26..31
-	};
 	static char n;
-	int a = 0, b = 0;
 	TIM15_SR = ~TIM_SR_UIF;
-	switch (n) {
-		case 0: // SBS-01T (ESC temperature)
-			a = temp1 + 100;
-			b = a >> 8 | 0x80;
-			break;
-		case 1: // SBS-01T (motor temperature)
-			a = temp2 + 100;
-			b = a >> 8 | 0x80;
-			break;
-		case 2: // SBS-01C (current)
-			b = curr;
-			a = b >> 8 | 0x40;
-			break;
-		case 3: // SBS-01C (voltage)
-			b = volt;
-			a = b >> 8;
-			break;
-		case 4: // SBS-01C (consumption)
-			b = csum;
-			a = b >> 8;
-			break;
-		case 5: // SBS-01R (RPM)
-			a = min(erpm / (cfg.telem_poles * 3), 0xffff);
-			b = a >> 8;
-			break;
-	}
-	iobuf[0] = slot[n + (telphid - 1) * 6];
-	iobuf[1] = a;
-	iobuf[2] = b;
+	sbuspacket((unsigned)n);
 	DMA1_CNDTR(USART2_TX_DMA) = 3;
 	DMA1_CCR(USART2_TX_DMA) = DMA_CCR_EN | DMA_CCR_DIR | DMA_CCR_MINC | DMA_CCR_PSIZE_8BIT | DMA_CCR_MSIZE_8BIT;
 	if (++n < 6) return;
@@ -1078,179 +818,15 @@ static void sbusirq2(void) {
 	n = 0;
 }
 
-static int sbusfunc(int len) {
-	if (len != 25 || iobuf[0] != 0x0f) return 0;
-	TIM15_EGR = TIM_EGR_UG;
-	IWDG_KR = IWDG_KR_RESET;
-	setthrot(getchan1(iobuf + 1, cfg.input_ch1 - 1));
-	setbrake(getchan1(iobuf + 1, cfg.input_ch2 - 1));
-	int a = iobuf[24];
-	if ((a & 0xf) != 0x4) return 0; // No telemetry
-	if ((telmode >= 2 && telmode <= 5) || a >> 4 != telphid - 1) {
-		ioirq = sbusirq1;
-		__disable_irq();
-		TIM15_ARR = 57279 - TIM15_CNT; // Disable RX for 2000+660*8-120=7160us
-		TIM15_EGR = TIM_EGR_UG;
-		__enable_irq();
-	} else {
-		ioirq = sbusirq2;
-		__disable_irq();
-		TIM15_ARR = 25599 - TIM15_CNT; // Delay TX for 2000+660*2-120=3200us
-		TIM15_EGR = TIM_EGR_UG;
-		TIM15_EGR; // Ensure UEV has happened
-		TIM15_ARR = 5279; // Preload slot interval
-		__enable_irq();
-	}
-	TIM15_SR = ~TIM_SR_UIF;
-	TIM15_DIER = TIM_DIER_UIE;
-	USART2_CR1 = USART_CR1_PCE | USART_CR1_M0 | USART_CR1_UE | USART_CR1_TE;
-	return -1;
-}
 
-static int crsffunc(int len) {
-	if (len > 128) return 0; // CSRF physical layer requirement
-	for (char *buf = iobuf, *res = buf + len; len >= 4;) {
-		int a = buf[1];
-		int b = a + 2;
-		if (a < 2 || b > 64 || (len -= b) < 0 || crc8dvbs2(buf + 2, a)) break;
-		IWDG_KR = IWDG_KR_RESET;
-		switch (buf[2]) {
-			case 0x16: // Channel data
-				if (a < 24) break;
-				setthrot(getchan1(buf + 3, cfg.input_ch1 - 1));
-				setbrake(getchan1(buf + 3, cfg.input_ch2 - 1));
-				break;
-#ifndef SMALL_DEVICE
-			case 0x28: // Ping
-			case 0x2c: // Read
-			case 0x2d: // Write
-				if (telmode != 4 || !(a = min(execcrsfcmd(buf + 2, a - 1, res + 2), 61))) break;
-				res[0] = 0xc8;
-				res[1] = a + 1;
-				res[a + 2] = crc8dvbs2(res + 2, a);
-				sendtelemdata(res, a + 3);
-				break;
-#endif
-		}
-		if (!len) break;
-		buf += b;
-	}
-	return 0;
-}
 
-static int exbusresp(int x) {
-	static uint8_t n;
-	int a = DESIG_UNIQUE_ID0;
-	iobuf[0] = 0x3b;
-	iobuf[1] = 0x01;
-	iobuf[3] = x;
-	iobuf[4] = 0x3a;
-	iobuf[6] = 0x0f;
-	iobuf[8] = a & 0x1f;
-	iobuf[9] = 0xa4;
-	iobuf[10] = a >> 8;
-	iobuf[11] = a >> 16;
-	iobuf[12] = 0x00;
-	if (n < 7) { // Send description
-		static const char *const str1[] = {"ESCape32", "Temp1", "Temp2", "Volt", "Curr", "Csum", "RPM"};
-		static const char *const str2[] = {"", "C", "C", "V", "A", "mAh", ""};
-		char *p = iobuf + 15;
-		char *q = stpcpy(p, str1[n]);
-		int b = q - p; // len1
-		p = stpcpy(q, str2[n]);
-		int c = p - q; // len2
-		a = b + c;
-		iobuf[2] = a + 18;
-		iobuf[5] = a + 10;
-		iobuf[7] = a + 8;
-		iobuf[13] = n++;
-		iobuf[14] = b << 3 | c;
-		p[0] = crc8(iobuf + 7, a + 8);
-		p[1] = b = crc16ccitt(iobuf, a + 16);
-		p[2] = b >> 8;
-		return a + 18;
-	}
-	iobuf[2] = 0x26;
-	iobuf[5] = 0x1e;
-	iobuf[7] = 0x5c;
-	iobuf[13] = 0x11;
-	iobuf[14] = temp1;
-	iobuf[15] = temp1 >> 8;
-	iobuf[16] = 0x21;
-	iobuf[17] = temp2;
-	iobuf[18] = temp2 >> 8;
-	iobuf[19] = 0x34;
-	iobuf[20] = volt;
-	iobuf[21] = volt >> 8;
-	iobuf[22] = volt >> 16 | 0x40;
-	iobuf[23] = 0x44;
-	iobuf[24] = curr;
-	iobuf[25] = curr >> 8;
-	iobuf[26] = curr >> 16 | 0x40;
-	iobuf[27] = 0x54;
-	iobuf[28] = csum;
-	iobuf[29] = csum >> 8;
-	iobuf[30] = csum >> 16;
-	iobuf[31] = 0x64;
-	iobuf[32] = a = erpm / (cfg.telem_poles >> 1);
-	iobuf[33] = a >> 8;
-	iobuf[34] = a >> 16;
-	iobuf[35] = crc8(iobuf + 7, 28);
-	iobuf[36] = a = crc16ccitt(iobuf, 36);
-	iobuf[37] = a >> 8;
-	return 38;
-}
 
-static int exbusfunc(int len) {
-	static char n = 10;
-	for (char *buf = iobuf; len >= 8;) {
-		int a = buf[2];
-		int b = buf[5];
-		if (a != b + 8 || (len -= a) < 0 || crc16ccitt(buf, a)) break;
-		IWDG_KR = IWDG_KR_RESET;
-		switch (buf[4]) {
-			case 0x31: // Channel data
-				setthrot(getchan2(buf + 6, b >> 1, cfg.input_ch1 - 1, -1));
-				setbrake(getchan2(buf + 6, b >> 1, cfg.input_ch2 - 1, -1));
-				n = 0;
-				break;
-			case 0x3a: // Telemetry request
-				if (len || b) break;
-				return exbusresp(buf[3]);
-		}
-		if (!len) return 0;
-		buf += a;
-	}
-	if (!n) return 0;
-	USART2_BRR = --n & 1 ? CLK_CNT(250000) : CLK_CNT(125000);
-	return 0;
-}
 
-static int hottfunc(int len) {
-	if (len < 5 || iobuf[0] != 0xa8 || crc16xmodem(iobuf, len - 2) != (iobuf[len - 2] << 8 | iobuf[len - 1])) return 0;
-	IWDG_KR = IWDG_KR_RESET;
-	int a = iobuf[2];
-	int b = a << 1;
-	if (b != len - 5) return 0;
-	switch (iobuf[1] & 0x7f) {
-		case 1: // SUMDv1
-			setthrot(getchan2(iobuf + 3, a, cfg.input_ch1 - 1, 0));
-			setbrake(getchan2(iobuf + 3, a, cfg.input_ch2 - 1, 0));
-			break;
-		case 3: // SUMDv3
-			static const char map[] = {0x60, 0x61, 0x80, 0x82, 0x84, 0x60}; // Function code mapping
-			int c = iobuf[b - 1];
-			if (c > 5) break;
-			int d = map[c];
-			int e = d >> 3;
-			int f = (d & 7) << 2;
-			if ((a -= 2) > e) a = e;
-			setthrot(getchan2(iobuf + 3, a, cfg.input_ch1 - 1, f));
-			setbrake(getchan2(iobuf + 3, a, cfg.input_ch2 - 1, f));
-			break;
-	}
-	return 0;
-}
+
+
+
+
+
 
 static void cliirq(void) {
 	static uint16_t i, j;
@@ -1391,4 +967,530 @@ void am13e_app_io_service_pending_save(void)
     beepval=operation==2U?resetcfg():savecfg();
     dshot_save_running=0U;
 }
+#endif
+
+#if defined(IO_PA2) || defined(AM13E)
+/* Original Core algorithms; only peripheral operations are target seams. */
+static uint8_t exbus_description_index;
+static int getchan1(const char *buf, int n) { // SBUS/CRSF
+	if (n < 0 || n >= 16) return -1;
+	int i = (n * 11) >> 3;
+	int a = (n * 3) & 7;
+	int b = ((n + 1) * 3) & 7;
+	int x = a < b ?
+		buf[i] >> a | (buf[i + 1] & ((1 << b) - 1)) << (8 - a):
+		buf[i] >> a | buf[i + 1] << (8 - a) | (buf[i + 2] & ((1 << b) - 1)) << (16 - a);
+	return (x * 5 >> 3) + 880;
+}
+
+static int getchan2(const char *buf, int m, int n, int s) { // EXBUS/HoTT
+	if (s > 0 && n >= 8 && (n -= s) < 8) return -1;
+	if (n < 0 || n >= m) return -1;
+	buf += n << 1;
+	int a = buf[0];
+	int b = buf[1];
+	return (s < 0 ? a | b << 8 : a << 8 | b) >> 3;
+}
+
+static int serialresp1(int a, int b) {
+	iobuf[0] = 4;
+	iobuf[1] = a;
+	iobuf[2] = b;
+	iobuf[3] = crc8(iobuf, 3);
+	return 4;
+}
+
+static int serialresp2(int x) {
+	return serialresp1(x, x >> 8);
+}
+
+static int serialfunc(int len) {
+	if (len < 2 || iobuf[0] != len || crc8(iobuf, len)) return 0;
+	#if defined(AM13E)
+    io_feed_watchdog();
+#else
+	IWDG_KR = IWDG_KR_RESET;
+#endif
+	len -= 2;
+	for (char *buf = iobuf + 1; len--;) {
+		int val = *buf++;
+		char *pos = buf;
+		switch (val) {
+			case 0x00: // Throttle
+				if (len < 2) return 0;
+				val = buf[0] | buf[1] << 8;
+				buf += 2;
+				if (val & 0x8000) val -= 0x10000; // Propagate sign
+				if (val < -2000 || val > 2000) break;
+				throt = val;
+				break;
+			case 0x01: // Drag brake adjustment
+				if (len < 1) return 0;
+				brake = min(*buf++, 100) * cfg.duty_drag * 41 >> 12;
+				auxup = 0;
+				break;
+			case 0x02: // Normal motor direction
+				flipdir = 0;
+				break;
+			case 0x03: // Reversed motor direction
+				flipdir = 1;
+				break;
+			case 0x04: // LED on/off bits
+				if (len < 1) return 0;
+				cfg.led = *buf++ & ((1 << LED_CNT) - 1);
+				break;
+			case 0x80: // Combined telemetry
+				iobuf[0] = 12;
+				iobuf[1] = temp1;
+				iobuf[2] = temp2;
+				iobuf[3] = volt;
+				iobuf[4] = volt >> 8;
+				iobuf[5] = curr;
+				iobuf[6] = curr >> 8;
+				iobuf[7] = csum;
+				iobuf[8] = csum >> 8;
+				iobuf[9] = val = min(ertm, 0xffff);
+				iobuf[10] = val >> 8;
+				iobuf[11] = crc8(iobuf, 11);
+				return 12;
+			case 0x81: return serialresp2(min(ertm, 0xffff)); // Electrical revolution time (us)
+			case 0x82: return serialresp1(temp1, temp2); // Temperature (C)
+			case 0x83: return serialresp2(volt); // Voltage (V/100)
+			case 0x84: return serialresp2(curr); // Current (A/100)
+			case 0x85: return serialresp2(csum); // Consumption (mAh)
+			default:
+				return 0;
+		}
+		len -= buf - pos;
+	}
+	return 0;
+}
+
+static int ibusfunc(int len) {
+	if (len != 32 || iobuf[0] != 0x20 || iobuf[1] != 0x40) return 0;
+	int n1 = cfg.input_ch1;
+	int n2 = cfg.input_ch2;
+	int x1 = -1;
+	int x2 = -1;
+	int u = 0xff9f;
+	for (int i = 1;; ++i) {
+		int j = i << 1;
+		int a = iobuf[j];
+		int b = iobuf[j + 1];
+		int v = a | b << 8;
+		if (i == 15) {
+			if (u != v) return 0; // Invalid checksum
+			break;
+		}
+		u -= a + b;
+		if (i == n1) x1 = v & 0xfff;
+		else if (i == n2) x2 = v & 0xfff;
+	}
+	#if defined(AM13E)
+    io_feed_watchdog();
+#else
+	IWDG_KR = IWDG_KR_RESET;
+#endif
+	setthrot(x1);
+	setbrake(x2);
+	return 0;
+}
+
+static void sbuspacket(unsigned n) {
+	static const char slot[] = {
+		0x43, 0xc3, 0x23, 0xa3, 0x63, 0xe3, // 2..7
+		0x53, 0xd3, 0x33, 0xb3, 0x73, 0xf3, // 10..15
+		0x4b, 0xcb, 0x2b, 0xab, 0x6b, 0xeb, // 18..23
+		0x5b, 0xdb, 0x3b, 0xbb, 0x7b, 0xfb, // 26..31
+	};
+	int a = 0, b = 0;
+	switch (n) {
+		case 0: // SBS-01T (ESC temperature)
+			a = temp1 + 100;
+			b = a >> 8 | 0x80;
+			break;
+		case 1: // SBS-01T (motor temperature)
+			a = temp2 + 100;
+			b = a >> 8 | 0x80;
+			break;
+		case 2: // SBS-01C (current)
+			b = curr;
+			a = b >> 8 | 0x40;
+			break;
+		case 3: // SBS-01C (voltage)
+			b = volt;
+			a = b >> 8;
+			break;
+		case 4: // SBS-01C (consumption)
+			b = csum;
+			a = b >> 8;
+			break;
+		case 5: // SBS-01R (RPM)
+			a = min(erpm / (cfg.telem_poles * 3), 0xffff);
+			b = a >> 8;
+			break;
+	}
+	iobuf[0] = slot[n + (telphid - 1) * 6];
+	iobuf[1] = a;
+	iobuf[2] = b;
+}
+
+static int sbusfunc(int len) {
+	if (len != 25 || iobuf[0] != 0x0f) return 0;
+#if !defined(AM13E)
+	TIM15_EGR = TIM_EGR_UG;
+#endif
+	#if defined(AM13E)
+    io_feed_watchdog();
+#else
+	IWDG_KR = IWDG_KR_RESET;
+#endif
+	setthrot(getchan1(iobuf + 1, cfg.input_ch1 - 1));
+	setbrake(getchan1(iobuf + 1, cfg.input_ch2 - 1));
+#if defined(AM13E)
+    sbus2_reply_index=0U;
+    sbus2_reply_remaining=0U;
+#endif
+	int a = iobuf[24];
+	if ((a & 0xf) != 0x4) return 0; // No telemetry
+#if defined(AM13E)
+    sbus2_reply_remaining=telphid>=1 && telphid<=4 &&
+        !((telmode>=2 && telmode<=5) || a>>4!=telphid-1) ? 6U : 0U;
+    return 0;
+#else
+	if ((telmode >= 2 && telmode <= 5) || a >> 4 != telphid - 1) {
+		ioirq = sbusirq1;
+		__disable_irq();
+		TIM15_ARR = 57279 - TIM15_CNT; // Disable RX for 2000+660*8-120=7160us
+		TIM15_EGR = TIM_EGR_UG;
+		__enable_irq();
+	} else {
+		ioirq = sbusirq2;
+		__disable_irq();
+		TIM15_ARR = 25599 - TIM15_CNT; // Delay TX for 2000+660*2-120=3200us
+		TIM15_EGR = TIM_EGR_UG;
+		TIM15_EGR; // Ensure UEV has happened
+		TIM15_ARR = 5279; // Preload slot interval
+		__enable_irq();
+	}
+	TIM15_SR = ~TIM_SR_UIF;
+	TIM15_DIER = TIM_DIER_UIE;
+	USART2_CR1 = USART_CR1_PCE | USART_CR1_M0 | USART_CR1_UE | USART_CR1_TE;
+	return -1;
+#endif
+}
+static inline __attribute__((always_inline)) unsigned crsfresponse(const char *buf,char *res) {
+    int a=buf[1];
+    if(telmode!=4 || !(a=min(execcrsfcmd(buf+2,a-1,res+2),61)))return 0U;
+#if defined(AM13E)
+    if(a<0)return 0U; /* Preserve native failure preflight before any output write. */
+#endif
+    res[0]=(char)0xc8;res[1]=(char)(a+1);
+    res[a+2]=(char)crc8dvbs2(res+2,a);
+    return (unsigned)a+3U;
+}
+
+static int crsffunc(int len) {
+	if (len > 128) return 0; // CSRF physical layer requirement
+	#if defined(AM13E)
+    for(char *buf=iobuf;len>=4;) {
+#else
+    for (char *buf = iobuf, *res = buf + len; len >= 4;) {
+#endif
+		int a = buf[1];
+		int b = a + 2;
+		if (a < 2 || b > 64 || (len -= b) < 0 || crc8dvbs2(buf + 2, a)) break;
+		#if defined(AM13E)
+    io_feed_watchdog();
+#else
+	IWDG_KR = IWDG_KR_RESET;
+#endif
+		switch (buf[2]) {
+			case 0x16: // Channel data
+				if (a < 24) break;
+				setthrot(getchan1(buf + 3, cfg.input_ch1 - 1));
+				setbrake(getchan1(buf + 3, cfg.input_ch2 - 1));
+				break;
+#ifndef SMALL_DEVICE
+			case 0x28: // Ping
+			case 0x2c: // Read
+			case 0x2d: // Write
+#if !defined(AM13E)
+                a=(int)crsfresponse(buf,res);
+                if(a)sendtelemdata(res,a);
+#endif
+				break;
+#endif
+		}
+		if (!len) break;
+		buf += b;
+	}
+	return 0;
+}
+
+static int exbusresp(int x) {
+
+	#if defined(AM13E)
+    int a=(int)io_exbus_device_id;
+#else
+    int a = DESIG_UNIQUE_ID0;
+#endif
+	iobuf[0] = 0x3b;
+	iobuf[1] = 0x01;
+	iobuf[3] = x;
+	iobuf[4] = 0x3a;
+	iobuf[6] = 0x0f;
+	iobuf[8] = a & 0x1f;
+	iobuf[9] = 0xa4;
+	iobuf[10] = a >> 8;
+	iobuf[11] = a >> 16;
+	iobuf[12] = 0x00;
+	if (exbus_description_index < 7) { // Send description
+		static const char *const description_name[] = {"ESCape32", "Temp1", "Temp2", "Volt", "Curr", "Csum", "RPM"};
+		static const char *const description_unit[] = {"", "C", "C", "V", "A", "mAh", ""};
+		char *p = iobuf + 15;
+		char *q = stpcpy(p, description_name[exbus_description_index]);
+		int b = q - p; // len1
+		p = stpcpy(q, description_unit[exbus_description_index]);
+		int c = p - q; // len2
+		a = b + c;
+		iobuf[2] = a + 18;
+		iobuf[5] = a + 10;
+		iobuf[7] = a + 8;
+		iobuf[13] = exbus_description_index++;
+		iobuf[14] = b << 3 | c;
+		p[0] = crc8(iobuf + 7, a + 8);
+		p[1] = b = crc16ccitt(iobuf, a + 16);
+		p[2] = b >> 8;
+		return a + 18;
+	}
+	iobuf[2] = 0x26;
+	iobuf[5] = 0x1e;
+	iobuf[7] = 0x5c;
+	iobuf[13] = 0x11;
+	iobuf[14] = temp1;
+	iobuf[15] = temp1 >> 8;
+	iobuf[16] = 0x21;
+	iobuf[17] = temp2;
+	iobuf[18] = temp2 >> 8;
+	iobuf[19] = 0x34;
+	iobuf[20] = volt;
+	iobuf[21] = volt >> 8;
+	iobuf[22] = volt >> 16 | 0x40;
+	iobuf[23] = 0x44;
+	iobuf[24] = curr;
+	iobuf[25] = curr >> 8;
+	iobuf[26] = curr >> 16 | 0x40;
+	iobuf[27] = 0x54;
+	iobuf[28] = csum;
+	iobuf[29] = csum >> 8;
+	iobuf[30] = csum >> 16;
+	iobuf[31] = 0x64;
+	iobuf[32] = a = erpm / (cfg.telem_poles >> 1);
+	iobuf[33] = a >> 8;
+	iobuf[34] = a >> 16;
+	iobuf[35] = crc8(iobuf + 7, 28);
+	iobuf[36] = a = crc16ccitt(iobuf, 36);
+	iobuf[37] = a >> 8;
+	return 38;
+}
+
+static int exbusfunc(int len) {
+#if !defined(AM13E)
+    static uint8_t attempts=10U;
+#endif
+	for (char *buf = iobuf; len >= 8;) {
+		int a = buf[2];
+		int b = buf[5];
+		if (a != b + 8 || (len -= a) < 0 || crc16ccitt(buf, a)) break;
+		#if defined(AM13E)
+    io_feed_watchdog();
+#else
+	IWDG_KR = IWDG_KR_RESET;
+#endif
+		switch (buf[4]) {
+			case 0x31: // Channel data
+				setthrot(getchan2(buf + 6, b >> 1, cfg.input_ch1 - 1, -1));
+				setbrake(getchan2(buf + 6, b >> 1, cfg.input_ch2 - 1, -1));
+#if !defined(AM13E)
+                attempts=0U;
+#endif
+				break;
+			case 0x3a: // Telemetry request
+				if (len || b) break;
+				#if defined(AM13E)
+                return 0; /* Formatting/TX happens after transport preflight. */
+#else
+                return exbusresp(buf[3]);
+#endif
+		}
+		if (!len) return 0;
+		buf += a;
+	}
+#if !defined(AM13E)
+    const int rate=exbus_retry_step(&attempts);
+    if(rate)USART2_BRR=rate==1 ? CLK_CNT(250000) : CLK_CNT(125000);
+#endif
+	return 0;
+}
+
+static int hottfunc(int len) {
+	if (len < 5 || iobuf[0] != 0xa8 || crc16xmodem(iobuf, len - 2) != (iobuf[len - 2] << 8 | iobuf[len - 1])) return 0;
+	#if defined(AM13E)
+    io_feed_watchdog();
+#else
+	IWDG_KR = IWDG_KR_RESET;
+#endif
+	int a = iobuf[2];
+	int b = a << 1;
+	if (b != len - 5) return 0;
+	switch (iobuf[1] & 0x7f) {
+		case 1: // SUMDv1
+			setthrot(getchan2(iobuf + 3, a, cfg.input_ch1 - 1, 0));
+			setbrake(getchan2(iobuf + 3, a, cfg.input_ch2 - 1, 0));
+			break;
+		case 3: { // SUMDv3
+			static const char map[] = {0x60, 0x61, 0x80, 0x82, 0x84, 0x60}; // Function code mapping
+			int c = iobuf[b - 1];
+			if (c > 5) break;
+			int d = map[c];
+			int e = d >> 3;
+			int f = (d & 7) << 2;
+			if ((a -= 2) > e) a = e;
+			setthrot(getchan2(iobuf + 3, a, cfg.input_ch1 - 1, f));
+			setbrake(getchan2(iobuf + 3, a, cfg.input_ch2 - 1, f));
+			break;
+        }
+	}
+	return 0;
+}
+#endif
+
+#include <stddef.h>
+
+#include "exbus_autobaud.h"
+#include <stddef.h>
+void am13e_exbus_autobaud_init(AM13E_ExbusAutobaud *s)
+{
+    if(!s)return;
+    s->attempts_remaining=10U;  /* upstream: static char n=10 */
+    s->channels_seen=false;
+    s->baud=125000U;
+}
+void am13e_exbus_autobaud_valid(AM13E_ExbusAutobaud *s,
+                               bool channel_frame)
+{
+    if(!s)return;
+    if(channel_frame){
+        s->attempts_remaining=0U; /* upstream: n=0 on 0x31 */
+        s->channels_seen=true;
+    }
+    /* Valid telemetry/unknown packet does not decrement n.
+     * Do not reinterpret this as a signal to reset autobaud.
+     */
+}
+bool am13e_exbus_autobaud_bad(AM13E_ExbusAutobaud *s,
+                              uint32_t *requested_baud)
+{
+    if(!s||!requested_baud||s->channels_seen||
+       s->attempts_remaining==0U)return false;
+    const int rate=exbus_retry_step(&s->attempts_remaining);
+    s->baud=rate==1 ? 250000U : 125000U;
+    *requested_baud=s->baud;
+    return true;
+}
+
+
+#if defined(AM13E)
+#include "cli_entry.h"
+#include <stddef.h>
+void am13e_cli_entry_select_receiver(AM13E_CliEntry *s)
+{
+    if(s==NULL)return;
+    s->selected=1U;
+    s->requested=0U;
+}
+int am13e_cli_entry_tick(AM13E_CliEntry *s,int high,int edge,int selected)
+{
+    if(s==NULL)return 0;
+    if(selected)am13e_cli_entry_select_receiver(s);
+    if(s->selected)return 0;
+    if(edge){s->ticks=0U;s->requested=0U;return 0;}
+    if(s->requested)return 1;
+    if(++s->ticks<AM13E_CLI_ENTRY_TIMEOUT_TICKS)return 0;
+    s->ticks=0U;
+    /* Rel17 entryirq resets capture counter n on LOW, but does not
+     * reset HIGH timeout counter c. Preserve this source detail.
+     */
+    if(!high)return 0;
+    if(!cli_high_timeout(&s->high_timeouts))return 0;
+    s->requested=1U;
+    return 1;
+}
+
+#endif
+
+#if !defined(AM13E) || defined(AM13E_BOARD_SERVO_CLOCK_TRIM_CONFIGURED) || defined(REL17_CALIBRATION_TEST_ADAPTER)
+static void calibirq(void) {
+#if defined(AM13E)
+#define n servo_calibration_state.count
+#define q servo_calibration_state.error
+#define x servo_calibration_state.high
+#define y servo_calibration_state.low
+#else
+	static uint8_t n;
+	static int16_t q, x, y;
+#endif
+	#if defined(AM13E)
+    int p=(int)servo_capture_period;
+#else
+	int p = TIM_CCR1(IOTIM); // Pulse period
+#endif
+	if (cfg.throt_cal && // 50/100/125/200/250/333/500Hz 11/22ms servo PWM within 8% margin
+		((p < 22880 && p > 21120) || (p < 20800 && p > 19200) || (p < 11440 && p > 10560) || (p < 10400 && p > 9600) || (p < 8320 && p > 7680) ||
+		(p < 5200 && p > 4800) || (p < 4160 && p > 3840) || (p < 3120 && p > 2880) || (p < 2080 && p > 1920))) {
+		#if defined(AM13E)
+        am13e_app_io_watchdog_feed();
+#else
+		IWDG_KR = IWDG_KR_RESET;
+#endif
+		q += p - ((p + 500) / 1000) * 1000; // Cumulative error
+		if (++n & 3) return;
+		if (q > x) { // Slow down
+			y = -q;
+			q = 0;
+			#if defined(AM13E)
+        am13e_app_servo_clock_trim(-1);
+#else
+			hsictl(-1);
+#endif
+			return;
+		}
+		if (q < y) { // Speed up
+			x = -q;
+			q = 0;
+			#if defined(AM13E)
+        am13e_app_servo_clock_trim(1);
+#else
+			hsictl(1);
+#endif
+			return;
+		}
+	}
+#if defined(AM13E)
+    servo_calibration_finished=1;
+#else
+	ioirq = servoirq;
+	TIM_CCMR1(IOTIM) = TIM_CCMR1_CC1S_IN_TI1 | TIM_CCMR1_IC1F_DTF_DIV_8_N_8 | TIM_CCMR1_CC2S_IN_TI1 | TIM_CCMR1_IC2F_DTF_DIV_8_N_8;
+	TIM_CCER(IOTIM) = TIM_CCER_CC2E | TIM_CCER_CC2P; // IC2 on falling edge on TI1
+	TIM_SR(IOTIM) = ~TIM_SR_CC2IF;
+	TIM_DIER(IOTIM) = TIM_DIER_CC2IE;
+#endif
+}
+#if defined(AM13E)
+#undef n
+#undef q
+#undef x
+#undef y
+#endif
 #endif

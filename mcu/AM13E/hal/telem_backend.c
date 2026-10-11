@@ -6,13 +6,13 @@
  * Original single-wire half-duplex bus turnarounds, S.Port PHY and
  * HoTT real-time slots are NOT hardware-qualified by this module.
  */
-#include "../telem_backend.h"
+#include "telem_backend.h"
 #ifdef AM13E_BOARD_TELEM_UART_CONFIGURED
-#include "../telem_frame_rx.h"
-#include "../serial_tx_queue.h"
-#include "../telem_mode_plan.h"
-#include "../board_reference_io.h"
-#include "../board_configuration.h"
+#include "telem_frame_rx.h"
+#include "serial_tx_queue.h"
+#include "telem_mode_plan.h"
+#include "board_reference_io.h"
+#include "board_configuration.h"
 #include <soc.h>
 #include <dl_gpio.h>
 #include <dl_unicommuart.h>

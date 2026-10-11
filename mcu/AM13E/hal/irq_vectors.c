@@ -4,15 +4,15 @@
  * The actual FW1 main(), tick/housekeeping and fault policy remain in
  * src/main.c. This file adapts the TI startup CMSIS vector names only.
  */
-#include "../irq_vectors.h"
-#include "../fault_input.h"
-#include "../io_backend.h"
-#include "../command_capture.h"
-#include "../serial_uart_rx.h"
+#include "irq_vectors.h"
+#include "fault_input.h"
+#include "io_backend.h"
+#include "command_capture.h"
+#include "serial_uart_rx.h"
 #ifdef AM13E_BOARD_TELEM_UART_CONFIGURED
-#include "../telem_backend.h"
+#include "telem_backend.h"
 #endif
-#include "../motor_bemf.h"
+#include "motor_bemf.h"
 #include <dl_gpio.h>
 
 void SysTick_Handler(void)

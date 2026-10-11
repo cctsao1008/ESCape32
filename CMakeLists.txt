@@ -38,7 +38,7 @@ function(add_target_ti_am13e name)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
     set(am13e_sdk_compat_dir "${PROJECT_BINARY_DIR}/am13e-sdk-compat")
     set(am13e_sdk_compat_script
-        "${PROJECT_SOURCE_DIR}/mcu/AM13E/tools/prepare_sdk_sources.py")
+        "${PROJECT_SOURCE_DIR}/tools/AM13E/prepare_sdk_sources.py")
     set_property(DIRECTORY "${PROJECT_SOURCE_DIR}" APPEND PROPERTY
         CMAKE_CONFIGURE_DEPENDS
         "${am13e_sdk_compat_script}"
@@ -130,12 +130,12 @@ function(add_target_ti_am13e name)
     endif()
     target_include_directories(${am13e_binary} PRIVATE "${am13e_source_dir}")
     if(name MATCHES "^BOOT")
-        target_include_directories(${am13e_binary} PRIVATE "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E")
+        target_include_directories(${am13e_binary} PRIVATE "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E" "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/hal")
     else()
         # Rel17 Application gets its own platform config.h. Never reuse
         # boot/mcu/AM13E/config.h (which is for the PB14 boot service).
         target_include_directories(${am13e_binary} PRIVATE
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E")
+            "${PROJECT_SOURCE_DIR}/src" "${PROJECT_SOURCE_DIR}/mcu/AM13E" "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal")
     endif()
     if(AM13E_PROJECT_SYSCFG_DIR)
         target_include_directories(${am13e_binary} PRIVATE
@@ -198,7 +198,7 @@ option(AM13E_ENABLE_APP_SMOKE
     "Enable AM13E Rel17 v1.4 ARM app-link / flat packer smoke validation" OFF)
 if(AM13E_ENABLE_APP_SMOKE)
     set(am13e_smoke_script
-        "${PROJECT_SOURCE_DIR}/boot/mcu/AM13E/linker_app_smoke.ld")
+        "${PROJECT_SOURCE_DIR}/cmake/AM13E/boot/linker_app_smoke.ld")
     set(am13e_smoke_source
         "${PROJECT_SOURCE_DIR}/boot/tests/am13e_app_link_smoke.c")
     set(am13e_smoke_packer
@@ -316,20 +316,20 @@ add_target(AM13E AM13E)
 # gate enable, analog channel, board clock or Flash partition is selected.
 # It is NOT a runnable firmware or a motor-output qualification gate.
 add_library(AM13E_PORTABLE_LOGIC OBJECT EXCLUDE_FROM_ALL
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/analog_calibration_plan.c"
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_codec.c"
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/bidir_timing.c"
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/fault_trip_route_plan.c"
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_phase_plan.c"
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_aq_plan.c"
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_audio_plan.c"
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_duty_plan.c"
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_frequency_plan.c"
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_shadow_plan.c"
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_pwm_shadow_plan.c"
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_timer_math.c")
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/analog_calibration_plan.c"
+    "${PROJECT_SOURCE_DIR}/src/bidir_codec.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/bidir_timing.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/fault_trip_route_plan.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_phase_plan.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_aq_plan.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_audio_plan.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_duty_plan.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_frequency_plan.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_shadow_plan.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_pwm_shadow_plan.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_timer_math.c")
 target_include_directories(AM13E_PORTABLE_LOGIC PRIVATE
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E")
+    "${PROJECT_SOURCE_DIR}/src" "${PROJECT_SOURCE_DIR}/mcu/AM13E" "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal")
 target_compile_definitions(AM13E_PORTABLE_LOGIC PRIVATE AM13E)
 target_compile_options(AM13E_PORTABLE_LOGIC PRIVATE
     -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
@@ -355,7 +355,7 @@ target_compile_options(AM13E_MCU_FAULT_TRIP_BACKEND PRIVATE
 add_library(AM13E_MCU_RUNTIME_TICK OBJECT EXCLUDE_FROM_ALL
     "${PROJECT_SOURCE_DIR}/mcu/AM13E/config.c")
 target_include_directories(AM13E_MCU_RUNTIME_TICK PRIVATE
-    "${PROJECT_SOURCE_DIR}/src" "${PROJECT_SOURCE_DIR}/mcu/AM13E")
+    "${PROJECT_SOURCE_DIR}/src" "${PROJECT_SOURCE_DIR}/src" "${PROJECT_SOURCE_DIR}/mcu/AM13E" "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal")
 target_include_directories(AM13E_MCU_RUNTIME_TICK SYSTEM PRIVATE
     "$<TARGET_PROPERTY:AM13E,INCLUDE_DIRECTORIES>")
 target_compile_definitions(AM13E_MCU_RUNTIME_TICK PRIVATE
@@ -371,7 +371,7 @@ target_compile_options(AM13E_MCU_RUNTIME_TICK PRIVATE
 add_library(AM13E_MCU_ADC_PAIR_BACKEND OBJECT EXCLUDE_FROM_ALL
     "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/analog_sampling_backend.c")
 target_include_directories(AM13E_MCU_ADC_PAIR_BACKEND PRIVATE
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E")
+    "${PROJECT_SOURCE_DIR}/src" "${PROJECT_SOURCE_DIR}/mcu/AM13E" "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal")
 target_include_directories(AM13E_MCU_ADC_PAIR_BACKEND SYSTEM PRIVATE
     "$<TARGET_PROPERTY:AM13E,INCLUDE_DIRECTORIES>")
 target_compile_definitions(AM13E_MCU_ADC_PAIR_BACKEND PRIVATE
@@ -387,7 +387,7 @@ target_compile_options(AM13E_MCU_ADC_PAIR_BACKEND PRIVATE
 add_library(AM13E_MCU_COMMAND_INPUT_ROUTE OBJECT EXCLUDE_FROM_ALL
     "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/command_input_route_backend.c")
 target_include_directories(AM13E_MCU_COMMAND_INPUT_ROUTE PRIVATE
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E")
+    "${PROJECT_SOURCE_DIR}/src" "${PROJECT_SOURCE_DIR}/mcu/AM13E" "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal")
 target_include_directories(AM13E_MCU_COMMAND_INPUT_ROUTE SYSTEM PRIVATE
     "$<TARGET_PROPERTY:AM13E,INCLUDE_DIRECTORIES>")
 target_compile_definitions(AM13E_MCU_COMMAND_INPUT_ROUTE PRIVATE
@@ -400,10 +400,10 @@ target_compile_options(AM13E_MCU_COMMAND_INPUT_ROUTE PRIVATE
 # Real TI board-neutral six-MCPWM-pad GPIO/PINCM backend; no gate enable.
 # Source-only object, never a qualified ESC output executable.
 add_library(AM13E_MCU_MOTOR_PAD_BACKEND OBJECT EXCLUDE_FROM_ALL
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/motor_output_route_plan.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_output_route_plan.c"
     "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_output_backend.c")
 target_include_directories(AM13E_MCU_MOTOR_PAD_BACKEND PRIVATE
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E")
+    "${PROJECT_SOURCE_DIR}/src" "${PROJECT_SOURCE_DIR}/mcu/AM13E" "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal")
 target_include_directories(AM13E_MCU_MOTOR_PAD_BACKEND SYSTEM PRIVATE
     "$<TARGET_PROPERTY:AM13E,INCLUDE_DIRECTORIES>")
 target_compile_definitions(AM13E_MCU_MOTOR_PAD_BACKEND PRIVATE
@@ -422,11 +422,11 @@ option(AM13E_BUILD_CLOCK_DIAGNOSTIC
     ON)
 if(AM13E_BUILD_CLOCK_DIAGNOSTIC)
     set(am13e_clock_diag_linker
-        "${PROJECT_SOURCE_DIR}/mcu/AM13E/linker_app_reference.ld")
+        "${PROJECT_SOURCE_DIR}/cmake/AM13E/linker_app_reference.ld")
     # Opt-in only: never make legacy/default builds depend on
     # an intentionally pre-production diagnostic ELF.
     add_executable(AM13E_CLOCK.elf EXCLUDE_FROM_ALL
-        "${PROJECT_SOURCE_DIR}/mcu/AM13E/clock_diagnostic_entry.c"
+        "${PROJECT_SOURCE_DIR}/tests/AM13E/fixtures/clock_diagnostic_entry.c"
         "${PROJECT_SOURCE_DIR}/mcu/AM13E/config.c"
         "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/clock_source_reference.c"
         "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/board_clock_reference.c"
@@ -439,7 +439,7 @@ if(AM13E_BUILD_CLOCK_DIAGNOSTIC)
     target_include_directories(AM13E_CLOCK.elf SYSTEM PRIVATE
         "$<TARGET_PROPERTY:AM13E,INCLUDE_DIRECTORIES>")
     target_compile_definitions(AM13E_CLOCK.elf PRIVATE
-        AM13E TARGET_NAME="AM13E_CLOCK"
+        AM13E AM13E_CLOCK_DIAGNOSTIC TARGET_NAME="AM13E_CLOCK"
         __DEVICE_SHORT__="am13e230x" __DEVICE_LONG__="AM13E230x"
         __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
     target_compile_options(AM13E_CLOCK.elf PRIVATE
@@ -487,7 +487,7 @@ if(AM13E_ENABLE_FW1_LINK_GATE)
     target_link_options(AM13E_FW1.elf PRIVATE
         -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
         -mfloat-abi=hard -fno-branch-count-reg
-        "-T${PROJECT_SOURCE_DIR}/mcu/AM13E/linker_app_reference.ld"
+        "-T${PROJECT_SOURCE_DIR}/cmake/AM13E/linker_app_reference.ld"
         -Wl,--no-undefined -Wl,--fatal-warnings
         -Wl,--require-defined=Reset_Handler
         -Wl,--require-defined=main
@@ -517,7 +517,7 @@ if(AM13E_ENABLE_FW1_REL17_IMAGE)
             "only REL17_V14 ABI exists. Disable FW1_REL17_IMAGE "
             "and select NONE for generic source-only port work.")
     endif()
-    include("${PROJECT_SOURCE_DIR}/mcu/AM13E/profiles/image_rel17_v14.cmake")
+    include("${PROJECT_SOURCE_DIR}/cmake/AM13E/profiles/image_rel17_v14.cmake")
     if(AM13E_BOOT_LINKER_SCRIPT AND NOT
        AM13E_BOOT_LINKER_SCRIPT STREQUAL AM13E_PROFILE_BOOT_LINKER_SCRIPT)
         message(FATAL_ERROR

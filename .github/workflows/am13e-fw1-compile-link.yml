@@ -6,6 +6,10 @@ on:
       - 'CMakeLists.txt'
       - 'src/**'
       - 'mcu/AM13E/**'
+      - 'tests/AM13E/**'
+      - 'tools/AM13E/**'
+      - 'docs/AM13E/**'
+      - 'cmake/AM13E/**'
       - 'boot/mcu/AM13E/**'
       - 'boot/src/**'
       - 'boot/tests/**'
@@ -41,7 +45,7 @@ jobs:
         run: |
           mkdir -p am13e-ci-logs
           set -euo pipefail
-          bash mcu/AM13E/tools/run_host_regressions.sh full \
+          bash tools/AM13E/run_host_regressions.sh full \
             2>&1 | tee am13e-ci-logs/host-tests.log
 
       - name: Compile original Rel17 objects and strictly link actual Application and Boot
@@ -155,7 +159,7 @@ jobs:
           fi
           grep -q 'Unsupported AM13E_IMAGE_PROFILE' \
             am13e-ci-logs/image-profile-negative.log
-          python3 mcu/AM13E/tools/verify_rel17_image.py --build am13e-ci-build \
+          python3 tools/AM13E/verify_rel17_image.py --build am13e-ci-build \
             2>&1 | tee am13e-ci-logs/fw1-rel17-static-audit.log
 
       - name: Compile current Reference board IO configuration and reject pin conflicts
@@ -163,7 +167,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python3 mcu/AM13E/tests/board_profile_compile_smoke.py am13e-ci-build \
+          python3 tests/AM13E/board_profile_compile_smoke.py am13e-ci-build \
             2>&1 | tee am13e-ci-logs/board-profile-compile.log
 
       - name: Strict ARM link with synthetic board-selected UNICOMM RX
@@ -176,7 +180,7 @@ jobs:
           cmake -S . -B am13e-ci-serial-selected -G "Unix Makefiles" \
             -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
             -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/config.ld" \
-            -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/mcu/AM13E/tests/uart_rx_synthetic_profile.cmake" \
+            -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/tests/AM13E/uart_rx_synthetic_profile.cmake" \
             >am13e-ci-logs/serial-selected-configure.log 2>&1 || {
               cat am13e-ci-logs/serial-selected-configure.log
               exit 1
@@ -200,7 +204,7 @@ jobs:
           cmake -S . -B am13e-ci-crsf-tx -G "Unix Makefiles" \
             -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
             -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/config.ld" \
-            -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/mcu/AM13E/tests/uart_crsf_tx_synthetic_profile.cmake" \
+            -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/tests/AM13E/uart_crsf_tx_synthetic_profile.cmake" \
             >am13e-ci-logs/serial-tx-configure.log 2>&1 || {
               cat am13e-ci-logs/serial-tx-configure.log
               exit 1
@@ -214,7 +218,13 @@ jobs:
             >am13e-ci-logs/serial-tx-symbols.txt
           grep -Eq ' [Tt] UC0_IRQHandler$' am13e-ci-logs/serial-tx-symbols.txt
           grep -Eq ' [Tt] am13e_app_io_crsf_reply$' am13e-ci-logs/serial-tx-symbols.txt
-          grep -Eq ' [Tt] am13e_crsf_reply_envelope$' am13e-ci-logs/serial-tx-symbols.txt
+          # Retired parallel formatter is absent; inspect the real Core call path.
+          grep -Eq ' [Tt] crsffunc$' am13e-ci-logs/serial-tx-symbols.txt
+          arm-none-eabi-objdump -d --disassemble=am13e_app_io_crsf_reply \
+            am13e-ci-crsf-tx/AM13E_FW1_REL17.elf \
+            >am13e-ci-logs/serial-tx-core-reply-disassembly.txt
+          grep -q '<execcrsfcmd>' am13e-ci-logs/serial-tx-core-reply-disassembly.txt
+          grep -q '<crc8dvbs2>' am13e-ci-logs/serial-tx-core-reply-disassembly.txt
           grep -Eq ' [Tt] am13e_serial_tx_queue_begin$' am13e-ci-logs/serial-tx-symbols.txt
           # The board-triggered CLI entry hook has NO Reference caller:
           # --gc-sections correctly discards it from this synthetic ELF.
@@ -230,7 +240,7 @@ jobs:
           cmake -S . -B am13e-ci-exbus-tx -G "Unix Makefiles" \
             -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
             -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/config.ld" \
-            -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/mcu/AM13E/tests/uart_exbus_tx_synthetic_profile.cmake" \
+            -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/tests/AM13E/uart_exbus_tx_synthetic_profile.cmake" \
             >am13e-ci-logs/exbus-tx-configure.log 2>&1 || {
               cat am13e-ci-logs/exbus-tx-configure.log
               exit 1
@@ -251,7 +261,7 @@ jobs:
           cmake -S . -B am13e-ci-telem -G "Unix Makefiles" \
             -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
             -DAM13E_BOOT_LINKER_SCRIPT="$(pwd)/boot/mcu/AM13E/config.ld" \
-            -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/mcu/AM13E/tests/uart_telem_synthetic_profile.cmake" \
+            -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/tests/AM13E/uart_telem_synthetic_profile.cmake" \
             >am13e-ci-logs/telem-configure.log 2>&1 || {
               cat am13e-ci-logs/telem-configure.log
               exit 1
@@ -322,7 +332,7 @@ jobs:
             if [ "$profile" = both ]; then flags="$park $erpm"; fi
             cmake -S . -B "am13e-ci-aux-$profile" \
               -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk -DCMAKE_C_STANDARD=23 \
-              -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/mcu/AM13E/tests/${profile}_synthetic_profile.cmake" \
+              -DAM13E_BOARD_BOARD_PROFILE_FILE="$(pwd)/tests/AM13E/${profile}_synthetic_profile.cmake" \
               >"am13e-ci-logs/aux-$profile-configure.log" 2>&1
             cmake --build "am13e-ci-aux-$profile" --target AM13E_FW1_REL17_IMAGE -j 2 \
               >"am13e-ci-logs/aux-$profile-build.log" 2>&1
@@ -343,7 +353,7 @@ jobs:
             "$park -DERPM_PIN=1 -DAM13E_BOARD_ERPM_GPIO=GPIO1 -DAM13E_BOARD_ERPM_MASK=1U -DAM13E_BOARD_ERPM_PINCM=32U" \
             '-DERPM_PIN=1 -DAM13E_BOARD_ERPM_GPIO=GPIO1 -DAM13E_BOARD_ERPM_MASK=8192U -DAM13E_BOARD_ERPM_PINCM=45U' \
             '-DERPM_PIN=1 -DAM13E_BOARD_ERPM_GPIO=GPIO1 -DAM13E_BOARD_ERPM_MASK=8192U -DAM13E_BOARD_ERPM_PINCM=33U'; do
-            if cc -std=c11 -DAM13E -Imcu/AM13E -Imcu/AM13E/tests/aux_mock \
+            if cc -std=c11 -DAM13E -Imcu/AM13E -Itests/AM13E/aux_mock \
               -fsyntax-only $flags mcu/AM13E/hal/aux_gpio.c \
               >am13e-ci-logs/aux-negative.log 2>&1; then
               echo 'FAIL invalid auxiliary GPIO selection accepted'; exit 1
@@ -357,14 +367,14 @@ jobs:
         id: led_selected
         shell: bash
         run: |
-          bash mcu/AM13E/tests/led_profiles_validation.sh /tmp/am13e-ti-sdk am13e-ci-led am13e-ci-logs
+          bash tests/AM13E/led_profiles_validation.sh /tmp/am13e-ti-sdk am13e-ci-led am13e-ci-logs
 
       - name: Audit actual Rel17 functional software coverage
         id: coverage
         shell: bash
         run: |
           set -e
-          python3 mcu/AM13E/tools/verify_rel17_coverage.py \
+          python3 tools/AM13E/verify_rel17_coverage.py \
             --build am13e-ci-build --logs am13e-ci-logs
 
       - name: Enforce current Rev1.6 authority and immutable historical Rev1.4 documents
@@ -372,14 +382,14 @@ jobs:
         shell: bash
         run: |
           set -e
-          python3 mcu/AM13E/tools/verify_v14_docs.py
+          python3 tools/AM13E/verify_v14_docs.py
 
       - name: Audit v1.4 upstream source and unresolved Boot interfaces
         id: v14_scope
         shell: bash
         run: |
           set -e
-          python3 mcu/AM13E/tools/verify_v14_source_scope.py
+          python3 tools/AM13E/verify_v14_source_scope.py
 
       - name: Summarize actual undefined symbols
         if: always()

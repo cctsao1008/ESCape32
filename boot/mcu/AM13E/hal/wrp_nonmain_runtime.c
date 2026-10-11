@@ -5,7 +5,7 @@
  * MUST NOT be activated by setting these synthetic CI flags.
  * Reference CMake has no qualification and remains NAK-only.
  */
-#include "../wrp_nonmain.h"
+#include "wrp_nonmain.h"
 #include <stdint.h>
 #if defined(AM13E_BOOT_RECOVERY_QUALIFIED) && AM13E_BOOT_RECOVERY_QUALIFIED
 #if !defined(AM13E_BOOT_ROM_BSL_SWD_RECOVERY_TESTED) || \

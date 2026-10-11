@@ -10,8 +10,8 @@
  * RX framing, EOT-based TX completion, buffer lifetime, protocol reply,
  * S.Port 26-bit gap and single-wire direction remain to be implemented.
  */
-#include "../telem_uc2_preflight.h"
-#include "../clock_backend.h"
+#include "telem_uc2_preflight.h"
+#include "clock_backend.h"
 #include <soc.h>
 #include <dl_gpio.h>
 #include <dl_unicomm.h>

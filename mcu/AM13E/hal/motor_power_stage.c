@@ -8,8 +8,8 @@
  * in motor_safety.c; its physical pads remain disconnected as GPIO
  * inputs. This source is deliberately NOT a working motor power stage.
  */
-#include "../motor_power_stage.h"
-#include "../board_configuration.h"
+#include "motor_power_stage.h"
+#include "board_configuration.h"
 #include <soc.h>
 #include <dl_gpio.h>
 #include <stdint.h>

@@ -3,14 +3,14 @@
  * AM13E230x TRM SPRUJF2B Table 24-1: CTRIPH ECAP index 45/46/48.
  * External analog phase/neutral connections MUST be board-confirmed.
  */
-#include "../motor_backend.h"
-#include "../motor_audio_hw.h" /* Prevent COMP/ECAP1 rearming during sound */
-#include "../motor_bemf.h" /* Declarations for init, abort and ECAP1 IRQ */
-#include "../motor_bemf_event_plan.h"
-#include "../board_reference_io.h" /* Provisional AM13E reference phase/BEMF pinmux */
-#include "../motor_event_timer.h" /* Cancel obsolete TIMG12 on BEMF timeout */
-#include "../clock_backend.h"
-#include "../irq_vectors.h"
+#include "motor_backend.h"
+#include "motor_audio_hw.h" /* Prevent COMP/ECAP1 rearming during sound */
+#include "motor_bemf.h" /* Declarations for init, abort and ECAP1 IRQ */
+#include "motor_bemf_event_plan.h"
+#include "board_reference_io.h" /* Provisional AM13E reference phase/BEMF pinmux */
+#include "motor_event_timer.h" /* Cancel obsolete TIMG12 on BEMF timeout */
+#include "clock_backend.h"
+#include "irq_vectors.h"
 #include <soc.h>
 #include <dl_ecap.h>
 #include <dl_cmpss_lite.h>

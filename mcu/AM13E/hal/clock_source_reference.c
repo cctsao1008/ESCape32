@@ -18,7 +18,7 @@
  * remain necessary. Never start power-stage outputs based on this
  * code alone. Boot hands off with PRIMASK=1; this does not unmask.
  */
-#include "../clock_backend.h"
+#include "clock_backend.h"
 #include <soc.h>
 #include <dl_sysctl.h>
 #include <dl_fri.h>

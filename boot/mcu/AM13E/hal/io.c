@@ -7,7 +7,7 @@
 #include <dl_gpio.h>
 #include <dl_systick.h>
 #include <hw_pinmap.h>
-#include "../handoff.h"
+#include "handoff.h"
 
 /* PB14 is GPIO46: GPIO1, bit 14 (46 - 32). */
 #define BOOT_IO_PORT GPIO1

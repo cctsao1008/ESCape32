@@ -1,5 +1,5 @@
-#include "../aux_gpio.h"
-#include "../board_configuration.h"
+#include "aux_gpio.h"
+#include "board_configuration.h"
 #include <soc.h>
 #include <dl_gpio.h>
 #include <hw_pinmap.h>

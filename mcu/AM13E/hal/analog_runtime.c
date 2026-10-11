@@ -9,14 +9,14 @@
  * assumptions, NOT electrical calibration of an AM13E power board.
  * No reference current-sense channel is assigned.
  */
-#include "../analog_runtime.h"
-#include "../clock_backend.h"
-#include "../analog_calibration_plan.h"
-#include "../analog_sampling_backend.h"
-#include "../analog_reference.h"
-#include "../board_configuration.h"
+#include "analog_runtime.h"
+#include "clock_backend.h"
+#include "analog_calibration_plan.h"
+#include "analog_sampling_backend.h"
+#include "analog_reference.h"
+#include "board_configuration.h"
 #ifdef ANALOG_CHAN
-#include "../board_reference_io.h"
+#include "board_reference_io.h"
 /* Analog input is an independently selected ADC0 channel, NOT the
  * Reference NTC/voltage channels, and not a fabricated GPIO route.
  * Board profile must provide the actual pin/mux/channel/VREF.

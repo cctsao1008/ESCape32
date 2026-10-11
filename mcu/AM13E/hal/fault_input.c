@@ -11,9 +11,9 @@
  */
 #include <soc.h>
 #include <dl_gpio.h>
-#include "../fault_input.h"
-#include "../board_configuration.h"
-#include "../aux_gpio.h"
+#include "fault_input.h"
+#include "board_configuration.h"
+#include "aux_gpio.h"
 
 #define AM13E_NFAULT_GPIO GPIO1
 #define AM13E_NFAULT_PIN DL_GPIO_PIN(15U)

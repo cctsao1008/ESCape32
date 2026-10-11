@@ -3,8 +3,8 @@
  * SYSPLL/MCLK. This is NOT AM13E silicon policy or a default BSP.
  * All checks came from the existing reference system_runtime.c path.
  */
-#include "../board_clock_provider.h"
-#include "../clock_backend.h"
+#include "board_clock_provider.h"
+#include "clock_backend.h"
 #include <soc.h>
 #include <dl_sysctl.h>
 

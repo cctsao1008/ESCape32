@@ -12,15 +12,15 @@
  * instead of assuming eCAP's clock divider. A valid 1ms measurement
  * is required before any throttle callback can execute.
  */
-#include "../command_capture.h"
-#include "../command_decode.h"
-#include "../io_backend.h"
-#include "../serial_uart_rx.h"
+#include "command_capture.h"
+#include "command_decode.h"
+#include "io_backend.h"
+#include "serial_uart_rx.h"
 /* Input mode is queried through original io.c policy owner. */
-#include "../input_watchdog.h"
-#include "../command_reply.h"
-#include "../command_input_route_backend.h"
-#include "../command_input_reference.h"
+#include "input_watchdog.h"
+#include "command_reply.h"
+#include "command_input_route_backend.h"
+#include "command_input_reference.h"
 #include <soc.h>
 #include <dl_gpio.h>
 #include <dl_ecap.h>

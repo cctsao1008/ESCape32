@@ -5,22 +5,22 @@
  * PB15 nFAULT, independent OC Trip and Gate Enable are IO ONLY; they
  * are not integrated into the motor control/IRQ/fault path.
  */
-#include "../motor_backend.h"
-#include "../motor_audio_hw.h" /* Exclusive MCPWM Motor/Audio resource owner */
-#include "../motor_output_backend.h"
-#include "../board_motor_output_provider.h"
-#include "../board_configuration.h" /* Required physical pin selection */
-#include "../motor_event_timer.h"
-#include "../motor_bemf.h"
-#include "../motor_power_stage.h" /* PB13 GPIO inactive-only initializer */
-#include "../motor_ownership_plan.h" /* Active MPCWM0 Motor/Music/PCM owner */
-#include "../motor_safety.h"
-#include "../motor_shadow_plan.h"
-#include "../motor_aq_plan.h"
-#include "../motor_pwm_shadow_plan.h"
-#include "../util_backend.h" /* real Rel17 resetcom() prototype */
-#include "../clock_backend.h"
-#include "../fault_input.h" /* PB15 nFAULT input supervision */
+#include "motor_backend.h"
+#include "motor_audio_hw.h" /* Exclusive MCPWM Motor/Audio resource owner */
+#include "motor_output_backend.h"
+#include "board_motor_output_provider.h"
+#include "board_configuration.h" /* Required physical pin selection */
+#include "motor_event_timer.h"
+#include "motor_bemf.h"
+#include "motor_power_stage.h" /* PB13 GPIO inactive-only initializer */
+#include "motor_ownership_plan.h" /* Active MPCWM0 Motor/Music/PCM owner */
+#include "motor_safety.h"
+#include "motor_shadow_plan.h"
+#include "motor_aq_plan.h"
+#include "motor_pwm_shadow_plan.h"
+#include "util_backend.h" /* real Rel17 resetcom() prototype */
+#include "clock_backend.h"
+#include "fault_input.h" /* PB15 nFAULT input supervision */
 #include <soc.h>
 #include <dl_mcpwm.h>
 #include <dl_gpio.h>

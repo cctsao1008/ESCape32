@@ -1,4 +1,4 @@
-#include "../command_input_route_backend.h"
+#include "command_input_route_backend.h"
 #include <stddef.h>
 
 int am13e_mcu_command_input_configure(const AM13E_CommandInputRoute *route)

@@ -1,0 +1,279 @@
+baseline_file,class,destination,reason
+boot/mcu/AM13E/app_validity.c,B,boot/mcu/AM13E/hal/app_validity.c,Target-specific hardware implementation/interface or physical register translation
+boot/mcu/AM13E/app_validity.h,B,boot/mcu/AM13E/hal/app_validity.h,Target-specific hardware implementation/interface or physical register translation
+boot/mcu/AM13E/config.c,C,boot/mcu/AM13E/config.c,Required native configuration/source selection/linker or original preset
+boot/mcu/AM13E/config.cmake,C,boot/mcu/AM13E/config.cmake,Required native configuration/source selection/linker or original preset
+boot/mcu/AM13E/config.h,C,boot/mcu/AM13E/config.h,Required native configuration/source selection/linker or original preset
+boot/mcu/AM13E/config.ld,C,boot/mcu/AM13E/config.ld,Required native configuration/source selection/linker or original preset
+boot/mcu/AM13E/entry.c,C,boot/mcu/AM13E/config.c,Native TI startup hook merged into config.c
+boot/mcu/AM13E/flash_range.c,A,boot/src/flash_range.c,Boot command staging/authorization policy integrated with original Boot Core
+boot/mcu/AM13E/hal/app.c,B,boot/mcu/AM13E/hal/app.c,Target-specific hardware implementation/interface or physical register translation
+boot/mcu/AM13E/hal/device.c,B,boot/mcu/AM13E/hal/device.c,Target-specific hardware implementation/interface or physical register translation
+boot/mcu/AM13E/hal/flash.c,B,boot/mcu/AM13E/hal/flash.c,Target-specific hardware implementation/interface or physical register translation
+boot/mcu/AM13E/hal/handoff.c,B,boot/mcu/AM13E/hal/handoff.c,Target-specific hardware implementation/interface or physical register translation
+boot/mcu/AM13E/hal/io.c,B,boot/mcu/AM13E/hal/io.c,Target-specific hardware implementation/interface or physical register translation
+boot/mcu/AM13E/hal/update_commit.c,B,boot/mcu/AM13E/hal/update_commit.c,Target-specific hardware implementation/interface or physical register translation
+boot/mcu/AM13E/hal/wrp_nonmain_runtime.c,B,boot/mcu/AM13E/hal/wrp_nonmain_runtime.c,Target-specific hardware implementation/interface or physical register translation
+boot/mcu/AM13E/handoff.h,B,boot/mcu/AM13E/hal/handoff.h,Target-specific hardware implementation/interface or physical register translation
+boot/mcu/AM13E/image_integrity.c,E,tests/AM13E/fixtures/image_integrity.c,"Superseded manifest experiment, not active production; retained for historical fixtures"
+boot/mcu/AM13E/image_integrity.h,E,tests/AM13E/fixtures/image_integrity.h,"Superseded manifest experiment, not active production; retained for historical fixtures"
+boot/mcu/AM13E/linker_app_smoke.ld,E,cmake/AM13E/boot/linker_app_smoke.ld,"Diagnostic/profile build asset, not active native config.ld"
+boot/mcu/AM13E/update_commit.h,B,boot/mcu/AM13E/hal/update_commit.h,Target-specific hardware implementation/interface or physical register translation
+boot/mcu/AM13E/update_staging.c,A,boot/src/update_staging.c,Boot command staging/authorization policy integrated with original Boot Core
+boot/mcu/AM13E/update_staging.h,A,boot/src/update_staging.h,Boot command staging/authorization policy integrated with original Boot Core
+boot/mcu/AM13E/wrp_nonmain.c,B,boot/mcu/AM13E/hal/wrp_nonmain.c,Target-specific hardware implementation/interface or physical register translation
+boot/mcu/AM13E/wrp_nonmain.h,B,boot/mcu/AM13E/hal/wrp_nonmain.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/APP_LINK_CONTRACT.md,E,docs/AM13E/APP_LINK_CONTRACT.md,Engineering evidence/immutable original design document
+mcu/AM13E/BOOT_APP_INTEGRATION_GAPS.md,E,docs/AM13E/BOOT_APP_INTEGRATION_GAPS.md,Engineering evidence/immutable original design document
+mcu/AM13E/BUILD_GUIDE.md,E,docs/AM13E/BUILD_GUIDE.md,Engineering evidence/immutable original design document
+mcu/AM13E/CLOCK_CONTRACT.md,E,docs/AM13E/CLOCK_CONTRACT.md,Engineering evidence/immutable original design document
+mcu/AM13E/CMD_UPDATE_SOURCE_GAP_REVIEW.md,E,docs/AM13E/CMD_UPDATE_SOURCE_GAP_REVIEW.md,Engineering evidence/immutable original design document
+mcu/AM13E/CONDITIONAL_FEATURE_GAPS.md,E,docs/AM13E/CONDITIONAL_FEATURE_GAPS.md,Engineering evidence/immutable original design document
+mcu/AM13E/CONVERGENCE_REQUIREMENTS.csv,E,docs/AM13E/CONVERGENCE_REQUIREMENTS.csv,Engineering evidence/immutable original design document
+mcu/AM13E/DESIGN_AUTHORITY.md,E,docs/AM13E/DESIGN_AUTHORITY.md,Engineering evidence/immutable original design document
+mcu/AM13E/REFERENCE_BOARD_STATUS.md,E,docs/AM13E/REFERENCE_BOARD_STATUS.md,Engineering evidence/immutable original design document
+mcu/AM13E/REL17_FEATURE_COVERAGE_AUDIT.md,E,docs/AM13E/REL17_FEATURE_COVERAGE_AUDIT.md,Engineering evidence/immutable original design document
+mcu/AM13E/REL17_FUNCTIONAL_COVERAGE.json,E,docs/AM13E/REL17_FUNCTIONAL_COVERAGE.json,Engineering evidence/immutable original design document
+mcu/AM13E/REL17_V14_SOURCE_GAP_AUDIT.md,E,docs/AM13E/REL17_V14_SOURCE_GAP_AUDIT.md,Engineering evidence/immutable original design document
+mcu/AM13E/REV14_TO_REV16_CROSSWALK.md,E,docs/AM13E/REV14_TO_REV16_CROSSWALK.md,Engineering evidence/immutable original design document
+mcu/AM13E/REV16_REQUIREMENTS.csv,E,docs/AM13E/REV16_REQUIREMENTS.csv,Engineering evidence/immutable original design document
+mcu/AM13E/V14_DESIGN_AUTHORITY.md,E,docs/AM13E/V14_DESIGN_AUTHORITY.md,Engineering evidence/immutable original design document
+mcu/AM13E/V14_INTERFACE_COMPLIANCE_AUDIT.md,E,docs/AM13E/V14_INTERFACE_COMPLIANCE_AUDIT.md,Engineering evidence/immutable original design document
+mcu/AM13E/analog_calibration_plan.c,B,mcu/AM13E/hal/analog_calibration_plan.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/analog_calibration_plan.h,B,mcu/AM13E/hal/analog_calibration_plan.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/analog_reference.h,B,mcu/AM13E/hal/analog_reference.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/analog_runtime.h,B,mcu/AM13E/hal/analog_runtime.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/analog_sampling_backend.h,B,mcu/AM13E/hal/analog_sampling_backend.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/arming_window.c,B,mcu/AM13E/hal/arming_window.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/aux_gpio.h,B,mcu/AM13E/hal/aux_gpio.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/bidir_codec.c,A,src/bidir_codec.c,Core GCR packing shared by original legacy DMA and native serializer
+mcu/AM13E/bidir_codec.h,A,src/bidir_codec.h,Core GCR packing shared by original legacy DMA and native serializer
+mcu/AM13E/bidir_timing.c,B,mcu/AM13E/hal/bidir_timing.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/bidir_timing.h,B,mcu/AM13E/hal/bidir_timing.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/board_clock_provider.h,B,mcu/AM13E/hal/board_clock_provider.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/board_configuration.h,B,mcu/AM13E/hal/board_configuration.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/board_motor_output_provider.h,B,mcu/AM13E/hal/board_motor_output_provider.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/board_reference_io.h,B,mcu/AM13E/hal/board_reference_io.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/cfg_flash_plan.c,B,mcu/AM13E/hal/cfg_flash_plan.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/cfg_flash_plan.h,B,mcu/AM13E/hal/cfg_flash_plan.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/cfg_flash_writer.c,B,mcu/AM13E/hal/cfg_flash_writer.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/cfg_flash_writer.h,B,mcu/AM13E/hal/cfg_flash_writer.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/cli_entry.c,A,src/io.c,Integrated into shared Core io.c; calibration and EXBUS policy now shared with legacy callers
+mcu/AM13E/cli_entry.h,A,src/cli_entry.h,Integrated into shared Core io.c; calibration and EXBUS policy now shared with legacy callers
+mcu/AM13E/cli_line_rx.c,A,src/cli_line_rx.c,Core CLI framing/editing; physical UART/PendSV transport stays HAL
+mcu/AM13E/cli_line_rx.h,A,src/cli_line_rx.h,Core CLI framing/editing; physical UART/PendSV transport stays HAL
+mcu/AM13E/clock_backend.h,B,mcu/AM13E/hal/clock_backend.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/clock_diagnostic_entry.c,E,tests/AM13E/fixtures/clock_diagnostic_entry.c,Standalone clock diagnostic entry; not production image
+mcu/AM13E/command_capture.h,B,mcu/AM13E/hal/command_capture.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/command_decode.c,B,mcu/AM13E/hal/command_decode.c,Necessary ECAP timestamp/pulse reconstruction and mode observation; original dshot_apply_packet handles commands; full discovery timing remains unqualified
+mcu/AM13E/command_decode.h,B,mcu/AM13E/hal/command_decode.h,Necessary ECAP timestamp/pulse reconstruction and mode observation; original dshot_apply_packet handles commands; full discovery timing remains unqualified
+mcu/AM13E/command_input_reference.h,B,mcu/AM13E/hal/command_input_reference.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/command_input_route_backend.h,B,mcu/AM13E/hal/command_input_route_backend.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/command_reply.h,B,mcu/AM13E/hal/command_reply.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/config.c,C,mcu/AM13E/config.c,Required native configuration/source selection/linker or original preset
+mcu/AM13E/config.cmake,C,mcu/AM13E/config.cmake,Required native configuration/source selection/linker or original preset
+mcu/AM13E/config.h,C,mcu/AM13E/config.h,Required native configuration/source selection/linker or original preset
+mcu/AM13E/config.ld,C,mcu/AM13E/config.ld,Required native configuration/source selection/linker or original preset
+mcu/AM13E/crsf_command_reply.c,D,src/io.c,Deleted; original shared src/io.c parser/formatter now used directly
+mcu/AM13E/crsf_command_reply.h,E,tests/AM13E/interfaces/crsf_command_reply.h,Compatibility declarations used solely by existing Host fixtures
+mcu/AM13E/crsf_deferred_command.c,B,mcu/AM13E/hal/crsf_deferred_command.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/crsf_deferred_command.h,B,mcu/AM13E/hal/crsf_deferred_command.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/crsf_receiver.c,D,src/io.c,Deleted; original shared src/io.c parser/formatter now used directly
+mcu/AM13E/crsf_receiver.h,E,tests/AM13E/interfaces/crsf_receiver.h,Compatibility declarations used solely by existing Host fixtures
+mcu/AM13E/entry.c,C,mcu/AM13E/config.c,Native TI startup hook merged into config.c
+mcu/AM13E/exbus_autobaud.c,A,src/io.c,Integrated into shared Core io.c; calibration and EXBUS policy now shared with legacy callers
+mcu/AM13E/exbus_autobaud.h,A,src/exbus_autobaud.h,Integrated into shared Core io.c; calibration and EXBUS policy now shared with legacy callers
+mcu/AM13E/exbus_receiver.c,D,src/io.c,Deleted; original shared src/io.c parser/formatter now used directly
+mcu/AM13E/exbus_receiver.h,E,tests/AM13E/interfaces/exbus_receiver.h,Compatibility declarations used solely by existing Host fixtures
+mcu/AM13E/exbus_telemetry_reply.c,D,src/io.c,Deleted; original shared src/io.c parser/formatter now used directly
+mcu/AM13E/exbus_telemetry_reply.h,E,tests/AM13E/interfaces/exbus_telemetry_reply.h,Compatibility declarations used solely by existing Host fixtures
+mcu/AM13E/fault_input.h,B,mcu/AM13E/hal/fault_input.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/fault_trip_backend.h,B,mcu/AM13E/hal/fault_trip_backend.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/fault_trip_route_plan.c,B,mcu/AM13E/hal/fault_trip_route_plan.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/fault_trip_route_plan.h,B,mcu/AM13E/hal/fault_trip_route_plan.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/flash_partition.h,B,mcu/AM13E/hal/flash_partition.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/analog_runtime.c,B,mcu/AM13E/hal/analog_runtime.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/analog_sampling_backend.c,B,mcu/AM13E/hal/analog_sampling_backend.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/aux_gpio.c,B,mcu/AM13E/hal/aux_gpio.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/board_clock_reference.c,B,mcu/AM13E/hal/board_clock_reference.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/board_motor_output_reference.c,B,mcu/AM13E/hal/board_motor_output_reference.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/cfg_flash_runtime.c,B,mcu/AM13E/hal/cfg_flash_runtime.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/clock_source_reference.c,B,mcu/AM13E/hal/clock_source_reference.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/command_capture.c,B,mcu/AM13E/hal/command_capture.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/command_input_route_backend.c,B,mcu/AM13E/hal/command_input_route_backend.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/command_reply.c,B,mcu/AM13E/hal/command_reply.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/fault_input.c,B,mcu/AM13E/hal/fault_input.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/fault_trip_backend.c,B,mcu/AM13E/hal/fault_trip_backend.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/input_watchdog.c,B,mcu/AM13E/hal/input_watchdog.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/irq_vectors.c,B,mcu/AM13E/hal/irq_vectors.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/motor_audio.c,B,mcu/AM13E/hal/motor_audio.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/motor_bemf.c,B,mcu/AM13E/hal/motor_bemf.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/motor_event_timer.c,B,mcu/AM13E/hal/motor_event_timer.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/motor_fault_route.c,B,mcu/AM13E/hal/motor_fault_route.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/motor_output_backend.c,B,mcu/AM13E/hal/motor_output_backend.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/motor_power_stage.c,B,mcu/AM13E/hal/motor_power_stage.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/motor_runtime_irq.c,B,mcu/AM13E/hal/motor_runtime_irq.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/motor_safety.c,B,mcu/AM13E/hal/motor_safety.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/reset_cause.c,B,mcu/AM13E/hal/reset_cause.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/serial_uart_rx.c,B,mcu/AM13E/hal/serial_uart_rx.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/service_reset.c,B,mcu/AM13E/hal/service_reset.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/telem_backend.c,B,mcu/AM13E/hal/telem_backend.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hal/telem_uc2_preflight.c,B,mcu/AM13E/hal/telem_uc2_preflight.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/hott_receiver.c,D,src/io.c,Deleted; original shared src/io.c parser/formatter now used directly
+mcu/AM13E/hott_receiver.h,E,tests/AM13E/interfaces/hott_receiver.h,Compatibility declarations used solely by existing Host fixtures
+mcu/AM13E/ibus_receiver.c,D,src/io.c,Deleted; original shared src/io.c parser/formatter now used directly
+mcu/AM13E/ibus_receiver.h,E,tests/AM13E/interfaces/ibus_receiver.h,Compatibility declarations used solely by existing Host fixtures
+mcu/AM13E/input_watchdog.h,B,mcu/AM13E/hal/input_watchdog.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/io_backend.h,B,mcu/AM13E/hal/io_backend.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/irq_vectors.h,B,mcu/AM13E/hal/irq_vectors.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/linker_app_reference.ld,E,cmake/AM13E/linker_app_reference.ld,"Diagnostic/profile build asset, not active native config.ld"
+mcu/AM13E/linker_app_v16.ld,E,cmake/AM13E/linker_app_v16.ld,"Diagnostic/profile build asset, not active native config.ld"
+mcu/AM13E/motor_aq_plan.c,B,mcu/AM13E/hal/motor_aq_plan.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_aq_plan.h,B,mcu/AM13E/hal/motor_aq_plan.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_audio_hw.h,B,mcu/AM13E/hal/motor_audio_hw.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_audio_plan.c,B,mcu/AM13E/hal/motor_audio_plan.c,Clock/register translation; duplicate pitch table removed; Core music.h is sole original tone table
+mcu/AM13E/motor_audio_plan.h,B,mcu/AM13E/hal/motor_audio_plan.h,Clock/register translation; duplicate pitch table removed; Core music.h is sole original tone table
+mcu/AM13E/motor_backend.h,B,mcu/AM13E/hal/motor_backend.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_bemf.h,B,mcu/AM13E/hal/motor_bemf.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_bemf_event_plan.c,B,mcu/AM13E/hal/motor_bemf_event_plan.c,HAL contains tick-domain sample conversion only; duplicated zero-cross policy removed; original bemf_zero_cross_delay directly reused
+mcu/AM13E/motor_bemf_event_plan.h,B,mcu/AM13E/hal/motor_bemf_event_plan.h,HAL contains tick-domain sample conversion only; duplicated zero-cross policy removed; original bemf_zero_cross_delay directly reused
+mcu/AM13E/motor_duty_plan.c,B,mcu/AM13E/hal/motor_duty_plan.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_duty_plan.h,B,mcu/AM13E/hal/motor_duty_plan.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_event_timer.h,B,mcu/AM13E/hal/motor_event_timer.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_fault_route.h,B,mcu/AM13E/hal/motor_fault_route.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_frequency_plan.c,B,mcu/AM13E/hal/motor_frequency_plan.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_frequency_plan.h,B,mcu/AM13E/hal/motor_frequency_plan.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_output_backend.h,B,mcu/AM13E/hal/motor_output_backend.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_output_route_plan.c,B,mcu/AM13E/hal/motor_output_route_plan.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_output_route_plan.h,B,mcu/AM13E/hal/motor_output_route_plan.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_ownership_plan.c,B,mcu/AM13E/hal/motor_ownership_plan.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_ownership_plan.h,B,mcu/AM13E/hal/motor_ownership_plan.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_phase_plan.c,B,mcu/AM13E/hal/motor_phase_plan.c,Hardware translation/validation of masks computed by original nextstep; repeated tables removed; Core commutation.h is sole sequence
+mcu/AM13E/motor_phase_plan.h,B,mcu/AM13E/hal/motor_phase_plan.h,Hardware translation/validation of masks computed by original nextstep; repeated tables removed; Core commutation.h is sole sequence
+mcu/AM13E/motor_power_stage.h,B,mcu/AM13E/hal/motor_power_stage.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_pwm_shadow_plan.c,B,mcu/AM13E/hal/motor_pwm_shadow_plan.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_pwm_shadow_plan.h,B,mcu/AM13E/hal/motor_pwm_shadow_plan.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_safety.h,B,mcu/AM13E/hal/motor_safety.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_shadow_plan.c,B,mcu/AM13E/hal/motor_shadow_plan.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_shadow_plan.h,B,mcu/AM13E/hal/motor_shadow_plan.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_timer_math.c,B,mcu/AM13E/hal/motor_timer_math.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/motor_timer_math.h,B,mcu/AM13E/hal/motor_timer_math.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/newlib_syscalls.c,A,src/newlib_syscalls.c,Target-neutral libc error support shared independently by both images
+mcu/AM13E/newlib_syscalls.h,A,src/newlib_syscalls.h,Target-neutral libc error support shared independently by both images
+mcu/AM13E/preset.c,C,mcu/AM13E/preset.c,Required native configuration/source selection/linker or original preset
+mcu/AM13E/profiles/image_reference_v16.cmake,E,cmake/AM13E/profiles/image_reference_v16.cmake,"Diagnostic/profile build asset, not active native config.ld"
+mcu/AM13E/profiles/image_rel17_v14.cmake,E,cmake/AM13E/profiles/image_rel17_v14.cmake,"Diagnostic/profile build asset, not active native config.ld"
+mcu/AM13E/runtime_tick_contract.h,B,mcu/AM13E/hal/runtime_tick_contract.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/sbus2_reply.c,D,src/io.c,Deleted; original shared src/io.c parser/formatter now used directly
+mcu/AM13E/sbus2_reply.h,E,tests/AM13E/interfaces/sbus2_reply.h,Compatibility declarations used solely by existing Host fixtures
+mcu/AM13E/sbus_receiver.c,D,src/io.c,Deleted; original shared src/io.c parser/formatter now used directly
+mcu/AM13E/sbus_receiver.h,E,tests/AM13E/interfaces/sbus_receiver.h,Compatibility declarations used solely by existing Host fixtures
+mcu/AM13E/serial_command.c,D,src/io.c,Deleted; original shared src/io.c parser/formatter now used directly
+mcu/AM13E/serial_command.h,E,tests/AM13E/interfaces/serial_command.h,Compatibility declarations used solely by existing Host fixtures
+mcu/AM13E/serial_frame_rx.c,A,src/serial_frame_rx.c,Pure byte-stream protocol framing moved to shared Core; only UART FIFO/gap observation stays HAL
+mcu/AM13E/serial_frame_rx.h,A,src/serial_frame_rx.h,Pure byte-stream protocol framing moved to shared Core; only UART FIFO/gap observation stays HAL
+mcu/AM13E/serial_tx_queue.c,B,mcu/AM13E/hal/serial_tx_queue.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/serial_tx_queue.h,B,mcu/AM13E/hal/serial_tx_queue.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/serial_uart_rx.h,B,mcu/AM13E/hal/serial_uart_rx.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/service_reset.h,B,mcu/AM13E/hal/service_reset.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/servo_calibration.c,D,src/io.c,Deleted independent calibration helper; original calibirq directly reused with period/clock seams
+mcu/AM13E/servo_calibration.h,E,tests/AM13E/interfaces/servo_calibration.h,State declarations for retained Host vectors; actual algorithm is production calibirq
+mcu/AM13E/telem_backend.h,B,mcu/AM13E/hal/telem_backend.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/telem_frame_rx.c,A,src/telem_frame_rx.c,Pure byte-stream protocol framing moved to shared Core; only UART FIFO/gap observation stays HAL
+mcu/AM13E/telem_frame_rx.h,A,src/telem_frame_rx.h,Pure byte-stream protocol framing moved to shared Core; only UART FIFO/gap observation stays HAL
+mcu/AM13E/telem_mode_plan.c,B,mcu/AM13E/hal/telem_mode_plan.c,Physical UART baud/inversion/turnaround and TI RXTOSEL representation; original telemetry packet handlers remain Core
+mcu/AM13E/telem_mode_plan.h,B,mcu/AM13E/hal/telem_mode_plan.h,Physical UART baud/inversion/turnaround and TI RXTOSEL representation; original telemetry packet handlers remain Core
+mcu/AM13E/telem_tx_progress.c,B,mcu/AM13E/hal/telem_tx_progress.c,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/telem_tx_progress.h,B,mcu/AM13E/hal/telem_tx_progress.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/telem_uc2_preflight.h,B,mcu/AM13E/hal/telem_uc2_preflight.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/tests/analog_calibration_plan_host_test.c,E,tests/AM13E/analog_calibration_plan_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/aux_mock/dl_gpio.h,E,tests/AM13E/aux_mock/dl_gpio.h,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/aux_mock/hw_pinmap.h,E,tests/AM13E/aux_mock/hw_pinmap.h,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/aux_mock/soc.h,E,tests/AM13E/aux_mock/soc.h,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/aux_route_negative_host_test.c,E,tests/AM13E/aux_route_negative_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/bidir_codec_host_test.c,E,tests/AM13E/bidir_codec_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/bidir_timing_host_test.c,E,tests/AM13E/bidir_timing_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/board_configuration_host_test.c,E,tests/AM13E/board_configuration_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/board_profile_compile_smoke.py,E,tests/AM13E/board_profile_compile_smoke.py,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/both_synthetic_profile.cmake,E,tests/AM13E/both_synthetic_profile.cmake,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/cfg_flash_plan_host_test.c,E,tests/AM13E/cfg_flash_plan_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/cfg_flash_writer_host_test.c,E,tests/AM13E/cfg_flash_writer_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/cli_entry_host_test.c,E,tests/AM13E/cli_entry_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/cli_line_rx_host_test.c,E,tests/AM13E/cli_line_rx_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/command_bidir_roundtrip_host_test.c,E,tests/AM13E/command_bidir_roundtrip_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/command_decode_host_test.c,E,tests/AM13E/command_decode_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/config_command_source_host_test.c,E,tests/AM13E/config_command_source_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/crsf_command_reply_host_test.c,E,tests/AM13E/crsf_command_reply_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/crsf_deferred_command_host_test.c,E,tests/AM13E/crsf_deferred_command_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/crsf_receiver_host_test.c,E,tests/AM13E/crsf_receiver_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/erpm_synthetic_profile.cmake,E,tests/AM13E/erpm_synthetic_profile.cmake,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/exbus_autobaud_host_test.c,E,tests/AM13E/exbus_autobaud_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/exbus_receiver_host_test.c,E,tests/AM13E/exbus_receiver_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/exbus_telemetry_reply_host_test.c,E,tests/AM13E/exbus_telemetry_reply_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/fault_trip_route_plan_host_test.c,E,tests/AM13E/fault_trip_route_plan_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/hott_receiver_host_test.c,E,tests/AM13E/hott_receiver_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/ibus_receiver_host_test.c,E,tests/AM13E/ibus_receiver_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/led3_synthetic_profile.cmake,E,tests/AM13E/led3_synthetic_profile.cmake,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/led4_synthetic_profile.cmake,E,tests/AM13E/led4_synthetic_profile.cmake,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/led_profiles_validation.sh,E,tests/AM13E/led_profiles_validation.sh,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/led_route_negative_host_test.c,E,tests/AM13E/led_route_negative_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/led_source_host_test.c,E,tests/AM13E/led_source_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/motor_aq_plan_host_test.c,E,tests/AM13E/motor_aq_plan_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/motor_audio_plan_host_test.c,E,tests/AM13E/motor_audio_plan_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/motor_bemf_clock_host_test.c,E,tests/AM13E/motor_bemf_clock_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/motor_bemf_commutation_host_test.c,E,tests/AM13E/motor_bemf_commutation_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/motor_brake_aq_host_test.c,E,tests/AM13E/motor_brake_aq_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/motor_duty_plan_host_test.c,E,tests/AM13E/motor_duty_plan_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/motor_frequency_plan_host_test.c,E,tests/AM13E/motor_frequency_plan_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/motor_lock_aq_host_test.c,E,tests/AM13E/motor_lock_aq_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/motor_mock/soc.h,E,tests/AM13E/motor_mock/soc.h,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/motor_output_route_plan_host_test.c,E,tests/AM13E/motor_output_route_plan_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/motor_ownership_integration_host_test.c,E,tests/AM13E/motor_ownership_integration_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/motor_phase_plan_host_test.c,E,tests/AM13E/motor_phase_plan_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/motor_pwm_shadow_plan_host_test.c,E,tests/AM13E/motor_pwm_shadow_plan_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/motor_shadow_plan_host_test.c,E,tests/AM13E/motor_shadow_plan_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/motor_source_host_test.c,E,tests/AM13E/motor_source_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/motor_timer_math_host_test.c,E,tests/AM13E/motor_timer_math_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/newlib_host.h,E,tests/AM13E/newlib_host.h,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/park_source_host_test.c,E,tests/AM13E/park_source_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/park_synthetic_profile.cmake,E,tests/AM13E/park_synthetic_profile.cmake,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/receiver_config_source_host_test.c,E,tests/AM13E/receiver_config_source_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/rel17_defaults_host.c,E,tests/AM13E/rel17_defaults_host.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/sbus2_reply_host_test.c,E,tests/AM13E/sbus2_reply_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/sbus_receiver_host_test.c,E,tests/AM13E/sbus_receiver_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/serial_command_host_test.c,E,tests/AM13E/serial_command_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/serial_frame_rx_host_test.c,E,tests/AM13E/serial_frame_rx_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/serial_tx_queue_host_test.c,E,tests/AM13E/serial_tx_queue_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/service_handoff_host_test.c,E,tests/AM13E/service_handoff_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/service_mock/soc.h,E,tests/AM13E/service_mock/soc.h,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/servo_source_host_test.c,E,tests/AM13E/servo_source_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/servo_trim_source_host_test.c,E,tests/AM13E/servo_trim_source_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/telem_frame_rx_host_test.c,E,tests/AM13E/telem_frame_rx_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/telem_mode_plan_host_test.c,E,tests/AM13E/telem_mode_plan_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/telem_tx_progress_host_test.c,E,tests/AM13E/telem_tx_progress_host_test.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/test_arming_window_host.c,E,tests/AM13E/test_arming_window_host.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/test_bemf_timeout_host.c,E,tests/AM13E/test_bemf_timeout_host.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/test_sine_carrier_host.c,E,tests/AM13E/test_sine_carrier_host.c,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/uart_crsf_tx_synthetic_profile.cmake,E,tests/AM13E/uart_crsf_tx_synthetic_profile.cmake,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/uart_exbus_tx_synthetic_profile.cmake,E,tests/AM13E/uart_exbus_tx_synthetic_profile.cmake,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/uart_rx_synthetic_profile.cmake,E,tests/AM13E/uart_rx_synthetic_profile.cmake,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tests/uart_telem_synthetic_profile.cmake,E,tests/AM13E/uart_telem_synthetic_profile.cmake,"Existing regression, mock or fixture retained outside native target"
+mcu/AM13E/tools/check_c_runtime.py,E,tools/AM13E/check_c_runtime.py,Existing verification/build tool retained outside native target
+mcu/AM13E/tools/check_object_symbols.py,E,tools/AM13E/check_object_symbols.py,Existing verification/build tool retained outside native target
+mcu/AM13E/tools/prepare_sdk_sources.py,E,tools/AM13E/prepare_sdk_sources.py,Existing verification/build tool retained outside native target
+mcu/AM13E/tools/probe_app_linker.py,E,tools/AM13E/probe_app_linker.py,Existing verification/build tool retained outside native target
+mcu/AM13E/tools/run_host_regressions.sh,E,tools/AM13E/run_host_regressions.sh,Existing verification/build tool retained outside native target
+mcu/AM13E/tools/toolchain_match.py,E,tools/AM13E/toolchain_match.py,Existing verification/build tool retained outside native target
+mcu/AM13E/tools/verify_rel17_coverage.py,E,tools/AM13E/verify_rel17_coverage.py,Existing verification/build tool retained outside native target
+mcu/AM13E/tools/verify_rel17_image.py,E,tools/AM13E/verify_rel17_image.py,Existing verification/build tool retained outside native target
+mcu/AM13E/tools/verify_v14_docs.py,E,tools/AM13E/verify_v14_docs.py,Existing verification/build tool retained outside native target
+mcu/AM13E/tools/verify_v14_source_scope.py,E,tools/AM13E/verify_v14_source_scope.py,Existing verification/build tool retained outside native target
+mcu/AM13E/tools/verify_v16_docs.py,E,tools/AM13E/verify_v16_docs.py,Existing verification/build tool retained outside native target
+mcu/AM13E/tools/verify_v16_image.py,E,tools/AM13E/verify_v16_image.py,Existing verification/build tool retained outside native target
+mcu/AM13E/util_backend.h,B,mcu/AM13E/hal/util_backend.h,Target-specific hardware implementation/interface or physical register translation
+mcu/AM13E/v1.4/Integration_Design.md,E,docs/AM13E/v1.4/Integration_Design.md,Engineering evidence/immutable original design document
+mcu/AM13E/v1.4/Integration_Mapping.md,E,docs/AM13E/v1.4/Integration_Mapping.md,Engineering evidence/immutable original design document
+mcu/AM13E/v1.4/Interface_Contracts.md,E,docs/AM13E/v1.4/Interface_Contracts.md,Engineering evidence/immutable original design document
+mcu/AM13E/v1.6/Integration_Design.md,E,docs/AM13E/v1.6/Integration_Design.md,Engineering evidence/immutable original design document
+mcu/AM13E/v1.6/Integration_Mapping.md,E,docs/AM13E/v1.6/Integration_Mapping.md,Engineering evidence/immutable original design document
+mcu/AM13E/v1.6/Interface_Contracts.md,E,docs/AM13E/v1.6/Interface_Contracts.md,Engineering evidence/immutable original design document

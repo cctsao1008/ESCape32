@@ -10,22 +10,22 @@
  * IRQ release is not a power-stage arming operation. Default numeric
  * gate/dead-band model is not a claim of physical qualification.
  */
-#include "../motor_backend.h"
-#include "../motor_safety.h"
-#include "../motor_bemf.h"
-#include "../motor_event_timer.h"
-#include "../analog_runtime.h" /* ADC0 monitoring must have a live IRQ handler */
-#include "../irq_vectors.h"
-#include "../fault_input.h"
-#include "../command_capture.h"
-#include "../command_reply.h"
-#include "../serial_uart_rx.h"
+#include "motor_backend.h"
+#include "motor_safety.h"
+#include "motor_bemf.h"
+#include "motor_event_timer.h"
+#include "analog_runtime.h" /* ADC0 monitoring must have a live IRQ handler */
+#include "irq_vectors.h"
+#include "fault_input.h"
+#include "command_capture.h"
+#include "command_reply.h"
+#include "serial_uart_rx.h"
 #ifdef AM13E_BOARD_TELEM_UART_CONFIGURED
-#include "../telem_backend.h"
+#include "telem_backend.h"
 #endif
-#include "../io_backend.h" /* native access to original cfg.input_mode */
+#include "io_backend.h" /* native access to original cfg.input_mode */
 /* Input mode is queried through original io.c policy owner. */
-#include "../clock_backend.h"
+#include "clock_backend.h"
 #include <soc.h>
 #include <dl_mcpwm.h>
 #include <dl_gpio.h>

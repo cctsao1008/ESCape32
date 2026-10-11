@@ -3,8 +3,8 @@
 # AM13E Host Validation — ESCape32 Rel17 v1.4 (CURRENT)
 
 **Status:** executable native-GCC/ARM software evidence only; not silicon or motor-drive qualification.
-**Authority:** [AM13E Boot/Application Contract](../../../mcu/AM13E/APP_LINK_CONTRACT.md),
-[Rel17 v1.4 Source Gap Audit](../../../mcu/AM13E/REL17_V14_SOURCE_GAP_AUDIT.md),
+**Authority:** [AM13E Boot/Application Contract](../../../docs/AM13E/APP_LINK_CONTRACT.md),
+[Rel17 v1.4 Source Gap Audit](../../../docs/AM13E/REL17_V14_SOURCE_GAP_AUDIT.md),
 original ESCape32 Rel17 source, and the active build/linker/Boot implementation.
 **Historical v1.6 tests:** [README_V16_SUPERSEDED.md](README_V16_SUPERSEDED.md).
 Those older header/CRC/signature-last instructions are **SUPERSEDED**, not current test or update requirements.
@@ -82,7 +82,7 @@ cmake -S boot/tests/am13e_host -B build-am13e-host-tests \
   -DAM13E_HOST_PACKED_IMAGE="$PWD/build-am13e/AM13E_FW1_REL17.flat.bin"
 cmake --build build-am13e-host-tests -j"$(nproc)"
 ctest --test-dir build-am13e-host-tests --output-on-failure -V
-python3 mcu/AM13E/tools/verify_v14_docs.py
+python3 tools/AM13E/verify_v14_docs.py
 ```
 
 Without `AM13E_HOST_PACKED_IMAGE`, base CTest tests still run.

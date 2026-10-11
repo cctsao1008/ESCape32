@@ -1,0 +1,20 @@
+/* Rel17 v1.4 AM13E native Boot SRAM reception, not a Flash commit. */
+#pragma once
+#include <stdint.h>
+#include <stdbool.h>
+#include "../../mcu/AM13E/hal/flash_partition.h"
+#define AM13E_BOOT_STAGE_BYTES (AM13E_FLASH_BOOT_END-AM13E_FLASH_BOOT_BASE)
+#define AM13E_BOOT_STAGE_BLOCK_BYTES AM13E_FLASH_LOGICAL_BLOCK
+#define AM13E_BOOT_STAGE_BLOCKS (AM13E_BOOT_STAGE_BYTES/AM13E_BOOT_STAGE_BLOCK_BYTES)
+void boot_am13e_stage_begin(void);
+void boot_am13e_stage_abort(void);
+uint8_t *boot_am13e_stage_next(unsigned index);
+bool boot_am13e_stage_accept(unsigned index,unsigned length);
+unsigned boot_am13e_stage_length(void);
+bool boot_am13e_stage_complete(void);
+bool boot_am13e_stage_vector_plausible(void);
+/* Byte-level preparation only, prior to any Flash command. Returns
+ * NULL for incomplete / implausible staged Boot vectors. Pads unused
+ * 16KiB Boot bytes with 0xff; real transferred length stays unchanged.
+ */
+uint8_t *boot_am13e_stage_prepare_for_commit(void);

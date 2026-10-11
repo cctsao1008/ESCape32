@@ -16,8 +16,10 @@
 */
 
 #include "common.h"
+#include "commutation.h"
 
 #if defined(AM13E)
+#include <limits.h>
 #include "motor_backend.h"
 #include "motor_safety.h"
 #include "motor_bemf.h"
@@ -210,9 +212,8 @@ static void nextstep(void) {
 	} else {
 		if (++step > 6) step = 1;
 	}
-	static const uint16_t seq[] = {0x175, 0xd9, 0x1ab, 0x72, 0x1de, 0xac}; // Commutation sequence
 	static int pcc, val, cnt, buf[6];
-	int x = seq[step - 1];
+	int x = rel17_commutation_sequence[step - 1];
 	int m = x >> 3; // Energized phase mask
 	int p = x & m; // Positive phase
 	int n = ~x & m; // Negative phase
@@ -448,26 +449,26 @@ static void bemf_timeout_reset(void) {
 /* Return a positive commutation delay for an accepted crossing.
  * Return zero for an early/spurious capture; do not change state.
  */
+#if defined(AM13E)
+static int bemf_inputs_valid(int interval,int capture,int timing) {
+    if(interval<=0 || capture<=0 || interval>INT_MAX/3 || timing<0 || timing>32)return 0;
+    if(capture<(interval>>1))return 1;
+    const int u=interval*3;
+    return capture<=INT_MAX-u && ((capture+u)>>2)<=INT_MAX/32;
+}
+#endif
 static int bemf_zero_cross_delay(int capture_ticks) {
 #if defined(AM13E)
-    AM13E_BemfPolicyPlan plan;
-    const int result=am13e_bemf_policy_plan(
-        ival,ertm,capture_ticks,cfg.timing,&plan);
-    if (result<0) {
-        hard_fault_handler(); /* No fabricated valid commutation on error. */
+    if(!bemf_inputs_valid(ival,capture_ticks,cfg.timing)) {
+        hard_fault_handler();
         return 0;
     }
-    if (result==0) return 0;
-    fast=plan.fast;
-    ival=plan.interval_us;
-    return plan.delay_us;
-#else
+#endif
     if (capture_ticks < ival >> 1) return 0;
     int u = ival * 3;
     fast = (capture_ticks < u >> 2 || capture_ticks > u >> 1) && ertm < 2000;
     ival = (capture_ticks + u) >> 2;
     return max((ival - (ival * cfg.timing >> 5)) >> 1, 1);
-#endif
 }
 
 #if !defined(AM13E)
@@ -737,7 +738,7 @@ static int park(void) {
 #endif
 
 #if defined(AM13E)
-/* The Cortex-M33 ABI adapter lives in mcu/AM13E/entry.c.
+/* The Cortex-M33 ABI adapter lives in mcu/AM13E/config.c.
  * Rel17's control-loop body keeps its original void-return contract.
  * Legacy MCU main() and behavior remain unchanged.
  */
