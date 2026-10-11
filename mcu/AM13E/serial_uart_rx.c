@@ -126,6 +126,11 @@ static bool crsf_tx_available;
 /* Called solely from this UNICOMM IRQ. Nonblocking, single-packet
  * transaction: queue copy finishes before TX IRQ can drain it.
  */
+/* PendSV calls this worker; both worker and UART IRQ use
+ * the same bounded TX queue owned by this UNICOMM instance.
+ */
+static void crsf_tx_start(const uint8_t *p,unsigned n);
+
 void am13e_app_serial_crsf_service_pending(void)
 {
     if(!crsf_tx_available||!crsf_cmd.busy||
@@ -144,9 +149,6 @@ void am13e_app_serial_crsf_service_pending(void)
     if(n)crsf_tx_start(reply,n);
     am13e_crsf_deferred_finish(&crsf_cmd);
 }
-
-/* forward declaration: PendSV worker submits a ready UART TX */
-static void crsf_tx_start(const uint8_t *p,unsigned n);
 
 static void crsf_tx_fill_fifo(void)
 {
