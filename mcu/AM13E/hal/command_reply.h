@@ -11,3 +11,9 @@ void am13e_pb14_bidir_tx_systick(void);
 void am13e_pb14_bidir_tx_status(uint32_t *completed, uint32_t *rejected);
 void TIMG4_0_IRQHandler(void);
 void DMA0_IRQHandler(void);
+
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+#include <stdbool.h>
+bool am13e_pb14_release_timer_for_sbus2(void);
+unsigned am13e_pb14_tx_timer_irq_priority(void);
+#endif

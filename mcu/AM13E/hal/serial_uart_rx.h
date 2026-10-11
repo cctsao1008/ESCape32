@@ -5,6 +5,9 @@
 #if !defined(AM13E)
 #error "AM13E UART RX provider is target-specific"
 #endif
+#if defined(AM13E_BOARD_SBUS2_TIMED_REPLY) && !defined(AM13E_BOARD_SERIAL_RX_CONFIGURED)
+#error "Timed SBUS2 requires the native board-selected serial receiver"
+#endif
 #ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
 #include <stdbool.h>
 bool am13e_app_serial_rx_init(unsigned mode);
@@ -28,4 +31,8 @@ void am13e_app_serial_cli_entry_poll(int high,int edge,int selected);
 void am13e_app_serial_cli_service_pending(void);
 #endif
 #endif
+#endif
+
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+void am13e_app_serial_sbus2_timer_irq(void);
 #endif

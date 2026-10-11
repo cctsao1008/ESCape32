@@ -86,7 +86,12 @@ void am13e_app_motor_runtime_enable_interrupts(void)
         NVIC_GetPriority(ECAP0_INT_IRQn)!=0U ||
         NVIC_GetPriority(ECAP1_INT_IRQn)!=0U ||
         NVIC_GetPriority(TIMG12_0_INT_IRQn)!=0U ||
-        NVIC_GetPriority(TIMG4_0_INT_IRQn)!=0U ||
+        NVIC_GetPriority(TIMG4_0_INT_IRQn)!=
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+            am13e_pb14_tx_timer_irq_priority() ||
+#else
+            0U ||
+#endif
         NVIC_GetPriority(DMA0_INT_IRQn)!=0U ||
         NVIC_GetPriority(ADC0_INT1_INT_IRQn)!=1U)
         irq_barrier_fault();

@@ -43,3 +43,12 @@ uint32_t NVIC_GetVector(int irq);
 #define IOMUX_PA30_MCPWM0_2B 7U
 #define IOMUX_PA10_MCPWM0_3A 7U
 #define IOMUX_PA31_MCPWM0_3B 5U
+
+void NVIC_ClearPendingIRQ(int irq);
+
+#define DOUTTGL31_0 latch
+typedef struct { struct { uint32_t MCLKCFG; } SOCLOCK; } TestSysctl;
+extern TestSysctl test_sysctl;
+#define SYSCTL (&test_sysctl)
+
+#define IOMUX_PINCM_PF_MASK 63U

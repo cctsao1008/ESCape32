@@ -29,6 +29,8 @@
     !defined(AM13E_BOARD_TELEM_TWO_WIRE)
 #error "Telemetry UNICOMM needs reviewed independent RX/TX pads, UC and bus clock"
 #endif
+/* SDK PF encoding admits documented UART routes above function7;
+ * legality of the selected UC/pad still belongs to board qualification. */
 _Static_assert(AM13E_BOARD_TELEM_TWO_WIRE==1U &&
                AM13E_BOARD_TELEM_RX_PINCM>0U &&
                AM13E_BOARD_TELEM_RX_PINCM<107U &&
@@ -36,9 +38,9 @@ _Static_assert(AM13E_BOARD_TELEM_TWO_WIRE==1U &&
                AM13E_BOARD_TELEM_TX_PINCM<107U &&
                AM13E_BOARD_TELEM_RX_PINCM!=AM13E_BOARD_TELEM_TX_PINCM &&
                AM13E_BOARD_TELEM_RX_PIN_FUNCTION>0U &&
-               AM13E_BOARD_TELEM_RX_PIN_FUNCTION<8U &&
+               AM13E_BOARD_TELEM_RX_PIN_FUNCTION<=IOMUX_PINCM_PF_MASK &&
                AM13E_BOARD_TELEM_TX_PIN_FUNCTION>0U &&
-               AM13E_BOARD_TELEM_TX_PIN_FUNCTION<8U &&
+               AM13E_BOARD_TELEM_TX_PIN_FUNCTION<=IOMUX_PINCM_PF_MASK &&
                AM13E_BOARD_TELEM_BUSCLK_HZ>=2000000U &&
                AM13E_BOARD_TELEM_BUSCLK_HZ<=200000000U,
                "Invalid or overlapping UNICOMM telemetry board profile");

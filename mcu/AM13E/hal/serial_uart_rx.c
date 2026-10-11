@@ -2,8 +2,9 @@
  * Reference has no assigned UART, so this implementation is selected
  * ONLY by explicit AM13E_BOARD_SERIAL_RX_CONFIGURED board definitions.
  * Optional board-selected 2-wire CRSF command TX uses UNICOMM FIFO,
- * TX interrupt and EOT; NO DMA, single-wire half-duplex bus, SBUS2
- * slot timing or verified physical pin mapping is implied.
+ * TX interrupt and EOT, without DMA. Conditional SBUS2 timing uses
+ * TIMG4 only after an initialization-time transfer from BiDShot.
+ * A single-wire bus or verified physical pin mapping is not implied.
  */
 #include "serial_uart_rx.h"
 #include "service_reset.h"
@@ -45,6 +46,20 @@ _Static_assert(AM13E_BOARD_EXBUS_STABLE_DEVICE_ID!=0U &&
 #include <dl_gpio.h>
 #include <dl_unicommuart.h>
 #include <stdint.h>
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+#include <dl_timer.h>
+#include "command_reply.h"
+#include "clock_backend.h"
+#if AM13E_BOARD_SBUS2_TIMED_REPLY!=1 || \
+    !defined(AM13E_BOARD_SERIAL_TX_CONFIGURED) || \
+    !defined(AM13E_BOARD_SBUS2_TX_PIN_INVERT)
+#error "Timed SBUS2 needs explicit two-wire TX and board-selected TX polarity"
+#endif
+_Static_assert(AM13E_BOARD_SERIAL_TX_TWO_WIRE==1 &&
+               AM13E_BOARD_SBUS2_TX_PIN_INVERT<=1U &&
+               AM13E_BOARD_SERIAL_RX_BUSCLK_HZ==AM13E_APP_MCLK_HZ/2U,
+               "SBUS2 requires reviewed polarity and 100MHz UART/TIMG clock");
+#endif
 
 #if AM13E_BOARD_SERIAL_RX_CONFIGURED != 1 || \
     !defined(AM13E_BOARD_SERIAL_RX_UC_INDEX) || \
@@ -54,10 +69,12 @@ _Static_assert(AM13E_BOARD_EXBUS_STABLE_DEVICE_ID!=0U &&
     !defined(AM13E_BOARD_SERIAL_SBUS_PIN_INVERT)
 #error "Board UART RX requires dedicated UC, RX pin/function, verified BUSCLK"
 #endif
+/* PF is a six-bit SDK field; functions9/11/13 exist on this silicon.
+ * This validates encoding only. The board must still prove the UC/pad route. */
 _Static_assert(AM13E_BOARD_SERIAL_RX_PINCM>0U &&
                AM13E_BOARD_SERIAL_RX_PINCM<107U &&
                AM13E_BOARD_SERIAL_RX_PIN_FUNCTION>0U &&
-               AM13E_BOARD_SERIAL_RX_PIN_FUNCTION<8U &&
+               AM13E_BOARD_SERIAL_RX_PIN_FUNCTION<=IOMUX_PINCM_PF_MASK &&
                AM13E_BOARD_SERIAL_RX_BUSCLK_HZ>=UINT32_C(2000000) &&
                AM13E_BOARD_SERIAL_RX_BUSCLK_HZ<=UINT32_C(200000000) &&
                AM13E_BOARD_SERIAL_SBUS_PIN_INVERT<=1U,
@@ -97,7 +114,7 @@ _Static_assert(AM13E_BOARD_SERIAL_TX_TWO_WIRE==1U &&
                AM13E_BOARD_SERIAL_TX_PINCM>0U &&
                AM13E_BOARD_SERIAL_TX_PINCM<64U &&
                AM13E_BOARD_SERIAL_TX_PIN_FUNCTION>0U &&
-               AM13E_BOARD_SERIAL_TX_PIN_FUNCTION<8U &&
+               AM13E_BOARD_SERIAL_TX_PIN_FUNCTION<=IOMUX_PINCM_PF_MASK &&
                AM13E_BOARD_SERIAL_TX_PINCM!=AM13E_BOARD_SERIAL_RX_PINCM,
                "CRSF TX must own a distinct board-assigned two-wire pin");
 #endif
@@ -217,6 +234,133 @@ static unsigned cli_reply_length,cli_reply_offset;
  * the same bounded TX queue owned by this UNICOMM instance.
  */
 static void crsf_tx_start(const uint8_t *p,unsigned n);
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+/* TIMG4: 16-bit free-running 1MHz counter, CC1 absolute deadlines.
+ * No accumulated ISR delay and no timer/DMA borrowing while live.
+ * Original Rel17: first slot 3200us, six starts 660us apart, RX at7160us.
+ * This two-wire adapter mutes RX in software until the real final EOT.
+ * Single-wire driver enable/Hi-Z turnaround remains a board blocker.
+ */
+#define SBUS2_TIMER TIMG4
+#define SBUS2_IRQ DL_TIMER_INTERRUPT_CC1_UP_EVENT
+static bool sbus2_timer_owned;
+static volatile bool sbus2_active,sbus2_release_due;
+static uint8_t sbus2_slots[6][3];
+static unsigned sbus2_slot,sbus2_count;
+static uint16_t sbus2_origin,sbus2_deadline;
+static uint32_t sbus2_origin_tick;
+static uint16_t sbus2_now(void)
+{ return (uint16_t)DL_Timer_getTimerCount(SBUS2_TIMER); }
+static void sbus2_release_rx(void)
+{
+    if(sbus2_release_due && crsf_tx.count==0U && !DL_UART_isBusy(RX_UC)){
+        sbus2_active=false;
+        sbus2_release_due=false;
+        am13e_serial_frame_abort(&rx_state);
+        rx_state.has_previous_byte_tick=false;
+    }
+}
+static bool sbus2_compare(uint16_t deadline)
+{
+    sbus2_deadline=deadline;
+    DL_Timer_disableInterrupt(SBUS2_TIMER,SBUS2_IRQ);
+    DL_Timer_clearInterruptStatus(SBUS2_TIMER,SBUS2_IRQ);
+    NVIC_ClearPendingIRQ(TIMG4_0_INT_IRQn);
+    DL_Timer_setCaptureCompareValue(SBUS2_TIMER,deadline,DL_TIMER_CC_1_INDEX);
+    /* Reject a deadline passed during publication instead of waiting a wrap. */
+    if((int16_t)(deadline-sbus2_now())<=0)return false;
+    DL_Timer_enableInterrupt(SBUS2_TIMER,SBUS2_IRQ);
+    if((int16_t)(deadline-sbus2_now())<=0){
+        DL_Timer_disableInterrupt(SBUS2_TIMER,SBUS2_IRQ);
+        return false;
+    }
+    return true;
+}
+static bool sbus2_timer_init(void)
+{
+    if(!am13e_pb14_release_timer_for_sbus2())return false;
+    DL_Timer_ClockConfig clock={.clockSel=DL_TIMER_CLOCK_BUSCLK,
+        .divideRatio=DL_TIMER_CLOCK_DIVIDE_1,.prescale=99U};
+    DL_Timer_setClockConfig(SBUS2_TIMER,&clock);
+    DL_Timer_TimerConfig timer={.timerMode=DL_TIMER_TIMER_MODE_PERIODIC_UP,
+        .period=UINT16_MAX,.startTimer=DL_TIMER_STOP,
+        .genIntermInt=DL_TIMER_INTERM_INT_DISABLED,.counterVal=0U};
+    DL_Timer_initTimerMode(SBUS2_TIMER,&timer);
+    DL_Timer_setCaptureCompareCtl(SBUS2_TIMER,DL_TIMER_CC_MODE_COMPARE,
+        DL_TIMER_CC_ZCOND_NONE|DL_TIMER_CC_LCOND_NONE|DL_TIMER_CC_ACOND_TIMCLK,
+        DL_TIMER_CC_1_INDEX);
+    DL_Timer_setCaptCompUpdateMethod(SBUS2_TIMER,DL_TIMER_CC_UPDATE_METHOD_IMMEDIATE,
+        DL_TIMER_CC_1_INDEX);
+    DL_Timer_disableInterrupt(SBUS2_TIMER,SBUS2_IRQ);
+    DL_Timer_clearInterruptStatus(SBUS2_TIMER,SBUS2_IRQ);
+    NVIC_ClearPendingIRQ(TIMG4_0_INT_IRQn);
+    sbus2_active=sbus2_release_due=false;
+    sbus2_timer_owned=true;
+    /* Same priority as UART: timer TX and UART FIFO/EOT cannot interrupt
+     * each other's queue mutation. Motor/ECAP/SysTick stay at priority0.
+     * In BiDShot mode the original TIMG4 priority0 remains unchanged.
+     */
+    NVIC_SetPriority(TIMG4_0_INT_IRQn,1U);
+    DL_Timer_startCounter(SBUS2_TIMER);
+    return true;
+}
+static void sbus2_begin(uint16_t received)
+{
+    if(!sbus2_timer_owned || sbus2_active || crsf_tx.count!=0U)return;
+    sbus2_count=sbus2_slot=0U;
+    /* Snapshot ORIGINAL sbuspacket() output before timer IRQ can use it.
+     * The timer never shares Core iobuf with the RX parser/CLI.
+     */
+    unsigned delay;
+    while(sbus2_count<6U && am13e_app_io_sbus2_next_slot(
+        sbus2_slots[sbus2_count],&delay))++sbus2_count;
+    sbus2_origin=received;
+    sbus2_origin_tick=serial_rx_tick;
+    sbus2_active=true;
+    sbus2_release_due=false;
+    if(!sbus2_compare((uint16_t)(received+(sbus2_count?3200U:7160U)))){
+        sbus2_count=0U;
+        if(sbus2_compare((uint16_t)(received+7160U)))return;
+        sbus2_release_due=true;
+        sbus2_release_rx();
+    }
+}
+void am13e_app_serial_sbus2_timer_irq(void)
+{
+    const uint32_t event=DL_Timer_getEnabledInterruptStatus(SBUS2_TIMER,SBUS2_IRQ);
+    DL_Timer_clearInterruptStatus(SBUS2_TIMER,SBUS2_IRQ);
+    if(!sbus2_timer_owned || !sbus2_active || !event)return;
+    /* Independent higher-priority SysTick rejects a starved UART/timer
+     * delivery even after the 16-bit counter has wrapped a whole turn.
+     * 128 ticks is8ms, beyond the original7160us reply window.
+     */
+    if((uint32_t)(serial_rx_tick-sbus2_origin_tick)>=128U){
+        DL_Timer_disableInterrupt(SBUS2_TIMER,SBUS2_IRQ);
+        sbus2_release_due=true;
+        sbus2_release_rx();
+        return;
+    }
+    /* A delayed ISR must not bunch slots. 3 bytes at 100k 8E2 need360us;
+     * >=300us lateness cannot fit the original 660us slot interval.
+     * This is an overlap guard, NOT proof of the SBUS2 jitter limit.
+     */
+    const int16_t late=(int16_t)(sbus2_now()-sbus2_deadline);
+    if(sbus2_slot<sbus2_count && late>=0 && late<300 &&
+       crsf_tx.count==0U && !DL_UART_isBusy(RX_UC)){
+        crsf_tx_start(sbus2_slots[sbus2_slot++],3U);
+    } else sbus2_slot=sbus2_count;
+    if(sbus2_slot<sbus2_count){
+        if(sbus2_compare((uint16_t)(sbus2_origin+3200U+660U*sbus2_slot)))return;
+        sbus2_slot=sbus2_count;
+    }
+    if((int16_t)((uint16_t)(sbus2_origin+7160U)-sbus2_now())>0 &&
+       sbus2_compare((uint16_t)(sbus2_origin+7160U)))return;
+    DL_Timer_disableInterrupt(SBUS2_TIMER,SBUS2_IRQ);
+    sbus2_release_due=true;
+    sbus2_release_rx();
+}
+#endif
+
 #ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
 static void cli_start_next_chunk(void);
 #endif
@@ -295,6 +439,12 @@ bool am13e_app_serial_cli_enter(void)
     };
     DL_UART_init(RX_UC,&config);
     DL_UART_configBaudRate(RX_UC,AM13E_BOARD_SERIAL_RX_BUSCLK_HZ,38400U);
+    /* Original text CLI is noninverted 8N1, even when entry precedes
+     * SBUS receiver selection. Reset the IOMUX polarity as well as UART. */
+    DL_GPIO_setDataInversion(AM13E_BOARD_SERIAL_RX_PINCM,DL_GPIO_INVERSION_DISABLE);
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+    DL_GPIO_setDataInversion(AM13E_BOARD_SERIAL_TX_PINCM,DL_GPIO_INVERSION_DISABLE);
+#endif
     DL_UART_enable(RX_UC);
     am13e_serial_frame_abort(&rx_state);
     am13e_cli_line_init(&cli_rx);
@@ -397,6 +547,9 @@ bool am13e_app_serial_rx_init(unsigned mode)
 #ifdef AM13E_BOARD_EXBUS_REPLY_ENABLED
        || mode==6U
 #endif
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+       || mode==4U
+#endif
        ) {
         /* Separate, board-reviewed 2-wire full-duplex TX/RX only.
          * Single-wire CRSF turnaround is NOT supported here.
@@ -411,6 +564,11 @@ bool am13e_app_serial_rx_init(unsigned mode)
                  AM13E_BOARD_SERIAL_TX_PINCM)!=
                  AM13E_BOARD_SERIAL_TX_PIN_FUNCTION)
             return false;
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+        DL_GPIO_setDataInversion(AM13E_BOARD_SERIAL_TX_PINCM,
+            mode==4U && AM13E_BOARD_SBUS2_TX_PIN_INVERT ?
+                DL_GPIO_INVERSION_ENABLE:DL_GPIO_INVERSION_DISABLE);
+#endif
         direction=DL_UART_DIRECTION_TX_RX;
         crsf_tx_available=true;
     }
@@ -452,6 +610,9 @@ bool am13e_app_serial_rx_init(unsigned mode)
                   DL_UART_INTERRUPT_RX|RX_IRQ_ERRORS);
     DL_UART_enableInterrupt(RX_UC,
                   DL_UART_INTERRUPT_RX|RX_IRQ_ERRORS);
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+    if(mode==4U && !sbus2_timer_init())return false;
+#endif
     DL_UART_enable(RX_UC);
     initialized=1U;
     NVIC_SetPriority(RX_IRQ,1U);
@@ -502,6 +663,9 @@ void RX_HANDLER(void)
             DL_UART_disableInterrupt(RX_UC,
                 DL_UART_INTERRUPT_EOT_DONE|DL_UART_INTERRUPT_TX);
             am13e_serial_tx_queue_eot(&crsf_tx);
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+            sbus2_release_rx();
+#endif
 #ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
             if(cli_active){
                 if(cli_reply_offset<cli_reply_length)
@@ -570,6 +734,9 @@ void RX_HANDLER(void)
             continue;
         }
 #endif
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+        if(sbus2_active)continue; /* Original reply-window RX mute. */
+#endif
         uint8_t bytes[AM13E_SERIAL_MAX_FRAME];
         unsigned len=0U;
         /* Original USART DMA received a complete packet at IDLE.
@@ -609,8 +776,17 @@ void RX_HANDLER(void)
             }
             else if(rx_state.mode==3U)
                 (void)am13e_app_io_ibus_frame(bytes,len);
-            else if(rx_state.mode==4U)
+            else if(rx_state.mode==4U){
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+                const uint16_t received=sbus2_now();
+#endif
                 (void)am13e_app_io_sbus_frame(bytes,len);
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+                if(am13e_app_io_input_mode()==4U && len==25U &&
+                   bytes[0]==0x0fU && (bytes[24]&0x0fU)==4U)
+                    sbus2_begin(received);
+#endif
+            }
             else if(rx_state.mode==6U){
                 const int valid=am13e_app_io_exbus_frame(bytes,len);
 #ifdef AM13E_BOARD_EXBUS_REPLY_ENABLED

@@ -7,6 +7,7 @@
 #include "io_backend.h"
 #include "clock_backend.h"
 #include "command_capture.h"
+#include "serial_uart_rx.h"
 #include <soc.h>
 #include <dl_timer.h>
 #include <dl_dma.h>
@@ -33,6 +34,26 @@ static uint32_t tx_words[AM13E_BIDIR_DMA_TRANSFERS] __attribute__((aligned(4)));
 static volatile uint32_t state,tx_completed,tx_rejected,timeout_ticks;
 static uint32_t symbol_ticks;
 enum {TX_IDLE,TX_DELAY,TX_STREAM};
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+static bool serial_timer_owner,tx_initialized;
+unsigned am13e_pb14_tx_timer_irq_priority(void)
+{ return serial_timer_owner?1U:0U; }
+/* Initialization-only transfer: no live timer/DMA owner can be displaced. */
+bool am13e_pb14_release_timer_for_sbus2(void)
+{
+    if (__get_PRIMASK()!=1U || !tx_initialized || state!=TX_IDLE || serial_timer_owner ||
+        am13e_app_io_input_mode()!=4U) return false;
+    DL_Timer_stopCounter(TX_TIMER);
+    DL_Timer_disableInterrupt(TX_TIMER, DL_TIMER_INTERRUPT_ZERO_EVENT);
+    DL_Timer_disableEvent(TX_TIMER, DL_TIMER_GEN_EVENT1, DL_TIMER_EVENT_ZERO_EVENT);
+    DL_DMA_disableChannel(TX_DMA, TX_CH);
+    DL_DMA_clearInterruptStatus(TX_DMA, TX_DMA_FLAGS);
+    DL_Timer_clearInterruptStatus(TX_TIMER, DL_TIMER_INTERRUPT_ZERO_EVENT);
+    NVIC_ClearPendingIRQ(TIMG4_0_INT_IRQn);
+    serial_timer_owner=true;
+    return true;
+}
+#endif
 
 static void fail_closed(void)
 {
@@ -54,6 +75,9 @@ static void timer_setup(uint32_t ticks,DL_TIMER_TIMER_MODE mode)
 }
 void am13e_pb14_bidir_tx_init(void)
 {
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+    if(tx_initialized)fail_closed();
+#endif
     /* Existing clock backend provides 200MHz MCLK and 100MHz MCLK2/BUSCLK. */
     if((SYSCTL->SOCLOCK.MCLKCFG&SYSCTL_MCLKCFG_MCLKDIVCFG_MASK)!=
        (uint32_t)DL_SYSCTL_MCLK_DIV_2_DIV_4) fail_closed();
@@ -97,11 +121,17 @@ void am13e_pb14_bidir_tx_init(void)
     NVIC_ClearPendingIRQ(DMA0_INT_IRQn);
     NVIC_EnableIRQ(TIMG4_0_INT_IRQn);
     NVIC_EnableIRQ(DMA0_INT_IRQn);
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+    tx_initialized=true;
+#endif
 }
 int am13e_pb14_bidir_tx_busy(void){return state!=TX_IDLE;}
 int am13e_pb14_bidir_tx_start(uint32_t final_edge,uint32_t rx_bit_ticks,
                               uint32_t capture_hz)
 {
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+    if(serial_timer_owner){++tx_rejected;return 0;}
+#endif
     if(state!=TX_IDLE){++tx_rejected;return 0;}
     const uint32_t ticks=am13e_bidir_tx_period_ticks(rx_bit_ticks,capture_hz,TX_CLK);
     if(!ticks){++tx_rejected;return 0;}
@@ -131,6 +161,9 @@ int am13e_pb14_bidir_tx_start(uint32_t final_edge,uint32_t rx_bit_ticks,
 }
 void TIMG4_0_IRQHandler(void)
 {
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+    if(serial_timer_owner){am13e_app_serial_sbus2_timer_irq();return;}
+#endif
     const uint32_t ev=DL_Timer_getEnabledInterruptStatus(
         TX_TIMER,DL_TIMER_INTERRUPT_ZERO_EVENT);
     DL_Timer_clearInterruptStatus(TX_TIMER,DL_TIMER_INTERRUPT_ZERO_EVENT);
