@@ -252,6 +252,9 @@ void ECAP0_IRQHandler(void)
 void am13e_app_pb14_systick(void)
 {
     if (!initialized) return;
+#ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
+    am13e_app_serial_rx_systick();
+#endif
     am13e_pb14_bidir_tx_systick();
     if (++calib_counter == 16U) {
         const uint32_t now = DL_ECAP_getTimeStampCounter(PB14_ECAP);

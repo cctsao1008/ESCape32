@@ -9,6 +9,8 @@
 #include <stdbool.h>
 bool am13e_app_serial_rx_init(unsigned mode);
 bool am13e_app_serial_rx_irq_ready(void);
+/* Called from existing 16kHz SysTick only: no new motor timer. */
+void am13e_app_serial_rx_systick(void);
 #ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
 /* PendSV-only, never from UART RX ISR. Original CRSF command executor
  * may perform Flash operations and requires preemptible context.

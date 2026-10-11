@@ -118,6 +118,11 @@ _Static_assert(AM13E_BOARD_SERIAL_TX_TWO_WIRE==1U &&
                        DL_UART_INTERRUPT_NOISE_ERROR)
 static AM13E_SerialFrameRx rx_state;
 static unsigned initialized;
+/* 16 kHz MCU SysTick timebase. IRQ/PendSV share only an atomic
+ * 32-bit snapshot; no serial state is reset from high-priority
+ * SysTick while UART IRQ might be in flight.
+ */
+static volatile uint32_t serial_rx_tick;
 #ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
 static AM13E_SerialTxQueue crsf_tx;
 static AM13E_CrsfDeferredCommand crsf_cmd;
@@ -256,6 +261,10 @@ bool am13e_app_serial_rx_init(unsigned mode)
     NVIC_EnableIRQ(RX_IRQ);
     return true;
 }
+void am13e_app_serial_rx_systick(void)
+{
+    if(initialized)++serial_rx_tick;
+}
 bool am13e_app_serial_rx_irq_ready(void)
 {
     return initialized &&
@@ -312,6 +321,13 @@ void RX_HANDLER(void)
         }
         uint8_t bytes[AM13E_SERIAL_MAX_FRAME];
         unsigned len=0U;
+        /* Original USART DMA received a complete packet at IDLE.
+         * Here an incomplete packet is dropped only when the
+         * previous FIFO byte was >=4 16kHz ticks earlier (>=250us).
+         * This is a provisional software boundary, NOT a claim
+         * about actual EXBUS/SUMD inter-frame timing on silicon.
+         */
+        am13e_serial_frame_gap(&rx_state,serial_rx_tick,4U);
         if(am13e_serial_frame_byte(&rx_state,
                 (uint8_t)(raw&UNICOMMUART_RXDATA_DATA_MASK),
                 bytes,sizeof bytes,&len)){

@@ -109,6 +109,40 @@ static void hott(void){
     am13e_serial_frame_abort(&rx);
     assert(rx.used==0U);
 }
-int main(void){ibus();sbus();crsf();exbus();hott();
-    puts("PASS iBUS/SBUS/CRSF/EXBUS/HoTT native UART framing, bounds and abort");
+/* Real 16kHz tick gaps reset incomplete packets in the same
+ * framing code that the UNICOMM ISR invokes. Verify boundary
+ * equality, counter wrap and no reset of completed frames.
+ */
+static void idle_boundaries(void){
+    AM13E_SerialFrameRx rx;
+    uint8_t out[64]={0};unsigned length=0U;
+    am13e_serial_frame_init(&rx,6U);
+    am13e_serial_frame_gap(&rx,100U,4U);
+    assert(!am13e_serial_frame_byte(&rx,0x3eU,out,sizeof out,&length));
+    assert(!am13e_serial_frame_byte(&rx,1U,out,sizeof out,&length));
+    assert(rx.used==2U);
+    am13e_serial_frame_gap(&rx,103U,4U);
+    assert(rx.used==2U&&rx.frame_errors==0U);
+    am13e_serial_frame_gap(&rx,107U,4U);
+    assert(rx.used==0U&&rx.frame_errors==1U);
+    assert(!am13e_serial_frame_byte(&rx,0x3eU,out,sizeof out,&length));
+    assert(rx.used==1U);
+    am13e_serial_frame_gap(&rx,111U,4U);
+    assert(rx.used==0U&&rx.frame_errors==2U);
+    am13e_serial_frame_gap(&rx,120U,4U);
+    assert(rx.frame_errors==2U); /* complete/idle no spurious errors */
+    am13e_serial_frame_init(&rx,7U);
+    am13e_serial_frame_gap(&rx,UINT32_MAX-1U,4U);
+    assert(!am13e_serial_frame_byte(&rx,0xa8U,out,sizeof out,&length));
+    am13e_serial_frame_gap(&rx,1U,4U); /* elapsed three ticks */
+    assert(rx.used==1U);
+    am13e_serial_frame_gap(&rx,2U,4U); /* elapsed one tick */
+    assert(rx.used==1U);
+    am13e_serial_frame_gap(&rx,6U,4U);
+    assert(rx.used==0U&&rx.frame_errors==1U);
+    am13e_serial_frame_gap(NULL,6U,4U);
+    am13e_serial_frame_gap(&rx,9U,0U);
+}
+int main(void){ibus();sbus();crsf();exbus();hott();idle_boundaries();
+    puts("PASS iBUS/SBUS/CRSF/EXBUS/HoTT native UART framing, bounds, 16kHz idle and wrap");
     return 0;}

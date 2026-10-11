@@ -19,6 +19,16 @@ void am13e_serial_frame_abort(AM13E_SerialFrameRx *rx)
     memset(rx->bytes,0,sizeof rx->bytes);
     ++rx->frame_errors;
 }
+void am13e_serial_frame_gap(AM13E_SerialFrameRx *rx,
+                             uint32_t now,unsigned min_ticks)
+{
+    if(!rx||min_ticks==0U)return;
+    if(rx->has_previous_byte_tick &&
+       (uint32_t)(now-rx->previous_byte_tick)>=min_ticks &&
+       rx->used!=0U)am13e_serial_frame_abort(rx);
+    rx->previous_byte_tick=now;
+    rx->has_previous_byte_tick=true;
+}
 bool am13e_serial_frame_byte(AM13E_SerialFrameRx *rx,uint8_t b,
                              uint8_t *out,unsigned capacity,
                              unsigned *length)
