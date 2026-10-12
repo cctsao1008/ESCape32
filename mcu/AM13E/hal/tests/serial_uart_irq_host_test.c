@@ -7,7 +7,7 @@
 #include "../command_reply.c"
 
 GPIO_Regs test_gpio[3];
-TestSCB test_scb;
+TestSCB test_scb;TestSysTick test_systick;
 uint32_t test_primask=1U;
 unsigned test_invert,test_pin_invert[96];
 TestTimer test_timer;
@@ -26,6 +26,10 @@ void test_halt(void){assert(0);}
 void am13e_app_motor_fault_shutdown(void){assert(0);}
 void am13e_app_motor_fault_reset(void){assert(0);}
 void am13e_pb14_resume_rx(void){assert(0);}
+uint32_t am13e_pa26_rx_now(void){assert(0);return 0;}
+void am13e_pa26_rx_suspend(void){assert(0);}
+void am13e_pa26_rx_timer_irq(void){assert(0);}
+void am13e_pa26_rx_dma_irq(void){assert(0);}
 void am13e_app_io_watchdog_feed(void){++feeds;}
 void am13e_app_io_watchdog_arm(void){++arms;}
 void am13e_app_service_reset(void){assert(0);}
@@ -130,7 +134,9 @@ static void select_mode(unsigned m)
     cfg.input_mode=(char)m;cfg.input_ch1=1;cfg.input_ch2=2;
     cfg.throt_min=1000;cfg.throt_mid=1500;cfg.throt_max=2000;
     cfg.duty_drag=80;cfg.throt_mode=0;throt=0;ertm=0;
-    assert(am13e_app_serial_rx_init(m) && am13e_app_serial_rx_irq_ready());
+    assert(am13e_app_serial_rx_init(m));
+    if(m==0U)assert(!initialized && !irq_enabled); /* Capture retains PA26 until CLI entry. */
+    else assert(am13e_app_serial_rx_irq_ready());
     test_primask=0U;
 }
 static void crsf(void)

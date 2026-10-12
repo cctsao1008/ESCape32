@@ -24,3 +24,8 @@ static inline void DL_DMA_clearInterruptStatus(void *d,unsigned m){(void)d;(void
 static inline void DL_DMA_enableInterrupt(void *d,unsigned m){(void)d;(void)m;}
 static inline void DL_DMA_enableChannel(void *d,unsigned c){(void)d;(void)c;assert(0);}
 static inline unsigned DL_DMA_getEnabledInterruptStatus(void *d,unsigned m){(void)d;return m;}
+
+#define DL_DMA_FULL_CH_INTERRUPT_EARLY_CHANNEL2 16U
+#define DL_DMA_EARLY_INTERRUPT_THRESHOLD_DISABLED 0U
+static inline void DL_DMA_disableInterrupt(void *d,unsigned m){(void)d;(void)m;}
+static inline void DL_DMA_Full_Ch_setEarlyInterruptThreshold(void *d,unsigned c,unsigned t){(void)d;(void)c;(void)t;}

@@ -1,5 +1,5 @@
 /*
-** AM13E PB14 single-wire ESCape32 boot transport.
+** AM13E PA26 single-wire ESCape32 boot transport.
 ** 38400 baud, 8N1, open-drain-style GPIO (drive low, release high).
 ** MCLK/SysTick source: reset-default 32 MHz SYSOSC.
 */
@@ -9,9 +9,9 @@
 #include <hw_pinmap.h>
 #include "handoff.h"
 
-/* PB14 is GPIO46: GPIO1, bit 14 (46 - 32). */
-#define BOOT_IO_PORT GPIO1
-#define BOOT_IO_MASK (UINT32_C(1) << 14)
+/* Revised board command route: PA26 / GPIO0 bit26. */
+#define BOOT_IO_PORT GPIO0
+#define BOOT_IO_MASK (UINT32_C(1) << 26)
 #define BOOT_TICK_HZ UINT32_C(32000000)
 #define BOOT_BIT_TICKS ((BOOT_TICK_HZ + 19200U) / 38400U)
 #define BOOT_TIMEOUT_TICKS (BOOT_TICK_HZ / 2U)
@@ -43,7 +43,7 @@ void boot_am13e_release_io(void) {
     release_line();
 }
 
-/* Protocol IO ID 4 is reserved here for the AM13E PB14 boot service.
+/* Protocol IO ID 4 is reserved here for the AM13E PA26 boot service.
  * This is a new host/target pairing, not the legacy STM32 PB4 ID 3.
  * Host discovery support must be updated before interoperability testing.
  */
@@ -53,7 +53,7 @@ uint8_t boot_am13e_io_id(void) {
 
 void initio(void) {
     DL_GPIO_enablePower(BOOT_IO_PORT);
-    DL_GPIO_initDigitalInput(IOMUX_PINCM_PB14);
+    DL_GPIO_initDigitalInput(IOMUX_PINCM_PA26);
     DL_GPIO_clearPins(BOOT_IO_PORT, BOOT_IO_MASK);
     release_line();
     DL_SYSTICK_init(BOOT_TICK_MASK + 1U);

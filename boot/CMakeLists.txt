@@ -8,5 +8,5 @@ add_target(BOOT3_PA2_FE STM32F0 AT32F4 IO_PA2 IO_RXTX FAST_EXIT)
 add_target(BOOT4_PA2 STM32G4)
 
 if(ESCAPE32_BUILD_AM13E)
-    add_target(BOOT5_PB14 AM13E IO_PB14)
+    add_target(BOOT5_PB14 AM13E IO_PA26) # Historical artifact name; physical PA26
 endif()

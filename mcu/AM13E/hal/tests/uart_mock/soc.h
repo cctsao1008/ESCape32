@@ -52,3 +52,14 @@ extern TestSysctl test_sysctl;
 #define SYSCTL (&test_sysctl)
 
 #define IOMUX_PINCM_PF_MASK 63U
+
+#define IOMUX_PINCM_PA26 26U
+#define IOMUX_PA26_TIMG4_0_CCP0 3U
+#define IOMUX_PA26_UC0_RX_SCL_SCLK 8U
+#define IOMUX_PA26_UC0_TX_SDA_PICO 9U
+#define IOMUX_PA26_UC3_TX_SDA_PICO 10U
+#define IOMUX_PA26_UC3_RX_SCL_SCLK 11U
+
+typedef struct { uint32_t CTRL,LOAD,VAL; } TestSysTick;
+extern TestSysTick test_systick;
+#define SysTick (&test_systick)

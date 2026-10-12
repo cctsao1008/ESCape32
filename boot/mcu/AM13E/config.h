@@ -7,6 +7,6 @@
 #ifndef AM13E
 #error "AM13E boot config selected without AM13E"
 #endif
-#ifndef IO_PB14
-#error "AM13E boot target requires IO_PB14"
+#ifndef IO_PA26
+#error "AM13E boot target requires IO_PA26"
 #endif

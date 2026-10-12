@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.15)
 project(AM13EFlashHostTests C)
 
 include(CTest)
-add_compile_definitions(AM13E IO_PB14)
+add_compile_definitions(AM13E IO_PA26)
 include_directories("${CMAKE_CURRENT_LIST_DIR}/../../src" "${CMAKE_CURRENT_LIST_DIR}/../../src/am13e")
 
 set(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../..")
@@ -104,7 +104,7 @@ if(AM13E_HOST_PACKED_IMAGE)
         "${REPO_ROOT}/boot/mcu/AM13E/hal/wrp_nonmain_runtime.c")
     target_compile_features(am13e_boot_protocol_test PRIVATE c_std_11)
     target_compile_definitions(am13e_boot_protocol_test PRIVATE
-        AM13E AM13E_FLASH_TEST IO_PB14)
+        AM13E AM13E_FLASH_TEST IO_PA26)
     target_include_directories(am13e_boot_protocol_test PRIVATE
         "${REPO_ROOT}/boot/src"
         "${REPO_ROOT}/boot/mcu/AM13E" "${REPO_ROOT}/boot/mcu/AM13E/hal"

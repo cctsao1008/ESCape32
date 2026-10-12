@@ -36,3 +36,6 @@ void am13e_app_serial_cli_service_pending(void);
 #ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
 void am13e_app_serial_sbus2_timer_irq(void);
 #endif
+
+/* Lowest-priority UART transport recovery; no protocol parser/state policy. */
+void am13e_app_serial_transport_service_pending(void);

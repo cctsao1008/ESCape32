@@ -1,5 +1,5 @@
-/* ESCape32 Rel17 BiDShot hardware: ECAP0 RX -> TIMG4/DMA0/GPIO46 TX -> RX.
- * PB14 requires a contention-safe external 3.3V/5V bidirectional front end.
+/* ESCape32 Rel17 BiDShot hardware: TIMG4/DMA capture RX -> TIMG4/DMA0/GPIO26 TX -> RX.
+ * PA26 requires a contention-safe external 3.3V/5V bidirectional front end.
  * Board timing/physical signaling is pending oscilloscope qualification.
  */
 #include "command_reply.h"
@@ -12,14 +12,14 @@
 #include <dl_timer.h>
 #include <dl_dma.h>
 #include <dl_gpio.h>
-#include <dl_ecap.h>
+#include "command_input_reference.h"
 #include <dl_sysctl.h>
 #include <stddef.h>
 extern void hard_fault_handler(void);
 #define TX_TIMER TIMG4
 #define TX_DMA DMA0
 #define TX_CH 2U
-#define TX_PIN DL_GPIO_PIN(14U)
+#define TX_PIN COMMAND_PIN
 #define TX_CLK (AM13E_APP_MCLK_HZ/2U)
 /* AM13E230x SDK dl_dma.h advertises DATA_ERROR, but hw_dma.h
  * does NOT define DMA_IMASK_DATAERR_SET on this device.
@@ -58,9 +58,10 @@ bool am13e_pb14_release_timer_for_sbus2(void)
 static void fail_closed(void)
 {
     DL_Timer_stopCounter(TX_TIMER);
-    DL_Timer_disableEvent(TX_TIMER,DL_TIMER_GEN_EVENT1,DL_TIMER_EVENT_ZERO_EVENT);
+    DL_Timer_disableEvent(TX_TIMER,DL_TIMER_GEN_EVENT1,UINT32_MAX);
+    DL_Timer_clearEventsStatus(TX_TIMER,DL_TIMER_GEN_EVENT1,UINT32_MAX);
     DL_DMA_disableChannel(TX_DMA,TX_CH);
-    DL_GPIO_disableOutput(GPIO1,TX_PIN);
+    DL_GPIO_disableOutput(COMMAND_GPIO,TX_PIN);
     __disable_irq();
     hard_fault_handler();
     for(;;){__NOP();}
@@ -91,7 +92,8 @@ void am13e_pb14_bidir_tx_init(void)
     DL_Timer_enableClock(TX_TIMER);
     if(!DL_Timer_isClockEnabled(TX_TIMER)) fail_closed();
     timer_setup(TX_CLK/1000000U,DL_TIMER_TIMER_MODE_ONE_SHOT);
-    DL_Timer_disableEvent(TX_TIMER,DL_TIMER_GEN_EVENT1,DL_TIMER_EVENT_ZERO_EVENT);
+    DL_Timer_disableEvent(TX_TIMER,DL_TIMER_GEN_EVENT1,UINT32_MAX);
+    DL_Timer_clearEventsStatus(TX_TIMER,DL_TIMER_GEN_EVENT1,UINT32_MAX);
     DL_Timer_clearInterruptStatus(TX_TIMER,DL_TIMER_INTERRUPT_ZERO_EVENT);
     DL_Timer_disableInterrupt(TX_TIMER,DL_TIMER_INTERRUPT_ZERO_EVENT);
 
@@ -101,7 +103,7 @@ void am13e_pb14_bidir_tx_init(void)
         DL_DMA_ADDR_INCREMENT,DL_DMA_ADDR_UNCHANGED);
     DL_DMA_setTrigger(TX_DMA,TX_CH,(uint8_t)DL_DMA_TRIGGER_SOURCE_TIMG4_0_GEN_EVENT1,
                       DL_DMA_TRIGGER_TYPE_EXTERNAL);
-    DL_DMA_setDestAddr(TX_DMA,TX_CH,(uint32_t)(uintptr_t)&GPIO1->DOUTTGL31_0);
+    DL_DMA_setDestAddr(TX_DMA,TX_CH,(uint32_t)(uintptr_t)&COMMAND_GPIO->DOUTTGL31_0);
     DL_DMA_setSrcAddr(TX_DMA,TX_CH,(uint32_t)(uintptr_t)tx_words);
     DL_DMA_setTransferSize(TX_DMA,TX_CH,AM13E_BIDIR_DMA_TRANSFERS);
     DL_DMA_clearInterruptStatus(TX_DMA,TX_DMA_FLAGS);
@@ -139,28 +141,48 @@ int am13e_pb14_bidir_tx_start(uint32_t final_edge,uint32_t rx_bit_ticks,
      * completion. Do not change telemetry value/rep while the
      * current RX CRC or throttle command is being processed.
      */
-    /* Actual CEVT4 trailing edge -> TIMG4 TX deadline. Reuse the
+    /* Actual final CC0 trailing edge -> TIMG4 TX deadline. Reuse the
      * host-regressed unsigned-wrap/clock-domain policy, never start
-     * a late or sub-16-clock reply on PB14.
+     * a late or sub-16-clock reply on PA26.
      */
+    const uint32_t cycle_start=SysTick->VAL;
     const uint32_t remaining=am13e_bidir_turnaround_ticks(
-        final_edge,DL_ECAP_getTimeStampCounter(ECAP0),
+        final_edge,am13e_pa26_rx_now(),
         capture_hz,TX_CLK);
     if(!remaining){++tx_rejected;return 0;}
     symbol_ticks=ticks;
     timeout_ticks=0U;
     state=TX_DELAY;
-    NVIC_DisableIRQ(ECAP0_INT_IRQn);
-    DL_ECAP_disableTimeStampCapture(ECAP0);
+    am13e_pa26_rx_suspend();
+    DL_Timer_setCaptureCompareCtl(TX_TIMER,DL_TIMER_CC_MODE_COMPARE,DL_TIMER_CC_CCOND_NOCAPTURE,DL_TIMER_CC_0_INDEX);
+    DL_Timer_setCaptureCompareCtl(TX_TIMER,DL_TIMER_CC_MODE_COMPARE,DL_TIMER_CC_CCOND_NOCAPTURE,DL_TIMER_CC_1_INDEX);
     DL_Timer_stopCounter(TX_TIMER);
     timer_setup(remaining,DL_TIMER_TIMER_MODE_ONE_SHOT);
     DL_Timer_clearInterruptStatus(TX_TIMER,DL_TIMER_INTERRUPT_ZERO_EVENT);
     DL_Timer_enableInterrupt(TX_TIMER,DL_TIMER_INTERRUPT_ZERO_EVENT);
-    DL_Timer_startCounter(TX_TIMER);
+    /* TIMG4 is stopped while its capture registers become TX. Measure
+     * that real interval with the existing 200MHz SysTick counter, rather
+     * than treating reconfiguration as instantaneous or guessing a delay.
+     * Only one SysTick wrap can occur inside the <30us reply budget. */
+    const uint32_t cycle_end=SysTick->VAL;
+    const uint32_t elapsed=cycle_start>=cycle_end?cycle_start-cycle_end:
+        cycle_start+(SysTick->LOAD+1U)-cycle_end;
+    const uint32_t used=(elapsed+1U)/2U;
+    if(used+16U>=remaining){
+        ++tx_rejected;state=TX_IDLE;am13e_pb14_resume_rx();return 0;
+    }
+    DL_Timer_setLoadValue(TX_TIMER,remaining-used-1U);
+    __DSB();DL_Timer_startCounter(TX_TIMER);
     return 1;
 }
 void TIMG4_0_IRQHandler(void)
 {
+    if(state==TX_IDLE){
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+        if(!serial_timer_owner)
+#endif
+        {am13e_pa26_rx_timer_irq();return;}
+    }
 #ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
     if(serial_timer_owner){am13e_app_serial_sbus2_timer_irq();return;}
 #endif
@@ -168,16 +190,22 @@ void TIMG4_0_IRQHandler(void)
         TX_TIMER,DL_TIMER_INTERRUPT_ZERO_EVENT);
     DL_Timer_clearInterruptStatus(TX_TIMER,DL_TIMER_INTERRUPT_ZERO_EVENT);
     DL_Timer_disableInterrupt(TX_TIMER,DL_TIMER_INTERRUPT_ZERO_EVENT);
-    if(state!=TX_DELAY || !ev) fail_closed();
+    if(!ev)return;
+    if(state!=TX_DELAY) fail_closed();
     DL_Timer_stopCounter(TX_TIMER);
     DL_DMA_disableChannel(TX_DMA,TX_CH);
+    DL_DMA_configTransfer(TX_DMA,TX_CH,DL_DMA_SINGLE_TRANSFER_MODE,DL_DMA_NORMAL_MODE,DL_DMA_WIDTH_WORD,DL_DMA_WIDTH_WORD,DL_DMA_ADDR_INCREMENT,DL_DMA_ADDR_UNCHANGED);
+    DL_DMA_Full_Ch_setEarlyInterruptThreshold(TX_DMA,TX_CH,DL_DMA_EARLY_INTERRUPT_THRESHOLD_DISABLED);
+    DL_DMA_disableInterrupt(TX_DMA,DL_DMA_FULL_CH_INTERRUPT_EARLY_CHANNEL2);
     DL_DMA_setSrcAddr(TX_DMA,TX_CH,(uint32_t)(uintptr_t)tx_words);
+    DL_DMA_setDestAddr(TX_DMA,TX_CH,(uint32_t)(uintptr_t)&COMMAND_GPIO->DOUTTGL31_0);
     DL_DMA_setTransferSize(TX_DMA,TX_CH,AM13E_BIDIR_DMA_TRANSFERS);
     DL_DMA_clearInterruptStatus(TX_DMA,TX_DMA_FLAGS);
     DL_DMA_enableChannel(TX_DMA,TX_CH);
-    /* Initial Rel17 NRZI level is HIGH; DMA toggles PB14 only. */
-    DL_GPIO_setPins(GPIO1,TX_PIN);
-    DL_GPIO_enableOutput(GPIO1,TX_PIN);
+    /* Initial Rel17 NRZI level is HIGH; DMA toggles PA26 only. */
+    DL_GPIO_initDigitalOutput(COMMAND_PINCM);
+    DL_GPIO_setPins(COMMAND_GPIO,TX_PIN);
+    DL_GPIO_enableOutput(COMMAND_GPIO,TX_PIN);
     state=TX_STREAM;
     timer_setup(symbol_ticks,DL_TIMER_TIMER_MODE_PERIODIC);
     DL_Timer_enableEvent(TX_TIMER,DL_TIMER_GEN_EVENT1,DL_TIMER_EVENT_ZERO_EVENT);
@@ -185,15 +213,18 @@ void TIMG4_0_IRQHandler(void)
 }
 void DMA0_IRQHandler(void)
 {
+    if(state==TX_IDLE){am13e_pa26_rx_dma_irq();return;}
     const uint32_t status=DL_DMA_getEnabledInterruptStatus(TX_DMA,TX_DMA_FLAGS);
     DL_DMA_clearInterruptStatus(TX_DMA,status);
+    if(!status)return;
     if((status&DL_DMA_INTERRUPT_ADDR_ERROR) ||
        state!=TX_STREAM ||
        !(status&DL_DMA_INTERRUPT_CHANNEL2)) fail_closed();
-    DL_Timer_disableEvent(TX_TIMER,DL_TIMER_GEN_EVENT1,DL_TIMER_EVENT_ZERO_EVENT);
+    DL_Timer_disableEvent(TX_TIMER,DL_TIMER_GEN_EVENT1,UINT32_MAX);
+    DL_Timer_clearEventsStatus(TX_TIMER,DL_TIMER_GEN_EVENT1,UINT32_MAX);
     DL_Timer_stopCounter(TX_TIMER);
     DL_DMA_disableChannel(TX_DMA,TX_CH);
-    DL_GPIO_disableOutput(GPIO1,TX_PIN);
+    DL_GPIO_disableOutput(COMMAND_GPIO,TX_PIN);
     /* Source rel17 prepares the NEXT GCR/NRZI response after TX DMA
      * completion and before re-arming RX. No current-frame CRC
      * decision is needed to reach this state.
@@ -212,5 +243,14 @@ void am13e_pb14_bidir_tx_status(uint32_t *completed, uint32_t *rejected)
 }
 void am13e_pb14_bidir_tx_systick(void)
 {
-    if(state!=TX_IDLE && ++timeout_ticks>16U) fail_closed();
+    const uint32_t mask=__get_PRIMASK();__disable_irq();
+    if(state!=TX_IDLE && ++timeout_ticks>16U){
+        /* Transport timeout is not a fabricated DMA completion. Cancel
+         * both request owners, release the pad and resynchronize RX. */
+        am13e_pa26_rx_suspend();
+        DL_GPIO_disableOutput(COMMAND_GPIO,TX_PIN);
+        state=TX_IDLE;++tx_rejected;timeout_ticks=0U;
+        am13e_pb14_resume_rx();
+    }
+    __set_PRIMASK(mask);
 }

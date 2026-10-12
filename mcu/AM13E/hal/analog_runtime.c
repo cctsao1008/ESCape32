@@ -33,7 +33,7 @@ _Static_assert(AM13E_BOARD_ANALOG_INPUT_PINCM>0U &&
                AM13E_BOARD_ANALOG_INPUT_PINCM!=IOMUX_PINCM_PA6 &&
                AM13E_BOARD_ANALOG_INPUT_PINCM!=IOMUX_PINCM_PA28 &&
                AM13E_BOARD_ANALOG_INPUT_PINCM!=IOMUX_PINCM_PB13 &&
-               AM13E_BOARD_ANALOG_INPUT_PINCM!=IOMUX_PINCM_PB14 &&
+               AM13E_BOARD_ANALOG_INPUT_PINCM!=IOMUX_PINCM_PA26 &&
                AM13E_BOARD_ANALOG_INPUT_PINCM!=IOMUX_PINCM_PB15 &&
                AM13E_BOARD_ANALOG_INPUT_PINCM!=AM13E_IO_PWM_UH_PINCM &&
                AM13E_BOARD_ANALOG_INPUT_PINCM!=AM13E_IO_PWM_UL_PINCM &&
@@ -103,7 +103,7 @@ void am13e_app_adc_init(void)
     };
 
     /* ADC0 is reserved for this reference PA6/PA28 slow monitoring.
-     * Never disturb GPIO1/PB14 input, PB15 fault, or gate output pads.
+     * Never disturb PA26 command input, PB15 fault, or gate output pads.
      */
     if (!am13e_mcu_adc_pair_initialize(&reference_route, AM13E_APP_MCLK_HZ))
         adc_fail_closed();

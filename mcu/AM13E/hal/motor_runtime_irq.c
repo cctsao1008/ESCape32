@@ -1,10 +1,10 @@
 /* AM13E reference ESCape32 Rel17 AM13E FW1 interrupt release barrier.
- * Release PRIMASK for real PB14 DShot, 16 kHz SysTick, BEMF and motor
+ * Release PRIMASK for real PA26 DShot, 16 kHz SysTick, BEMF and motor
  * commutation IRQs; the Rel17 motor/audio runtime alone requests gate
  * drive later, not the IRQ release barrier.
  *
  * Require the installed TI startup vectors, enabled NVIC sources,
- * actual SysTick and initialized PB14 receiver. PB15 is IO-only;
+ * actual SysTick and initialized PA26 receiver. PB15 is IO-only;
  * no nFAULT, OC or Gate Enable functionality is consulted here.
  *
  * IRQ release is not a power-stage arming operation. Default numeric
@@ -73,7 +73,6 @@ void am13e_app_motor_runtime_enable_interrupts(void)
         !vector_matches(HardFault_IRQn,HardFault_Handler) ||
         !vector_matches(GPIO1_INT_IRQn,GPIO1_IRQHandler) ||
         !vector_matches(ADC0_INT1_INT_IRQn,ADC0_INT1_IRQHandler) ||
-        !vector_matches(ECAP0_INT_IRQn,ECAP0_IRQHandler) ||
         !vector_matches(ECAP1_INT_IRQn,ECAP1_IRQHandler) ||
         !vector_matches(TIMG12_0_INT_IRQn,TIMG12_0_IRQHandler) ||
         !vector_matches(TIMG4_0_INT_IRQn,TIMG4_0_IRQHandler) ||
@@ -87,7 +86,6 @@ void am13e_app_motor_runtime_enable_interrupts(void)
                           SysTick_CTRL_TICKINT_Msk) ||
         SysTick->LOAD != ((AM13E_APP_MCLK_HZ / AM13E_APP_SYSTICK_HZ)-1U) ||
         NVIC_GetPriority(SysTick_IRQn)!=0U ||
-        NVIC_GetPriority(ECAP0_INT_IRQn)!=0U ||
         NVIC_GetPriority(ECAP1_INT_IRQn)!=0U ||
         NVIC_GetPriority(TIMG12_0_INT_IRQn)!=0U ||
         NVIC_GetPriority(TIMG4_0_INT_IRQn)!=
@@ -102,9 +100,6 @@ void am13e_app_motor_runtime_enable_interrupts(void)
 
 #ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
     if((am13e_app_io_input_mode()==2||
-#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
-        am13e_app_io_input_mode()==0||
-#endif
         am13e_app_io_input_mode()==3||am13e_app_io_input_mode()==4||
         am13e_app_io_input_mode()==5||
         am13e_app_io_input_mode()==6||
@@ -116,7 +111,7 @@ void am13e_app_motor_runtime_enable_interrupts(void)
     if(!am13e_telem_hw_irq_ready())
         irq_barrier_fault();
 #endif
-    if (!NVIC_GetEnableIRQ(ECAP0_INT_IRQn) ||
+    if (
         !NVIC_GetEnableIRQ(ECAP1_INT_IRQn) ||
         !NVIC_GetEnableIRQ(TIMG12_0_INT_IRQn) ||
         !NVIC_GetEnableIRQ(TIMG4_0_INT_IRQn) ||

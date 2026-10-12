@@ -4,11 +4,16 @@
  * Optional board-selected 2-wire CRSF command TX uses UNICOMM FIFO,
  * TX interrupt and EOT, without DMA. Conditional SBUS2 timing uses
  * TIMG4 only after an initialization-time transfer from BiDShot.
- * A single-wire bus or verified physical pin mapping is not implied.
+ * PA26 single-wire RX/TX is selected explicitly by TX_TWO_WIRE=0;
+ * the same pad changes native functions only after transport ownership.
  */
 #include "serial_uart_rx.h"
 #include "service_reset.h"
 #include "command_capture.h"
+#if defined(AM13E_BOARD_SERIAL_TX_CONFIGURED) && \
+    defined(AM13E_BOARD_SERIAL_TX_TWO_WIRE) && AM13E_BOARD_SERIAL_TX_TWO_WIRE==0
+#define PA26_SINGLE_WIRE 1
+#endif
 #ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
 #include "serial_frame_rx.h"
 #include "../../../src/exbus_autobaud.h"
@@ -24,7 +29,7 @@
 #if defined(AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED) && \
     (!defined(AM13E_BOARD_SERIAL_TX_CONFIGURED) || \
      AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED!=1)
-#error "CLI requires board-selected two-wire TX and explicit entry qualification"
+#error "CLI requires board-selected TX and explicit entry qualification"
 #endif
 /* The original EXBUS single-wire transceiver remains unqualified.
  * A two-wire board-selected response is permitted only with an
@@ -53,9 +58,9 @@ _Static_assert(AM13E_BOARD_EXBUS_STABLE_DEVICE_ID!=0U &&
 #if AM13E_BOARD_SBUS2_TIMED_REPLY!=1 || \
     !defined(AM13E_BOARD_SERIAL_TX_CONFIGURED) || \
     !defined(AM13E_BOARD_SBUS2_TX_PIN_INVERT)
-#error "Timed SBUS2 needs explicit two-wire TX and board-selected TX polarity"
+#error "Timed SBUS2 needs explicit TX topology and board-selected TX polarity"
 #endif
-_Static_assert(AM13E_BOARD_SERIAL_TX_TWO_WIRE==1 &&
+_Static_assert((AM13E_BOARD_SERIAL_TX_TWO_WIRE==1 || AM13E_BOARD_SERIAL_TX_TWO_WIRE==0) &&
                AM13E_BOARD_SBUS2_TX_PIN_INVERT<=1U &&
                AM13E_BOARD_SERIAL_RX_BUSCLK_HZ==AM13E_APP_MCLK_HZ/2U,
                "SBUS2 requires reviewed polarity and 100MHz UART/TIMG clock");
@@ -79,6 +84,10 @@ _Static_assert(AM13E_BOARD_SERIAL_RX_PINCM>0U &&
                AM13E_BOARD_SERIAL_RX_BUSCLK_HZ<=UINT32_C(200000000) &&
                AM13E_BOARD_SERIAL_SBUS_PIN_INVERT<=1U,
                "Native UART RX board route/function/clock invalid");
+_Static_assert(AM13E_BOARD_SERIAL_RX_PINCM!=IOMUX_PINCM_PA26 ||
+    ((AM13E_BOARD_SERIAL_RX_UC_INDEX==0 && AM13E_BOARD_SERIAL_RX_PIN_FUNCTION==8) ||
+     (AM13E_BOARD_SERIAL_RX_UC_INDEX==3 && AM13E_BOARD_SERIAL_RX_PIN_FUNCTION==11)),
+    "PA26 UART RX must select its actual UC0/UC3 function");
 _Static_assert(AM13E_BOARD_SERIAL_RX_PINCM!=IOMUX_PINCM_PB14 &&
                AM13E_BOARD_SERIAL_RX_PINCM!=IOMUX_PINCM_PB15 &&
                AM13E_BOARD_SERIAL_RX_PINCM!=IOMUX_PINCM_PB13 &&
@@ -97,7 +106,13 @@ _Static_assert(AM13E_BOARD_SERIAL_RX_PINCM!=IOMUX_PINCM_PB14 &&
                AM13E_BOARD_SERIAL_RX_PINCM!=AM13E_BEMF_CMP3_HP_PINCM &&
                AM13E_BOARD_SERIAL_RX_PINCM!=AM13E_BEMF_CMP3_HN_PINCM &&
                (AM13E_BOARD_SERIAL_TX_PINCM==0U ||
-                AM13E_BOARD_SERIAL_RX_PINCM!=AM13E_BOARD_SERIAL_TX_PINCM) &&
+                (AM13E_BOARD_SERIAL_RX_PINCM!=AM13E_BOARD_SERIAL_TX_PINCM ||
+#ifdef PA26_SINGLE_WIRE
+                true
+#else
+                false
+#endif
+                )) &&
                (AM13E_BOARD_OC_GPIO_PINCM==0U ||
                 AM13E_BOARD_SERIAL_RX_PINCM!=AM13E_BOARD_OC_GPIO_PINCM) &&
                (AM13E_BOARD_CURRENT_SENSE_PINCM==0U ||
@@ -108,8 +123,14 @@ _Static_assert(AM13E_BOARD_SERIAL_RX_PINCM!=IOMUX_PINCM_PB14 &&
 #if AM13E_BOARD_SERIAL_TX_CONFIGURED != 1 || \
     !defined(AM13E_BOARD_SERIAL_TX_PIN_FUNCTION) || \
     !defined(AM13E_BOARD_SERIAL_TX_TWO_WIRE)
-#error "CRSF TX requires explicit TX pin function and 2-wire board topology"
+#error "UART TX requires explicit TX pin function and board topology"
 #endif
+#ifdef PA26_SINGLE_WIRE
+_Static_assert(AM13E_BOARD_SERIAL_RX_PINCM==26U && AM13E_BOARD_SERIAL_TX_PINCM==26U &&
+    ((AM13E_BOARD_SERIAL_RX_UC_INDEX==0 && AM13E_BOARD_SERIAL_RX_PIN_FUNCTION==8 && AM13E_BOARD_SERIAL_TX_PIN_FUNCTION==9) ||
+     (AM13E_BOARD_SERIAL_RX_UC_INDEX==3 && AM13E_BOARD_SERIAL_RX_PIN_FUNCTION==11 && AM13E_BOARD_SERIAL_TX_PIN_FUNCTION==10)),
+    "Single-wire command UART requires actual PA26 UC0/UC3 RX/TX functions");
+#else
 _Static_assert(AM13E_BOARD_SERIAL_TX_TWO_WIRE==1U &&
                AM13E_BOARD_SERIAL_TX_PINCM>0U &&
                AM13E_BOARD_SERIAL_TX_PINCM<64U &&
@@ -117,6 +138,7 @@ _Static_assert(AM13E_BOARD_SERIAL_TX_TWO_WIRE==1U &&
                AM13E_BOARD_SERIAL_TX_PIN_FUNCTION<=IOMUX_PINCM_PF_MASK &&
                AM13E_BOARD_SERIAL_TX_PINCM!=AM13E_BOARD_SERIAL_RX_PINCM,
                "CRSF TX must own a distinct board-assigned two-wire pin");
+#endif
 #endif
 
 #if AM13E_BOARD_SERIAL_RX_UC_INDEX==0
@@ -233,7 +255,7 @@ static unsigned cli_reply_length,cli_reply_offset;
 /* PendSV calls this worker; both worker and UART IRQ use
  * the same bounded TX queue owned by this UNICOMM instance.
  */
-static void crsf_tx_start(const uint8_t *p,unsigned n);
+static bool crsf_tx_start(const uint8_t *p,unsigned n);
 #ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
 /* TIMG4: 16-bit free-running 1MHz counter, CC1 absolute deadlines.
  * No accumulated ISR delay and no timer/DMA borrowing while live.
@@ -388,6 +410,94 @@ void am13e_app_serial_crsf_service_pending(void)
     am13e_crsf_deferred_finish(&crsf_cmd);
 }
 
+#ifdef PA26_SINGLE_WIRE
+static bool wire_tx_active;
+static volatile bool wire_abort_pending;
+static uint32_t wire_started;
+extern void hard_fault_handler(void);
+static void wire_rx(void)
+{
+    DL_GPIO_disableOutput(GPIO0,DL_GPIO_PIN(26U));
+    DL_UART_setDirection(RX_UC,DL_UART_DIRECTION_RX);
+    DL_GPIO_initPeripheralInputFunctionFeatures(AM13E_BOARD_SERIAL_RX_PINCM,
+        AM13E_BOARD_SERIAL_RX_PIN_FUNCTION,
+        rx_state.mode==4U
+#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
+        && !cli_active
+#endif
+        && AM13E_BOARD_SERIAL_SBUS_PIN_INVERT ? DL_GPIO_INVERSION_ENABLE:DL_GPIO_INVERSION_DISABLE,
+        DL_GPIO_RESISTOR_NONE,DL_GPIO_WAKEUP_DISABLE);
+    DL_UART_clearInterruptStatus(RX_UC,DL_UART_INTERRUPT_RX|RX_IRQ_ERRORS|DL_UART_INTERRUPT_TX|DL_UART_INTERRUPT_EOT_DONE);
+    DL_UART_enableInterrupt(RX_UC,DL_UART_INTERRUPT_RX|RX_IRQ_ERRORS);
+    wire_tx_active=false;
+}
+static bool wire_tx(void)
+{
+    if(wire_tx_active || !DL_UART_isRXFIFOEmpty(RX_UC) || DL_UART_isBusy(RX_UC))return false;
+    DL_UART_disableInterrupt(RX_UC,DL_UART_INTERRUPT_RX|RX_IRQ_ERRORS);
+    DL_UART_setDirection(RX_UC,DL_UART_DIRECTION_TX);
+    DL_GPIO_disableOutput(GPIO0,DL_GPIO_PIN(26U));
+    DL_GPIO_initPeripheralOutputFunction(AM13E_BOARD_SERIAL_TX_PINCM,AM13E_BOARD_SERIAL_TX_PIN_FUNCTION);
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+    DL_GPIO_setDataInversion(AM13E_BOARD_SERIAL_TX_PINCM,
+        rx_state.mode==4U
+#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
+        && !cli_active
+#endif
+        && AM13E_BOARD_SBUS2_TX_PIN_INVERT ? DL_GPIO_INVERSION_ENABLE:DL_GPIO_INVERSION_DISABLE);
+#endif
+    __DSB();wire_tx_active=true;wire_started=serial_rx_tick;
+    return true;
+}
+static void wire_abort(void)
+{
+    /* A 64-byte reply at the slowest 38400 8N1 rate needs <17 ms.
+     * At 32 ms, abort the transport, never synthesize an EOT event. */
+    DL_UART_disableInterrupt(RX_UC,DL_UART_INTERRUPT_TX|DL_UART_INTERRUPT_EOT_DONE);
+    DL_UART_setDirection(RX_UC,DL_UART_DIRECTION_RX);
+    DL_GPIO_initDigitalInput(AM13E_BOARD_SERIAL_RX_PINCM);
+    DL_UART_enableFlushTxFifo(RX_UC);
+    DL_UART_enableFlushRxFifo(RX_UC);
+    unsigned budget=128U;
+    while(budget && (!DL_UART_isTxFifoClearDone(RX_UC)||!DL_UART_isRxFifoClearDone(RX_UC)))--budget;
+    if(!budget){hard_fault_handler();return;}
+    DL_UART_disableFlushTxFifo(RX_UC);DL_UART_disableFlushRxFifo(RX_UC);
+    crsf_tx.count=crsf_tx.sent=0U;crsf_tx.awaiting_eot=false;++crsf_tx.dropped;
+    am13e_serial_frame_abort(&rx_state);
+#ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
+    cli_reply_length=cli_reply_offset=0U;am13e_cli_line_abort(&cli_rx);
+#endif
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+    if(sbus2_timer_owned){
+        DL_Timer_disableInterrupt(SBUS2_TIMER,SBUS2_IRQ);
+        DL_Timer_clearInterruptStatus(SBUS2_TIMER,SBUS2_IRQ);
+        NVIC_ClearPendingIRQ(TIMG4_0_INT_IRQn);
+        sbus2_active=sbus2_release_due=false;sbus2_count=0U;
+    }
+#endif
+    wire_rx();
+}
+#endif
+void am13e_app_serial_transport_service_pending(void)
+{
+#ifdef PA26_SINGLE_WIRE
+    if(!wire_abort_pending)return;
+    /* PendSV is below UART and SBUS2: neither owner is already running.
+     * SysTick only requests recovery; it must not mutate a preempted ISR. */
+    const uint32_t uart_enabled=NVIC_GetEnableIRQ(RX_IRQ);
+    NVIC_DisableIRQ(RX_IRQ);
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+    const uint32_t timer_enabled=NVIC_GetEnableIRQ(TIMG4_0_INT_IRQn);
+    if(sbus2_timer_owned)NVIC_DisableIRQ(TIMG4_0_INT_IRQn);
+#endif
+    __DSB();wire_abort_pending=false;
+    if(wire_tx_active && (uint32_t)(serial_rx_tick-wire_started)>=512U)wire_abort();
+#ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
+    if(sbus2_timer_owned && timer_enabled)NVIC_EnableIRQ(TIMG4_0_INT_IRQn);
+#endif
+    if(uart_enabled)NVIC_EnableIRQ(RX_IRQ);
+#endif
+}
 static void crsf_tx_fill_fifo(void)
 {
     for(unsigned budget=0U;budget<AM13E_SERIAL_TX_MAX;++budget){
@@ -399,17 +509,23 @@ static void crsf_tx_fill_fifo(void)
     if(am13e_serial_tx_queue_waiting_eot(&crsf_tx))
         DL_UART_disableInterrupt(RX_UC,DL_UART_INTERRUPT_TX);
 }
-static void crsf_tx_start(const uint8_t *p,unsigned n)
+static bool crsf_tx_start(const uint8_t *p,unsigned n)
 {
     /* PendSV can be preempted by this UART. Publish queue/FIFO/EOT
      * state as one transaction; keep motor and SysTick IRQs live. */
     const uint32_t enabled=NVIC_GetEnableIRQ(RX_IRQ);
     NVIC_DisableIRQ(RX_IRQ);
     __DSB();
+#ifdef PA26_SINGLE_WIRE
+    if(!wire_tx()){if(enabled)NVIC_EnableIRQ(RX_IRQ);return false;}
+#endif
     if(!crsf_tx_available ||
        !am13e_serial_tx_queue_begin(&crsf_tx,p,n)) {
+#ifdef PA26_SINGLE_WIRE
+        wire_rx();
+#endif
         if(enabled)NVIC_EnableIRQ(RX_IRQ);
-        return;
+        return false;
     }
     DL_UART_clearInterruptStatus(RX_UC,
                                  DL_UART_INTERRUPT_TX |
@@ -419,14 +535,20 @@ static void crsf_tx_start(const uint8_t *p,unsigned n)
     if(!am13e_serial_tx_queue_waiting_eot(&crsf_tx))
         DL_UART_enableInterrupt(RX_UC,DL_UART_INTERRUPT_TX);
     if(enabled)NVIC_EnableIRQ(RX_IRQ);
+    return true;
 }
 #ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
-/* Physical entry requires the original HIGH timeout signal on PB14.
- * Never selected or auto-inferred by the PB14 Reference profile.
+/* Physical entry requires the original HIGH timeout signal on PA26.
+ * Never selected or auto-inferred by the unconfigured Reference profile.
  * Selected mode2 binary serial and CLI share the UART, not a parser.
  */
 bool am13e_app_serial_cli_enter(void)
 {
+    if(!initialized && cli_entry.requested && __get_PRIMASK()==1U){
+        const AM13E_CliEntry entry=cli_entry;
+        if(!am13e_app_pb14_service_takeover() || !am13e_app_serial_rx_init(2U))return false;
+        cli_entry=entry;
+    }
     if(!initialized||cli_active||cli_entry.selected||!cli_entry.requested||
        __get_PRIMASK()!=1U||!crsf_tx_available||
        crsf_tx.count!=0U||crsf_cmd.busy||
@@ -437,7 +559,12 @@ bool am13e_app_serial_cli_enter(void)
     DL_UART_disable(RX_UC);
     /* SBUS receiver parity/stop bits must not leak into text CLI. */
     DL_UART_Config config={
-        .mode=DL_UART_MODE_NORMAL,.direction=DL_UART_DIRECTION_TX_RX,
+        .mode=DL_UART_MODE_NORMAL,.direction=
+#ifdef PA26_SINGLE_WIRE
+        DL_UART_DIRECTION_RX,
+#else
+        DL_UART_DIRECTION_TX_RX,
+#endif
         .flowControl=DL_UART_FLOW_CONTROL_NONE,.parity=DL_UART_PARITY_NONE,
         .wordLength=DL_UART_WORD_LENGTH_8_BITS,.stopBits=DL_UART_STOP_BITS_ONE
     };
@@ -464,8 +591,8 @@ static void cli_start_next_chunk(void)
     const unsigned count=remaining>AM13E_SERIAL_TX_MAX?
         AM13E_SERIAL_TX_MAX:remaining;
     const unsigned offset=cli_reply_offset;
-    cli_reply_offset+=count;
-    crsf_tx_start((const uint8_t *)cli_reply+offset,count);
+    cli_reply_offset+=count; /* Publish before a possible EOT preemption. */
+    if(!crsf_tx_start((const uint8_t *)cli_reply+offset,count))cli_reply_offset=offset;
 }
 void am13e_app_serial_cli_service_pending(void)
 {
@@ -479,6 +606,7 @@ void am13e_app_serial_cli_service_pending(void)
         __set_PRIMASK(primask);
     }
     if(!cli_active)return;
+    if(cli_reply_length && crsf_tx.count==0U)cli_start_next_chunk();
     if(cli_rx.reboot){
         /* Original 00 ff reboot-to-Boot, deferred out of UART IRQ. */
         am13e_app_service_reset();
@@ -500,7 +628,7 @@ void am13e_app_serial_cli_service_pending(void)
 }
 void am13e_app_serial_cli_entry_poll(int high,int edge,int selected)
 {
-    if(!initialized||cli_active)return;
+    if(cli_active)return;
     if(am13e_cli_entry_tick(&cli_entry,high,edge,selected))
         SCB->ICSR=SCB_ICSR_PENDSVSET_Msk;
 }
@@ -515,7 +643,12 @@ bool am13e_app_serial_rx_init(unsigned mode)
     /* cfg.input_mode=0 still needs the explicitly selected CLI UART.
      * Binary frames on it are refused by the real source mode check.
      */
-    if(mode==0U)mode=2U;
+    if(mode==0U){cli_entry=(AM13E_CliEntry){0};return true;}
+#endif
+#ifdef PA26_SINGLE_WIRE
+    /* CRSF transmitter links are full-duplex. RX-only CRSF remains a
+     * separate valid selection; do not advertise single-pad full-duplex. */
+    if(mode==5U)return false;
 #endif
     if(__get_PRIMASK()!=1U || initialized ||
        (mode!=2U && mode!=3U && mode!=4U && mode!=5U && mode!=6U &&
@@ -559,6 +692,7 @@ bool am13e_app_serial_rx_init(unsigned mode)
          * Single-wire CRSF turnaround is NOT supported here.
          * Earlier initgpio() left the TX reservation Hi-Z.
          */
+#ifndef PA26_SINGLE_WIRE
         DL_GPIO_initPeripheralOutputFunction(
             AM13E_BOARD_SERIAL_TX_PINCM,
             AM13E_BOARD_SERIAL_TX_PIN_FUNCTION);
@@ -574,6 +708,7 @@ bool am13e_app_serial_rx_init(unsigned mode)
                 DL_GPIO_INVERSION_ENABLE:DL_GPIO_INVERSION_DISABLE);
 #endif
         direction=DL_UART_DIRECTION_TX_RX;
+#endif
         crsf_tx_available=true;
     }
 #endif
@@ -627,6 +762,11 @@ void am13e_app_serial_rx_systick(void)
 {
     if(!initialized)return;
     ++serial_rx_tick;
+#ifdef PA26_SINGLE_WIRE
+    if(wire_tx_active && (uint32_t)(serial_rx_tick-wire_started)>=512U){
+        wire_abort_pending=true;SCB->ICSR=SCB_ICSR_PENDSVSET_Msk;
+    }
+#endif
     /* The selected UART is configured in preemptible PendSV ONLY;
      * a 4-tick guard avoids a write while a character is in flight.
      * Periodic 8-tick retries remain bounded and nonblocking.
@@ -667,6 +807,9 @@ void RX_HANDLER(void)
             DL_UART_disableInterrupt(RX_UC,
                 DL_UART_INTERRUPT_EOT_DONE|DL_UART_INTERRUPT_TX);
             am13e_serial_tx_queue_eot(&crsf_tx);
+#ifdef PA26_SINGLE_WIRE
+            wire_rx();
+#endif
 #ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
             sbus2_release_rx();
 #endif

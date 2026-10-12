@@ -85,7 +85,9 @@ def main():
     # disconnected test-only model is not an acceptable coverage claim.
     required_symbols={
         "mcu/AM13E/hal/command_capture.c":[
-            "am13e_pb14_capture_snapshot_valid(",
+            "DL_DMA_setSrcAddr(",
+            "DL_TIMER_CC_CCOND_TRIG_EDGE",
+            "am13e_pa26_rx_suspend(",
             "am13e_pb14_decoder_abort("],
         "mcu/AM13E/hal/command_reply.c":[
             "am13e_bidir_turnaround_ticks("],

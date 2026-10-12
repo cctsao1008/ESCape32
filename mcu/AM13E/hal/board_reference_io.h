@@ -81,11 +81,11 @@ _Static_assert(AM13E_BEMF_CMP0_HP_PINCM==17U &&
                AM13E_BEMF_CMP3_HN_MUX==DL_SYSCTL_CMP_HN0,
                "AM13E reference IO Plan BEMF analog pin/mux drift");
 
-/* PB14 is the DShot command; PB15 is IO-only nFAULT input.
+/* PA26 is the revised development command selection; PB15 is IO-only nFAULT input.
  * PB13 Gate Enable is initialized as an INACTIVE GPIO output, with
  * no motor or audio runtime transitions. These are reference pins.
  */
 _Static_assert(IOMUX_PINCM_PB13==45U &&
-               IOMUX_PINCM_PB14==46U &&
+               IOMUX_PINCM_PA26==26U &&
                IOMUX_PINCM_PB15==47U,
                "AM13E reference IO Plan Power Stage/DShot pins changed");

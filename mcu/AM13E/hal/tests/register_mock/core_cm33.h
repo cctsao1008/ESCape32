@@ -30,3 +30,7 @@ uint32_t NVIC_GetVector(IRQn_Type irq);
 
 #define SCB_SCR_SLEEPDEEP_Msk 4U
 #define SCB_SCR_SEVONPEND_Msk 16U
+
+typedef struct { uint32_t CTRL,LOAD,VAL; } TestSysTick;
+extern TestSysTick test_systick;
+#define SysTick (&test_systick)

@@ -1,11 +1,11 @@
 /*
  * ESCape32 Rel17 AM13E Application input/DSHOT platform contract.
  *
- * PB14 GPIO46/INPUTXBAR1/ECAP0 captures DShot/PWM RX; TIMG4/DMA0
- * drives the NRZI telemetry reply on GPIO46, then restores ECAP0 RX.
+ * PA26 TIMG4 CCP0/DMA2 captures DShot/PWM RX; TIMG4/DMA0
+ * drives the NRZI telemetry reply on GPIO26, then restores TIMG4 capture RX.
  * Timing and external-line electrical validation remain outstanding.
  *
- * initio() now owns PB14 input and ECAP0 edge timestamps. The
+ * initio() now owns PA26 input and TIMG4 edge timestamps. The
  * bidirectional TX waveform and direction changes have implementations;
  * the WWDT0 valid-frame feed backend is implemented; service/CLI transport
  * and silicon watchdog/timing validation are pending.
@@ -118,6 +118,6 @@ void am13e_app_io_watchdog_arm(void);
 void am13e_app_io_on_gpio1_interrupt(uint32_t pending);
 
 /* Lowest-priority PendSV services DShot Save/Reset after PB14 TX completes.
- * Never execute erase/program synchronously inside ECAP0 IRQ.
+ * Never execute erase/program synchronously inside capture/DMA IRQ.
  */
 void am13e_app_io_service_pending_save(void);

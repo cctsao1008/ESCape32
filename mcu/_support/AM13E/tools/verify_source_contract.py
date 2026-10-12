@@ -150,7 +150,16 @@ def main():
           "FLASH_RESERVED" in ld,"Rev1.6 Reserved partition missing")
 
     rx=src("mcu/AM13E/hal/command_capture.c")
-    isr=rx.split("void ECAP0_IRQHandler(void)")[1]
+    route=src("mcu/AM13E/hal/command_input_reference.h")
+    check("COMMAND_PINCM IOMUX_PINCM_PA26" in route and
+          "COMMAND_CAPTURE_FUNCTION IOMUX_PA26_TIMG4_0_CCP0" in route and
+          "DL_TIMER_CC_MODE_CAPTURE" in rx and "DL_TIMER_CC_CCOND_TRIG_EDGE" in rx and
+          "DL_DMA_TRIGGER_SOURCE_TIMG4_0_GEN_EVENT1" in rx and
+          "COUNTERREGS.CC_01[0]" in rx and "ECAP0" not in rx and
+          "IOMUX_PINCM_PA26" in src("boot/mcu/AM13E/hal/io.c") and
+          "#define BOOT_IO_PORT GPIO0" in src("boot/mcu/AM13E/hal/io.c"),
+          "Application/Boot must share native PA26; no command ECAP0 fallback")
+    isr=rx.split("static void drain_locked(void)")[1]
     check(isr.index("am13e_pb14_bidir_tx_start(") <
           isr.index("am13e_pb14_decoder_pulse("),
           "Rel17 inverted DShot reply must be queued before CRC")

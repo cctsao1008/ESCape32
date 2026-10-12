@@ -1,5 +1,5 @@
 /* ESCape32 Rel17 AM13E PB14 capture decoder (no TI register ownership).
- * Input timestamps come from successive hardware ECAP0 capture events.
+ * Input timestamps come from successive hardware timer capture events.
  * DShot output generation is intentionally NOT part of this RX decoder.
  */
 #pragma once
@@ -91,3 +91,4 @@ void am13e_pb14_decoder_abort(AM13E_PB14_Decoder *d);
 
 void am13e_pb14_decoder_idle(AM13E_PB14_Decoder *d, uint32_t now,
                              AM13E_PB14_DshotCallback dshot);
+int am13e_pa26_decoder_reply_due(const AM13E_PB14_Decoder *d,uint32_t final_start);

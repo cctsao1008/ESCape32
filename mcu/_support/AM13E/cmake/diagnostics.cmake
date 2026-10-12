@@ -69,10 +69,9 @@ target_compile_options(AM13E_MCU_ADC_PAIR_BACKEND PRIVATE
     -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
     -mfloat-abi=hard -fno-branch-count-reg -Werror)
 
-# Generic AM13E MCU digital command input / INPUTXBAR routing.
-# Explicit board route required; no output, oscillator or ADC defaults.
+# Native PA26 TIMG4 capture/DMA register compile gate.
 add_library(AM13E_MCU_COMMAND_INPUT_ROUTE OBJECT EXCLUDE_FROM_ALL
-    "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/command_input_route_backend.c")
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/command_capture.c")
 target_include_directories(AM13E_MCU_COMMAND_INPUT_ROUTE PRIVATE
     "${PROJECT_SOURCE_DIR}/src" "${PROJECT_SOURCE_DIR}/mcu/AM13E" "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal")
 target_include_directories(AM13E_MCU_COMMAND_INPUT_ROUTE SYSTEM PRIVATE

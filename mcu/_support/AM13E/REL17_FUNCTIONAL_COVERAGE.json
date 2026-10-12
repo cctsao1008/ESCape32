@@ -4,7 +4,7 @@
   "branch": "am13e-port-v2",
   "evidence_limits": [
     "Source presence + ARM FW1 compile/link + native algorithm regression is not a physical motor/ESC acceptance test",
-    "Capture four-event register overwrite before ECAP0 ISR starts is not detectable without DMA/on-target timing evidence",
+    "TIMG4 capture register overwrite before DMA and multiple missed 16-bit wraps need on-target throughput/latency evidence",
     "Thirty-microsecond BiDShot software scheduling does not establish physical turnaround/contending-driver behavior",
     "The current Reference board keeps six MCPWM pads isolated and PB13 inactive; this is a hardware-qualification state, not a Rel17 feature exclusion"
   ],
@@ -26,11 +26,10 @@
     },
     {
       "id": "dshot_rx_capture",
-      "label": "PB14 ECAP0 PWM/DShot300/600/1200 RX, capture-race rejection",
+      "label": "PA26 TIMG4 CC0/DMA2 PWM/DShot300/600/1200 RX, bounded prefix capture",
       "sources": [
         "mcu/AM13E/hal/command_capture.c",
-        "mcu/AM13E/hal/command_decode.c",
-        "mcu/AM13E/hal/command_input_route_backend.c"
+        "mcu/AM13E/hal/command_decode.c"
       ],
       "host_tests": [
         "command_decode",
@@ -39,7 +38,7 @@
     },
     {
       "id": "bidir_reply",
-      "label": "PB14 GCR/NRZI BiDShot reply, 30us final-edge turnaround",
+      "label": "PA26 GCR/NRZI BiDShot reply, 30us final-edge turnaround",
       "sources": [
         "mcu/AM13E/hal/command_reply.c",
         "src/serial/bidir_codec.c",
@@ -176,7 +175,7 @@
     },
     {
       "id": "watchdog_policy",
-      "label": "PB14-valid-command WWDT0 feed; physical reset still unverified",
+      "label": "PA26-valid-command WWDT0 feed; physical reset still unverified",
       "sources": [
         "mcu/AM13E/hal/input_watchdog.c",
         "mcu/AM13E/hal/command_capture.c"
@@ -315,9 +314,9 @@
     "DroneCAN and independent TI FOC are not part of upstream ESCape32 Rel17 six-step firmware; no new feature is imposed by this MCU port"
   ],
   "hardware_pending": [
-    "PB14 external 3.3V/5V bidirectional interface and physical DShot300/600/1200 capture loss rate",
-    "ECAP0 worst-case IRQ latency, complete four-event capture overwrite, and optional DMA capture implementation",
-    "PB14 BiDShot 30us oscilloscope turnaround, DMA event-timer period and TX->RX recovery",
+    "PA26 external 3.3V/5V bidirectional interface and physical DShot300/600/1200 capture loss rate",
+    "TIMG4 worst-case wrap IRQ latency and capture overwrite before DMA read",
+    "PA26 BiDShot 30us oscilloscope turnaround, DMA event-timer period and TX->RX recovery",
     "CMPSS/ECAP1 comparator analog levels, edge filter and hardware zero-cross interrupt jitter",
     "Six MCPWM0 output pad electrical waveforms, dead-band non-overlap and real gate-driver polarity (outputs currently isolated)",
     "VBUS/NTC divider and model calibration plus WWDT LFCLK reset behavior",

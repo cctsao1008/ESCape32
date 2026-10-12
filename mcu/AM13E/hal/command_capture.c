@@ -1,360 +1,264 @@
-/* ESCape32 Rel17 FW1 PB14 command input -- AM13E reference HW Baseline v1.6.
- * PB14/GPIO46 is NOT a 5V tolerant MCU pin. AM13E reference requires an external
- * bidirectional, level-compatible and contention-safe interface.
- *
- * Receive: GPIO46 -> INPUTXBAR1 -> ECAP0 (32bit timestamps).
- * eCAP captures two complete pulses per four-event group (CEVT4 IRQ).
- * Rel17 policy stays in src/io.c via original servo/DShot callbacks.
- * BiDShot RX->TIMG4/DMA TX->RX is integrated; waveform timing and
- * external bidirectional electrical interface remain hardware test gates.
- *
- * ECAP counter frequency is measured against Rel17's 16 kHz SysTick
- * instead of assuming eCAP's clock divider. A valid 1ms measurement
- * is required before any throttle callback can execute.
+/* PA26 native TIMG4 CCP0 receive. TRM SPRUJF2B 18.2.3/18.4, table
+ * 11-3: both-edge capture -> GEN_EVENT1 -> DMA source 34. Channel 2
+ * is loaned to BiDShot TX only after capture requests are disabled.
+ * SINGLE DMA never wraps into a CPU-owned buffer. SysTick drains stable
+ * prefixes; completion drains the final prefix before rearming.
+ * The silicon has no capture FIFO/overcapture counter: flags cannot prove
+ * a CC overwrite before a DMA read. Bus throughput/IRQ latency remain
+ * qualification requirements, especially at DShot1200.
+ * Historical pb14 decoder/API names denote software interfaces only.
  */
 #include "command_capture.h"
 #include "command_decode.h"
 #include "io_backend.h"
 #include "serial_uart_rx.h"
-/* Input mode is queried through original io.c policy owner. */
 #include "input_watchdog.h"
 #include "command_reply.h"
-#include "command_input_route_backend.h"
 #include "command_input_reference.h"
-#include <soc.h>
-#include <dl_gpio.h>
-#include <dl_ecap.h>
+#include "clock_backend.h"
+#include <dl_timer.h>
 #include <dl_dma.h>
-#include <dl_xbar.h>
+#include <dl_gpio.h>
 #include <stddef.h>
 
-/* Original ESCape32 fatal policy; real motor shutdown remains unresolved. */
 extern void hard_fault_handler(void);
-
-/* AM13E230x TRM SPRUJF2B (rev B), Tables 11-3 and 24-4:
- *   DMA source index 39 = ECAP0DMA; 40 = ECAP1DMA.
- * The TI SDK 26.01.00.03 dl_dma.h enum has a one-instance naming
- * offset: ECAP1DMA=39, ECAP2DMA=40, despite device ECAP0/ECAP1 only.
- * Do NOT select 40 for PB14/ECAP0 simply by reading the SDK label.
- *
- * Future ECAP0 DMA integration must use source index 39, and must
- * separately prove the trigger routing, block completion, atomicity and
- * capture-overwrite behavior on silicon. No DMA is enabled in FW1 yet.
- */
-#define AM13E_PB14_ECAP0_DMA_TRIGGER_INDEX 39U
-_Static_assert((unsigned)DL_DMA_TRIGGER_SOURCE_ECAP1DMA ==
-                   AM13E_PB14_ECAP0_DMA_TRIGGER_INDEX,
-               "SDK ECAP DMA trigger map differs from AM13E230x TRM");
-_Static_assert((unsigned)DL_DMA_TRIGGER_SOURCE_ECAP2DMA == 40U,
-               "SDK second ECAP DMA trigger label or index changed");
-
-
-/* ECFLG latches all four capture events despite only CEVT4 having
- * interrupt enabled; 32-bit TSCTR wrap is a normal counter event.
- * The group contains two pulses: CAP1->CAP2 and CAP3->CAP4.
- */
-#define PB14_CAPTURE_GROUP_FLAGS (DL_ECAP_ISR_SOURCE_CEVT1 | \
-                                  DL_ECAP_ISR_SOURCE_CEVT2 | \
-                                  DL_ECAP_ISR_SOURCE_CEVT3 | \
-                                  DL_ECAP_ISR_SOURCE_CEVT4)
-#define PB14_ECAP_EXPECTED_FLAGS (PB14_CAPTURE_GROUP_FLAGS | \
-                                  DL_ECAP_ISR_SOURCE_CTROVF)
-
-/* Route is a board choice, not an AM13E silicon default. */
-static const AM13E_CommandInputRoute reference_command_input = {
-    .gpio = PB14_GPIO,
-    .pin_mask = PB14_GPIO_PIN,
-    .pincm = PB14_PINCM,
-    .gpio_function = IOMUX_PB14_GPIO46,
-    .gpio_index = PB14_GPIO_NUMBER,
-    .input_xbar = PB14_INPUT_XBAR
-};
-
+#define RX_TIMER TIMG4
+#define RX_CH 2U
+#define RX_HZ (AM13E_APP_MCLK_HZ/2U)
+#define RX_EVENTS DL_TIMER_EVENT_CC0_UP_EVENT
+#define RX_DMA_FLAGS (DL_DMA_INTERRUPT_CHANNEL2|DL_DMA_FULL_CH_INTERRUPT_EARLY_CHANNEL2|DL_DMA_INTERRUPT_ADDR_ERROR)
+_Static_assert(RX_HZ==100000000U && DL_DMA_TRIGGER_SOURCE_TIMG4_0_GEN_EVENT1==34U,
+    "PA26 TIMG4 clock/DMA routing changed");
+static uint32_t edges[32] __attribute__((aligned(4)));
 static AM13E_PB14_Decoder decoder;
-static volatile uint32_t initialized;
-static volatile uint32_t capture_pairs;
-static volatile uint32_t capture_overruns;
-static volatile uint32_t late_capture_groups;
-static volatile uint32_t max_capture_age_ticks;
-static volatile uint32_t invalid_capture_groups;
-static volatile uint32_t unexpected_gpio1_irqs;
-static uint32_t calib_counter;
-static uint32_t calib_start;
-static uint32_t calib_ticks_per_us;
-static uint8_t inverted_rx;
-static uint8_t service_owns_input;
-
+static volatile uint32_t initialized,epoch,suspended,service_owns_input;
+static unsigned consumed;
+static uint32_t start_edge,last_edge,capture_pairs,capture_overruns,late_capture_groups;
+static uint32_t invalid_capture_groups,max_capture_age_ticks,unexpected_gpio1_irqs;
+static uint8_t inverted_rx,capture_desynced;
 static void input_fail_closed(void)
-{
-    __disable_irq();
-    hard_fault_handler();
-    for (;;) { __NOP(); }
-}
+{ __disable_irq();hard_fault_handler();for(;;){__NOP();} }
 
+uint32_t am13e_pa26_rx_now(void)
+{
+    const uint32_t mask=__get_PRIMASK();__disable_irq();
+    uint32_t high=epoch;
+    uint32_t low=DL_Timer_getTimerCount(RX_TIMER)&0xffffU;
+    if((DL_Timer_getRawInterruptStatus(RX_TIMER,DL_TIMER_INTERRUPT_ZERO_EVENT)!=0U) && low<0x8000U)
+        high+=0x10000U;
+    __set_PRIMASK(mask);return high+low;
+}
+void am13e_pa26_rx_suspend(void)
+{
+    DL_Timer_disableEvent(RX_TIMER,DL_TIMER_GEN_EVENT1,UINT32_MAX);
+    DL_Timer_clearEventsStatus(RX_TIMER,DL_TIMER_GEN_EVENT1,UINT32_MAX);
+    DL_DMA_disableChannel(DMA0,RX_CH);
+    DL_Timer_stopCounter(RX_TIMER);
+    DL_Timer_setCaptureCompareCtl(RX_TIMER,DL_TIMER_CC_MODE_COMPARE,DL_TIMER_CC_CCOND_NOCAPTURE,DL_TIMER_CC_0_INDEX);
+    DL_Timer_disableInterrupt(RX_TIMER,UINT32_MAX);
+    DL_Timer_clearInterruptStatus(RX_TIMER,UINT32_MAX);
+    DL_DMA_clearInterruptStatus(DMA0,RX_DMA_FLAGS);
+    NVIC_ClearPendingIRQ(TIMG4_0_INT_IRQn);NVIC_ClearPendingIRQ(DMA0_INT_IRQn);
+    suspended=1U;
+}
+static void dma_arm(void)
+{
+    DL_Timer_disableEvent(RX_TIMER,DL_TIMER_GEN_EVENT1,UINT32_MAX);
+    DL_Timer_clearEventsStatus(RX_TIMER,DL_TIMER_GEN_EVENT1,UINT32_MAX);
+    DL_DMA_disableChannel(DMA0,RX_CH);
+    DL_DMA_configTransfer(DMA0,RX_CH,DL_DMA_SINGLE_TRANSFER_MODE,DL_DMA_NORMAL_MODE,
+        DL_DMA_WIDTH_WORD,DL_DMA_WIDTH_WORD,DL_DMA_ADDR_UNCHANGED,DL_DMA_ADDR_INCREMENT);
+    DL_DMA_setTrigger(DMA0,RX_CH,DL_DMA_TRIGGER_SOURCE_TIMG4_0_GEN_EVENT1,DL_DMA_TRIGGER_TYPE_EXTERNAL);
+    DL_DMA_setSrcAddr(DMA0,RX_CH,(uint32_t)(uintptr_t)&RX_TIMER->COUNTERREGS.CC_01[0]);
+    DL_DMA_setDestAddr(DMA0,RX_CH,(uint32_t)(uintptr_t)edges);
+    DL_DMA_setTransferSize(DMA0,RX_CH,32U);
+    DL_DMA_Full_Ch_setEarlyInterruptThreshold(DMA0,RX_CH,DL_DMA_EARLY_INTERRUPT_THRESHOLD_HALF);
+    DL_DMA_enableInterrupt(DMA0,RX_DMA_FLAGS);
+    DL_DMA_clearInterruptStatus(DMA0,RX_DMA_FLAGS);
+    consumed=0U;__DMB();DL_DMA_enableChannel(DMA0,RX_CH);
+    DL_Timer_enableEvent(RX_TIMER,DL_TIMER_GEN_EVENT1,RX_EVENTS);
+}
+void am13e_pb14_resume_rx(void)
+{
+    if(!initialized || service_owns_input)input_fail_closed();
+    am13e_pa26_rx_suspend();
+    DL_GPIO_disableOutput(COMMAND_GPIO,COMMAND_PIN);
+    DL_GPIO_initPeripheralInputFunction(COMMAND_PINCM,COMMAND_CAPTURE_FUNCTION);
+    if(!DL_GPIO_isInputEnabled(COMMAND_PINCM) ||
+       DL_GPIO_getPeripheralFunctionBits(COMMAND_PINCM)!=COMMAND_CAPTURE_FUNCTION)input_fail_closed();
+    DL_Timer_CaptureConfig c={.captureMode=DL_TIMER_CAPTURE_MODE_EDGE_TIME_UP,
+        .period=0xffffU,.startTimer=DL_TIMER_STOP,.edgeCaptMode=DL_TIMER_CAPTURE_EDGE_DETECTION_MODE_RISING,
+        .inputChan=DL_TIMER_INPUT_CHAN_0,.inputInvMode=inverted_rx?DL_TIMER_CC_INPUT_INV_INVERT:DL_TIMER_CC_INPUT_INV_NOINVERT};
+    DL_Timer_initCaptureMode(RX_TIMER,&c);
+    DL_Timer_disableCaptureCompareInputFilter(RX_TIMER,DL_TIMER_CC_0_INDEX);
+    DL_Timer_setCaptureCompareCtl(RX_TIMER,DL_TIMER_CC_MODE_CAPTURE,
+        DL_TIMER_CC_ZCOND_NONE|DL_TIMER_CC_ACOND_TIMCLK|DL_TIMER_CC_LCOND_NONE|DL_TIMER_CC_CCOND_TRIG_EDGE,DL_TIMER_CC_0_INDEX);
+    DL_Timer_setCaptureCompareCtl(RX_TIMER,DL_TIMER_CC_MODE_COMPARE,DL_TIMER_CC_CCOND_NOCAPTURE,DL_TIMER_CC_1_INDEX);
+    DL_Timer_setCounterValueAfterEnable(RX_TIMER,DL_TIMER_COUNT_AFTER_EN_ZERO);
+    DL_Timer_setTimerCount(RX_TIMER,0U);epoch=0U;
+    am13e_pb14_decoder_abort(&decoder);
+    dma_arm();
+    DL_Timer_clearInterruptStatus(RX_TIMER,UINT32_MAX);
+    DL_Timer_enableInterrupt(RX_TIMER,DL_TIMER_INTERRUPT_ZERO_EVENT);
+    DL_Timer_enableEvent(RX_TIMER,DL_TIMER_GEN_EVENT1,RX_EVENTS);
+    capture_desynced=0U;suspended=0U;DL_Timer_startCounter(RX_TIMER);
+}
 void initio(void)
 {
-    /* No PB15 interrupt-mask changes or unqualified output defaults. */
-    if (!am13e_mcu_command_input_configure(&reference_command_input))
-        input_fail_closed();
-
-    /* Idle LOW = normal PWM/DShot, idle HIGH = inverted DShot.
-     * This snapshot is NOT a substitute for the external idle-bias test.
-     */
-    inverted_rx = (DL_GPIO_readPins(PB14_GPIO, PB14_GPIO_PIN) != 0U);
-
-    DL_ECAP_Config cap;
-    DL_ECAP_initParamsSetDefault(&cap);
-    cap.captureModeConfig.input = DL_ECAP_INPUT_INPUTXBAR1;
-    cap.captureModeConfig.prescalerValue = 0U; /* no edge prescale */
-    cap.captureModeConfig.continouousOrOneShot = DL_ECAP_CONTINUOUS_CAPTURE_MODE;
-    /* Batch two pulses per ISR. DShot600 nominal IRQ rate is lowered
-     * from ~600k/s to ~300k/s; measured capture reliability is pending.
-     */
-    cap.captureModeConfig.wrapOrStopAtEvent = DL_ECAP_EVENT_4;
-    cap.captureModeConfig.captureEvent1Polarity =
-        inverted_rx ? DL_ECAP_EVENT_FALLING_EDGE : DL_ECAP_EVENT_RISING_EDGE;
-    cap.captureModeConfig.captureEvent2Polarity =
-        inverted_rx ? DL_ECAP_EVENT_RISING_EDGE : DL_ECAP_EVENT_FALLING_EDGE;
-    cap.captureModeConfig.captureEvent3Polarity =
-        cap.captureModeConfig.captureEvent1Polarity;
-    cap.captureModeConfig.captureEvent4Polarity =
-        cap.captureModeConfig.captureEvent2Polarity;
-    cap.captureModeConfig.resetCounter = true; /* init-only, not every edge */
-    cap.captureModeConfig.reArm = true;
-    cap.interruptsConfig.interruptSourceEnableMask = DL_ECAP_ISR_SOURCE_CEVT4;
-    DL_ECAP_init(PB14_ECAP, &cap);
-    DL_ECAP_enableTimeStampCapture(PB14_ECAP);
-    DL_ECAP_clearInterrupt(PB14_ECAP, PB14_ECAP_EXPECTED_FLAGS);
-    DL_ECAP_clearGlobalInterrupt(PB14_ECAP);
-    DL_ECAP_startCounter(PB14_ECAP);
-
-    am13e_pb14_decoder_reset(&decoder, 0U, inverted_rx);
-    calib_counter = 0U;
-    calib_start = DL_ECAP_getTimeStampCounter(PB14_ECAP);
+    DL_GPIO_enablePower(COMMAND_GPIO);
+    DL_GPIO_disableOutput(COMMAND_GPIO,COMMAND_PIN);
+    DL_GPIO_initDigitalInput(COMMAND_PINCM);
+    inverted_rx=DL_GPIO_readPins(COMMAND_GPIO,COMMAND_PIN)!=0U;
+    am13e_pb14_decoder_reset(&decoder,RX_HZ,inverted_rx);
     am13e_app_io_watchdog_prepare();
-    am13e_pb14_bidir_tx_init();
-    initialized = 1U;
+    am13e_pb14_bidir_tx_init(); /* Establishes verified 100 MHz TIMG4 clock. */
+    initialized=1U;am13e_pb14_resume_rx();
+    NVIC_SetPriority(TIMG4_0_INT_IRQn,0U);NVIC_SetPriority(DMA0_INT_IRQn,0U);
+    NVIC_EnableIRQ(TIMG4_0_INT_IRQn);NVIC_EnableIRQ(DMA0_INT_IRQn);
+    const unsigned mode=am13e_app_io_input_mode();
 #ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
-    /* Original cfg has already been restored/validated before initio().
-     * Default Reference never selects a UART. RX is IRQ/FIFO-only.
-     */
-    if((am13e_app_io_input_mode()==2||
 #ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
-        am13e_app_io_input_mode()==0||
+    if(mode==0U && !am13e_app_serial_rx_init(0U))input_fail_closed();
 #endif
-        am13e_app_io_input_mode()==3||am13e_app_io_input_mode()==4||
-        am13e_app_io_input_mode()==5||
-        am13e_app_io_input_mode()==6||
-        am13e_app_io_input_mode()==7) &&
-       !am13e_app_serial_rx_init(am13e_app_io_input_mode()))
-        input_fail_closed();
+    if(mode>=2U && mode<=7U){
+        if(!am13e_app_pb14_service_takeover() || !am13e_app_serial_rx_init(mode))input_fail_closed();
+    }
+#else
+    if(mode>=2U && mode<=7U)input_fail_closed(); /* No invented UART route. */
 #endif
-    /* Equal to 16 kHz SysTick priority (0): neither exception may
-     * preempt the other while mutating the decoder.
-     */
-    NVIC_SetPriority(ECAP0_INT_IRQn, 0U);
-    NVIC_EnableIRQ(ECAP0_INT_IRQn);
-    /* Must NOT unmask global PRIMASK; motor safe-enable still pending. */
 }
-
-void ECAP0_IRQHandler(void)
+static void drain_locked(void)
 {
-    const uint16_t flags = DL_ECAP_getInterruptSource(PB14_ECAP);
-    /* CEVT1..3 latch as normal data flags while only CEVT4 requests
-     * an IRQ. CTROVF is legal for the free-running unsigned TSCTR.
-     * A missing CEVT4 is not an actionable complete capture group.
-     */
-    if (!initialized || (flags & ~PB14_ECAP_EXPECTED_FLAGS) != 0U ||
-        (flags & DL_ECAP_ISR_SOURCE_CEVT4) == 0U) {
-        input_fail_closed();
+    if(suspended || service_owns_input || capture_desynced)return;
+    const unsigned remaining=DL_DMA_getTransferSize(DMA0,RX_CH);
+    if(remaining>32U)input_fail_closed();
+    const unsigned available=32U-remaining;
+    if(available<consumed)input_fail_closed();
+    __DMB();
+    const uint32_t now=am13e_pa26_rx_now();
+    if(available==32U && (DL_Timer_getCaptureCompareValue(RX_TIMER,DL_TIMER_CC_0_INDEX)&0xffffU)!=(edges[31]&0xffffU)){
+        ++capture_overruns;capture_desynced=1U;am13e_pb14_decoder_abort(&decoder);return;
     }
-    /* Acknowledge OLD latched flags BEFORE reading CAP1..4. If any
-     * CEVT1..4 event reappears during our snapshot it belongs to the
-     * NEXT group and proves a racing capture/overwrite. Do not clear
-     * those newly latched flags: the hardware must still complete the
-     * next CEVT4 group and request its own IRQ.
-     *
-     * Unlike the earlier snapshot, checking phase alone could miss
-     * a complete four-event wrap while registers were copied. The
-     * new flag epoch catches events arriving after this ACK boundary.
-     * A wrap entirely BEFORE the first ISR read is still unprovable
-     * without DMA/oscilloscope timing evidence.
-     */
-    const DL_ECAP_EVENT phase_before =
-        DL_ECAP_getModuloCounterStatus(PB14_ECAP);
-    DL_ECAP_clearInterrupt(PB14_ECAP,flags & PB14_ECAP_EXPECTED_FLAGS);
-    DL_ECAP_clearGlobalInterrupt(PB14_ECAP);
-    const uint32_t start1=DL_ECAP_getEventTimeStamp(PB14_ECAP,DL_ECAP_EVENT_1);
-    const uint32_t end1=DL_ECAP_getEventTimeStamp(PB14_ECAP,DL_ECAP_EVENT_2);
-    const uint32_t start2=DL_ECAP_getEventTimeStamp(PB14_ECAP,DL_ECAP_EVENT_3);
-    const uint32_t end2=DL_ECAP_getEventTimeStamp(PB14_ECAP,DL_ECAP_EVENT_4);
-    const DL_ECAP_EVENT phase_after=
-        DL_ECAP_getModuloCounterStatus(PB14_ECAP);
-    const uint32_t flags_after=DL_ECAP_getInterruptSource(PB14_ECAP);
-    if (!am13e_pb14_capture_snapshot_valid(
-            flags,flags_after,PB14_CAPTURE_GROUP_FLAGS,
-            (unsigned)phase_before,(unsigned)phase_after,
-            (unsigned)DL_ECAP_EVENT_1)) {
-        /* Quarantine partial/mixed groups and recover at the NEXT
-         * complete CEVT4 event; never forward suspect throttle data.
-         */
-        ++capture_overruns;
-        am13e_pb14_decoder_abort(&decoder);
-        return;
+    if(available>consumed){
+        const uint32_t cc=DL_Timer_getCaptureCompareValue(RX_TIMER,DL_TIMER_CC_0_INDEX)&0xffffU;
+        if(cc!=(edges[available-1U]&0xffffU))return; /* Pending DMA beat; retry. */
+        const unsigned level=DL_GPIO_readPins(COMMAND_GPIO,COMMAND_PIN)!=0U;
+        if(DL_DMA_getTransferSize(DMA0,RX_CH)!=remaining ||
+           (DL_Timer_getCaptureCompareValue(RX_TIMER,DL_TIMER_CC_0_INDEX)&0xffffU)!=cc)return;
+        /* A lost/noisy edge must not complement a complete DShot packet:
+         * bitwise-complemented data can also have a valid CRC. Verify
+         * observed final edge polarity before forwarding this prefix. */
+        const unsigned expected=(available&1U)?!inverted_rx:inverted_rx;
+        if(level!=expected){
+            ++invalid_capture_groups;capture_desynced=1U;
+            am13e_pb14_decoder_abort(&decoder);return;
+        }
     }
-    if (!am13e_pb14_capture_group_valid(start1, end1, start2, end2,
-                                        decoder.tick_hz)) {
-        /* Invalid ordering can also indicate an overwritten capture
-         * register. Do not deliver either pulse to the throttle logic.
-         * A silent period >50ms will drop one capture pair by design.
-         */
-        ++invalid_capture_groups;
-        am13e_pb14_decoder_abort(&decoder);
-        return;
+    for(;consumed<available;++consumed){
+        /* A stable DMA prefix was sampled within one 655.36 us counter
+         * cycle. The separate ZERO interrupt extends Servo frame time;
+         * pulse widths never become ISR-entry timestamps. */
+        const uint32_t stamp=now-(uint16_t)((uint16_t)now-(uint16_t)edges[consumed]);
+        if(!(consumed&1U)){start_edge=stamp;continue;}
+        const uint32_t width=stamp-start_edge;
+        if(!width || width>RX_HZ/400U){++invalid_capture_groups;am13e_pb14_decoder_abort(&decoder);continue;}
+        const uint32_t age=now-stamp;
+        if(age>max_capture_age_ticks)max_capture_age_ticks=age;
+        if(am13e_app_io_input_mode()==0U && inverted_rx &&
+           am13e_pa26_decoder_reply_due(&decoder,start_edge)){
+            (void)am13e_pb14_bidir_tx_start(stamp,start_edge-last_edge,RX_HZ);
+        }
+        last_edge=start_edge;
+        const unsigned old=decoder.rx_mode;
+        am13e_pb14_decoder_pulse(&decoder,start_edge,stamp,am13e_app_io_servo_pulse,am13e_app_io_dshot_packet);
+        ++capture_pairs;
+        if(am13e_app_io_input_mode()==0U && old==AM13E_PB14_RX_UNDECIDED && decoder.rx_mode!=old)am13e_app_io_watchdog_arm();
+        if(suspended){++consumed;break;} /* Current valid frame owns the TX handover. */
     }
-    /* DShot300/600/1200 arrives in two-pulse/four-edge groups.
-     * CPU snapshot must finish before the NEXT CEVT4 can overwrite
-     * these four CAP registers, even when flag/phase checks passed.
-     * A deadline miss MUST NOT feed Rel17 throttle/WWDT/BiDShot.
-     */
-    const uint32_t snapshot_now=DL_ECAP_getTimeStampCounter(PB14_ECAP);
-    const uint32_t age=snapshot_now-end2; /* modulo-2^32 rollover-safe */
-    if(age>max_capture_age_ticks) max_capture_age_ticks=age;
-    if(!am13e_pb14_capture_budget_ok(start1,start2,end2,
-                                      snapshot_now,decoder.tick_hz)) {
-        ++late_capture_groups;
-        ++capture_overruns;
-        am13e_pb14_decoder_abort(&decoder);
-        return;
+    if(available==32U){
+        if(!suspended)dma_arm();
     }
-    capture_pairs += 2U;
-    /* Rel17 iotim_dma_isr() puts the inverted reply on the line
-     * BEFORE CRC/command disposition. Original TX DMA completion
-     * builds the NEXT telemetry payload, not the current one.
-     * This CEVT4 batch supplies the physical 15th/16th RX pulses.
-     * Only source-equivalent DShot framing (not Servo/Oneshot)
-     * is permitted to borrow PB14 for physical TX.
-     */
-    if (am13e_app_io_input_mode()==0U && inverted_rx &&
-        am13e_pb14_decoder_bidir_reply_due(&decoder,start1,start2)) {
-        (void)am13e_pb14_bidir_tx_start(end2,start2-start1,
-                                        decoder.tick_hz);
-    }
-    /* Decide CRC, WWDT and Rel17 throttle AFTER physical reply
-     * is armed. A bad CRC cannot apply a command or feed WWDT.
-     */
-    const unsigned previous_mode=decoder.rx_mode;
-    am13e_pb14_decoder_pulse(&decoder,start1,end1,
-                             am13e_app_io_servo_pulse,
-                             am13e_app_io_dshot_packet);
-    am13e_pb14_decoder_pulse(&decoder,start2,end2,
-                             am13e_app_io_servo_pulse,
-                             am13e_app_io_dshot_packet);
-    if(am13e_app_io_input_mode()==0U &&
-       previous_mode==AM13E_PB14_RX_UNDECIDED &&
-       decoder.rx_mode!=AM13E_PB14_RX_UNDECIDED)
-        am13e_app_io_watchdog_arm();
 }
-
-/* Called by the real 16kHz TI SysTick vector only after GPIO + eCAP
- * initialization; 16 elapsed ticks = 1ms nominal at MCLK=200MHz.
- */
+static void drain(void)
+{
+    /* DMA continues latching hardware edges. Only CPU prefix ownership and
+     * RX/TX handover are atomic against SysTick/DMA/TIMG4 preemption. */
+    const uint32_t mask=__get_PRIMASK();__disable_irq();
+    drain_locked();__set_PRIMASK(mask);
+}
+void am13e_pa26_rx_dma_irq(void)
+{
+    const uint32_t flags=DL_DMA_getEnabledInterruptStatus(DMA0,RX_DMA_FLAGS);
+    if(!flags)return;
+    DL_DMA_clearInterruptStatus(DMA0,flags);
+    if(flags&DL_DMA_INTERRUPT_ADDR_ERROR)input_fail_closed();
+    if(!suspended && (flags&(DL_DMA_INTERRUPT_CHANNEL2|DL_DMA_FULL_CH_INTERRUPT_EARLY_CHANNEL2)))drain();
+}
+void am13e_pa26_rx_timer_irq(void)
+{
+    const uint32_t flags=DL_Timer_getEnabledInterruptStatus(RX_TIMER,DL_TIMER_INTERRUPT_ZERO_EVENT);
+    if(!flags || suspended)return;
+    DL_Timer_clearInterruptStatus(RX_TIMER,flags);epoch+=0x10000U;
+}
 void am13e_app_pb14_systick(void)
 {
-    if (!initialized) return;
+    if(!initialized)return;
 #ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
     am13e_app_serial_rx_systick();
 #ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
-    static unsigned last_level;
-    const unsigned level=DL_GPIO_readPins(PB14_GPIO,PB14_GPIO_PIN)!=0U;
-    const int edge=level!=last_level ||
-        (DL_ECAP_getInterruptSource(PB14_ECAP)&PB14_CAPTURE_GROUP_FLAGS)!=0U;
-    last_level=level;
-    am13e_app_serial_cli_entry_poll((int)level,edge,
-        decoder.rx_mode!=AM13E_PB14_RX_UNDECIDED ||
-        am13e_app_io_input_mode()==1U);
+    am13e_app_serial_cli_entry_poll(DL_GPIO_readPins(COMMAND_GPIO,COMMAND_PIN)!=0U,
+        DL_DMA_getTransferSize(DMA0,RX_CH)!=32U,decoder.rx_mode!=AM13E_PB14_RX_UNDECIDED);
 #endif
 #endif
-    if(service_owns_input)return;
     am13e_pb14_bidir_tx_systick();
-    if (++calib_counter == 16U) {
-        const uint32_t now = DL_ECAP_getTimeStampCounter(PB14_ECAP);
-        const uint32_t ticks = now - calib_start;
-        calib_start = now;
-        calib_counter = 0U;
-        const uint32_t ticks_per_us = (ticks + 500U) / 1000U;
-        /* Sanity only: expected ECAP <=200MHz and >=10MHz. Do not
-         * infer or promise the precise clock before silicon validation.
-         */
-        if (ticks_per_us < 10U || ticks_per_us > 200U) input_fail_closed();
-        calib_ticks_per_us = ticks_per_us;
-        decoder.tick_hz = ticks_per_us * 1000000U;
+    if(service_owns_input || suspended)return;
+    const uint32_t mask=__get_PRIMASK();__disable_irq();
+    if(capture_desynced){
+        const uint32_t now=am13e_pa26_rx_now();
+        const uint32_t cc=DL_Timer_getCaptureCompareValue(RX_TIMER,DL_TIMER_CC_0_INDEX)&0xffffU;
+        if((DL_GPIO_readPins(COMMAND_GPIO,COMMAND_PIN)!=0U)==inverted_rx &&
+           (uint16_t)((uint16_t)now-(uint16_t)cc)>RX_HZ/300000U*4U &&
+           (DL_Timer_getCaptureCompareValue(RX_TIMER,DL_TIMER_CC_0_INDEX)&0xffffU)==cc){
+            dma_arm();capture_desynced=0U;
+        }
+        __set_PRIMASK(mask);return;
     }
-    if (calib_ticks_per_us) {
-        am13e_pb14_decoder_idle(&decoder,
-                                DL_ECAP_getTimeStampCounter(PB14_ECAP),
-                                am13e_app_io_dshot_packet);
+    drain_locked();
+    if(!suspended && !capture_desynced){
+        const uint32_t now=am13e_pa26_rx_now();
+        const uint32_t period=decoder.last_bit_period?decoder.last_bit_period:
+            decoder.rx_mode==AM13E_PB14_RX_DSHOT?RX_HZ/(300000U<<decoder.dshot_rate):0U;
+        const uint32_t cc=DL_Timer_getCaptureCompareValue(RX_TIMER,DL_TIMER_CC_0_INDEX)&0xffffU;
+        am13e_pb14_decoder_idle(&decoder,now,am13e_app_io_dshot_packet);
+        /* A truncated/noisy DShot frame must not shift the next frame's
+         * edge pairs or DMA ownership. Rebase only on an observed quiet
+         * idle line, stable DMA prefix and unchanged capture register. */
+        if(decoder.rx_mode==AM13E_PB14_RX_DSHOT && period && consumed &&
+           (uint16_t)((uint16_t)now-(uint16_t)cc)>period*4U &&
+           (DL_GPIO_readPins(COMMAND_GPIO,COMMAND_PIN)!=0U)==inverted_rx &&
+           DL_DMA_getTransferSize(DMA0,RX_CH)==32U-consumed &&
+           (DL_Timer_getCaptureCompareValue(RX_TIMER,DL_TIMER_CC_0_INDEX)&0xffffU)==cc){
+            am13e_pb14_decoder_abort(&decoder);dma_arm();
+        }
     }
+    __set_PRIMASK(mask);
 }
-
 bool am13e_app_pb14_service_takeover(void)
 {
-    if(!initialized || __get_PRIMASK()!=1U || service_owns_input ||
-       decoder.rx_mode!=AM13E_PB14_RX_UNDECIDED ||
-       am13e_pb14_bidir_tx_busy())return false;
-    NVIC_DisableIRQ(ECAP0_INT_IRQn);
-    DL_ECAP_disableTimeStampCapture(PB14_ECAP);
-    DL_ECAP_stopCounter(PB14_ECAP);
-    DL_ECAP_clearInterrupt(PB14_ECAP,PB14_ECAP_EXPECTED_FLAGS);
-    DL_ECAP_clearGlobalInterrupt(PB14_ECAP);
-    NVIC_ClearPendingIRQ(ECAP0_INT_IRQn);
-    am13e_pb14_decoder_abort(&decoder);
-    service_owns_input=1U;
-    return true;
+    if(!initialized || __get_PRIMASK()!=1U || am13e_pb14_bidir_tx_busy())return false;
+    if(service_owns_input)return true;
+    am13e_pa26_rx_suspend();am13e_pb14_decoder_abort(&decoder);service_owns_input=1U;return true;
 }
-
-void am13e_pb14_resume_rx(void)
-{
-    if (!initialized || service_owns_input) input_fail_closed();
-    DL_ECAP_stopCounter(PB14_ECAP);
-    DL_ECAP_resetCounters(PB14_ECAP);
-    DL_ECAP_clearInterrupt(PB14_ECAP, PB14_ECAP_EXPECTED_FLAGS);
-    DL_ECAP_clearGlobalInterrupt(PB14_ECAP);
-    DL_ECAP_enableTimeStampCapture(PB14_ECAP);
-    DL_ECAP_startCounter(PB14_ECAP);
-    calib_start = DL_ECAP_getTimeStampCounter(PB14_ECAP);
-    calib_counter = 0U;
-    NVIC_ClearPendingIRQ(ECAP0_INT_IRQn);
-    NVIC_EnableIRQ(ECAP0_INT_IRQn);
-}
-
 void am13e_app_io_on_gpio1_interrupt(uint32_t pending)
-{
-    /* PB14 capture uses ECAP0, NOT GPIO1 IRQ. Unexpected enabled GPIO1
-     * events are evidence of an IRQ ownership conflict and must not be
-     * silently acknowledged as if a valid command were received.
-     */
-    ++unexpected_gpio1_irqs;
-    (void)pending;
-    input_fail_closed();
-}
-
+{ ++unexpected_gpio1_irqs;(void)pending;input_fail_closed(); }
 void am13e_app_pb14_status(AM13E_PB14_Status *out)
 {
-    if (out == NULL) return;
-    out->capture_pairs = capture_pairs;
-    out->capture_overruns = capture_overruns;
-    out->late_capture_groups = late_capture_groups;
-    out->max_capture_age_ticks = max_capture_age_ticks;
-    out->invalid_capture_groups = invalid_capture_groups;
-    out->good_pwm = decoder.good_pwm;
-    out->good_dshot_rx = decoder.good_dshot;
-    am13e_app_io_watchdog_status(&out->watchdog_armed,
-                                &out->watchdog_valid_feeds);
-    am13e_pb14_bidir_tx_status(&out->tx_dma_completed, &out->tx_rejected);
-    out->rejected = decoder.rejected;
-    out->unexpected_gpio1_irqs = unexpected_gpio1_irqs;
-    out->capture_ticks_per_us = calib_ticks_per_us;
-    out->inverted_rx = inverted_rx;
-    out->initialized = (uint8_t)initialized;
+    if(out==NULL)return;
+    *out=(AM13E_PB14_Status){.capture_pairs=capture_pairs,.capture_overruns=capture_overruns,
+        .late_capture_groups=late_capture_groups,.max_capture_age_ticks=max_capture_age_ticks,
+        .invalid_capture_groups=invalid_capture_groups,.good_pwm=decoder.good_pwm,.good_dshot_rx=decoder.good_dshot,
+        .rejected=decoder.rejected,.unexpected_gpio1_irqs=unexpected_gpio1_irqs,.capture_ticks_per_us=100U,
+        .inverted_rx=inverted_rx,.initialized=(uint8_t)initialized};
+    am13e_app_io_watchdog_status(&out->watchdog_armed,&out->watchdog_valid_feeds);
+    am13e_pb14_bidir_tx_status(&out->tx_dma_completed,&out->tx_rejected);
 }

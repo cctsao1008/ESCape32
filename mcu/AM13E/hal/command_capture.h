@@ -1,9 +1,9 @@
-/* AM13E reference FW1 PB14 command input: GPIO46 -> INPUTXBAR1 -> ECAP0.
+/* AM13E development command input: PA26 -> TIMG4 CCP0 -> DMA2.
  * Bidirectional reply is implemented by the separate TIMG4/DMA backend.
  */
 #pragma once
 #if !defined(AM13E)
-#error "AM13E-only PB14 input driver"
+#error "AM13E-only PA26 input driver"
 #endif
 #include <stdint.h>
 #include <stdbool.h>
@@ -11,15 +11,18 @@
 void initio(void); /* Original Rel17 entry, real MCU initialization. */
 void am13e_pb14_resume_rx(void);
 void am13e_app_pb14_systick(void); /* 16 kHz clock reference & timeout */
-void ECAP0_IRQHandler(void);
+uint32_t am13e_pa26_rx_now(void);
+void am13e_pa26_rx_suspend(void);
+void am13e_pa26_rx_timer_irq(void);
+void am13e_pa26_rx_dma_irq(void);
 /* Masked-IRQ, idle-only handover from undecided capture to service CLI. */
 bool am13e_app_pb14_service_takeover(void);
 
 typedef struct {
     uint32_t capture_pairs;
-    uint32_t capture_overruns; /* observed phase movement or stale DShot read */
-    uint32_t late_capture_groups; /* DShot pair exceeded next CEVT4 deadline */
-    uint32_t max_capture_age_ticks; /* observed ECAP ISR snapshot age */
+    uint32_t capture_overruns; /* observed capture/DMA backlog */
+    uint32_t late_capture_groups; /* reserved historical diagnostic */
+    uint32_t max_capture_age_ticks; /* observed hardware timestamp age */
     uint32_t invalid_capture_groups; /* physical ordering/width rejected */
     uint32_t good_pwm;
     uint32_t good_dshot_rx;

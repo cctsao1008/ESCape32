@@ -44,3 +44,9 @@ static inline void DL_Timer_enablePower(TestTimer *t){(void)t;}
 static inline bool DL_Timer_isPowerEnabled(TestTimer *t){(void)t;return true;}
 static inline void DL_Timer_enableClock(TestTimer *t){(void)t;}
 static inline bool DL_Timer_isClockEnabled(TestTimer *t){(void)t;return true;}
+
+#define DL_TIMER_CC_0_INDEX 0U
+#define DL_TIMER_CC_CCOND_NOCAPTURE 0U
+static inline void DL_Timer_clearEventsStatus(TestTimer *t,unsigned p,unsigned m){(void)t;(void)p;(void)m;}
+
+static inline void DL_Timer_setLoadValue(TestTimer *t,unsigned v){(void)t;(void)v;}

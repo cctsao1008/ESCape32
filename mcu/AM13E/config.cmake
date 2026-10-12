@@ -16,7 +16,6 @@ include("${PROJECT_SOURCE_DIR}/mcu/_support/AM13E/cmake/ti.cmake")
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/analog_sampling_backend.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/analog_runtime.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/analog_calibration_plan.c"
-            "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/command_input_route_backend.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/command_capture.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/command_decode.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/crsf_deferred_command.c"

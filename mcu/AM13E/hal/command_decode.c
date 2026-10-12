@@ -135,6 +135,16 @@ int am13e_pb14_decoder_bidir_reply_due(
            (uint64_t)gap*5U<=old*6U;
 }
 
+int am13e_pa26_decoder_reply_due(const AM13E_PB14_Decoder *d,uint32_t final_start)
+{
+    if(d==NULL || !d->active || d->decoded_bits!=14U || !d->last_bit_period ||
+       !d->tick_hz || d->rx_mode!=AM13E_PB14_RX_DSHOT)return 0;
+    const uint32_t p=final_start-d->last_start;
+    return p && rel17_receiver_dshot_rate((int)p,(int)((d->tick_hz+400000U)/800000U))==d->dshot_rate &&
+        (uint64_t)p*5U>=(uint64_t)d->last_bit_period*4U &&
+        (uint64_t)p*5U<=(uint64_t)d->last_bit_period*6U;
+}
+
 void am13e_pb14_decoder_pulse(AM13E_PB14_Decoder *d, uint32_t start,
                               uint32_t end, AM13E_PB14_PwmCallback pwm,
                               AM13E_PB14_DshotCallback dshot)

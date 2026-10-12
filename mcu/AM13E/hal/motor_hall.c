@@ -26,7 +26,7 @@
  * USE_XOR selects that same any-Hall-edge intent; it reserves no extra pin.
  */
 #define FREE_HALL(p) ((p)>0U && (p)<32U && \
-    (p)!=8U && (p)!=11U && (p)!=9U && (p)!=30U && (p)!=10U && (p)!=31U && \
+    (p)!=26U && (p)!=8U && (p)!=11U && (p)!=9U && (p)!=30U && (p)!=10U && (p)!=31U && \
     (p)!=6U && (p)!=28U && (p)!=17U && (p)!=4U && (p)!=3U && (p)!=2U && \
     (p)!=16U && (p)!=18U && (p)!=AM13E_BOARD_OC_GPIO_PINCM && \
     (p)!=AM13E_BOARD_SERIAL_TX_PINCM && (p)!=AM13E_BOARD_CURRENT_SENSE_PINCM)

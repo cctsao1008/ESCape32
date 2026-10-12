@@ -16,7 +16,7 @@
  */
 #define FREE_PIN(p) ((p)>0U && (p)<96U && \
     (p)!=IOMUX_PINCM_PC16_X1 && (p)!=IOMUX_PINCM_PC17_X2 && \
-    (p)!=IOMUX_PINCM_PB13 && (p)!=IOMUX_PINCM_PB14 && (p)!=IOMUX_PINCM_PB15 && \
+    (p)!=IOMUX_PINCM_PB13 && (p)!=IOMUX_PINCM_PA26 && (p)!=IOMUX_PINCM_PB15 && \
     (p)!=IOMUX_PINCM_PA8 && (p)!=IOMUX_PINCM_PA11 && (p)!=IOMUX_PINCM_PA9 && \
     (p)!=IOMUX_PINCM_PA30 && (p)!=IOMUX_PINCM_PA10 && (p)!=IOMUX_PINCM_PA31 && \
     (p)!=IOMUX_PINCM_PA6 && (p)!=IOMUX_PINCM_PA28 && (p)!=IOMUX_PINCM_PA17 && \

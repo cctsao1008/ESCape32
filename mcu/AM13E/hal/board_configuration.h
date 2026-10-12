@@ -26,7 +26,7 @@
 
 #include "motor_output_configuration.h"
 
-/* Existing six motor pads, PB13/PB14/PB15 and ADC pin routing stay in
+/* Existing six motor pads, PB13/PA26/PB15 and ADC pin routing stay in
  * board_reference_io.h, board_motor_output_reference.c,
  * command_input_reference.h, motor_fault_route.c and analog_reference.h.
  */

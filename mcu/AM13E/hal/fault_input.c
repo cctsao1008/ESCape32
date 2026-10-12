@@ -2,7 +2,7 @@
  *
  * PB15 (driver nFAULT) is a GPIO INPUT only. It is NOT sampled by
  * motor safety logic, does NOT install GPIO interrupts, and is NOT
- * routed to MCPWM Trip. PB14/DShot remains separately owned by ECAP0.
+ * routed to MCPWM Trip. PA26/DShot remains separately owned by TIMG4/DMA.
  *
  * Optional Independent OC, Serial Telemetry TX and Current Sense pins
  * default to 0 (NOT ASSIGNED). Once explicitly assigned, only their
@@ -27,7 +27,7 @@ _Static_assert(IOMUX_PINCM_PB15 == 47U &&
 
 #define AM13E_RESERVED_IO_VALID(p) \
     ((p)==0 || ((p)>0 && (p)<64 && \
-     (p)!=IOMUX_PINCM_PB13 && (p)!=IOMUX_PINCM_PB14 && \
+     (p)!=IOMUX_PINCM_PB13 && (p)!=IOMUX_PINCM_PA26 && \
      (p)!=IOMUX_PINCM_PB15 && (p)!=IOMUX_PINCM_PA8 && \
      (p)!=IOMUX_PINCM_PA11 && (p)!=IOMUX_PINCM_PA9 && \
      (p)!=IOMUX_PINCM_PA30 && (p)!=IOMUX_PINCM_PA10 && \
@@ -37,7 +37,11 @@ _Static_assert(IOMUX_PINCM_PB15 == 47U &&
      (p)!=IOMUX_PINCM_PA2 && (p)!=IOMUX_PINCM_PA16 && \
      (p)!=IOMUX_PINCM_PA18))
 _Static_assert(AM13E_RESERVED_IO_VALID(AM13E_BOARD_OC_GPIO_PINCM) &&
-               AM13E_RESERVED_IO_VALID(AM13E_BOARD_SERIAL_TX_PINCM) &&
+               (AM13E_RESERVED_IO_VALID(AM13E_BOARD_SERIAL_TX_PINCM)
+#if defined(AM13E_BOARD_SERIAL_TX_TWO_WIRE) && AM13E_BOARD_SERIAL_TX_TWO_WIRE==0
+                 || AM13E_BOARD_SERIAL_TX_PINCM==IOMUX_PINCM_PA26
+#endif
+                 ) &&
                AM13E_RESERVED_IO_VALID(AM13E_BOARD_CURRENT_SENSE_PINCM),
                "Aux IO reservation conflicts with an AM13E reference pin");
 _Static_assert((AM13E_BOARD_OC_GPIO_PINCM==0 ||

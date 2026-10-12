@@ -1,4 +1,4 @@
-/* Reference-only DShot command wire PB14/GPIO46 -> ECAP0.
+/* Development command wire PA26/GPIO26 -> TIMG4 CCP0.
  * This is not the universal AM13E MCU IO or power-stage profile.
  * The external bidirectional electrical interface is unqualified.
  */
@@ -8,11 +8,11 @@
 #endif
 #include <soc.h>
 #include <dl_gpio.h>
-#include <dl_xbar.h>
-#define PB14_GPIO        GPIO1
-#define PB14_GPIO_PIN    DL_GPIO_PIN(14U)
-#define PB14_PINCM       IOMUX_PINCM_PB14
-#define PB14_GPIO_NUMBER 46U
-#define PB14_ECAP       ECAP0
-#define PB14_INPUT_XBAR DL_XBAR_INPUT1
-_Static_assert(IOMUX_PINCM_PB14 == 46U, "Reference PB14/GPIO46 route changed");
+#define COMMAND_GPIO GPIO0
+#define COMMAND_PIN DL_GPIO_PIN(26U)
+#define COMMAND_PINCM IOMUX_PINCM_PA26
+#define COMMAND_CAPTURE_FUNCTION IOMUX_PA26_TIMG4_0_CCP0
+_Static_assert(IOMUX_PINCM_PA26==26U && IOMUX_PA26_TIMG4_0_CCP0==3U &&
+    IOMUX_PA26_UC0_RX_SCL_SCLK==8U && IOMUX_PA26_UC0_TX_SDA_PICO==9U &&
+    IOMUX_PA26_UC3_TX_SDA_PICO==10U && IOMUX_PA26_UC3_RX_SCL_SCLK==11U,
+    "PA26 native command mux differs from datasheet table 5-2");

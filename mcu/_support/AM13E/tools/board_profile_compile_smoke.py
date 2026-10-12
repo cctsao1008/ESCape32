@@ -92,7 +92,7 @@ syntax_check(observed["analog_runtime.c"],["-DANALOG_CHAN=1"],
 syntax_check(observed["analog_runtime.c"],
              [f for f in receiver_flags
               if not f.startswith("-DAM13E_BOARD_ANALOG_INPUT_PINCM")] +
-             ["-DAM13E_BOARD_ANALOG_INPUT_PINCM=46"],
+             ["-DAM13E_BOARD_ANALOG_INPUT_PINCM=26"],
              False,"Analog receiver conflicts")
 print("PASS: conditional Analog input_mode=1 ADC0 SOC2 build and board pin guards")
 
@@ -125,12 +125,27 @@ tx=uart+["-DAM13E_BOARD_SERIAL_TX_CONFIGURED=1",
 syntax_check(observed["serial_uart_rx.c"],tx)
 syntax_check(observed["serial_uart_rx.c"],
              [x for x in tx if not x.startswith("-DAM13E_BOARD_SERIAL_TX_TWO_WIRE")],
-             False,"CRSF TX requires explicit TX")
+             False,"UART TX requires explicit TX")
 syntax_check(observed["serial_uart_rx.c"],
              [x for x in tx if not x.startswith("-DAM13E_BOARD_SERIAL_TX_PINCM")] +
              ["-DAM13E_BOARD_SERIAL_TX_PINCM=50"],
              False,"CRSF TX must own a distinct")
 print("PASS: optional CRSF TX IRQ/EOT board route and fail-closed contract")
+# Real device functions, compile-only routing checks; waveform needs hardware.
+for uc,rxpf,txpf in [(0,8,9),(3,11,10)]:
+    pa26=[x for x in tx if not any(x.startswith(k) for k in [
+        "-DAM13E_BOARD_SERIAL_RX_UC_INDEX", "-DAM13E_BOARD_SERIAL_RX_PINCM",
+        "-DAM13E_BOARD_SERIAL_RX_PIN_FUNCTION", "-DAM13E_BOARD_SERIAL_TX_PINCM",
+        "-DAM13E_BOARD_SERIAL_TX_PIN_FUNCTION", "-DAM13E_BOARD_SERIAL_TX_TWO_WIRE"])] + [
+        f"-DAM13E_BOARD_SERIAL_RX_UC_INDEX={uc}", "-DAM13E_BOARD_SERIAL_RX_PINCM=26",
+        f"-DAM13E_BOARD_SERIAL_RX_PIN_FUNCTION={rxpf}", "-DAM13E_BOARD_SERIAL_TX_PINCM=26",
+        f"-DAM13E_BOARD_SERIAL_TX_PIN_FUNCTION={txpf}", "-DAM13E_BOARD_SERIAL_TX_TWO_WIRE=0"]
+    syntax_check(observed["serial_uart_rx.c"],pa26)
+    syntax_check(observed["serial_uart_rx.c"],
+        [x for x in pa26 if not x.startswith("-DAM13E_BOARD_SERIAL_TX_PIN_FUNCTION")]+[
+            "-DAM13E_BOARD_SERIAL_TX_PIN_FUNCTION=2"],False,"Single-wire command UART requires actual")
+print("PASS: PA26 UC0/UC3 native single-pad route and wrong-function rejection")
+
 
 # Verify the preprocessed default firmware, rather than banning the
 # configured production implementation from the same source file.

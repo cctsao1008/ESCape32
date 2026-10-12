@@ -18,13 +18,13 @@
 void SysTick_Handler(void)
 {
     /* PB15 is IO-only: no sampling, IRQ or driver fault processing.
-     * PB14 is serviced by its independent ECAP0 RX backend.
+     * PA26 is serviced by the TIMG4 capture/DMA RX backend.
      */
     sys_tick_handler();
 #ifdef AM13E_BOARD_TELEM_UART_CONFIGURED
     am13e_telem_hw_systick();
 #endif
-    /* PB14 ECAP reference calibration / RX-only frame-gap processing. */
+    /* PA26 capture DMA prefix / RX-only frame-gap processing. */
     am13e_app_pb14_systick();
     /* BEMF ECAP1 timeouts must be bounded even if no edge arrives. */
     am13e_app_motor_bemf_tick();
@@ -39,7 +39,7 @@ void PendSV_Handler(void)
      */
     am13e_app_serial_exbus_service_pending();
 #endif
-    /* DShot CMD_SAVE is queued by PB14/ECAP0 IRQ, not executed there.
+    /* DShot CMD_SAVE is queued by PA26 TIMG4/DMA IRQ, not executed there.
      * PendSV can be preempted by higher-priority valid RX, preserving
      * WWDT feeding between individual Flash commands.
      */
@@ -49,6 +49,7 @@ void PendSV_Handler(void)
     /* CRSF Write/Save/Reset executes in preemptible PendSV.
      * UC RX IRQ only validates/copies the command frame.
      */
+    am13e_app_serial_transport_service_pending();
     am13e_app_serial_crsf_service_pending();
 #ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
     am13e_app_serial_cli_service_pending();
@@ -63,7 +64,7 @@ void HardFault_Handler(void)
 
 /* GPIO1 vector remains for future non-PB15 clients. In this IO-only
  * reference build PB15 interrupts are NOT enabled and no nFAULT
- * handler/Trip exists. PB14/DShot uses ECAP0, not this IRQ.
+ * handler/Trip exists. PA26/DShot uses TIMG4/DMA, not this IRQ.
  */
 void GPIO1_IRQHandler(void)
 {
@@ -72,7 +73,7 @@ void GPIO1_IRQHandler(void)
     /* PB15 interrupts are disabled by initgpio(). A spurious or
      * misconfigured interrupt must not be interpreted as nFAULT logic.
      */
-    /* Do not silently discard future PB14 DShot/command GPIO events.
+    /* Do not silently discard unexpected GPIO1 events.
      * Their real backend MUST acknowledge and handle assigned sources.
      * Intentionally unresolved until input capture has been ported.
      */

@@ -76,3 +76,45 @@ INVERTED_HIGH requires the explicit board pad mask to invert UH/VH/WH;
 it never silently overrides a conflicting electrical board definition.
 Logical FED=0 bypasses the B delay path, with unused DBFED/DBFEDS kept at 1
 because TI forbids loading zero dead-band counts at global ZERO.
+
+## PA26 development command route
+
+The current firmware selects PA26 instead of PB14 in the immutable Rev1.6
+originals. Application uses PA26 PF3 / TIMG4 CCP0; Boot uses GPIO26 at
+38400 baud with reset SYSOSC32MHz. `BOOT5_PB14` remains the historical build
+artifact name, not an active PB14 transport. Historical `pb14` decoder/API
+names are retained for protocol-independent software compatibility.
+
+Datasheet SPRSPC3A table5-2 confirms PA26 PF3 TIMG4 CCP0, PF4 TIMG12 CCP0,
+PF8/PF9 UC0 RX/TX and PF11/PF10 UC3 RX/TX. TIMG4 remains selected; Motor
+TIMG12 and BEMF ECAP1 are unchanged. TRM SPRUJF2B timer allocation/table11-3
+and SDK dl_timer/dl_dma define TIMG4 as 16-bit and GEN_EVENT1 DMA source34.
+CC0 both-edge captures use DMA2 single transfers into a 32-word buffer;
+half/completion IRQs and 16kHz SysTick drain stable prefixes. ZERO extends
+timestamps without reducing the 100MHz edge resolution. Capture input
+filtering is explicitly disabled; no prescale or majority filter reduces
+DShot1200 edge resolution. Electrical glitch suppression remains external. CC1 is not another
+RX DMA stream. RX capture requests are disabled before DMA2 becomes the
+BiDShot GPIO26 toggle owner, then restored only after completion/abort.
+The existing 200MHz SysTick counter measures timer reconfiguration time
+and reduces the remaining reply countdown; no guessed fixed delay is used.
+
+There is no capture FIFO or hardware overcapture counter. A detected newer
+CC0 after buffer completion aborts that block, but unobserved overwrite
+before DMA, bus stalls and multiple missed ZERO events cannot be ruled out
+by software tests. Prefix servicing must remain within 655.36us, ZERO
+service within one wrap. DShot1200 DMA reliability and physical RX/TX mux
+turnaround require measurement under maximum bus/IRQ load.
+
+A board provider can select UC0 PA26 PF8/PF9 or UC3 PF11/PF10 with
+`AM13E_BOARD_SERIAL_TX_TWO_WIRE=0`, explicit existing RX/TX clock/polarity
+fields, and both PINCM fields26. RX is default; TX changes the physical mux,
+FIFO writes do not release the line, and actual EOT restores RX. Busy/FIFO
+collision prevents starting TX; a stalled reply has bounded FIFO-flush
+recovery. Native GPIO input/output inversion is explicit for SBUS/SBUS2.
+Single-pad CRSF TX is rejected as full-duplex; RX-only CRSF and existing
+explicit two-wire profiles remain conditional. Serial, EXBUS, CLI and SBUS2
+reuse original parsers/reply policy. CLI mode0 does not steal capture until
+original HIGH-timeout entry. No native simultaneous RX/TX pin function or
+hardware collision detector is implied. External electrical routing,
+pull-ups/level conversion and physical timings remain unqualified.

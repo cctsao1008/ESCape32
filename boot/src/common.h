@@ -40,7 +40,7 @@
 
 #if defined(AM13E)
 /* Pin identifiers and peripheral clock conversion are backend-owned. */
-#ifndef IO_PB14
+#ifndef IO_PA26
 #error "AM13E boot target requires an explicit service I/O pin"
 #endif
 #else
