@@ -99,21 +99,28 @@ static void output_compare_active(MCPWM_Regs *p,DL_MCPWM_COUNTER_COMPARE_MODULE 
 { output_active_begin();DL_MCPWM_setCounterCompareActiveValue(p,c,a); }
 static void output_period_active(MCPWM_Regs *p,uint16_t a)
 { output_active_begin();DL_MCPWM_setTimeBasePeriodActive(p,a); }
-static void output_restore_irq(uint32_t mask)
+static void motor_transaction_end(uint32_t mask)
 {
     output_commit_shadow();
     __set_PRIMASK(mask);
 }
-#undef DL_MCPWM_setActionQualifierActionCompleteShadow
-#define DL_MCPWM_setActionQualifierActionCompleteShadow output_aq_shadow
-#undef DL_MCPWM_setCounterCompareShadowValue
-#define DL_MCPWM_setCounterCompareShadowValue output_compare_shadow
-#undef DL_MCPWM_setTimeBasePeriodShadow
-#define DL_MCPWM_setTimeBasePeriodShadow output_period_shadow
-#define DL_MCPWM_setActionQualifierActionCompleteActive output_aq_active
-#define DL_MCPWM_setCounterCompareActiveValue output_compare_active
-#define DL_MCPWM_setTimeBasePeriodActive output_period_active
-#define __set_PRIMASK output_restore_irq
+#else
+/* Unconfigured reference still executes the actual SDK writes and original
+ * inactive proofs. These wrappers add no physical-output authorization. */
+static inline void output_aq_shadow(MCPWM_Regs *p,DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE o,uint16_t a)
+{ DL_MCPWM_setActionQualifierActionCompleteShadow(p,o,a); }
+static inline void output_compare_shadow(MCPWM_Regs *p,DL_MCPWM_COUNTER_COMPARE_MODULE c,uint16_t a)
+{ DL_MCPWM_setCounterCompareShadowValue(p,c,a); }
+static inline void output_period_shadow(MCPWM_Regs *p,uint16_t a)
+{ DL_MCPWM_setTimeBasePeriodShadow(p,a); }
+static inline void output_aq_active(MCPWM_Regs *p,DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE o,uint16_t a)
+{ DL_MCPWM_setActionQualifierActionCompleteActive(p,o,a); }
+static inline void output_compare_active(MCPWM_Regs *p,DL_MCPWM_COUNTER_COMPARE_MODULE c,uint16_t a)
+{ DL_MCPWM_setCounterCompareActiveValue(p,c,a); }
+static inline void output_period_active(MCPWM_Regs *p,uint16_t a)
+{ DL_MCPWM_setTimeBasePeriodActive(p,a); }
+static inline void motor_transaction_end(uint32_t mask) { __set_PRIMASK(mask); }
+
 #endif
 
 static volatile uint32_t motor_timebase_starts;
@@ -380,8 +387,8 @@ void am13e_app_motor_init(void)
     /* Dedicated CMPC is not a phase PWM compare; CMPC/D are otherwise
      * unused by this MOTOR_PWM owner. No TIMG4/TIMG12 allocation changes. */
     DL_MCPWM_setCounterCompareShadowLoadMode(MOTOR_PWM,DL_MCPWM_COUNTER_COMPARE_C,DL_MCPWM_COMP_LOAD_ON_CNTR_ZERO);
-    DL_MCPWM_setCounterCompareShadowValue(MOTOR_PWM,DL_MCPWM_COUNTER_COMPARE_C,AM13E_BEMF_BLANK_TICKS);
-    DL_MCPWM_setCounterCompareActiveValue(MOTOR_PWM,DL_MCPWM_COUNTER_COMPARE_C,AM13E_BEMF_BLANK_TICKS);
+    output_compare_shadow(MOTOR_PWM,DL_MCPWM_COUNTER_COMPARE_C,AM13E_BEMF_BLANK_TICKS);
+    output_compare_active(MOTOR_PWM,DL_MCPWM_COUNTER_COMPARE_C,AM13E_BEMF_BLANK_TICKS);
     DL_MCPWM_setEventTriggerSource(MOTOR_PWM,DL_MCPWM_ET_1,DL_MCPWM_EVT_TBCTR_ZERO);
     DL_MCPWM_setEventTriggerSource(MOTOR_PWM,DL_MCPWM_ET_2,DL_MCPWM_EVT_TBCTR_U_CMPC);
     DL_MCPWM_setEventTriggerEventPrescale(MOTOR_PWM,DL_MCPWM_ET_1,1U);
@@ -417,7 +424,7 @@ int am13e_app_motor_stage_inactive_shadow(const AM13E_MotorShadowPlan *plan)
     const uint32_t previous_primask=__get_PRIMASK();
     __disable_irq();
     if (!safety_initialized || fault_latched) {
-        __set_PRIMASK(previous_primask);
+        motor_transaction_end(previous_primask);
         return 0;
     }
     if (!pwm_pads_disconnected() || !pwm_registers_inactive()) {
@@ -430,9 +437,9 @@ int am13e_app_motor_stage_inactive_shadow(const AM13E_MotorShadowPlan *plan)
         DL_MCPWM_COUNTER_COMPARE_2A, DL_MCPWM_COUNTER_COMPARE_2B,
         DL_MCPWM_COUNTER_COMPARE_3A, DL_MCPWM_COUNTER_COMPARE_3B
     };
-    DL_MCPWM_setTimeBasePeriodShadow(MOTOR_PWM, plan->period);
+    output_period_shadow(MOTOR_PWM, plan->period);
     for (unsigned i=0U;i<6U;++i)
-        DL_MCPWM_setCounterCompareShadowValue(MOTOR_PWM,channels[i],plan->compare[i]);
+        output_compare_shadow(MOTOR_PWM,channels[i],plan->compare[i]);
 
     if (DL_MCPWM_getTimeBasePeriodShadow(MOTOR_PWM)!=plan->period) {
         am13e_app_motor_fault_shutdown();
@@ -448,7 +455,7 @@ int am13e_app_motor_stage_inactive_shadow(const AM13E_MotorShadowPlan *plan)
         am13e_app_motor_fault_shutdown();
         am13e_app_motor_fault_reset();
     }
-    __set_PRIMASK(previous_primask);
+    motor_transaction_end(previous_primask);
     return 1;
 }
 
@@ -483,7 +490,7 @@ int am13e_app_motor_stage_inactive_aq_shadow(const AM13E_MotorAQShadowPlan *plan
     const uint32_t saved_mask = __get_PRIMASK();
     __disable_irq();
     if (!safety_initialized || fault_latched) {
-        __set_PRIMASK(saved_mask);
+        motor_transaction_end(saved_mask);
         return 0;
     }
     if (!pwm_pads_disconnected() || !pwm_registers_inactive()) {
@@ -504,7 +511,7 @@ int am13e_app_motor_stage_inactive_aq_shadow(const AM13E_MotorAQShadowPlan *plan
     for (unsigned i=0U;i<6U;++i) {
         DL_MCPWM_setActionQualifierShadowLoadMode(
             MOTOR_PWM,modules[i],DL_MCPWM_AQ_LOAD_FREEZE);
-        DL_MCPWM_setActionQualifierActionCompleteShadow(
+        output_aq_shadow(
             MOTOR_PWM,outputs[i],plan->action[i]);
     }
     const uint32_t actual[6] = {
@@ -527,7 +534,7 @@ int am13e_app_motor_stage_inactive_aq_shadow(const AM13E_MotorAQShadowPlan *plan
         am13e_app_motor_fault_shutdown();
         am13e_app_motor_fault_reset();
     }
-    __set_PRIMASK(saved_mask);
+    motor_transaction_end(saved_mask);
     return 1;
 }
 
@@ -672,7 +679,7 @@ void am13e_app_motor_sixstep_write(int positive_mask,int negative_mask,
     for(unsigned i=0U;i<6U;++i) {
         DL_MCPWM_setActionQualifierShadowLoadMode(
             MOTOR_PWM,runtime_aq_modules[i],DL_MCPWM_AQ_LOAD_ON_CNTR_ZERO);
-        DL_MCPWM_setActionQualifierActionCompleteShadow(
+        output_aq_shadow(
             MOTOR_PWM,runtime_aq_outputs[i],aq.action[i]);
         runtime_aq_last[i]=aq.action[i];
     }
@@ -689,7 +696,7 @@ void am13e_app_motor_sixstep_write(int positive_mask,int negative_mask,
     drag_brake_aq_staged=0U;
     lock_brake_aq_staged=0U;
     ++runtime_aq_updates;
-    __set_PRIMASK(primask);
+    motor_transaction_end(primask);
 }
 
 /* Rel17 16..96 kHz ramp and logical 0..2000 duty are preserved by
@@ -742,12 +749,12 @@ void am13e_app_motor_pwm_apply(int duty,int freq_min_khz,int freq_max_khz,
     __disable_irq();
     DL_MCPWM_setPeriodLoadMode(MOTOR_PWM,
                                DL_MCPWM_PERIOD_SHADOW_LOAD_ENABLE);
-    DL_MCPWM_setTimeBasePeriodShadow(MOTOR_PWM,plan.period);
+    output_period_shadow(MOTOR_PWM,plan.period);
     for(unsigned i=0U;i<6U;++i) {
         DL_MCPWM_setCounterCompareShadowLoadMode(
             MOTOR_PWM,runtime_compare_modules[i],
             DL_MCPWM_COMP_LOAD_ON_CNTR_ZERO);
-        DL_MCPWM_setCounterCompareShadowValue(
+        output_compare_shadow(
             MOTOR_PWM,runtime_compare_modules[i],plan.compare[i]);
         if (DL_MCPWM_getCounterCompareShadowValue(
                 MOTOR_PWM,runtime_compare_modules[i])!=plan.compare[i])
@@ -767,9 +774,9 @@ void am13e_app_motor_pwm_apply(int duty,int freq_min_khz,int freq_max_khz,
           (uint32_t)DL_MCPWM_COUNTER_MODE_STOP_FREEZE) {
         if (!pwm_registers_inactive() || !pwm_pads_disconnected())
             runtime_fault();
-        DL_MCPWM_setTimeBasePeriodActive(MOTOR_PWM,plan.period);
+        output_period_active(MOTOR_PWM,plan.period);
         for(unsigned i=0U;i<6U;++i) {
-            DL_MCPWM_setCounterCompareActiveValue(
+            output_compare_active(
                 MOTOR_PWM,runtime_compare_modules[i],plan.compare[i]);
             if (DL_MCPWM_getCounterCompareActiveValue(
                     MOTOR_PWM,runtime_compare_modules[i])!=plan.compare[i])
@@ -779,7 +786,7 @@ void am13e_app_motor_pwm_apply(int duty,int freq_min_khz,int freq_max_khz,
             runtime_fault();
     }
     ++runtime_pwm_updates;
-    __set_PRIMASK(primask);
+    motor_transaction_end(primask);
 }
 
 /* Rel17 brushed start: forward drives phases U/W with PWM and uses
@@ -822,7 +829,7 @@ void am13e_app_motor_brushed_write(int reverse,int damp)
     for(unsigned i=0U;i<6U;++i) {
         DL_MCPWM_setActionQualifierShadowLoadMode(
             MOTOR_PWM,runtime_aq_modules[i],DL_MCPWM_AQ_LOAD_ON_CNTR_ZERO);
-        DL_MCPWM_setActionQualifierActionCompleteShadow(
+        output_aq_shadow(
             MOTOR_PWM,runtime_aq_outputs[i],action[i]);
         runtime_aq_last[i]=action[i];
     }
@@ -839,7 +846,7 @@ void am13e_app_motor_brushed_write(int reverse,int damp)
     drag_brake_aq_staged=0U;
     lock_brake_aq_staged=0U;
     ++runtime_aq_updates;
-    __set_PRIMASK(primask);
+    motor_transaction_end(primask);
     am13e_app_motor_commutation_commit();
 }
 
@@ -907,26 +914,26 @@ void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
                        (uint32_t)DL_MCPWM_COUNTER_MODE_STOP_FREEZE;
     if (frozen && !pwm_registers_inactive()) runtime_fault();
     DL_MCPWM_setPeriodLoadMode(MOTOR_PWM,DL_MCPWM_PERIOD_SHADOW_LOAD_ENABLE);
-    DL_MCPWM_setTimeBasePeriodShadow(MOTOR_PWM,period);
+    output_period_shadow(MOTOR_PWM,period);
     for(unsigned i=0U;i<6U;++i) {
         const uint16_t compare=wave[i/2U];
         const uint16_t action=(i&1U)?aq_b:aq_a;
         DL_MCPWM_setCounterCompareShadowLoadMode(
             MOTOR_PWM,runtime_compare_modules[i],DL_MCPWM_COMP_LOAD_ON_CNTR_ZERO);
-        DL_MCPWM_setCounterCompareShadowValue(
+        output_compare_shadow(
             MOTOR_PWM,runtime_compare_modules[i],compare);
         DL_MCPWM_setActionQualifierShadowLoadMode(
             MOTOR_PWM,runtime_aq_modules[i],DL_MCPWM_AQ_LOAD_ON_CNTR_ZERO);
-        DL_MCPWM_setActionQualifierActionCompleteShadow(
+        output_aq_shadow(
             MOTOR_PWM,runtime_aq_outputs[i],action);
         if (DL_MCPWM_getCounterCompareShadowValue(
                 MOTOR_PWM,runtime_compare_modules[i])!=compare)
             runtime_fault();
         runtime_aq_last[i]=action;
         if (frozen) {
-            DL_MCPWM_setCounterCompareActiveValue(
+            output_compare_active(
                 MOTOR_PWM,runtime_compare_modules[i],compare);
-            DL_MCPWM_setActionQualifierActionCompleteActive(
+            output_aq_active(
                 MOTOR_PWM,runtime_aq_outputs[i],action);
             if (DL_MCPWM_getCounterCompareActiveValue(
                     MOTOR_PWM,runtime_compare_modules[i])!=compare)
@@ -944,7 +951,7 @@ void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
     for(unsigned i=0U;i<6U;++i)
         if (aq_shadow[i]!=(uint32_t)((i&1U)?aq_b:aq_a))
             runtime_fault();
-    if (frozen) DL_MCPWM_setTimeBasePeriodActive(MOTOR_PWM,period);
+    if (frozen) output_period_active(MOTOR_PWM,period);
     if (DL_MCPWM_getTimeBasePeriodShadow(MOTOR_PWM)!=period ||
         (frozen && DL_MCPWM_getTimeBasePeriodActive(MOTOR_PWM)!=period))
         runtime_fault();
@@ -954,7 +961,7 @@ void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
     runtime_phase_pending=0U;
     ++sine_write_count;
     if (start) sine_entry_pending=1U;
-    __set_PRIMASK(irqmask);
+    motor_transaction_end(irqmask);
 }
 
 /* Rel17 nextstep() calls sine_finish() ONLY ON FIRST SINE SAMPLE:
@@ -974,7 +981,7 @@ void am13e_app_motor_sine_finish(void)
         !pwm_io_for_runtime()) runtime_fault();
     sine_entry_pending=0U;
     sine_mode_active=1U;
-    __set_PRIMASK(irqmask);
+    motor_transaction_end(irqmask);
 }
 
 /* Rel17 laststep(), start boundary: AQ shadow-to-active transfers are
@@ -993,12 +1000,12 @@ void am13e_app_motor_commutation_commit(void)
         (MOTOR_PWM->TBCTL & MCPWM_TBCTL_CTRMODE_MASK)==
          (uint32_t)DL_MCPWM_COUNTER_MODE_STOP_FREEZE) {
         for(unsigned i=0U;i<6U;++i)
-            DL_MCPWM_setActionQualifierActionCompleteActive(
+            output_aq_active(
                 MOTOR_PWM,runtime_aq_outputs[i],runtime_aq_last[i]);
     }
     runtime_phase_pending=0U;
     ++runtime_commit_count;
-    __set_PRIMASK(primask);
+    motor_transaction_end(primask);
 }
 
 /* Original Core run/stop lifecycle. A configured board connects the six
@@ -1055,7 +1062,7 @@ void am13e_app_motor_commutation_enable(int enable)
             runtime_fault();
         /* Carrier startup ISR handles the configured driver's enable. */
     }
-    __set_PRIMASK(irqmask);
+    motor_transaction_end(irqmask);
 }
 
 
@@ -1091,19 +1098,19 @@ static void audio_stage_compare_locked(uint16_t u, uint16_t w,int active)
     for (unsigned i=0U;i<6U;++i) {
         DL_MCPWM_setActionQualifierShadowLoadMode(
             MOTOR_PWM,runtime_aq_modules[i],DL_MCPWM_AQ_LOAD_ON_CNTR_ZERO);
-        DL_MCPWM_setActionQualifierActionCompleteShadow(
+        output_aq_shadow(
             MOTOR_PWM,runtime_aq_outputs[i],wave[i]);
         DL_MCPWM_setCounterCompareShadowLoadMode(
             MOTOR_PWM,runtime_compare_modules[i],DL_MCPWM_COMP_LOAD_ON_CNTR_ZERO);
-        DL_MCPWM_setCounterCompareShadowValue(
+        output_compare_shadow(
             MOTOR_PWM,runtime_compare_modules[i],compare[i]);
         if (DL_MCPWM_getCounterCompareShadowValue(
             MOTOR_PWM,runtime_compare_modules[i])!=compare[i])
             runtime_fault();
         if(active){
-            DL_MCPWM_setCounterCompareActiveValue(
+            output_compare_active(
                 MOTOR_PWM,runtime_compare_modules[i],compare[i]);
-            DL_MCPWM_setActionQualifierActionCompleteActive(
+            output_aq_active(
                 MOTOR_PWM,runtime_aq_outputs[i],wave[i]);
         }
     }
@@ -1162,7 +1169,7 @@ void am13e_app_motor_audio_begin(int mode)
     DL_MCPWM_setEventTriggerEventPrescale(MOTOR_PWM,DL_MCPWM_ET_2,1U);
     audio_stage_compare_locked(0U,0U,1);
     for (unsigned i=0U;i<6U;++i) runtime_aq_last[i]=0U;
-    __set_PRIMASK(mask);
+    motor_transaction_end(mask);
 }
 
 void am13e_app_motor_audio_period(uint16_t period)
@@ -1181,8 +1188,8 @@ void am13e_app_motor_audio_period(uint16_t period)
 #endif
     motor_timebase_running=0U;
     DL_MCPWM_setPeriodLoadMode(MOTOR_PWM,DL_MCPWM_PERIOD_SHADOW_LOAD_ENABLE);
-    DL_MCPWM_setTimeBasePeriodShadow(MOTOR_PWM,period);
-    DL_MCPWM_setTimeBasePeriodActive(MOTOR_PWM,period);
+    output_period_shadow(MOTOR_PWM,period);
+    output_period_active(MOTOR_PWM,period);
     DL_MCPWM_setTimeBaseCounter(MOTOR_PWM,0U);
     audio_stage_compare_locked(0U,0U,1);
     DL_MCPWM_clearInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_2);
@@ -1190,7 +1197,7 @@ void am13e_app_motor_audio_period(uint16_t period)
     if (DL_MCPWM_getTimeBasePeriodShadow(MOTOR_PWM)!=period ||
         DL_MCPWM_getTimeBasePeriodActive(MOTOR_PWM)!=period ||
         !pwm_registers_inactive()) runtime_fault();
-    __set_PRIMASK(mask);
+    motor_transaction_end(mask);
 }
 
 void am13e_app_motor_audio_compare(uint16_t u,uint16_t w)
@@ -1224,7 +1231,7 @@ void am13e_app_motor_audio_compare(uint16_t u,uint16_t w)
             runtime_fault();
     }
     /* Configured music/PCM uses MOTOR_PWM pins and the same gate lifecycle. */
-    __set_PRIMASK(mask);
+    motor_transaction_end(mask);
 }
 
 int am13e_app_motor_audio_period_elapsed(void)
@@ -1249,7 +1256,7 @@ int am13e_app_motor_audio_period_elapsed(void)
     }
     /* Do not acknowledge the global interrupt: a simultaneous OST must
      * still invoke shutdown. Only one ET2 IRQ occurs per polling interval. */
-    __set_PRIMASK(mask);
+    motor_transaction_end(mask);
     return elapsed;
 }
 
@@ -1288,8 +1295,8 @@ void am13e_app_motor_audio_end(void)
     DL_MCPWM_setPeriodLoadMode(MOTOR_PWM,DL_MCPWM_PERIOD_SHADOW_LOAD_ENABLE);
     const uint16_t period=(uint16_t)
         ((AM13E_APP_MCLK_HZ/2U)/UINT32_C(24000)-1U);
-    DL_MCPWM_setTimeBasePeriodShadow(MOTOR_PWM,period);
-    DL_MCPWM_setTimeBasePeriodActive(MOTOR_PWM,period);
+    output_period_shadow(MOTOR_PWM,period);
+    output_period_active(MOTOR_PWM,period);
     audio_stage_compare_locked(0U,0U,1);
     for(unsigned i=0U;i<6U;++i) runtime_aq_last[i]=0U;
     runtime_phase_pending=0U;
@@ -1307,7 +1314,7 @@ void am13e_app_motor_audio_end(void)
     if (!pwm_registers_inactive() || !pwm_pads_disconnected() ||
         (SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
         runtime_fault();
-    __set_PRIMASK(mask);
+    motor_transaction_end(mask);
 }
 
 /* Rel17 laststep() with lock==0 switches all three TIM1 channels
@@ -1337,9 +1344,9 @@ void am13e_app_motor_drag_brake_write(void)
     for (unsigned i=0U;i<6U;++i) {
         DL_MCPWM_setActionQualifierShadowLoadMode(
             MOTOR_PWM,runtime_aq_modules[i],DL_MCPWM_AQ_LOAD_ON_CNTR_ZERO);
-        DL_MCPWM_setActionQualifierActionCompleteShadow(
+        output_aq_shadow(
             MOTOR_PWM,runtime_aq_outputs[i],aq.action[i]);
-        DL_MCPWM_setActionQualifierActionCompleteActive(
+        output_aq_active(
             MOTOR_PWM,runtime_aq_outputs[i],aq.action[i]);
         runtime_aq_last[i]=aq.action[i];
     }
@@ -1354,7 +1361,7 @@ void am13e_app_motor_drag_brake_write(void)
     drag_brake_aq_staged=1U;
     lock_brake_aq_staged=0U;
     ++runtime_aq_updates;
-    __set_PRIMASK(primask);
+    motor_transaction_end(primask);
 }
 
 /* Rel17 laststep() selects the lock-hold six-step image through its own
@@ -1442,9 +1449,9 @@ void am13e_app_motor_sixstep_idle(void)
     sine_entry_pending=0U;
     sine_mode_active=0U;
     for(unsigned i=0U;i<6U;++i) {
-        DL_MCPWM_setActionQualifierActionCompleteShadow(
+        output_aq_shadow(
             MOTOR_PWM,runtime_aq_outputs[i],0U);
-        DL_MCPWM_setActionQualifierActionCompleteActive(
+        output_aq_active(
             MOTOR_PWM,runtime_aq_outputs[i],0U);
         runtime_aq_last[i]=0U;
     }
@@ -1453,7 +1460,7 @@ void am13e_app_motor_sixstep_idle(void)
     lock_brake_aq_staged=0U;
     if(!pwm_registers_inactive() || !pwm_pads_disconnected())
         runtime_fault();
-    __set_PRIMASK(primask);
+    motor_transaction_end(primask);
 }
 
 /* Rel17 util.c::resetcom(): restore *physical MCU-side inactive bridge*
@@ -1487,7 +1494,7 @@ void am13e_app_commutation_reset(void)
         am13e_app_motor_fault_shutdown();
         am13e_app_motor_fault_reset();
     }
-    __set_PRIMASK(irqmask);
+    motor_transaction_end(irqmask);
 }
 
 void am13e_app_motor_fault_shutdown(void)
