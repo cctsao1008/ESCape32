@@ -90,7 +90,7 @@ static void output_active_begin(void)
         am13e_app_motor_fault_shutdown();am13e_app_motor_fault_reset();
     }
     DL_MCPWM_disableGlobalLoad(MCPWM0);
-    physical_shadow_dirty=1U;
+    if(physical_runtime_image)physical_shadow_dirty=1U;
 }
 static void output_aq_active(MCPWM_Regs *p,DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE o,uint16_t a)
 { output_active_begin();DL_MCPWM_setActionQualifierActionCompleteActive(p,o,a); }
@@ -246,7 +246,7 @@ static void configure_motor_deadband_isolated(void)
 #ifdef AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED
     DL_MCPWM_DeadBandConfig db = {
         .enableRisingEdgeDelayOnPathA=true,
-        .enableFallingEdgeDelayOnPathB=true,
+        .enableFallingEdgeDelayOnPathB=(AM13E_MOTOR_DB_FED_TICKS!=0),
         .enableOutputSwapA=(AM13E_MOTOR_DB_SWAP_A!=0),
         .enableOutputSwapB=(AM13E_MOTOR_DB_SWAP_B!=0),
         .risingEdgeDelayPolarity=
@@ -256,8 +256,13 @@ static void configure_motor_deadband_isolated(void)
         .risingEdgeDelayInputSource=AM13E_MOTOR_DB_RED_INPUT,
         .fallingEdgeDelayInputSource=AM13E_MOTOR_DB_FED_INPUT,
         .risingEdgeDelayCount=AM13E_MOTOR_DB_RED_TICKS,
-        .fallingEdgeDelayCount=AM13E_MOTOR_DB_FED_TICKS
+        .fallingEdgeDelayCount=AM13E_MOTOR_DB_FED_TICKS?AM13E_MOTOR_DB_FED_TICKS:1U
     };
+    /* TRM26.7.2: global ZERO loading forbids a zero DB count, even
+     * though global loading overrides the individual FREEZE modes.
+     * FED=0 means bypass B's delay path; retain a harmless nonzero count
+     * in its unused ACTIVE/SHADOW registers. B compare still supplies DT.
+     */
     DL_MCPWM_configureDeadBand(MCPWM0,&db);
     /* Explicit fixed-delay shadow handling: do not transfer an
      * unqualified value at an arbitrary PWM Zero/Period edge.
@@ -279,7 +284,7 @@ static void configure_motor_deadband_isolated(void)
                   MCPWM_DBCTL_LOADREDMODE_MASK |
                   MCPWM_DBCTL_LOADFEDMODE_MASK |
                   (UINT32_C(1)<<MCPWM_DBCTL_IN_MODE_OFS);
-    uint32_t expected=3U |
+    uint32_t expected=(1U<<DL_MCPWM_DB_RED) | (AM13E_MOTOR_DB_FED_TICKS?(1U<<DL_MCPWM_DB_FED):0U) |
           ((uint32_t)AM13E_MOTOR_DB_RED_POLARITY<<MCPWM_DBCTL_POLSEL_OFS) |
           ((uint32_t)AM13E_MOTOR_DB_FED_POLARITY<<(MCPWM_DBCTL_POLSEL_OFS+1U)) |
           ((uint32_t)AM13E_MOTOR_DB_RED_INPUT<<MCPWM_DBCTL_IN_MODE_OFS) |
@@ -298,9 +303,9 @@ static void configure_motor_deadband_isolated(void)
     }
     if ((dbctl&mask)!=(expected&mask) ||
         (MCPWM0->DBRED & MCPWM_DBRED_DBRED_MASK)!=AM13E_MOTOR_DB_RED_TICKS ||
-        (MCPWM0->DBFED & MCPWM_DBFED_DBFED_MASK)!=AM13E_MOTOR_DB_FED_TICKS ||
+        (MCPWM0->DBFED & MCPWM_DBFED_DBFED_MASK)!=(AM13E_MOTOR_DB_FED_TICKS?AM13E_MOTOR_DB_FED_TICKS:1U) ||
         (MCPWM0->DBREDS & MCPWM_DBREDS_DBREDS_MASK)!=AM13E_MOTOR_DB_RED_TICKS ||
-        (MCPWM0->DBFEDS & MCPWM_DBFEDS_DBFEDS_MASK)!=AM13E_MOTOR_DB_FED_TICKS)
+        (MCPWM0->DBFEDS & MCPWM_DBFEDS_DBFEDS_MASK)!=(AM13E_MOTOR_DB_FED_TICKS?AM13E_MOTOR_DB_FED_TICKS:1U))
         am13e_app_motor_fault_reset();
 #else
     /* Unqualified board: do not invent a valid dead-time. Explicitly
@@ -370,6 +375,21 @@ void am13e_app_motor_init(void)
      */
     am13e_power_stage_init();
     configure_motor_deadband_isolated();
+#ifdef SW_BLANKING
+    /* Dedicated CMPC is not a phase PWM compare; CMPC/D are otherwise
+     * unused by this MCPWM0 owner. No TIMG4/TIMG12 allocation changes. */
+    DL_MCPWM_setCounterCompareShadowLoadMode(MCPWM0,DL_MCPWM_COUNTER_COMPARE_C,DL_MCPWM_COMP_LOAD_ON_CNTR_ZERO);
+    DL_MCPWM_setCounterCompareShadowValue(MCPWM0,DL_MCPWM_COUNTER_COMPARE_C,AM13E_BEMF_BLANK_TICKS);
+    DL_MCPWM_setCounterCompareActiveValue(MCPWM0,DL_MCPWM_COUNTER_COMPARE_C,AM13E_BEMF_BLANK_TICKS);
+    DL_MCPWM_setEventTriggerSource(MCPWM0,DL_MCPWM_ET_1,DL_MCPWM_EVT_TBCTR_ZERO);
+    DL_MCPWM_setEventTriggerSource(MCPWM0,DL_MCPWM_ET_2,DL_MCPWM_EVT_TBCTR_U_CMPC);
+    DL_MCPWM_setEventTriggerEventPrescale(MCPWM0,DL_MCPWM_ET_1,1U);
+    DL_MCPWM_setEventTriggerEventPrescale(MCPWM0,DL_MCPWM_ET_2,1U);
+    DL_MCPWM_disableInterrupt(MCPWM0,DL_MCPWM_INT_ET_1|DL_MCPWM_INT_ET_2);
+    NVIC_SetPriority(MCPWM0_INT_IRQn,0U);
+    NVIC_ClearPendingIRQ(MCPWM0_INT_IRQn);
+    NVIC_EnableIRQ(MCPWM0_INT_IRQn);
+#endif
 #if AM13E_MOTOR_OUTPUT_CONFIGURED
     DL_MCPWM_enableInterrupt(MCPWM0,DL_MCPWM_INT_TZ_OST);
     NVIC_SetPriority(MCPWM0_INT_IRQn,0U);
@@ -1122,6 +1142,13 @@ void am13e_app_motor_audio_begin(int mode)
     DL_MCPWM_setRisingEdgeDelayCountActive(MCPWM0,audio_red);
     DL_MCPWM_setRisingEdgeDelayCountShadow(MCPWM0,audio_red);
 #endif
+    /* ET2 is loaned by BEMF blanking to music's sticky period flag.
+     * ET2 stays latched until the original delayf poll consumes it. */
+    DL_MCPWM_disableInterrupt(MCPWM0,DL_MCPWM_INT_ET_2);
+    DL_MCPWM_clearInterrupt(MCPWM0,DL_MCPWM_INT_ET_2);
+    DL_MCPWM_setEventTriggerSource(MCPWM0,DL_MCPWM_ET_2,
+        mode==1?DL_MCPWM_EVT_TBCTR_ZERO:DL_MCPWM_EVT_DISABLED);
+    DL_MCPWM_setEventTriggerEventPrescale(MCPWM0,DL_MCPWM_ET_2,1U);
     audio_stage_compare_locked(0U,0U,1);
     for (unsigned i=0U;i<6U;++i) runtime_aq_last[i]=0U;
     __set_PRIMASK(mask);
@@ -1147,6 +1174,7 @@ void am13e_app_motor_audio_period(uint16_t period)
     DL_MCPWM_setTimeBasePeriodActive(MCPWM0,period);
     DL_MCPWM_setTimeBaseCounter(MCPWM0,0U);
     audio_stage_compare_locked(0U,0U,1);
+    DL_MCPWM_clearInterrupt(MCPWM0,DL_MCPWM_INT_ET_2);
     audio_period_valid=1U;
     if (DL_MCPWM_getTimeBasePeriodShadow(MCPWM0)!=period ||
         DL_MCPWM_getTimeBasePeriodActive(MCPWM0)!=period ||
@@ -1160,8 +1188,8 @@ void am13e_app_motor_audio_compare(uint16_t u,uint16_t w)
     __disable_irq();
     if (!audio_owner || !audio_period_valid || fault_latched ||
         !pwm_io_for_runtime() ||
-        u >= DL_MCPWM_getTimeBasePeriodActive(MCPWM0) ||
-        w >= DL_MCPWM_getTimeBasePeriodActive(MCPWM0))
+        (audio_owner!=1U && (u >= DL_MCPWM_getTimeBasePeriodActive(MCPWM0) ||
+                            w >= DL_MCPWM_getTimeBasePeriodActive(MCPWM0))))
         runtime_fault();
     const int frozen=!motor_timebase_running;
     if (frozen && !pwm_registers_inactive()) runtime_fault();
@@ -1175,12 +1203,34 @@ void am13e_app_motor_audio_compare(uint16_t u,uint16_t w)
         DL_MCPWM_setTimeBaseCounterMode(MCPWM0,DL_MCPWM_COUNTER_MODE_UP);
         DL_MCPWM_enableTBCLK();
         motor_timebase_running=1U;
+        if(audio_owner==1U){
+            NVIC_SetPriority(MCPWM0_INT_IRQn,0U);
+            NVIC_EnableIRQ(MCPWM0_INT_IRQn);
+            DL_MCPWM_enableInterrupt(MCPWM0,DL_MCPWM_INT_ET_2);
+        }
         if (!pwm_io_for_runtime() ||
             !(SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
             runtime_fault();
     }
     /* Configured music/PCM uses MCPWM0 pins and the same gate lifecycle. */
     __set_PRIMASK(mask);
+}
+
+int am13e_app_motor_audio_period_elapsed(void)
+{
+    const uint32_t mask=__get_PRIMASK();
+    __disable_irq();
+    if(audio_owner!=1U || !motor_timebase_running || fault_latched)runtime_fault();
+    const int elapsed=(DL_MCPWM_getInterruptSource(MCPWM0)&DL_MCPWM_INT_ET_2)!=0U;
+    if(elapsed){
+        DL_MCPWM_disableInterrupt(MCPWM0,DL_MCPWM_INT_ET_2);
+        DL_MCPWM_clearInterrupt(MCPWM0,DL_MCPWM_INT_ET_2);
+        DL_MCPWM_enableInterrupt(MCPWM0,DL_MCPWM_INT_ET_2);
+    }
+    /* Do not acknowledge the global interrupt: a simultaneous OST must
+     * still invoke shutdown. Only one ET2 IRQ occurs per polling interval. */
+    __set_PRIMASK(mask);
+    return elapsed;
 }
 
 uint16_t am13e_app_motor_audio_counter(void)
@@ -1222,6 +1272,14 @@ void am13e_app_motor_audio_end(void)
     DL_MCPWM_setTimeBaseCounter(MCPWM0,0U);
     audio_period_valid=0U;
     audio_owner=0U;
+    DL_MCPWM_disableInterrupt(MCPWM0,DL_MCPWM_INT_ET_2);
+    DL_MCPWM_clearInterrupt(MCPWM0,DL_MCPWM_INT_ET_2);
+    DL_MCPWM_setEventTriggerSource(MCPWM0,DL_MCPWM_ET_2,
+#ifdef SW_BLANKING
+        DL_MCPWM_EVT_TBCTR_U_CMPC);
+#else
+        DL_MCPWM_EVT_DISABLED);
+#endif
     if (!pwm_registers_inactive() || !pwm_pads_disconnected() ||
         (SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
         runtime_fault();
@@ -1436,29 +1494,69 @@ void am13e_app_motor_fault_shutdown(void)
  * Trip/overcurrent routing can enforce bounded-latency shutdown without
  * waiting for this CPU interrupt. Unexpected MCPWM interrupts also fault.
  */
+static void motor_irq_ack(uint16_t flags)
+{
+    DL_MCPWM_clearInterrupt(MCPWM0,flags);
+    DL_MCPWM_clearGlobalInterrupt(MCPWM0);
+    /* Catch an asynchronous trip arriving between the ISR's snapshot
+     * and acknowledgement. Never clear OST, including this late case. */
+    last_trip_zone_flags|=DL_MCPWM_getTripZoneFlagStatus(MCPWM0);
+    if(last_trip_zone_flags){am13e_app_motor_fault_shutdown();am13e_app_motor_fault_reset();}
+}
 void MCPWM0_IRQHandler(void)
 {
-    last_trip_irq_flags = DL_MCPWM_getInterruptSource(MCPWM0);
+    /* Polled music ET2 flags are raw status, not enabled CPU sources. */
+    last_trip_irq_flags = DL_MCPWM_getInterruptSource(MCPWM0)&MCPWM0->INTEN;
     last_trip_zone_flags = DL_MCPWM_getTripZoneFlagStatus(MCPWM0);
+    if(!last_trip_irq_flags && !last_trip_zone_flags && !fault_latched){
+        /* A cleared old vector may arrive after a new start/rearm. */
+        motor_irq_ack(0U);
+        return;
+    }
+    if(audio_owner==1U && !last_trip_zone_flags && !fault_latched &&
+       !(last_trip_irq_flags&~(DL_MCPWM_INT_ET_1|DL_MCPWM_INT_ET_2))){
+        /* TRM26.9: disabled ET interrupts can hold the event counter
+         * without generating INTFLAG. Generate one enabled ET2 event,
+         * then mask it and preserve its sticky flag for delayf().
+         * Do not run an IRQ on every high-frequency music period. */
+        if(last_trip_irq_flags&DL_MCPWM_INT_ET_2)
+            DL_MCPWM_disableInterrupt(MCPWM0,DL_MCPWM_INT_ET_2);
+        motor_irq_ack(DL_MCPWM_INT_ET_1);
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+        if(last_trip_irq_flags&DL_MCPWM_INT_ET_1)
+            (void)am13e_motor_output_zero_irq();
+#endif
+        return;
+    }
+#ifdef SW_BLANKING
+    const uint32_t events=DL_MCPWM_INT_ET_1|DL_MCPWM_INT_ET_2;
+    if(!last_trip_zone_flags && !fault_latched && !(last_trip_irq_flags&~events)){
+        motor_irq_ack((uint16_t)last_trip_irq_flags);
+        if(last_trip_irq_flags&(DL_MCPWM_INT_ET_1|DL_MCPWM_INT_ET_2))
+            am13e_app_motor_bemf_pwm_event();
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+        if(last_trip_irq_flags&DL_MCPWM_INT_ET_1)
+            (void)am13e_motor_output_zero_irq();
+#endif
+        return;
+    }
+#endif
 #if AM13E_MOTOR_OUTPUT_CONFIGURED
     /* Asynchronous TZ overrides ET startup even when both are pending. */
     if(last_trip_zone_flags==0U && last_trip_irq_flags==DL_MCPWM_INT_ET_1 && !fault_latched){
         /* Acknowledge before starting the driver: a later OST keeps its
          * own global/pending interrupt and is not accidentally consumed. */
-        DL_MCPWM_clearInterrupt(MCPWM0,DL_MCPWM_INT_ET_1);
-        DL_MCPWM_clearGlobalInterrupt(MCPWM0);
+        motor_irq_ack(DL_MCPWM_INT_ET_1);
         if(am13e_motor_output_zero_irq())return;
     }
     if(last_trip_zone_flags==0U && (last_trip_irq_flags&~DL_MCPWM_INT_ET_1)==0U &&
        !motor_timebase_running && !(MCPWM0->INTEN&DL_MCPWM_INT_ET_1)){
         /* A stop may have cleared the source after NVIC latched it. */
-        DL_MCPWM_clearInterrupt(MCPWM0,DL_MCPWM_INT_ET_1);
-        DL_MCPWM_clearGlobalInterrupt(MCPWM0);
+        motor_irq_ack(DL_MCPWM_INT_ET_1);
         return;
     }
 #endif
-    DL_MCPWM_clearInterrupt(MCPWM0, (uint16_t)last_trip_irq_flags);
-    DL_MCPWM_clearGlobalInterrupt(MCPWM0);
+    motor_irq_ack((uint16_t)last_trip_irq_flags);
     am13e_app_motor_fault_shutdown();
     am13e_app_motor_fault_reset();
 }

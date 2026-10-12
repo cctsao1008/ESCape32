@@ -4,6 +4,9 @@
 #include "motor_power_stage.h"
 #include "board_motor_output_provider.h"
 #include "motor_fault_route.h"
+#ifdef SW_BLANKING
+#include "motor_bemf.h"
+#endif
 #include <dl_mcpwm.h>
 static const DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE outputs[6]={
     DL_MCPWM_AQ_OUTPUT_1A,DL_MCPWM_AQ_OUTPUT_1B,DL_MCPWM_AQ_OUTPUT_2A,
@@ -31,7 +34,8 @@ void am13e_motor_output_stage(const uint16_t aq[6],const uint16_t compare[6],uin
     /* Counts are in current TBCLK. Audio divider changes are handled by
      * the caller's DB configuration, not guessed electrical pulse widths. */
     const uint32_t red=MCPWM0->DBRED & MCPWM_DBRED_DBRED_MASK;
-    const uint32_t fed=MCPWM0->DBFED & MCPWM_DBFED_DBFED_MASK;
+    const uint32_t fed=(MCPWM0->DBCTL & (UINT32_C(1)<<(DL_MCPWM_DB_FED+MCPWM_DBCTL_OUT_MODE_OFS))) ?
+        MCPWM0->DBFED & MCPWM_DBFED_DBFED_MASK : 0U;
     if(red<=fed || period<=red)output_fault();
     am13e_motor_output_update_begin();
     uint16_t image_aq[6],image_compare[6];
@@ -52,6 +56,9 @@ void am13e_motor_output_stage(const uint16_t aq[6],const uint16_t compare[6],uin
         }else if((i&1U) && cc>period){
             action=DL_MCPWM_AQ_OUTPUT_LOW_ZERO; /* no wrapped freewheel edge */
         }
+        /* Constant actions ignore compares. Keep these representable even
+         * when a valid FULL_DUTY/near-limit image plus DT exceeds 16 bits. */
+        if(action==DL_MCPWM_AQ_OUTPUT_LOW_ZERO || action==DL_MCPWM_AQ_OUTPUT_HIGH_ZERO)cc=1U;
         if(cc==0U)cc=1U; /* TRM26.6 zero-compare/shadow-load contention. */
         if(cc>UINT16_MAX)output_fault();
         image_aq[i]=action;image_compare[i]=(uint16_t)cc;
@@ -104,14 +111,19 @@ int am13e_motor_output_start(void)
 void am13e_motor_output_cancel(void)
 {
     start_zero_events=0U;
+    DL_MCPWM_clearGlobalLoadOneShotLatch(MCPWM0);
     DL_MCPWM_disableInterrupt(MCPWM0,DL_MCPWM_INT_ET_1);
     DL_MCPWM_clearInterrupt(MCPWM0,DL_MCPWM_INT_ET_1);
 }
+int am13e_motor_output_start_pending(void) { return start_zero_events!=0U; }
 int am13e_motor_output_zero_irq(void)
 {
     if(!start_zero_events)return 0;
     if(!am13e_app_motor_nfault_trip_ready())output_fault();
     if(--start_zero_events==0U){
+#ifdef SW_BLANKING
+        if(!am13e_app_motor_bemf_blanking_enabled())
+#endif
         DL_MCPWM_disableInterrupt(MCPWM0,DL_MCPWM_INT_ET_1);
         const uint32_t mask=__get_PRIMASK();
         __disable_irq();

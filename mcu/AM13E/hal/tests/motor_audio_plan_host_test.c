@@ -16,8 +16,11 @@ int main(void)
         for(int note=0;note<=12;++note)
             for(int volume=1;volume<=100;++volume) {
                 if(am13e_audio_tone(note,octave,volume,&tone))
-                    assert(tone.compare>0U && tone.compare<=tone.period);
+                    assert(tone.compare>0U);
             }
+    /* Original CCR may exceed ARR: that is a constant full-duty tone,
+     * not an invalid score/volume. */
+    assert(am13e_audio_tone(0,10,255,&tone) && tone.compare>tone.period);
     assert(am13e_audio_tone(0,0,50,&tone));
     assert(tone.period==11943U); /* C: original (15287+1)*25/32 */
     assert(tone.compare==39U);

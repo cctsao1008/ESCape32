@@ -1,7 +1,7 @@
 #include "motor_audio_plan.h"
 #include <stddef.h>
 /* Directly from Rel17 util.c::playmusic(), base 8MHz TIM1 tone table.
- * AM13E uses actual 100MHz MCPWM BUSCLK /16=6.25MHz for audio, so
+ * AM13E uses actual 200MHz MCPWM MCLK /32=6.25MHz for audio, so
  * the physical period/pulse counts scale by 25/32, preserving pitch
  * and note duty fraction (without assuming unverified DEAD_TIME).
  */
@@ -14,7 +14,7 @@ int am13e_audio_tone(int semitone,int octave,int volume,AM13E_AudioTone *out)
     const uint32_t legacy_ticks=(rel17_music_period[semitone]>>octave)+1U;
     const uint32_t ticks=(legacy_ticks*25U+16U)/32U;
     const uint32_t compare=((uint32_t)volume*25U+16U)/32U;
-    if(ticks<3U || ticks>65536U || compare>=ticks || compare==0U) return 0;
+    if(ticks<3U || ticks>65536U || compare>UINT16_MAX || compare==0U) return 0;
     out->period=(uint16_t)(ticks-1U);
     out->compare=(uint16_t)compare;
     return 1;

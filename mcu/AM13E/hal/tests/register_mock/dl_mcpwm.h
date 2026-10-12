@@ -9,8 +9,9 @@ static inline void test_load_force(MCPWM_Regs *p)
 { DL_MCPWM_forceGlobalLoadOneShotEvent(p);test_global_load(p); }
 static inline void test_irq_clear(MCPWM_Regs *p,uint16_t flags)
 { DL_MCPWM_clearInterrupt(p,flags);p->INTFLAG&=~(uint32_t)flags; }
+void test_irq_ack_boundary(MCPWM_Regs *p);
 static inline void test_global_irq_clear(MCPWM_Regs *p)
-{ DL_MCPWM_clearGlobalInterrupt(p);p->INTFLAG&=~MCPWM_INTFLAG_INT_MASK; }
+{ test_irq_ack_boundary(p);DL_MCPWM_clearGlobalInterrupt(p);p->INTFLAG&=~MCPWM_INTFLAG_INT_MASK; }
 #define DL_MCPWM_clearGlobalLoadOneShotLatch test_load_clear
 #define DL_MCPWM_setGlobalLoadOneShotLatch test_load_arm
 #define DL_MCPWM_forceGlobalLoadOneShotEvent test_load_force

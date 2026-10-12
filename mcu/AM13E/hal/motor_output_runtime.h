@@ -8,4 +8,5 @@ void am13e_motor_output_stage(const uint16_t aq[6],const uint16_t compare[6],uin
 int am13e_motor_output_start(void);
 void am13e_motor_output_cancel(void);
 int am13e_motor_output_zero_irq(void);
+int am13e_motor_output_start_pending(void);
 #endif

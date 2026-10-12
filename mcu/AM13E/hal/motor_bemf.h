@@ -13,3 +13,12 @@ void am13e_app_motor_bemf_abort(void);
 /* Existing 16kHz SysTick bounds missing-edge timeout supervision. */
 void am13e_app_motor_bemf_tick(void);
 void ECAP1_IRQHandler(void);
+
+#ifdef SW_BLANKING
+/* Native equivalent of Rel17 CCR4=IFTIM_ICFL<<2. The existing AM13E
+ * integration uses the G431 timing reference: 1024 / 168MHz. CMPC is
+ * internal to the already-owned MCPWM0, not another timer or output pad. */
+#define AM13E_BEMF_BLANK_TICKS UINT32_C(610) /* ceil(1024*100/168) */
+void am13e_app_motor_bemf_pwm_event(void);
+int am13e_app_motor_bemf_blanking_enabled(void);
+#endif

@@ -5,8 +5,8 @@
  *
  * PB14 DShot (ECAP0/TIMG4) continues operating during playback.
  * TIMG12 (motor commutation) is loaned to PCM sample clock ONLY while
- * Motor/Audio owner == PCM. SW forced LOW + six GPIO Input pads remain
- * applied until a separate qualified power-stage arming path exists.
+ * Motor/Audio owner == PCM. Physical output uses the existing electrical
+ * board configuration and the original Core ownership/admission policy.
  */
 #include "util_backend.h"
 #include "motor_audio_hw.h"
@@ -20,7 +20,6 @@ enum { AUDIO_NONE=0,AUDIO_MUSIC=1,AUDIO_PCM=2 };
 enum { MCPWM_CARRIER_HZ=24000 };
 static volatile unsigned current_audio;
 static uint16_t note_volume_ticks;
-static uint16_t last_music_tbctr;
 static uint8_t music_u_active;
 static uint32_t pcm_sample_rate;
 static int pcm_volume;
@@ -46,7 +45,6 @@ void am13e_app_audio_music_begin(void)
      */
     am13e_app_motor_audio_period(4165U);
     am13e_app_motor_audio_compare(0U,0U);
-    last_music_tbctr=am13e_app_motor_audio_counter();
 }
 
 void am13e_app_audio_music_note(int semitone,int octave_shift,int volume)
@@ -58,7 +56,6 @@ void am13e_app_audio_music_note(int semitone,int octave_shift,int volume)
     note_volume_ticks=tone.compare;
     music_u_active=1U;
     am13e_app_motor_audio_compare(tone.compare,0U);
-    last_music_tbctr=am13e_app_motor_audio_counter();
 }
 
 void am13e_app_audio_music_pause(void)
@@ -66,7 +63,6 @@ void am13e_app_audio_music_pause(void)
     if(current_audio!=AUDIO_MUSIC) audio_fault();
     note_volume_ticks=0U;
     am13e_app_motor_audio_compare(0U,0U);
-    last_music_tbctr=am13e_app_motor_audio_counter();
 }
 
 void am13e_app_audio_music_tick(void)
@@ -75,18 +71,16 @@ void am13e_app_audio_music_tick(void)
      * only an active MUSIC owner may touch audio compare registers.
      */
     if(current_audio!=AUDIO_MUSIC) return;
-    const uint16_t now=am13e_app_motor_audio_counter();
-    /* TIM1 UIF behavior: alternate CCR1 and CCR3 each full tone
-     * period; the counter wraps from TBPRD to zero. Polling must be
-     * checked against actual silicon jitter in later validation.
-     */
-    if(note_volume_ticks && now<last_music_tbctr){
+    /* The original TIM1 UIF is sticky. Counter-order comparisons lose
+     * complete periods if polling resumes at the same/larger counter
+     * value after preemption; ET2 records that at least one ZERO occurred. */
+    const int elapsed=am13e_app_motor_audio_period_elapsed();
+    if(note_volume_ticks && elapsed){
         music_u_active^=1U;
         am13e_app_motor_audio_compare(
             music_u_active?note_volume_ticks:0U,
             music_u_active?0U:note_volume_ticks);
     }
-    last_music_tbctr=now;
 }
 
 void am13e_app_audio_pcm_begin(uint32_t rate_hz,int volume)

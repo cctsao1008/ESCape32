@@ -452,7 +452,7 @@ static void bemf_timeout_reset(void) {
  */
 #if defined(AM13E)
 static int bemf_inputs_valid(int interval,int capture,int timing) {
-    if(interval<=0 || capture<=0 || interval>INT_MAX/3 || timing<0 || timing>32)return 0;
+    if(interval<=0 || capture<0 || interval>INT_MAX/3 || timing<0 || timing>32)return 0;
     if(capture<(interval>>1))return 1;
     const int u=interval*3;
     return capture<=INT_MAX-u && ((capture+u)>>2)<=INT_MAX/32;

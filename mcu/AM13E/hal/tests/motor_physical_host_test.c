@@ -1,7 +1,12 @@
 #include "motor_audio_hw.h"
+#include "util_backend.h"
 /* Original Core + native HAL + actual SDK registers/DriverLib. Only core
  * primitives, GPIO aliases and autonomous register loads are emulated. */
 #include <sys/mman.h>
+#define sync host_unused_posix_sync
+#include <sys/wait.h>
+#include <unistd.h>
+#undef sync
 #include <assert.h>
 #include <setjmp.h>
 #include <stdio.h>
@@ -33,6 +38,9 @@ int am13e_app_io_watchdog_fault_arm(void){++watchdog_arms;return 1;}
 void test_global_load(MCPWM_Regs *p)
 {
     if(!(p->GLDOSHTSTS&MCPWM_GLDOSHTSTS_OSHTLATCH_MASK))return;
+    assert(p->DBREDS!=0U && p->DBFEDS!=0U); /* TRM global ZERO restriction. */
+    p->DBRED=p->DBREDS;p->DBFED=p->DBFEDS;
+    p->CMPC=p->CMPCS;
     p->TBPRD=p->TBPRDS;
     p->PWM1_CMPA=p->PWM1_CMPAS;p->PWM1_CMPB=p->PWM1_CMPBS;
     p->PWM2_CMPA=p->PWM2_CMPAS;p->PWM2_CMPB=p->PWM2_CMPBS;
@@ -44,19 +52,31 @@ void test_global_load(MCPWM_Regs *p)
     p->GLDOSHTCTL=0U;
 }
 
-static unsigned inject_shadow_zero,shadow_boundaries;
-static uint32_t active_sum(MCPWM_Regs *p)
+static unsigned inject_shadow_zero,shadow_boundaries,inject_trip,inject_ack_trip;
+void test_irq_ack_boundary(MCPWM_Regs *p)
 {
-    return p->TBPRD+p->PWM1_CMPA+p->PWM1_CMPB+p->PWM2_CMPA+p->PWM2_CMPB+
-        p->PWM3_CMPA+p->PWM3_CMPB+p->PWM1_AQCTLA+p->PWM1_AQCTLB+
-        p->PWM2_AQCTLA+p->PWM2_AQCTLB+p->PWM3_AQCTLA+p->PWM3_AQCTLB;
+    if(inject_ack_trip){
+        p->TZCBCOSTFLAG=DL_MCPWM_TZ_FLAG_OST_TZ1;
+        p->INTFLAG|=DL_MCPWM_INT_TZ_OST;inject_ack_trip=0U;
+    }
+}
+static void active_image(MCPWM_Regs *p,uint32_t image[16])
+{
+    const uint32_t values[16]={p->TBPRD,p->PWM1_CMPA,p->PWM1_CMPB,p->PWM2_CMPA,p->PWM2_CMPB,
+        p->PWM3_CMPA,p->PWM3_CMPB,p->PWM1_AQCTLA,p->PWM1_AQCTLB,p->PWM2_AQCTLA,
+        p->PWM2_AQCTLB,p->PWM3_AQCTLA,p->PWM3_AQCTLB,p->CMPC,p->DBRED,p->DBFED};
+    memcpy(image,values,sizeof values);
 }
 void test_shadow_written(MCPWM_Regs *p)
 {
+    if(inject_trip){
+        MCPWM0->TZCBCOSTFLAG=DL_MCPWM_TZ_FLAG_OST_TZ1;
+        MCPWM0->INTFLAG|=DL_MCPWM_INT_TZ_OST;inject_trip=0U;
+    }
     if(!inject_shadow_zero)return;
-    const uint32_t before=active_sum(p);
+    uint32_t before[16],after[16];active_image(p,before);
     test_global_load(p); /* ZERO during every individual register write. */
-    assert(before==active_sum(p));++shadow_boundaries;
+    active_image(p,after);assert(memcmp(before,after,sizeof before)==0);++shadow_boundaries;
 }
 /* TI AQ/RED register behavior observer, not a commutation controller.
  * Core chooses phases; the observer checks the resulting logical gate
@@ -85,8 +105,14 @@ static void carrier(void)
     uint32_t cc[6]={MCPWM0->PWM1_CMPA,MCPWM0->PWM1_CMPB,
         MCPWM0->PWM2_CMPA,MCPWM0->PWM2_CMPB,MCPWM0->PWM3_CMPA,MCPWM0->PWM3_CMPB};
     const unsigned red=MCPWM0->DBRED;
-    assert(MCPWM0->DBFED==0U);
+    assert(MCPWM0->DBFED==1U && (MCPWM0->DBCTL&MCPWM_DBCTL_OUT_MODE_MASK)==(1U<<DL_MCPWM_DB_RED));
     for(unsigned tick=0;tick<=MCPWM0->TBPRD;++tick,++virtual_tick){
+        MCPWM0->TBCTR=tick;
+#ifdef SW_BLANKING
+        if(tick==AM13E_BEMF_BLANK_TICKS && (MCPWM0->INTEN&DL_MCPWM_INT_ET_2)){
+            MCPWM0->INTFLAG=DL_MCPWM_INT_ET_2;MCPWM0_IRQHandler();
+        }
+#endif
         for(unsigned phase=0;phase<3U;++phase){
             const unsigned a=phase*2U,b=a+1U,old_a=aq_state[a];
             const unsigned previous[2]={gate_state[a],gate_state[b]};
@@ -136,9 +162,11 @@ static void capture(unsigned ticks)
 static void zero(void)
 {
     test_global_load(MCPWM0);
-    if(MCPWM0->INTEN&DL_MCPWM_INT_ET_1){
+    uint32_t events=DL_MCPWM_INT_ET_1;
+    MCPWM0->TBCTR=0U;
+    if(MCPWM0->INTEN&events){
         uint32_t mask=test_primask;test_primask=0U;
-        MCPWM0->INTFLAG=DL_MCPWM_INT_ET_1;MCPWM0_IRQHandler();test_primask=mask;
+        MCPWM0->INTFLAG=MCPWM0->INTEN&events;MCPWM0_IRQHandler();test_primask=mask;
     }
 }
 static int gate_on(void)
@@ -174,12 +202,37 @@ int main(void)
     cfg.damp=1;cfg.sine_power=8;ertm=6000;ival=3000;sync=6;step=0;reverse=0;
     am13e_app_motor_pwm_apply(800,24,48,ertm,1,0,0,1);
     nextstep();start();carrier();
-    assert(MCPWM0->DBRED==AM13E_MOTOR_OUTPUT_RED_TICKS && MCPWM0->DBFED==0U);
+    assert(MCPWM0->DBRED==AM13E_MOTOR_OUTPUT_RED_TICKS && MCPWM0->DBFED==1U);
     inject_shadow_zero=1U;
     for(unsigned n=0;n<12U;++n){nextstep();zero();expect_sixstep();carrier();assert(am13e_mcu_motor_pads_pwm_matches(am13e_board_motor_pad_route(),AM13E_MOTOR_PAD_INVERT_MASK));}
     reverse=1;for(unsigned n=0;n<12U;++n){nextstep();zero();expect_sixstep();carrier();}
+#ifdef SW_BLANKING
+    /* Real ZERO/CMPC IRQ -> ECAP capture gating, elapsed counter intact.
+     * Coalesced old-CMPC/new-ZERO events must leave capture blanked. */
+    const uint32_t elapsed=ECAP1->TSCTR;
+    zero();assert(!(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK));
+    const int before_blank=ival;
+    ECAP1->CAP1=500000U;ECAP1->ECFLG=DL_ECAP_ISR_SOURCE_CEVT1;
+    ECAP1_IRQHandler();assert(ival==before_blank);
+    MCPWM0->TBCTR=10U;MCPWM0->INTFLAG=DL_MCPWM_INT_ET_1|DL_MCPWM_INT_ET_2;
+    MCPWM0_IRQHandler();assert(!(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK));
+    MCPWM0->TBCTR=AM13E_BEMF_BLANK_TICKS;MCPWM0->INTFLAG=DL_MCPWM_INT_ET_2;
+    MCPWM0_IRQHandler();assert(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK);
+    assert(ECAP1->TSCTR==elapsed);
+#endif
+    /* Empty vectors after replacement must preserve the new hardware owner. */
+    const int before_empty=step;
+    MCPWM0->INTFLAG=0U;MCPWM0_IRQHandler();assert(gate_on());
+    ECAP1->ECFLG=0U;ECAP1_IRQHandler();
+    am13e_app_motor_bemf_commutation_delay_us(1234);
+    *(volatile uint32_t *)(uintptr_t)&TIMG12->CPU_INT.MIS=0U;
+    TIMG12_0_IRQHandler();assert(step==before_empty && gate_on());
+    *(volatile uint32_t *)(uintptr_t)&TIMG12->CPU_INT.MIS=DL_TIMER_INTERRUPT_ZERO_EVENT;
+    TIMG12_0_IRQHandler();zero();carrier();assert(step!=before_empty);
     /* Actual CMPSS phase route -> ECAP1 -> Core BEMF policy -> TIMG12 ISR. */
     cfg.timing=16;ival=3000;ertm=6000;const int previous_step=step;
+    capture(0U);capture(1U); /* quantized zero must be an early rejection, not fault */
+    assert(ival==3000 && step==previous_step);
     capture(100000U); /* 500us < original ival/2: no schedule/step. */
     assert(ival==3000 && step==previous_step);
     capture(400000U); /* 2000us: accepted timing advance schedule. */
@@ -192,6 +245,19 @@ int main(void)
     ECAP1->TSCTR=8000000U;am13e_app_motor_bemf_tick();
     assert(sync==0 && fast==0 && ival==10000 && ertm==100000000);
     TIMG12_0_IRQHandler();assert(step==timed_out_step && gate_on());
+    /* Real accepted captures acquire six crossings of synchronization;
+     * the original six-interval check also detects a desynchronized rotor. */
+    ival=3000;ertm=6000;sync=0;
+    nextstep();zero();carrier();
+    for(unsigned crossing=0;crossing<6U;++crossing){
+        capture(400000U);assert(sync==crossing+1U);
+        *(volatile uint32_t *)(uintptr_t)&TIMG12->CPU_INT.MIS=DL_TIMER_INTERRUPT_ZERO_EVENT;
+        TIMG12_0_IRQHandler();zero();carrier();
+    }
+    assert(sync==6);
+    ival=500;ertm=1500;sync=6;fast=1;
+    for(unsigned n=0;n<6U;++n){nextstep();zero();carrier();}
+    assert(sync==0 && fast==0 && ival==5000 && ertm==100000000);
     /* Normal duty/frequency changes remain coherent at every write boundary. */
     for(unsigned duty=0;duty<=2000U;duty+=100U){
         am13e_app_motor_pwm_apply(duty,16,96,ertm,1,0,0,1);zero();carrier();
@@ -245,6 +311,69 @@ int main(void)
         am13e_app_motor_audio_end();assert(!gate_on());
         assert(am13e_app_motor_inactive_preflight_ok());
         assert(MCPWM0->DBRED==AM13E_MOTOR_OUTPUT_RED_TICKS);
+    }
+    /* Actual music adapter: constant-tone CCR>ARR and sticky UIF behavior
+     * after a missed period, even when counter order does not show wrap. */
+    am13e_app_audio_music_begin();zero();zero();
+    am13e_app_audio_music_note(0,10,255);zero();zero();carrier();
+    assert(MCPWM0->PWM1_AQCTLA==DL_MCPWM_AQ_OUTPUT_HIGH_ZERO);
+    assert(MCPWM0->PWM1_AQCTLB==DL_MCPWM_AQ_OUTPUT_LOW_ZERO);
+    assert((MCPWM0->ETSEL&MCPWM_ETSEL_ET2_SEL_MASK)==
+        (uint32_t)DL_MCPWM_EVT_TBCTR_ZERO<<MCPWM_ETSEL_ET2_SEL_OFS);
+    MCPWM0->TBCTR=5U;MCPWM0->INTFLAG|=DL_MCPWM_INT_ET_2;
+    MCPWM0_IRQHandler();
+    assert(!(MCPWM0->INTEN&DL_MCPWM_INT_ET_2));
+    assert(MCPWM0->INTFLAG&DL_MCPWM_INT_ET_2);
+    am13e_app_audio_music_tick();zero();carrier();
+    assert(MCPWM0->PWM3_AQCTLA==DL_MCPWM_AQ_OUTPUT_HIGH_ZERO);
+    assert(MCPWM0->PWM1_AQCTLA==DL_MCPWM_AQ_OUTPUT_LOW_ZERO);
+    assert(!(MCPWM0->INTFLAG&DL_MCPWM_INT_ET_2));
+    am13e_app_audio_music_tick(); /* no new ZERO: no second swap */
+    zero();carrier();assert(MCPWM0->PWM3_AQCTLA==DL_MCPWM_AQ_OUTPUT_HIGH_ZERO);
+    am13e_app_audio_music_pause();zero();carrier();
+    am13e_app_audio_end();assert(!gate_on());
+    /* Maximum 16-bit carrier image: inactive/freewheel compares must not
+     * overflow merely because the electrical DT offset is added. */
+    {
+        const uint16_t image[6]={DL_MCPWM_AQ_OUTPUT_HIGH_ZERO|DL_MCPWM_AQ_OUTPUT_LOW_UP_CMPA,
+            DL_MCPWM_AQ_OUTPUT_LOW_ZERO|DL_MCPWM_AQ_OUTPUT_HIGH_UP_CMPB,0,DL_MCPWM_AQ_OUTPUT_HIGH_ZERO,0,0};
+        const uint16_t maximum[6]={65535,65535,65535,65535,65535,65535};
+        am13e_motor_output_stage(image,maximum,65534U);
+        assert(MCPWM0->PWM1_AQCTLA==DL_MCPWM_AQ_OUTPUT_HIGH_ZERO);
+        assert(MCPWM0->PWM1_AQCTLB==DL_MCPWM_AQ_OUTPUT_LOW_ZERO);
+        assert(MCPWM0->PWM1_CMPA==1U && MCPWM0->PWM1_CMPB==1U);
+        assert(!gate_on());
+    }
+    /* A trip can latch halfway through masked SHADOW writes. Test in
+     * an isolated anonymous-RAM child because fault reset never returns. */
+    for(volatile unsigned fault_case=0;fault_case<2U;++fault_case){
+    pid_t child=fork();assert(child>=0);
+    if(child==0){
+        sine=0;step=0;lock=0;nextstep();
+        am13e_app_motor_pwm_apply(800,24,48,ertm,1,0,0,1);start();carrier();
+        test_primask=0U;
+        if(fault_case){
+            am13e_app_motor_commutation_enable(0);
+            am13e_app_audio_music_begin();zero();zero();
+            am13e_app_audio_music_note(0,0,50);zero();zero();carrier();
+        }
+        if(!setjmp(fault_return)){
+            if(fault_case){
+                inject_ack_trip=1U;MCPWM0->INTFLAG=DL_MCPWM_INT_ET_2;
+            }else{
+                inject_trip=1U;
+                am13e_app_motor_pwm_apply(1000,24,48,ertm,1,0,0,1);
+                assert(test_primask==0U && (MCPWM0->TZCBCOSTFLAG&DL_MCPWM_TZ_FLAG_OST_TZ1));
+            }
+            MCPWM0_IRQHandler();assert(0);
+        }
+        assert(!gate_on() && watchdog_arms==1U);
+        assert(am13e_mcu_motor_pads_disconnected(am13e_board_motor_pad_route()));
+        assert(!DL_MCPWM_getGlobalLoadOneShotLatchStatus(MCPWM0));
+        _exit(0);
+    }
+    int child_status;assert(waitpid(child,&child_status,0)==child);
+    assert(WIFEXITED(child_status) && WEXITSTATUS(child_status)==0);
     }
     /* Fault dominates a pending startup ZERO and cannot re-enable pads. */
     sine=0;step=0;lock=0;nextstep();am13e_app_motor_commutation_commit();

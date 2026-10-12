@@ -43,8 +43,19 @@ independent overcurrent protection still need board signoff.
 
 With `AM13E_SDK_ROOT` set, the existing full native runner additionally executes
 actual Core `nextstep()` and native HAL with official TI register definitions in
-anonymous host RAM, using three synthetic electrical fixtures. These fixtures are
+anonymous host RAM, using synthetic electrical fixtures with normal, inverted-high, full-duty and software-blanking configurations. These fixtures are
 never production-board parameters. Observe all six physical pins with the power
 stage safely isolated before qualifying polarity, duty/frequency, dead time,
 commutation transitions or asynchronous trip timing; register-model PASS does not
 establish physical waveforms or power-stage safety.
+
+SW_BLANKING uses MCPWM0 CMPC (610 motor-TBCLK ticks, the existing G431
+1024/168 MHz reference rounded up), ET1 ZERO shared with startup, and ET2 CMPC.
+It gates ECAP1 timestamp capture in the original slowest ERPM band without
+resetting elapsed BEMF time. IRQ latency and analog blanking effectiveness
+remain unmeasured. Music temporarily loans ET2 for a sticky period event;
+its IRQ masks itself until the original polling callback consumes that flag.
+INVERTED_HIGH requires the explicit board pad mask to invert UH/VH/WH;
+it never silently overrides a conflicting electrical board definition.
+Logical FED=0 bypasses the B delay path, with unused DBFED/DBFEDS kept at 1
+because TI forbids loading zero dead-band counts at global ZERO.

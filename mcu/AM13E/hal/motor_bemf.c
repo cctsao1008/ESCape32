@@ -13,6 +13,12 @@
 #include "irq_vectors.h"
 #include <soc.h>
 #include <dl_ecap.h>
+#ifdef SW_BLANKING
+#include <dl_mcpwm.h>
+#include "motor_output_runtime.h"
+static volatile uint32_t blank_required,blank_active;
+#define BLANK_EVENTS (DL_MCPWM_INT_ET_1|DL_MCPWM_INT_ET_2)
+#endif
 #include <dl_cmpss_lite.h>
 #include <dl_sysctl.h>
 #include <dl_gpio.h>
@@ -93,6 +99,17 @@ static void sense_comparators_off(void)
 static void capture_stop(void)
 {
     armed=0U;
+#ifdef SW_BLANKING
+    blank_required=blank_active=0U;
+    uint32_t events=DL_MCPWM_INT_ET_2;
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    if(!am13e_motor_output_start_pending())
+#endif
+        events|=DL_MCPWM_INT_ET_1;
+    DL_MCPWM_disableInterrupt(MCPWM0,events);
+    DL_MCPWM_clearInterrupt(MCPWM0,events);
+    DL_ECAP_disableTimeStampCapture(BEMF_ECAP);
+#endif
     DL_ECAP_disableInterrupt(BEMF_ECAP,BEMF_FLAGS);
     DL_ECAP_stopCounter(BEMF_ECAP);
     DL_ECAP_clearInterrupt(BEMF_ECAP,BEMF_FLAGS);
@@ -283,6 +300,12 @@ void am13e_app_motor_bemf_interval_select(int ertm_us)
         DL_ECAP_enableInterrupt(BEMF_ECAP,
              DL_ECAP_ISR_SOURCE_CEVT1|DL_ECAP_ISR_SOURCE_CTROVF);
         armed=1U;
+#ifdef SW_BLANKING
+        /* Original nextstep enables blanking only in its slowest band. */
+        blank_required=(ertm_us>=2000);
+        if(blank_required)DL_MCPWM_enableInterrupt(MCPWM0,BLANK_EVENTS);
+        am13e_app_motor_bemf_pwm_event();
+#endif
         DL_ECAP_startCounter(BEMF_ECAP);
 #else
         bemf_fault();
@@ -295,6 +318,54 @@ void am13e_app_motor_bemf_stop(void)
     if(!initialized)bemf_fault();
     am13e_app_motor_bemf_abort();
 }
+#ifdef SW_BLANKING
+int am13e_app_motor_bemf_blanking_enabled(void) { return armed && blank_required; }
+void am13e_app_motor_bemf_pwm_event(void)
+{
+    const uint32_t mask=__get_PRIMASK();
+    __disable_irq();
+    if(armed){
+        /* Use actual position when ZERO/CMPC flags coalesce. Processing
+         * a stale CMPC after a newer ZERO must not reopen the blank window. */
+        const unsigned blank=blank_required &&
+            DL_MCPWM_getTimeBaseCounterValue(MCPWM0)<AM13E_BEMF_BLANK_TICKS;
+        if(blank){
+            /* Preserve an already latched crossing from before blanking.
+             * Process it through the real ISR/Core policy, not a second
+             * timing implementation. Never consume timestamp-less events
+             * generated after CAPLDEN has been disabled. */
+            if(!blank_active && (DL_ECAP_getInterruptSource(BEMF_ECAP)&DL_ECAP_ISR_SOURCE_CEVT1)){
+                ECAP1_IRQHandler();
+                if(!armed){__set_PRIMASK(mask);return;}
+            }
+            blank_active=1U;
+            DL_ECAP_disableTimeStampCapture(BEMF_ECAP);
+            DL_ECAP_disableInterrupt(BEMF_ECAP,DL_ECAP_ISR_SOURCE_CEVT1);
+        }else{
+            /* CAPLDEN suppresses timestamp loads, not capture event flags.
+             * Discard those flags before reopening, without resetting the
+             * elapsed counter or extending the original BEMF timeout. */
+            if(blank_active){
+                /* Re-enable loads before discarding stale flags: any flag
+                 * raised after this clear has a fresh timestamp. The small
+                 * reopening latency remains part of software blanking. */
+                DL_ECAP_enableTimeStampCapture(BEMF_ECAP);
+                DL_ECAP_clearInterrupt(BEMF_ECAP,DL_ECAP_ISR_SOURCE_CEVT1);
+                if(DL_ECAP_getInterruptSource(BEMF_ECAP)&DL_ECAP_ISR_SOURCE_CTROVF){
+                    ECAP1_IRQHandler();
+                    if(!armed){__set_PRIMASK(mask);return;}
+                }
+                DL_ECAP_clearGlobalInterrupt(BEMF_ECAP);
+                NVIC_ClearPendingIRQ(ECAP1_INT_IRQn);
+            }
+            blank_active=0U;
+            DL_ECAP_enableTimeStampCapture(BEMF_ECAP);
+            DL_ECAP_enableInterrupt(BEMF_ECAP,DL_ECAP_ISR_SOURCE_CEVT1);
+        }
+    }
+    __set_PRIMASK(mask);
+}
+#endif
 /* Actual hardware edge -> timestamp -> original Rel17 desync/advance
  * logic. Hardware source is acknowledged before invoking the callback.
  */
@@ -305,7 +376,9 @@ void ECAP1_IRQHandler(void)
     const uint16_t flags=DL_ECAP_getInterruptSource(BEMF_ECAP);
     DL_ECAP_clearInterrupt(BEMF_ECAP,flags&BEMF_FLAGS);
     DL_ECAP_clearGlobalInterrupt(BEMF_ECAP);
-    if(!armed)return;
+    /* compctl()/rearm may clear an already-dispatched old IRQ. Preserve
+     * the newly armed capture when that vector has no peripheral event. */
+    if(!armed || flags==0U)return;
     /* Counter overflow is a timeout. CAP1 data is not valid here. */
     if(flags&DL_ECAP_ISR_SOURCE_CTROVF) {
         capture_stop();
@@ -313,6 +386,9 @@ void ECAP1_IRQHandler(void)
         (void)am13e_app_motor_on_bemf_event(0,1);
         return;
     }
+#ifdef SW_BLANKING
+    if(blank_active && !(flags&~DL_ECAP_ISR_SOURCE_CEVT1))return; /* Masked capture vector. */
+#endif
     if((flags&DL_ECAP_ISR_SOURCE_CEVT1)==0U ||
        (flags&~BEMF_FLAGS)!=0U)bemf_fault();
     if (!calibration_done || !capture_ticks_per_ms) bemf_fault();

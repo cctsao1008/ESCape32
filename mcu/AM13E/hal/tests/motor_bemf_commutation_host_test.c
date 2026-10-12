@@ -18,7 +18,8 @@ int main(void) {
     const uint32_t per_ms=100000U;
     const uint32_t timeout=AM13E_BEMF_REL17_TIMEOUT_US*100U;
     int us=0;
-    assert(am13e_bemf_sample_plan(0,per_ms,timeout,&us)==0);
+    assert(am13e_bemf_sample_plan(0,per_ms,timeout,&us)==1 && us==0);
+    assert(am13e_bemf_policy_plan(1000,1200,us,8,&(AM13E_BemfPolicyPlan){0})==0);
     assert(am13e_bemf_sample_plan(1000,0,timeout,&us)==0);
     assert(am13e_bemf_sample_plan(1000,per_ms,0,&us)==0);
     assert(am13e_bemf_sample_plan(1000,per_ms,timeout,NULL)==0);

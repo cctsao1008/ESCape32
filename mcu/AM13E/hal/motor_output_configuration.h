@@ -16,6 +16,10 @@
     !defined(AM13E_MOTOR_GATE_RESET_INACTIVE)
 #error "Motor outputs require explicit gate/pad polarity, RED/FED/minimum dead time, nFAULT and reset-off wiring"
 #endif
+#ifdef INVERTED_HIGH
+_Static_assert((AM13E_MOTOR_PAD_INVERT_MASK & 0x15)==0x15,
+    "INVERTED_HIGH requires all three high-side pads inverted in the explicit board definition");
+#endif
 #ifdef PWM_ENABLE
 #error "PWM_ENABLE requires a board-specific PWM/enable gate-driver topology adapter"
 #endif

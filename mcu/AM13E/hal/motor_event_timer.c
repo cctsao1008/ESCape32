@@ -143,8 +143,10 @@ void TIMG12_0_IRQHandler(void)
      * never spuriously advance the original Rel17 step sequence.
      */
     if (audio_pcm_timer || !timer_armed) return;
-    if ((status & DL_TIMER_INTERRUPT_ZERO_EVENT) == 0U)
-        timing_fault();
+    /* A vector can already be in the CPU exception pipeline when a
+     * replacement clears its peripheral/NVIC source. An empty delivery
+     * must neither consume the new one-shot nor fault the running motor. */
+    if ((status & DL_TIMER_INTERRUPT_ZERO_EVENT) == 0U) return;
     timer_armed=0U;
     DL_Timer_stopCounter(MOTOR_TIMER);
     ++serviced;
