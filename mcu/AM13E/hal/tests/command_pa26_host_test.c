@@ -173,7 +173,9 @@ int main(void)
     am13e_pb14_resume_rx();time_now=0;
     reconfiguration_cycles=repeat<2U?100U:0U;
     SysTick->VAL=repeat==1U?20U:12000U;
-    frame(167U,packet(512,1),1);assert(state==TX_DELAY && suspended);
+    const unsigned inverted_before=feeds;
+    frame(rates[repeat],packet(512,1),1);assert(state==TX_DELAY && suspended);
+    assert(feeds==inverted_before+1U);
     assert(TIMG4->COUNTERREGS.LOAD==2999U-reconfiguration_cycles/2U);
     reconfiguration_cycles=0U;
     assert(!DL_DMA_isChannelEnabled(DMA0,2U));
@@ -190,6 +192,13 @@ int main(void)
     *(volatile uint32_t *)(uintptr_t)&DMA0->CPU_INT.MIS=0U;DMA0_IRQHandler();
     *(volatile uint32_t *)(uintptr_t)&TIMG4->CPU_INT.MIS=0U;TIMG4_0_IRQHandler();
     assert(!suspended && state==TX_IDLE);
+    const unsigned invalid_before=feeds;
+    frame(rates[repeat],packet(512,1)^1U,1);
+    assert(feeds==invalid_before && state==TX_DELAY); /* Rel17 replies precede CRC. */
+    *(volatile uint32_t *)(uintptr_t)&TIMG4->CPU_INT.MIS=DL_TIMER_INTERRUPT_ZERO_EVENT;
+    TIMG4_0_IRQHandler();
+    *(volatile uint32_t *)(uintptr_t)&DMA0->CPU_INT.MIS=DL_DMA_INTERRUPT_CHANNEL2;
+    DMA0_IRQHandler();assert(state==TX_IDLE && !suspended && feeds==invalid_before);
     }
     /* Reconfiguration consumes the hardware deadline: reject, release
      * ownership and restore input rather than sending a late reply. */
