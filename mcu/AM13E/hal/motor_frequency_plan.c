@@ -16,24 +16,27 @@ int am13e_motor_frequency_plan(uint32_t pwm_clock_hz,int freq_min_khz,
      * Fixed rounding follows C integer division, not a continuous
      * interpolation of 1/frequency or a second frequency ramp.
      */
-    const uint64_t clock_khz=(uint64_t)pwm_clock_hz/UINT64_C(1000);
-    const uint64_t period_min=clock_khz/(uint32_t)freq_min_khz;
-    const uint64_t period_max=clock_khz/(uint32_t)freq_max_khz;
+    const uint32_t clock_khz=(uint32_t)pwm_clock_hz/UINT32_C(1000);
+    const uint32_t period_min=clock_khz/(uint32_t)freq_min_khz;
+    const uint32_t period_max=clock_khz/(uint32_t)freq_max_khz;
     if (period_min < 2U || period_min > MAX_PERIOD_TICKS ||
         period_max < 2U || period_max > MAX_PERIOD_TICKS) return 0;
 
-    uint64_t selected = period_min;
+    uint32_t selected = period_min;
     if (ertm_us != 0) {
         if (ertm_us <= 1000) selected = period_max;
         else if (ertm_us >= 2000) selected = period_min;
         else selected = period_max +
-            ((uint64_t)(ertm_us-1000)*(period_min-period_max))/UINT64_C(1000);
+            ((uint32_t)(ertm_us-1000)*(period_min-period_max))/UINT32_C(1000);
     }
+    /* Validated periods<=65535 and ertm interpolation factor<=999 give
+     * a product<65535000. With freq_min<=48, accepted clock_hz is below
+     * 65536*48*1000, so nominal-frequency rounding cannot overflow either. */
     AM13E_MotorFrequencyPlan plan={
         .period_ticks=(uint32_t)selected,
         .freq_min_period_ticks=(uint32_t)period_min,
         .freq_max_period_ticks=(uint32_t)period_max,
-        .nominal_frequency_hz=(uint32_t)(((uint64_t)pwm_clock_hz+selected/2U)/selected)
+        .nominal_frequency_hz=(uint32_t)(((uint32_t)pwm_clock_hz+selected/2U)/selected)
     };
     *out=plan;
     return 1;

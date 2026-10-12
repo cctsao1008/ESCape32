@@ -26,8 +26,10 @@ int am13e_motor_duty_plan(uint32_t period_ticks,uint32_t pwm_clock_hz,
     const uint32_t bounded = (logical_duty < 0) ? 0U :
                              (logical_duty > 2000) ? 2000U :
                              (uint32_t)logical_duty;
+    /* bounded<=2000 and span<=65535: product<=131070000, exact in
+     * uint32_t. Preserve the original integer truncation without a wide divide. */
     const uint32_t compare = lower +
-        (uint32_t)(((uint64_t)bounded * (upper - lower)) / UINT64_C(2000));
+        (bounded * (upper - lower)) / UINT32_C(2000);
     const AM13E_MotorDutyPlan plan = {
         .period_register_ticks = (uint16_t)(period_ticks - (full_duty != 0)),
         .compare_ticks = (uint16_t)compare,

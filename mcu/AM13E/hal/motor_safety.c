@@ -52,6 +52,9 @@ uint32_t am13e_app_motor_audio_mode(void)
  * Shadow writes inhibit global loads until the complete electrical image
  * is committed. PRIMASK alone cannot exclude a peripheral ZERO event.
  */
+_Static_assert(DL_MCPWM_AQ_OUTPUT_1A==0 && DL_MCPWM_AQ_OUTPUT_3B==5 &&
+    DL_MCPWM_COUNTER_COMPARE_1A==0 && DL_MCPWM_COUNTER_COMPARE_3B==5,
+    "Six-output transaction cache requires the native SDK channel encodings");
 static uint16_t logical_aq[6],logical_compare[6];
 static unsigned physical_shadow_dirty,physical_runtime_image;
 /* Exclude inactive diagnostic proofs from runtime electrical conversion.
@@ -60,15 +63,15 @@ static void output_aq_shadow(MCPWM_Regs *p,DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODU
 {
     if(!physical_runtime_image){DL_MCPWM_setActionQualifierActionCompleteShadow(p,o,a);return;}
     if(!physical_shadow_dirty)am13e_motor_output_update_begin();
+    /* Runtime logical images are converted and written ONCE by stage().
+     * The old logical hardware write was overwritten before global load. */
     logical_aq[(unsigned)o]=a;physical_shadow_dirty=1U;
-    DL_MCPWM_setActionQualifierActionCompleteShadow(p,o,a);
 }
 static void output_compare_shadow(MCPWM_Regs *p,DL_MCPWM_COUNTER_COMPARE_MODULE c,uint16_t value)
 {
     if(!physical_runtime_image){DL_MCPWM_setCounterCompareShadowValue(p,c,value);return;}
     if(!physical_shadow_dirty)am13e_motor_output_update_begin();
     logical_compare[(unsigned)c]=value;physical_shadow_dirty=1U;
-    DL_MCPWM_setCounterCompareShadowValue(p,c,value);
 }
 static void output_period_shadow(MCPWM_Regs *p,uint16_t value)
 {
@@ -437,9 +440,9 @@ int am13e_app_motor_stage_inactive_shadow(const AM13E_MotorShadowPlan *plan)
         DL_MCPWM_COUNTER_COMPARE_2A, DL_MCPWM_COUNTER_COMPARE_2B,
         DL_MCPWM_COUNTER_COMPARE_3A, DL_MCPWM_COUNTER_COMPARE_3B
     };
-    output_period_shadow(MOTOR_PWM, plan->period);
+    DL_MCPWM_setTimeBasePeriodShadow(MOTOR_PWM, plan->period);
     for (unsigned i=0U;i<6U;++i)
-        output_compare_shadow(MOTOR_PWM,channels[i],plan->compare[i]);
+        DL_MCPWM_setCounterCompareShadowValue(MOTOR_PWM,channels[i],plan->compare[i]);
 
     if (DL_MCPWM_getTimeBasePeriodShadow(MOTOR_PWM)!=plan->period) {
         am13e_app_motor_fault_shutdown();
@@ -511,7 +514,7 @@ int am13e_app_motor_stage_inactive_aq_shadow(const AM13E_MotorAQShadowPlan *plan
     for (unsigned i=0U;i<6U;++i) {
         DL_MCPWM_setActionQualifierShadowLoadMode(
             MOTOR_PWM,modules[i],DL_MCPWM_AQ_LOAD_FREEZE);
-        output_aq_shadow(
+        DL_MCPWM_setActionQualifierActionCompleteShadow(
             MOTOR_PWM,outputs[i],plan->action[i]);
     }
     const uint32_t actual[6] = {
@@ -683,6 +686,7 @@ void am13e_app_motor_sixstep_write(int positive_mask,int negative_mask,
             MOTOR_PWM,runtime_aq_outputs[i],aq.action[i]);
         runtime_aq_last[i]=aq.action[i];
     }
+#if !AM13E_MOTOR_OUTPUT_CONFIGURED
     const uint32_t readback[6]={
         MOTOR_PWM->PWM1_AQCTLAS,MOTOR_PWM->PWM1_AQCTLBS,
         MOTOR_PWM->PWM2_AQCTLAS,MOTOR_PWM->PWM2_AQCTLBS,
@@ -690,6 +694,7 @@ void am13e_app_motor_sixstep_write(int positive_mask,int negative_mask,
     };
     for(unsigned i=0U;i<6U;++i)
         if(readback[i] != (uint32_t)aq.action[i])runtime_fault();
+#endif
     runtime_phase_pending=1U;
     sine_entry_pending=0U;
     sine_mode_active=0U;
@@ -756,9 +761,11 @@ void am13e_app_motor_pwm_apply(int duty,int freq_min_khz,int freq_max_khz,
             DL_MCPWM_COMP_LOAD_ON_CNTR_ZERO);
         output_compare_shadow(
             MOTOR_PWM,runtime_compare_modules[i],plan.compare[i]);
+#if !AM13E_MOTOR_OUTPUT_CONFIGURED
         if (DL_MCPWM_getCounterCompareShadowValue(
                 MOTOR_PWM,runtime_compare_modules[i])!=plan.compare[i])
             runtime_fault();
+#endif
     }
     if(DL_MCPWM_getTimeBasePeriodShadow(MOTOR_PWM)!=plan.period)
         runtime_fault();
@@ -833,6 +840,7 @@ void am13e_app_motor_brushed_write(int reverse,int damp)
             MOTOR_PWM,runtime_aq_outputs[i],action[i]);
         runtime_aq_last[i]=action[i];
     }
+#if !AM13E_MOTOR_OUTPUT_CONFIGURED
     const uint32_t readback[6]={
         MOTOR_PWM->PWM1_AQCTLAS,MOTOR_PWM->PWM1_AQCTLBS,
         MOTOR_PWM->PWM2_AQCTLAS,MOTOR_PWM->PWM2_AQCTLBS,
@@ -840,6 +848,7 @@ void am13e_app_motor_brushed_write(int reverse,int damp)
     };
     for(unsigned i=0U;i<6U;++i)
         if(readback[i] != (uint32_t)action[i])runtime_fault();
+#endif
     runtime_phase_pending=1U;
     sine_entry_pending=0U;
     sine_mode_active=0U;
@@ -882,6 +891,9 @@ void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
     _Static_assert(REL17_TIM1_HZ/SINE_CARRIER_HZ==7000U,
                    "Rel17 STM32G431 sine carrier contract changed");
     if (ticks<=2U || ticks>UINT16_MAX) runtime_fault();
+    _Static_assert(((UINT64_C(65535)*120U)>>7U)*
+        ((AM13E_APP_MCLK_HZ/2U)/SINE_CARRIER_HZ)+3500U<=UINT32_MAX,
+        "Sine timer conversion numerator exceeds 32-bit range");
     const uint16_t period=(uint16_t)(ticks-1U);
     const int idx[3]={a,b,c};
     uint16_t wave[3];
@@ -891,7 +903,7 @@ void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
         /* Scale the fraction of the original carrier period, with
          * one-tick rounding and no floating point in the motor IRQ.
          */
-        uint32_t compare=(uint32_t)(((uint64_t)rel17_count*ticks+
+        uint32_t compare=(uint32_t)((rel17_count*ticks+
                                       old_ticks/2U)/old_ticks);
 #ifdef AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED
         /* Only a verified board can supply the original DEAD_TIME-like
@@ -926,9 +938,11 @@ void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
             MOTOR_PWM,runtime_aq_modules[i],DL_MCPWM_AQ_LOAD_ON_CNTR_ZERO);
         output_aq_shadow(
             MOTOR_PWM,runtime_aq_outputs[i],action);
+#if !AM13E_MOTOR_OUTPUT_CONFIGURED
         if (DL_MCPWM_getCounterCompareShadowValue(
                 MOTOR_PWM,runtime_compare_modules[i])!=compare)
             runtime_fault();
+#endif
         runtime_aq_last[i]=action;
         if (frozen) {
             output_compare_active(
@@ -943,6 +957,7 @@ void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
     /* One coherent AQ Shadow snapshot, rather than six 6-register MMIO
      * snapshots on every Rel17 high-rate sine commutation event.
      */
+#if !AM13E_MOTOR_OUTPUT_CONFIGURED
     const uint32_t aq_shadow[6]={
         MOTOR_PWM->PWM1_AQCTLAS,MOTOR_PWM->PWM1_AQCTLBS,
         MOTOR_PWM->PWM2_AQCTLAS,MOTOR_PWM->PWM2_AQCTLBS,
@@ -951,6 +966,7 @@ void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
     for(unsigned i=0U;i<6U;++i)
         if (aq_shadow[i]!=(uint32_t)((i&1U)?aq_b:aq_a))
             runtime_fault();
+#endif
     if (frozen) output_period_active(MOTOR_PWM,period);
     if (DL_MCPWM_getTimeBasePeriodShadow(MOTOR_PWM)!=period ||
         (frozen && DL_MCPWM_getTimeBasePeriodActive(MOTOR_PWM)!=period))
@@ -1104,9 +1120,11 @@ static void audio_stage_compare_locked(uint16_t u, uint16_t w,int active)
             MOTOR_PWM,runtime_compare_modules[i],DL_MCPWM_COMP_LOAD_ON_CNTR_ZERO);
         output_compare_shadow(
             MOTOR_PWM,runtime_compare_modules[i],compare[i]);
+#if !AM13E_MOTOR_OUTPUT_CONFIGURED
         if (DL_MCPWM_getCounterCompareShadowValue(
             MOTOR_PWM,runtime_compare_modules[i])!=compare[i])
             runtime_fault();
+#endif
         if(active){
             output_compare_active(
                 MOTOR_PWM,runtime_compare_modules[i],compare[i]);
@@ -1350,6 +1368,7 @@ void am13e_app_motor_drag_brake_write(void)
             MOTOR_PWM,runtime_aq_outputs[i],aq.action[i]);
         runtime_aq_last[i]=aq.action[i];
     }
+#if !AM13E_MOTOR_OUTPUT_CONFIGURED
     const uint32_t readback[6]={
         MOTOR_PWM->PWM1_AQCTLAS,MOTOR_PWM->PWM1_AQCTLBS,
         MOTOR_PWM->PWM2_AQCTLAS,MOTOR_PWM->PWM2_AQCTLBS,
@@ -1357,6 +1376,7 @@ void am13e_app_motor_drag_brake_write(void)
     };
     for(unsigned i=0U;i<6U;++i)
         if(readback[i]!=(uint32_t)aq.action[i]) runtime_fault();
+#endif
     runtime_phase_pending=1U;
     drag_brake_aq_staged=1U;
     lock_brake_aq_staged=0U;

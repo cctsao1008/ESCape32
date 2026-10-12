@@ -163,7 +163,7 @@ def main():
           "AM13E_COMMAND_PINCM" in src("boot/mcu/AM13E/hal/io.c") and
           "#define BOOT_IO_PORT AM13E_COMMAND_GPIO" in src("boot/mcu/AM13E/hal/io.c"),
           "Application/Boot must share native PA26; no command ECAP0 fallback")
-    isr=rx.split("static void drain_locked(void)")[1]
+    isr=rx.split("static void drain_captured(void)")[1]
     check(isr.index("am13e_pb14_bidir_tx_start(") <
           isr.index("am13e_pb14_decoder_pulse("),
           "Rel17 inverted DShot reply must be queued before CRC")

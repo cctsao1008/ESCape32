@@ -127,7 +127,7 @@ void initio(void)
     if(mode>=2U && mode<=7U)input_fail_closed(); /* No invented UART route. */
 #endif
 }
-static void drain_locked(void)
+static void drain_captured(void)
 {
     if(suspended || service_owns_input || capture_desynced)return;
     const unsigned remaining=DL_DMA_getTransferSize(IOTIM_DMA,RX_CH);
@@ -181,10 +181,12 @@ static void drain_locked(void)
 }
 static void drain(void)
 {
-    /* DMA continues latching hardware edges. Only CPU prefix ownership and
-     * RX/TX handover are atomic against SysTick/DMA/TIMG4 preemption. */
-    const uint32_t mask=__get_PRIMASK();__disable_irq();
-    drain_locked();__set_PRIMASK(mask);
+    /* DMA/SysTick/TIMG4 RX all run at priority0, verified by the startup
+     * IRQ barrier. They cannot preempt one another; PendSV handover masks
+     * IRQs and stops capture first. SINGLE DMA appends but cannot overwrite
+     * the stable prefix before this owner rearms it. No global masking is
+     * needed around decoding/Core callbacks. */
+    drain_captured();
 }
 void am13e_pa26_rx_dma_irq(void)
 {
@@ -212,7 +214,6 @@ void am13e_app_pb14_systick(void)
 #endif
     am13e_pb14_bidir_tx_systick();
     if(service_owns_input || suspended)return;
-    const uint32_t mask=__get_PRIMASK();__disable_irq();
     if(capture_desynced){
         const uint32_t now=am13e_pa26_rx_now();
         const uint32_t cc=DL_Timer_getCaptureCompareValue(RX_TIMER,IOTIM_CAPTURE_CHANNEL)&0xffffU;
@@ -221,9 +222,9 @@ void am13e_app_pb14_systick(void)
            (DL_Timer_getCaptureCompareValue(RX_TIMER,IOTIM_CAPTURE_CHANNEL)&0xffffU)==cc){
             dma_arm();capture_desynced=0U;
         }
-        __set_PRIMASK(mask);return;
+        return;
     }
-    drain_locked();
+    drain_captured();
     if(!suspended && !capture_desynced){
         const uint32_t now=am13e_pa26_rx_now();
         const uint32_t period=decoder.last_bit_period?decoder.last_bit_period:
@@ -241,7 +242,6 @@ void am13e_app_pb14_systick(void)
             am13e_pb14_decoder_abort(&decoder);dma_arm();
         }
     }
-    __set_PRIMASK(mask);
 }
 bool am13e_app_pb14_service_takeover(void)
 {

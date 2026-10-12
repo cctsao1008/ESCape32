@@ -16,7 +16,23 @@
 #undef resetcfg
 #undef playmusic
 #undef resetcom
+#define am13e_app_io_dshot_packet fixture_dshot_packet
+#define am13e_app_io_servo_pulse fixture_servo_pulse
 #include "../command_capture.c"
+#undef am13e_app_io_dshot_packet
+#undef am13e_app_io_servo_pulse
+extern int am13e_app_io_dshot_packet(uint16_t frame,int inverted);
+extern void am13e_app_io_servo_pulse(unsigned width,unsigned period);
+int fixture_dshot_packet(uint16_t frame,int inverted)
+{
+    assert(__get_PRIMASK()==0U); /* Actual Core callback outside global masking. */
+    return am13e_app_io_dshot_packet(frame,inverted);
+}
+void fixture_servo_pulse(unsigned width,unsigned period)
+{
+    assert(__get_PRIMASK()==0U);
+    am13e_app_io_servo_pulse(width,period);
+}
 static unsigned reconfiguration_cycles;
 static void fixture_timer_setup(GPTIMER_Regs *t,DL_Timer_TimerConfig *c)
 {
@@ -107,7 +123,7 @@ int main(void)
     assert(!setjmp(fault));
     SYSCTL->SOCLOCK.MCLKCFG=DL_SYSCTL_MCLK_DIV_2_DIV_4;
     cfg.input_mode=0;cfg.throt_min=1000;cfg.throt_mid=1500;cfg.throt_max=2000;
-    initio();assert(DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PA26)==3U);
+    initio();test_primask=0U;assert(DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PA26)==3U);
     const unsigned rates[]={333U,167U,83U};
     for(unsigned r=0;r<3U;++r){
         am13e_pb14_decoder_reset(&decoder,RX_HZ,0);am13e_pb14_resume_rx();time_now=0;

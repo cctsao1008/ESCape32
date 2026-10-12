@@ -32,6 +32,17 @@ int main(void)
         assert(p.period_register_ticks == (uint16_t)(arr-full));
         ++scenarios;
     }
+    /* Every 16-bit period, boundary duties/dead offsets, with the original
+     * wide expression as oracle for the narrowed production multiplication. */
+    const unsigned duties[]={0,1,999,1000,1999,2000};
+    for(unsigned period=2;period<=65535U;++period)
+    for(unsigned offset=0;offset<3U;++offset)
+    for(unsigned d=0;d<sizeof duties/sizeof duties[0];++d){
+        unsigned dead=offset==0?0:offset==1?period/4U:period;
+        assert(am13e_motor_duty_plan(period,100000000U,duties[d],dead,1,0,0,0,1,&p));
+        unsigned expected=dead+(unsigned)((uint64_t)duties[d]*(period-dead)/2000U);
+        assert(p.compare_ticks==expected && p.period_register_ticks==period-1U);
+    }
     assert(!am13e_motor_duty_plan(100U,100000000U,500,0,0,1,0,1,0,&p));
     assert(!am13e_motor_duty_plan(300U,100000000U,500,301,1,1,0,0,0,&p));
     assert(!am13e_motor_duty_plan(65536U,100000000U,500,0,0,0,0,0,0,&p));

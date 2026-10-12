@@ -27,6 +27,17 @@ int main(void) {
     assert(us==32768);
     assert(am13e_bemf_sample_plan(timeout,per_ms,timeout,&us)==2);
     assert(am13e_bemf_sample_plan(UINT32_MAX,per_ms,timeout,&us)==2);
+    /* Exact rounding across the 32-bit fast-path boundary and retained
+     * wide fallback, including signed-result rejection and timeout. */
+    const uint32_t clocks[]={1,100000U,200000U,UINT32_MAX};
+    const uint32_t ticks_cases[]={0,1,4294966U,4294967U,4294968U,2147483647U,UINT32_MAX-1U};
+    for(unsigned c=0;c<sizeof clocks/sizeof clocks[0];++c)
+    for(unsigned t=0;t<sizeof ticks_cases/sizeof ticks_cases[0];++t){
+        uint64_t value=((uint64_t)ticks_cases[t]*1000U+clocks[c]/2U)/clocks[c];
+        AM13E_BemfSample result=am13e_bemf_sample_plan(ticks_cases[t],clocks[c],UINT32_MAX,&us);
+        assert(result==(value>INT_MAX?AM13E_BEMF_SAMPLE_INVALID:AM13E_BEMF_SAMPLE_EDGE));
+        if(value<=INT_MAX)assert(us==(int)value);
+    }
     unsigned simulated=0;
     for(int reverse=0;reverse<2;++reverse)
     for(int damp=0;damp<2;++damp)

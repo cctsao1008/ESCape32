@@ -243,7 +243,6 @@ void am13e_pb14_bidir_tx_status(uint32_t *completed, uint32_t *rejected)
 }
 void am13e_pb14_bidir_tx_systick(void)
 {
-    const uint32_t mask=__get_PRIMASK();__disable_irq();
     if(state!=TX_IDLE && ++timeout_ticks>16U){
         /* Transport timeout is not a fabricated DMA completion. Cancel
          * both request owners, release the pad and resynchronize RX. */
@@ -252,5 +251,4 @@ void am13e_pb14_bidir_tx_systick(void)
         state=TX_IDLE;++tx_rejected;timeout_ticks=0U;
         am13e_pb14_resume_rx();
     }
-    __set_PRIMASK(mask);
 }
