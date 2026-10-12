@@ -53,7 +53,11 @@ void am13e_mcu_fault_trip_install(const AM13E_FaultTripRoute *route)
     DL_MCPWM_setTripZoneAction(route->mcpwm,
                               DL_MCPWM_TZ_ACTION_EVENT_TZB,
                               #if AM13E_MOTOR_OUTPUT_CONFIGURED
+#ifdef PWM_ENABLE
+                              DL_MCPWM_TZ_ACTION_HIGH);
+#else
                               DL_MCPWM_TZ_ACTION_LOW);
+#endif
 #else
                               DL_MCPWM_TZ_ACTION_HIGH_Z);
 #endif
@@ -81,7 +85,11 @@ int am13e_mcu_fault_trip_ready(const AM13E_FaultTripRoute *route)
                (MCPWM_TZCTL_TZA_MASK | MCPWM_TZCTL_TZB_MASK)) ==
 #if AM13E_MOTOR_OUTPUT_CONFIGURED
                 ((uint32_t)DL_MCPWM_TZ_ACTION_LOW<<MCPWM_TZCTL_TZA_OFS |
+#ifdef PWM_ENABLE
+                 (uint32_t)DL_MCPWM_TZ_ACTION_HIGH<<MCPWM_TZCTL_TZB_OFS);
+#else
                  (uint32_t)DL_MCPWM_TZ_ACTION_LOW<<MCPWM_TZCTL_TZB_OFS);
+#endif
 #else
                 0U;
 #endif

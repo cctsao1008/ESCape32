@@ -110,5 +110,5 @@ echo "PASS: bemf_timeout"
 
 if [ "$mode" = full ]; then
   bash mcu/_support/AM13E/tools/run_motor_register_regression.sh
-  echo "PASS: motor_physical_sdk (five motor configurations)"
+  echo "PASS: motor_physical_sdk (production motor configurations)"
 fi

@@ -1069,8 +1069,14 @@ static void audio_stage_compare_locked(uint16_t u, uint16_t w,int active)
     const uint16_t inverse=(uint16_t)(DL_MCPWM_AQ_OUTPUT_LOW_ZERO |
                                       DL_MCPWM_AQ_OUTPUT_HIGH_UP_CMPB);
     const uint16_t sink=(uint16_t)DL_MCPWM_AQ_OUTPUT_HIGH_ZERO;
+#ifdef PWM_ENABLE
+    /* Original util.c enables all three bridge phases even at a silent
+     * zero compare. PWM U/W alternate; V remains the static return. */
+    const uint16_t wave[6]={pwm,inverse,0U,sink,pwm,inverse};
+#else
     const uint16_t wave[6]={u?pwm:0U,u?inverse:0U,0U,
                              (u||w)?sink:0U,w?pwm:0U,w?inverse:0U};
+#endif
 #if AM13E_MOTOR_OUTPUT_CONFIGURED
     /* Audio formatters supply modulation counts without the hardware DT.
      * Preserve pulse width after RED at the actual selected clock divider. */
@@ -1141,6 +1147,10 @@ void am13e_app_motor_audio_begin(int mode)
         (AM13E_MOTOR_OUTPUT_RED_TICKS+15U)/16U:AM13E_MOTOR_OUTPUT_RED_TICKS);
     DL_MCPWM_setRisingEdgeDelayCountActive(MCPWM0,audio_red);
     DL_MCPWM_setRisingEdgeDelayCountShadow(MCPWM0,audio_red);
+#ifdef PWM_ENABLE
+    DL_MCPWM_setFallingEdgeDelayCountActive(MCPWM0,audio_red);
+    DL_MCPWM_setFallingEdgeDelayCountShadow(MCPWM0,audio_red);
+#endif
 #endif
     /* ET2 is loaned by BEMF blanking to music's sticky period flag.
      * ET2 stays latched until the original delayf poll consumes it. */
@@ -1269,6 +1279,10 @@ void am13e_app_motor_audio_end(void)
 #if AM13E_MOTOR_OUTPUT_CONFIGURED
     DL_MCPWM_setRisingEdgeDelayCountActive(MCPWM0,AM13E_MOTOR_OUTPUT_RED_TICKS);
     DL_MCPWM_setRisingEdgeDelayCountShadow(MCPWM0,AM13E_MOTOR_OUTPUT_RED_TICKS);
+#ifdef PWM_ENABLE
+    DL_MCPWM_setFallingEdgeDelayCountActive(MCPWM0,AM13E_MOTOR_OUTPUT_FED_TICKS);
+    DL_MCPWM_setFallingEdgeDelayCountShadow(MCPWM0,AM13E_MOTOR_OUTPUT_FED_TICKS);
+#endif
 #endif
     DL_MCPWM_setPeriodLoadMode(MCPWM0,DL_MCPWM_PERIOD_SHADOW_LOAD_ENABLE);
     const uint16_t period=(uint16_t)

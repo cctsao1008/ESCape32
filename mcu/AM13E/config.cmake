@@ -65,6 +65,7 @@ include("${PROJECT_SOURCE_DIR}/mcu/_support/AM13E/cmake/ti.cmake")
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/cfg_flash_runtime.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/input_watchdog.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_event_timer.c"
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_hall.c"
             "${PROJECT_SOURCE_DIR}/src/runtime/newlib_syscalls.c"
             # Genuine TI DriverLib objects: delayCycles (common) and
             # Flash read wait-state RAMFUNC (FRI); no replacement stubs.

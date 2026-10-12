@@ -14,6 +14,7 @@
 #include "motor_safety.h"
 #include "motor_bemf.h"
 #include "motor_event_timer.h"
+#include "motor_hall.h"
 #include "analog_runtime.h" /* ADC0 monitoring must have a live IRQ handler */
 #include "irq_vectors.h"
 #include "fault_input.h"
@@ -54,6 +55,9 @@ void am13e_app_motor_runtime_enable_interrupts(void)
 {
     if (__get_PRIMASK() != 1U || irq_barrier_released)
         irq_barrier_fault();
+#ifdef HALL_MAP
+    if (!am13e_app_motor_hall_ready()) irq_barrier_fault();
+#endif
 
     /* The paired SW Architecture Baseline v1.6 requires exactly one
      * APP_BASE=0x6000 for both FW1/FW2. Boot must not transfer execution

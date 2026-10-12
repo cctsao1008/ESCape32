@@ -7,22 +7,29 @@ out=$(mktemp -d /tmp/am13e-motor-register.XXXXXX)
 trap 'rm -rf "$out"' EXIT
 python3 mcu/_support/AM13E/tools/prepare_sdk_sources.py --sdk-root "$sdk" --output "$out"
 # Synthetic electrical fixtures only; never a qualified board configuration.
-for fixture in high low full inverted blanking; do
-polarity=1; mask=0; extra=()
+for fixture in high low full inverted blanking hall pwm_enable pwm_enable_full; do
+polarity=1; mask=0; fed=0; extra=()
 case "$fixture" in
   low) polarity=0; mask=63 ;;
   full) extra=(-DFULL_DUTY) ;;
   inverted) mask=21; extra=(-DINVERTED_HIGH) ;;
   blanking) extra=(-DSW_BLANKING) ;;
+  hall) extra=(-DHALL_MAP=1 -DUSE_XOR -DAM13E_HALL_GPIO_TIMESTAMP=1
+    -DAM13E_HALL_PIN1=5 -DAM13E_HALL_PIN2=7 -DAM13E_HALL_PIN3=12
+    -DAM13E_HALL_PULL=DL_GPIO_RESISTOR_PULL_UP -DAM13E_HALL_INVERT_MASK=0) ;;
+  pwm_enable) fed=120; extra=(-DPWM_ENABLE -DAM13E_MOTOR_PWM_ENABLE_TOPOLOGY=1 -DAM13E_MOTOR_PWM_ENABLE_DRIVER_DEAD_NS=1500) ;;
+  pwm_enable_full) fed=120; mask=21; extra=(-DPWM_ENABLE -DAM13E_MOTOR_PWM_ENABLE_TOPOLOGY=1 -DAM13E_MOTOR_PWM_ENABLE_DRIVER_DEAD_NS=1500 -DFULL_DUTY -DINVERTED_HIGH -DSW_BLANKING) ;;
 esac
 hw="$sdk/source/device/am13e230x/include/hw"
 dl="$sdk/source/driverlib/am13e230x"
 cc "${extra[@]}" -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections \
  -DAM13E -DAM13E_REF_IO_PLAN_V1=1 -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' \
- -DAM13E_MOTOR_GATE_ACTIVE_LEVEL="$polarity" -DAM13E_MOTOR_PAD_INVERT_MASK="$mask" -DAM13E_MOTOR_OUTPUT_RED_TICKS=120 -DAM13E_MOTOR_OUTPUT_FED_TICKS=0 -DAM13E_MOTOR_MIN_DEAD_TICKS=100 -DAM13E_MOTOR_NFAULT_ACTIVE_LOW=1 -DAM13E_MOTOR_GATE_RESET_INACTIVE=1 \
+ -DAM13E_MOTOR_GATE_ACTIVE_LEVEL="$polarity" -DAM13E_MOTOR_PAD_INVERT_MASK="$mask" -DAM13E_MOTOR_OUTPUT_RED_TICKS=120 -DAM13E_MOTOR_OUTPUT_FED_TICKS="$fed" -DAM13E_MOTOR_MIN_DEAD_TICKS=100 -DAM13E_MOTOR_NFAULT_ACTIVE_LOW=1 -DAM13E_MOTOR_GATE_RESET_INACTIVE=1 \
  "-DAM13E_TEST_TI_ECAP_HEADER=\"$dl/dl_ecap.h\"" "-DAM13E_TEST_TI_GPIO_HEADER=\"$dl/dl_gpio.h\"" "-DAM13E_TEST_TI_MCPWM_HEADER=\"$dl/dl_mcpwm.h\"" \
+ "-DAM13E_TEST_TI_EQEP_HEADER=\"$dl/dl_eqep.h\"" \
  -Isrc -Isrc/serial -Isrc/runtime -Imcu/AM13E -Imcu/AM13E/hal -Imcu/AM13E/hal/tests/register_mock -I"$hw" -I"$dl" \
  mcu/AM13E/hal/tests/motor_physical_host_test.c src/util.c \
+ mcu/AM13E/hal/motor_hall.c \
  mcu/AM13E/hal/motor_audio.c mcu/AM13E/hal/motor_audio_plan.c mcu/AM13E/hal/motor_safety.c mcu/AM13E/hal/motor_output_runtime.c mcu/AM13E/hal/motor_output_backend.c mcu/AM13E/hal/board_motor_output_reference.c mcu/AM13E/hal/motor_power_stage.c mcu/AM13E/hal/motor_output_route_plan.c \
  mcu/AM13E/hal/motor_fault_route.c mcu/AM13E/hal/fault_trip_backend.c mcu/AM13E/hal/fault_trip_route_plan.c \
  mcu/AM13E/hal/motor_phase_plan.c mcu/AM13E/hal/motor_aq_plan.c mcu/AM13E/hal/motor_shadow_plan.c mcu/AM13E/hal/motor_pwm_shadow_plan.c mcu/AM13E/hal/motor_frequency_plan.c mcu/AM13E/hal/motor_duty_plan.c mcu/AM13E/hal/motor_ownership_plan.c \
@@ -32,13 +39,41 @@ cc "${extra[@]}" -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-int-to-po
 "$out/motor-physical-test"
 done
 
+# Compile the real optional input owner: invalid routing must fail before
+# any GPIO mode can overwrite a motor/receiver/sensor pad.
+hall_args=(-std=c11 -Werror -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
+ -DAM13E -DCLK=200000000 -DHALL_MAP=1 -DAM13E_REF_IO_PLAN_V1=1
+ -DAM13E_HALL_GPIO_TIMESTAMP=1 -DAM13E_HALL_PIN1=5 -DAM13E_HALL_PIN2=7
+ -DAM13E_HALL_PIN3=12 -DAM13E_HALL_PULL=DL_GPIO_RESISTOR_PULL_UP
+ -DAM13E_HALL_INVERT_MASK=0
+ "-DAM13E_TEST_TI_GPIO_HEADER=\"$dl/dl_gpio.h\""
+ "-DAM13E_TEST_TI_EQEP_HEADER=\"$dl/dl_eqep.h\""
+ -Isrc -Imcu/AM13E -Imcu/AM13E/hal -Imcu/AM13E/hal/tests/register_mock
+ -I"$hw" -I"$dl" -fsyntax-only mcu/AM13E/hal/motor_hall.c)
+cc "${hall_args[@]}"
+for invalid in missing_route motor_pad duplicate_pad bad_inversion unspecified_timestamp; do
+  expected='Hall routes conflict'
+  case "$invalid" in
+    missing_route) args=(-UAM13E_HALL_PIN3); expected='Hall requires three explicit' ;;
+    motor_pad) args=(-UAM13E_HALL_PIN1 -DAM13E_HALL_PIN1=8) ;;
+    duplicate_pad) args=(-UAM13E_HALL_PIN1 -DAM13E_HALL_PIN1=7) ;;
+    bad_inversion) args=(-UAM13E_HALL_INVERT_MASK -DAM13E_HALL_INVERT_MASK=8); expected='Invalid Hall electrical definition' ;;
+    unspecified_timestamp) args=(-UAM13E_HALL_GPIO_TIMESTAMP); expected='Hall requires three explicit' ;;
+  esac
+  if cc "${hall_args[@]}" "${args[@]}" >"$out/hall-$invalid.log" 2>&1; then
+    echo "FAIL: invalid Hall definition accepted: $invalid" >&2; exit 1
+  fi
+  rg -q "$expected" "$out/hall-$invalid.log"
+  echo "PASS: rejected Hall definition: $invalid"
+done
+
 base=(-DAM13E_MOTOR_GATE_ACTIVE_LEVEL=1 -DAM13E_MOTOR_PAD_INVERT_MASK=0
  -DAM13E_MOTOR_OUTPUT_RED_TICKS=120 -DAM13E_MOTOR_OUTPUT_FED_TICKS=0
  -DAM13E_MOTOR_MIN_DEAD_TICKS=100 -DAM13E_MOTOR_NFAULT_ACTIVE_LOW=1
  -DAM13E_MOTOR_GATE_RESET_INACTIVE=1)
 header=mcu/AM13E/hal/motor_output_configuration.h
 cc -std=c11 -Werror "${base[@]}" -include "$header" -x c -fsyntax-only /dev/null
-for invalid in missing_gate bad_gate bad_pad missing_min short_dead nonzero_fed reset_active pwm_enable inverted_mismatch; do
+for invalid in missing_gate bad_gate bad_pad missing_min short_dead nonzero_fed reset_active pwm_enable inverted_mismatch pwm_enable_bad_fed topology_without_selector pwm_enable_missing_driver_dt pwm_enable_short_driver_dt; do
   case "$invalid" in
     missing_gate) args=(-UAM13E_MOTOR_GATE_ACTIVE_LEVEL) ;;
     bad_gate) args=(-UAM13E_MOTOR_GATE_ACTIVE_LEVEL -DAM13E_MOTOR_GATE_ACTIVE_LEVEL=2) ;;
@@ -49,6 +84,10 @@ for invalid in missing_gate bad_gate bad_pad missing_min short_dead nonzero_fed 
     reset_active) args=(-UAM13E_MOTOR_GATE_RESET_INACTIVE -DAM13E_MOTOR_GATE_RESET_INACTIVE=0) ;;
     pwm_enable) args=(-DPWM_ENABLE) ;;
     inverted_mismatch) args=(-DINVERTED_HIGH) ;;
+    pwm_enable_bad_fed) args=(-DPWM_ENABLE -DAM13E_MOTOR_PWM_ENABLE_TOPOLOGY=1 -DAM13E_MOTOR_PWM_ENABLE_DRIVER_DEAD_NS=1500) ;;
+    topology_without_selector) args=(-DAM13E_MOTOR_PWM_ENABLE_TOPOLOGY=1) ;;
+    pwm_enable_missing_driver_dt) args=(-DPWM_ENABLE -DAM13E_MOTOR_PWM_ENABLE_TOPOLOGY=1 -UAM13E_MOTOR_OUTPUT_FED_TICKS -DAM13E_MOTOR_OUTPUT_FED_TICKS=120) ;;
+    pwm_enable_short_driver_dt) args=(-DPWM_ENABLE -DAM13E_MOTOR_PWM_ENABLE_TOPOLOGY=1 -DAM13E_MOTOR_PWM_ENABLE_DRIVER_DEAD_NS=500 -UAM13E_MOTOR_OUTPUT_FED_TICKS -DAM13E_MOTOR_OUTPUT_FED_TICKS=120) ;;
   esac
   if cc -std=c11 -Werror "${base[@]}" "${args[@]}" -include "$header" -x c -fsyntax-only /dev/null >"$out/$invalid.log" 2>&1; then
     echo "FAIL: invalid motor electrical definition accepted: $invalid" >&2; exit 1

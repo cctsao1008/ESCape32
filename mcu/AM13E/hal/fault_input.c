@@ -14,6 +14,7 @@
 #include "fault_input.h"
 #include "board_configuration.h"
 #include "aux_gpio.h"
+#include "motor_hall.h"
 
 #define AM13E_NFAULT_GPIO GPIO1
 #define AM13E_NFAULT_PIN DL_GPIO_PIN(15U)
@@ -55,6 +56,9 @@ static void io_init_fail(void)
 
 void initgpio(void)
 {
+#ifdef HALL_MAP
+    am13e_app_motor_hall_gpio_init();
+#endif
     /* Do not reset GPIO1: PB14 DShot shares the same port. */
     DL_GPIO_enablePower(AM13E_NFAULT_GPIO);
     if (!DL_GPIO_isPowerEnabled(AM13E_NFAULT_GPIO))

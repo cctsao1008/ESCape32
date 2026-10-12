@@ -36,12 +36,36 @@ void am13e_motor_output_stage(const uint16_t aq[6],const uint16_t compare[6],uin
     const uint32_t red=MCPWM0->DBRED & MCPWM_DBRED_DBRED_MASK;
     const uint32_t fed=(MCPWM0->DBCTL & (UINT32_C(1)<<(DL_MCPWM_DB_FED+MCPWM_DBCTL_OUT_MODE_OFS))) ?
         MCPWM0->DBFED & MCPWM_DBFED_DBFED_MASK : 0U;
+#ifdef PWM_ENABLE
+    if(red!=fed || period<=red)output_fault();
+#else
     if(red<=fed || period<=red)output_fault();
+#endif
     am13e_motor_output_update_begin();
     uint16_t image_aq[6],image_compare[6];
     DL_MCPWM_setTimeBasePeriodShadow(MCPWM0,period);
     for(unsigned i=0;i<6U;++i){
         uint16_t action=aq[i];
+#ifdef PWM_ENABLE
+        /* Rel17 TIM1 PWM_ENABLE: positive PWM and sine enable the phase;
+         * forced-low sink enables it; forced-high floating disables it.
+         * NP inversion makes the complementary enable fall delayed, rise
+         * immediate. MCPWM independent A RED / B FED realizes those edges.
+         * Drag brake is PWM2 on enable, with the PWM input inactive.
+         */
+        uint32_t cc=compare[i];
+        if(i&1U){
+            const uint16_t pwm=DL_MCPWM_AQ_OUTPUT_HIGH_ZERO|DL_MCPWM_AQ_OUTPUT_LOW_UP_CMPA;
+            if(aq[i-1U]==pwm || action==DL_MCPWM_AQ_OUTPUT_HIGH_ZERO)
+                action=DL_MCPWM_AQ_OUTPUT_LOW_ZERO;
+            else if(action==0U)action=DL_MCPWM_AQ_OUTPUT_HIGH_ZERO;
+            else if(cc==0U || cc>period)action=cc==0U ?
+                DL_MCPWM_AQ_OUTPUT_HIGH_ZERO:DL_MCPWM_AQ_OUTPUT_LOW_ZERO;
+        }else{
+            if(action==0U || cc<=red)action=DL_MCPWM_AQ_OUTPUT_LOW_ZERO;
+            else if(cc>period)action=DL_MCPWM_AQ_OUTPUT_HIGH_ZERO;
+        }
+#else
         uint32_t cc=compare[i]+((i&1U)?red:fed);
         if(action==0U)action=DL_MCPWM_AQ_OUTPUT_LOW_ZERO;
         else if((i&1U) && action==DL_MCPWM_AQ_OUTPUT_HIGH_ZERO){
@@ -56,6 +80,7 @@ void am13e_motor_output_stage(const uint16_t aq[6],const uint16_t compare[6],uin
         }else if((i&1U) && cc>period){
             action=DL_MCPWM_AQ_OUTPUT_LOW_ZERO; /* no wrapped freewheel edge */
         }
+#endif
         /* Constant actions ignore compares. Keep these representable even
          * when a valid FULL_DUTY/near-limit image plus DT exceeds 16 bits. */
         if(action==DL_MCPWM_AQ_OUTPUT_LOW_ZERO || action==DL_MCPWM_AQ_OUTPUT_HIGH_ZERO)cc=1U;

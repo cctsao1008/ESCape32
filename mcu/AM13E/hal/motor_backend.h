@@ -32,6 +32,10 @@
 #endif
 
 void am13e_app_motor_init(void);
+#ifdef HALL_MAP
+void am13e_app_motor_hall_init(int enable);
+void am13e_app_motor_on_hall_event(int capture_500ns, int timeout);
+#endif
 void am13e_app_motor_sine_schedule_us(int period_us);
 void am13e_app_motor_sine_write(int a, int b, int c, int power, int start);
 /* Called once after first sine sample to ENTER sine PWM (not sine exit).

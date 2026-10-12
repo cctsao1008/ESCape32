@@ -16,6 +16,10 @@
 #include "board_motor_output_provider.h"
 #include "motor_bemf.h"
 #include "motor_event_timer.h"
+#include "motor_hall.h"
+#ifdef HALL_MAP
+#include <dl_eqep.h>
+#endif
 #include <dl_mcpwm.h>
 #include <dl_sysctl.h>
 #include <dl_gpio.h>
@@ -33,7 +37,13 @@ void NVIC_EnableIRQ(IRQn_Type i){assert(i>=0);enabled[i]=1U;}
 void NVIC_DisableIRQ(IRQn_Type i){assert(i>=0);enabled[i]=0U;}
 uint32_t NVIC_GetEnableIRQ(IRQn_Type i){return enabled[i];}
 uint32_t NVIC_GetPriority(IRQn_Type i){return priority[i];}
-uint32_t NVIC_GetVector(IRQn_Type i){(void)i;return 0U;}
+uint32_t NVIC_GetVector(IRQn_Type i){
+#ifdef HALL_MAP
+    if(i==GPIO0_INT_IRQn)return (uint32_t)(uintptr_t)GPIO0_IRQHandler|1U;
+    if(i==EQEP0_INT_IRQn)return (uint32_t)(uintptr_t)EQEP0_IRQHandler|1U;
+#endif
+    (void)i;return 0U;
+}
 int am13e_app_io_watchdog_fault_arm(void){++watchdog_arms;return 1;}
 void test_global_load(MCPWM_Regs *p)
 {
@@ -83,6 +93,9 @@ void test_shadow_written(MCPWM_Regs *p)
  * levels at each TBCLK. This is model evidence, not a pin measurement. */
 static unsigned aq_state[6],gate_state[6];
 static uint64_t virtual_tick,red_deadline[3],last_off[6];
+#ifdef PWM_ENABLE
+static uint64_t fed_deadline[3];
+#endif
 static unsigned off_seen[6];
 void test_aq_forced(MCPWM_Regs *p,DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE o)
 {
@@ -105,7 +118,11 @@ static void carrier(void)
     uint32_t cc[6]={MCPWM0->PWM1_CMPA,MCPWM0->PWM1_CMPB,
         MCPWM0->PWM2_CMPA,MCPWM0->PWM2_CMPB,MCPWM0->PWM3_CMPA,MCPWM0->PWM3_CMPB};
     const unsigned red=MCPWM0->DBRED;
+#ifdef PWM_ENABLE
+    assert(MCPWM0->DBFED==red && (MCPWM0->DBCTL&MCPWM_DBCTL_OUT_MODE_MASK)==3U);
+#else
     assert(MCPWM0->DBFED==1U && (MCPWM0->DBCTL&MCPWM_DBCTL_OUT_MODE_MASK)==(1U<<DL_MCPWM_DB_RED));
+#endif
     for(unsigned tick=0;tick<=MCPWM0->TBPRD;++tick,++virtual_tick){
         MCPWM0->TBCTR=tick;
 #ifdef SW_BLANKING
@@ -122,6 +139,15 @@ static void carrier(void)
             if(!aq_state[a]){gate_state[a]=0U;red_deadline[phase]=UINT64_MAX;}
             else if(!old_a)red_deadline[phase]=virtual_tick+red;
             if(aq_state[a] && virtual_tick==red_deadline[phase])gate_state[a]=1U;
+#ifdef PWM_ENABLE
+            /* B is active-low bridge enable, not a low-side gate. FED
+             * delays its activation; a rising input cancels a short pulse. */
+            if(aq_state[b]){gate_state[b]=1U;fed_deadline[phase]=UINT64_MAX;}
+            else if(previous[1]){
+                if(fed_deadline[phase]==UINT64_MAX)fed_deadline[phase]=virtual_tick+MCPWM0->DBFED;
+                if(virtual_tick==fed_deadline[phase])gate_state[b]=0U;
+            }
+#else
             gate_state[b]=aq_state[b];
             assert(!(gate_state[a] && gate_state[b]));
             for(unsigned leg=0;leg<2U;++leg){
@@ -133,6 +159,7 @@ static void carrier(void)
                 if(!previous[leg] && gate_state[i] && off_seen[other])
                     assert(virtual_tick-last_off[other]>=red);
             }
+#endif
         }
     }
 }
@@ -145,13 +172,26 @@ static void expect_sixstep(void)
         MCPWM0->PWM2_AQCTLA,MCPWM0->PWM2_AQCTLB,MCPWM0->PWM3_AQCTLA,MCPWM0->PWM3_AQCTLB};
     assert(step>=1 && step<=6);
     for(unsigned phase=0;phase<3U;++phase){
-        if(phase==negative[step-1]){
+#ifdef PWM_ENABLE
+        if(phase==positive[step-1]){
+            assert(aq[phase*2U]==(DL_MCPWM_AQ_OUTPUT_HIGH_ZERO|DL_MCPWM_AQ_OUTPUT_LOW_UP_CMPA));
+            assert(aq[phase*2U+1U]==DL_MCPWM_AQ_OUTPUT_LOW_ZERO);
+        }else{
+            assert(aq[phase*2U]==DL_MCPWM_AQ_OUTPUT_LOW_ZERO);
+            assert(aq[phase*2U+1U]==(phase==negative[step-1] ?
+                DL_MCPWM_AQ_OUTPUT_LOW_ZERO:DL_MCPWM_AQ_OUTPUT_HIGH_ZERO));
+        }
+#else
+        if(phase==positive[step-1]){
+            assert(aq[phase*2U]==(DL_MCPWM_AQ_OUTPUT_HIGH_ZERO|DL_MCPWM_AQ_OUTPUT_LOW_UP_CMPA));
+        }else if(phase==negative[step-1]){
             assert(aq[phase*2U]==DL_MCPWM_AQ_OUTPUT_LOW_ZERO);
             assert(aq[phase*2U+1U]==DL_MCPWM_AQ_OUTPUT_HIGH_UP_CMPB);
         }else if(phase!=positive[step-1]){
             assert(aq[phase*2U]==DL_MCPWM_AQ_OUTPUT_LOW_ZERO);
             assert(aq[phase*2U+1U]==DL_MCPWM_AQ_OUTPUT_LOW_ZERO);
         }
+#endif
     }
 }
 static void capture(unsigned ticks)
@@ -183,6 +223,74 @@ static void start(void)
     zero();assert(!gate_on());
     zero();assert(gate_on());
 }
+#ifdef HALL_MAP
+static void hall_input(unsigned code)
+{
+    *(volatile uint32_t *)(uintptr_t)&GPIO0->DIN31_0=
+        ((code&1U)?DL_GPIO_PIN(AM13E_HALL_PIN1):0U)|
+        ((code&2U)?DL_GPIO_PIN(AM13E_HALL_PIN2):0U)|
+        ((code&4U)?DL_GPIO_PIN(AM13E_HALL_PIN3):0U);
+}
+static void hall_edge(unsigned code,unsigned ticks)
+{
+    hall_input(code);EQEP0->QUTMR=ticks;
+    *(volatile uint32_t *)(uintptr_t)&GPIO0->CPU_INT.MIS=DL_GPIO_PIN(AM13E_HALL_PIN1);
+    GPIO0_IRQHandler();
+    assert(EQEP0->QUTMR==0U && GPIO0->CPU_INT.MIS==0U);
+}
+static void hall_runtime(void)
+{
+    am13e_app_motor_hall_gpio_init();
+    for(unsigned code=0;code<8U;++code){hall_input(code);assert(getcode()==(int)code);}
+    hall_input(7);am13e_app_motor_hall_init(0);
+    assert(am13e_app_motor_hall_ready() && !enabled[GPIO0_INT_IRQn]);
+    hall_input(1);am13e_app_motor_hall_init(1);
+    assert(am13e_app_motor_hall_ready() && EQEP0->QUPRD==6553600U);
+    cfg.damp=1;cfg.sine_power=8;ertm=6000;ival=10000;sync=6;hall=10000;
+    am13e_app_motor_pwm_apply(800,24,48,ertm,1,0,0,1);
+    step=0;reverse=0;nextstep();start();carrier();
+    static const unsigned expected[6][2]={{2,4},{4,6},{3,5},{6,2},{1,3},{5,1}};
+    for(unsigned direction=0;direction<2U;++direction){
+        reverse=direction;
+        for(unsigned code=1;code<=6U;++code){
+            hall=10000;sync=5;test_primask=0U;
+            hall_edge(code,1000000U); /* 5 ms -> original 10000 half-us counts. */
+            assert(test_primask==0U && step==(int)expected[code-1U][direction]);
+            assert(ival==10000 && hall==10000 && sync==6);
+            assert(!(TIMG12->COUNTERREGS.CTRCTL&GPTIMER_CTRCTL_EN_MASK));
+            zero();expect_sixstep();carrier();
+        }
+    }
+    test_primask=1U;
+    /* Fast Hall edge follows original hybrid threshold: BEMF owns COM. */
+    hall=4000;sync=6;const int old=step;
+    hall_edge(3,100000U);assert(hall==3250 && step==old);
+    /* Actual ECAP/BEMF policy conversion and TIMG12 delay in Hall builds. */
+    ival=4000;cfg.timing=16;sync=0;
+    am13e_app_motor_bemf_interval_select(6000);
+    capture(300000U); /* Real ECAP1 ISR: 200 MHz capture of 1.5 ms. */
+    assert(ival==3750 && sync==1);
+    assert(TIMG12->COUNTERREGS.LOAD==46900U-1U);
+    /* Hardware unit-timeout and coalesced GPIO/timeout keep UIF priority. */
+    EQEP0->QFLG=DL_EQEP_INT_UNIT_TIME_OUT|DL_EQEP_INT_GLOBAL;
+    EQEP0_IRQHandler();assert(hall==0x10000 && sync==0 && ival==10000);
+    hall=10000;sync=6;EQEP0->QFLG=DL_EQEP_INT_UNIT_TIME_OUT;
+    hall_edge(1,20U);assert(hall==0x10000 && sync==0 && step==old);
+    am13e_app_motor_commutation_enable(0);sine=1000;step=0;prep=0;
+    nextstep();assert(TIMG12->COUNTERREGS.LOAD==50000U-1U);
+    const int sine_step=step;hall_edge(2,1000000U);assert(step==sine_step);
+    am13e_app_motor_commutation_enable(0);sine=0;step=0;
+    hall_edge(4,1000000U);assert(step==0 && !gate_on());
+    /* Invalid Hall code is rejected by original getcode()/nextstep(). */
+    hall=10000;hall_input(0);
+    if(!setjmp(fault_return)){nextstep();assert(0);}
+    assert(!gate_on());
+    hall_input(7);
+    if(!setjmp(fault_return)){nextstep();assert(0);}
+    assert(!gate_on());
+    puts("PASS production Hall GPIO/EQEP0 ISR -> Rel17 mapping/filter/timeout/hybrid -> MCPWM; IRQ timestamp latency unqualified");
+}
+#endif
 int main(void)
 {
     /* Anonymous virtual register RAM. Absolutely no device access. */
@@ -199,12 +307,21 @@ int main(void)
         (uint32_t)DL_MCPWM_CLOCK_DIVIDER_2<<MCPWM_TBCTL_CLKDIV_OFS);
     assert(am13e_app_motor_inactive_aq_boot_preflight());
     am13e_app_motor_bemf_init();
+#ifdef PWM_ENABLE
+    assert((MCPWM0->TZCTL&MCPWM_TZCTL_TZB_MASK)==
+        ((uint32_t)DL_MCPWM_TZ_ACTION_HIGH<<MCPWM_TZCTL_TZB_OFS));
+    checkcfg();assert(cfg.damp==1);
+#endif
     for(unsigned n=0;n<18U;++n){ECAP1->TSCTR+=12500U;am13e_app_motor_bemf_tick();}
     assert(am13e_app_motor_inactive_preflight_ok());
+#ifdef HALL_MAP
+    hall_runtime();assert(munmap(r,0x07000000)==0);return 0;
+#endif
     cfg.damp=1;cfg.sine_power=8;ertm=6000;ival=3000;sync=6;step=0;reverse=0;
     am13e_app_motor_pwm_apply(800,24,48,ertm,1,0,0,1);
     nextstep();start();carrier();
-    assert(MCPWM0->DBRED==AM13E_MOTOR_OUTPUT_RED_TICKS && MCPWM0->DBFED==1U);
+    assert(MCPWM0->DBRED==AM13E_MOTOR_OUTPUT_RED_TICKS &&
+        MCPWM0->DBFED==(AM13E_MOTOR_OUTPUT_FED_TICKS?AM13E_MOTOR_OUTPUT_FED_TICKS:1U));
     inject_shadow_zero=1U;
     for(unsigned n=0;n<12U;++n){nextstep();zero();expect_sixstep();carrier();assert(am13e_mcu_motor_pads_pwm_matches(am13e_board_motor_pad_route(),AM13E_MOTOR_PAD_INVERT_MASK));}
     reverse=1;for(unsigned n=0;n<12U;++n){nextstep();zero();expect_sixstep();carrier();}
@@ -305,6 +422,9 @@ int main(void)
         assert((MCPWM0->TBCTL&MCPWM_TBCTL_CLKDIV_MASK)==
             (uint32_t)(mode==1?DL_MCPWM_CLOCK_DIVIDER_32:DL_MCPWM_CLOCK_DIVIDER_2)<<MCPWM_TBCTL_CLKDIV_OFS);
         assert(MCPWM0->DBRED==(mode==1?(AM13E_MOTOR_OUTPUT_RED_TICKS+15U)/16U:AM13E_MOTOR_OUTPUT_RED_TICKS));
+#ifdef PWM_ENABLE
+        assert(MCPWM0->DBFED==MCPWM0->DBRED);
+#endif
         am13e_app_motor_audio_period(2000U);
         am13e_app_motor_audio_compare(400U,700U);zero();zero();carrier();assert(gate_on());
         am13e_app_motor_audio_compare(300U,500U);zero();carrier();

@@ -28,16 +28,33 @@ The six-independent-input adapter preserves Core phase selection using separate
 A/B AQ sources. RED delays A rising; FED is zero; compare-delayed B rising
 provides the opposite switching gap. RED must meet the explicitly defined minimum
 at the motor/PCM 100 MHz TBCLK. Music rescales RED upwards to whole 6.25 MHz ticks.
-Nonzero FED and `PWM_ENABLE` gate-driver topologies need a separate electrical
-adapter and are rejected rather than guessed. No production dead-time is inferred
-from the provisional 92-tick reference.
+`PWM_ENABLE` instead requires `AM13E_MOTOR_PWM_ENABLE_TOPOLOGY=1`: each A route
+is PWM, each B route is phase enable. Before the explicit pad inversion, B=1
+floats, B=0/A=1 sources, and B=0/A=0 sinks. The board driver must implement that
+truth table and internal complementary gate control. Its guaranteed internal
+non-overlap must be supplied as `AM13E_MOTOR_PWM_ENABLE_DRIVER_DEAD_NS` and meet
+the board minimum: MCU PWM/enable signals cannot time the driver's hidden gates.
+This topology requires
+equal nonzero RED/FED: A rising and B falling are delayed, rather than using
+the independent-gate compare offset. Music rescales both counts. Arbitrary FED
+remains unsupported. No production dead-time is inferred from the 92-tick reference.
+
+`HALL_MAP` can select GPIO0 Hall inputs using explicit `AM13E_HALL_PIN1/2/3`
+PINCM indices, `AM13E_HALL_PULL`, `AM13E_HALL_INVERT_MASK`, and
+`AM13E_HALL_GPIO_TIMESTAMP=1`. EQEP0's 200 MHz unit timer timestamps GPIO ISR
+entry and supplies the original 32.768 ms timeout; TIMG4/12 and ECAP0/1 retain
+their owners. Hall builds retain the Core's 500 ns units and convert only at
+native timer hooks. This backend does not provide a hardware edge-capture latch
+or STM32 input-filter timing equivalence. IRQ latency, Hall wiring and filtering
+require validation. LED/BEC sharing needs additional route ownership checks.
 
 Rel17 requests start/stop/brake/audio through existing native hooks. The driver
 seeds an inactive first image, connects real peripheral pads, releases AQ software
 force, and activates PB13 after two carrier ZERO observations. Running AQ/compare/
 period images transfer together through one-shot global loading. Stop/fault disables
 the gate before stopping the clock and disconnecting pins. Configured PB15 trips
-force both logical gate outputs LOW and remain latched until watchdog reset.
+force both logical gate outputs LOW (PWM/enable: PWM LOW, enable HIGH) and
+remain latched until watchdog reset.
 PB15 electrical routing, external reset-inactive gate wiring, pin inversion and
 independent overcurrent protection still need board signoff.
 

@@ -13,3 +13,6 @@ static inline void test_gpio_disable(GPIO_Regs *g,uint32_t m)
 #define DL_GPIO_clearPins test_gpio_clear
 #define DL_GPIO_enableOutput test_gpio_enable
 #define DL_GPIO_disableOutput test_gpio_disable
+static inline void test_gpio_irq_clear(GPIO_Regs *g,uint32_t m)
+{ DL_GPIO_clearInterruptStatus(g,m);*(volatile uint32_t *)(uintptr_t)&g->CPU_INT.MIS &= ~m; }
+#define DL_GPIO_clearInterruptStatus test_gpio_irq_clear

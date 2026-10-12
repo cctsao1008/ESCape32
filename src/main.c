@@ -23,12 +23,24 @@
 #include "motor_backend.h"
 #include "motor_safety.h"
 #include "motor_bemf.h"
+#ifdef HALL_MAP
+#include "motor_event_timer.h"
+#endif
 #include "motor_bemf_event_plan.h"
 #include "irq_vectors.h"
 #include "analog_runtime.h"
 #include "aux_gpio.h"
 /* Logical microsecond commutation timebase, not a TI register mapping. */
 #define MOTOR_TIME_SHIFT 0
+/* Hall builds retain Rel17 TIM3 / IFTIM base units (500 ns).
+ * Only the hardware seam converts to the native microsecond API. */
+static int motor_native_us(int ticks) {
+#ifdef HALL_MAP
+    return (ticks + 1) >> 1;
+#else
+    return ticks;
+#endif
+}
 #else
 #define MOTOR_TIME_SHIFT IFTIM_XRES
 #endif
@@ -144,7 +156,7 @@ static int getcode(void) {
 static void nextstep(void) {
 	if (sine) { // Sine startup
 #if defined(AM13E)
-        am13e_app_motor_sine_schedule_us(sine);
+        am13e_app_motor_sine_schedule_us(motor_native_us(sine));
 #else
 		TIM_ARR(IFTIM) = IFTIM_OCR = sine;
 		TIM_EGR(IFTIM) = TIM_EGR_UG;
@@ -513,26 +525,42 @@ void iftim_isr(void) { // BEMF zero-crossing
 	TIM_DIER(IFTIM) = 0;
 	if (sync < 6) ++sync;
 }
+#endif /* !AM13E: legacy TIM1 / BEMF ISRs */
 
 #ifdef HALL_MAP
+/* Original Hall filter/timeout/commutation policy; only register access
+ * and interrupt delivery differ. Native capture uses TIM3's 500 ns units. */
+#if defined(AM13E)
+void am13e_app_motor_on_hall_event(int capture, int timeout) {
+    if (timeout) {
+#else
 void tim3_isr(void) { // Any change on Hall sensor inputs
 	if (TIM3_SR & TIM_SR_UIF) { // Timeout
 		TIM3_SR = ~TIM_SR_UIF;
+#endif
 		hall = 0x10000;
 		if (sine || !step) return;
 		bemf_timeout_reset();
 		return;
 	}
+#if defined(AM13E)
+    hall = (capture + hall * 3) >> 2;
+#else
 	hall = (TIM3_CCR1 + hall * 3) >> 2;
+#endif
 	if (hall < 5000 || sine || !step) return;
 	ival = hall << MOTOR_TIME_SHIFT;
+#if defined(AM13E)
+    nextstep(); /* Native delivery of the original TIM1 COM event. */
+    am13e_app_motor_timing_cancel(); /* Original IFTIM UG / DIER=0. */
+#else
 	TIM1_EGR = TIM_EGR_COMG;
 	TIM_EGR(IFTIM) = TIM_EGR_UG;
 	TIM_DIER(IFTIM) = 0;
+#endif
 	if (sync < 6) ++sync;
 }
-#endif /* HALL_MAP legacy IRQ */
-#endif /* !AM13E: legacy TIM1 / BEMF / Hall ISRs */
+#endif /* HALL_MAP */
 
 #if defined(AM13E)
 /* Physical commutation IRQ must acknowledge the device event first. */
@@ -548,13 +576,18 @@ int am13e_app_motor_on_bemf_event(int capture_us, int timeout) {
         bemf_timeout_reset();
         return 1;
     }
+#ifdef HALL_MAP
+    if (capture_us < 0 || capture_us > INT_MAX / 2) hard_fault_handler();
+    capture_us *= 2;
+#endif
     int delay_us = bemf_zero_cross_delay(capture_us);
     if (!delay_us) return 0; /* Ignore early capture; keep ECAP1 armed. */
-    am13e_app_motor_bemf_commutation_delay_us(delay_us);
+    am13e_app_motor_bemf_commutation_delay_us(motor_native_us(delay_us));
     if (sync < 6) ++sync;
     return 1;
 }
 #endif /* AM13E */
+
 
 /* Rel17 ADC scaling and protection logic is shared unchanged. */
 void adcdata(int t, int u, int v, int c, int a) {
@@ -778,6 +811,12 @@ void main(void) {
 #if defined(AM13E)
     am13e_app_motor_init();
     am13e_app_motor_bemf_init(); /* CMPSS/ECAP1, no external gate enable */
+#ifdef HALL_MAP
+    if (!brushed && getcode() != 7) {
+        am13e_app_motor_hall_init(1);
+        hall = 0x10000;
+    } else am13e_app_motor_hall_init(0);
+#endif
     /* Readback only; all six PWM pads remain Hi-Z with TBCLK stopped. */
     if (!am13e_app_motor_inactive_aq_boot_preflight()) {
         am13e_app_motor_fault_shutdown();
@@ -963,7 +1002,7 @@ void main(void) {
 				int c = b * 60;
                 int delay_ticks = sine * (reverse ? (void)(++b == 6 && (b = 0)), a - c + 1 : c - a + 60); // Commutation delay
 #if defined(AM13E)
-                am13e_app_motor_bemf_sine_exit_us(delay_ticks);
+                am13e_app_motor_bemf_sine_exit_us(motor_native_us(delay_ticks));
 #else
 				IFTIM_OCR = delay_ticks;
 				TIM_ARR(IFTIM) = (1 << (MOTOR_TIME_SHIFT + 16)) - 1;
@@ -1100,7 +1139,7 @@ void main(void) {
 #if defined(AM13E)
             am13e_app_motor_commutation_commit();
             am13e_app_motor_commutation_enable(1);
-            am13e_app_motor_bemf_sine_exit_us(0xffff);
+            am13e_app_motor_bemf_sine_exit_us(motor_native_us(0xffff));
 #else
 			TIM1_EGR = TIM_EGR_UG | TIM_EGR_COMG;
 #ifdef SW_BLANKING
