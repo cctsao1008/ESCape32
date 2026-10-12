@@ -14,7 +14,7 @@
 #include <dl_gpio.h>
 #include <stdint.h>
 
-#define GATE_EN_PIN DL_GPIO_PIN(13U)
+#define GATE_EN_PIN AM13E_GATE_MASK
 
 _Static_assert(AM13E_BOARD_PB13_ACTIVE_LEVEL==0 ||
                AM13E_BOARD_PB13_ACTIVE_LEVEL==1,
@@ -25,9 +25,9 @@ static volatile uint32_t initialized;
 static void gate_hold_inactive(void)
 {
 #if AM13E_BOARD_PB13_ACTIVE_LEVEL == 1
-    DL_GPIO_clearPins(GPIO1,GATE_EN_PIN);
+    DL_GPIO_clearPins(AM13E_GATE_GPIO,GATE_EN_PIN);
 #else
-    DL_GPIO_setPins(GPIO1,GATE_EN_PIN);
+    DL_GPIO_setPins(AM13E_GATE_GPIO,GATE_EN_PIN);
 #endif
 }
 
@@ -35,17 +35,17 @@ void am13e_power_stage_init(void)
 {
     if (__get_PRIMASK()!=1U || initialized)
         for(;;){__NOP();}
-    /* GPIO1 is already powered by initgpio(). Do not reset PB14/15. */
-    DL_GPIO_enablePower(GPIO1);
-    if (!DL_GPIO_isPowerEnabled(GPIO1))
+    /* AM13E_GATE_GPIO is already powered by initgpio(). Do not reset PB14/15. */
+    DL_GPIO_enablePower(AM13E_GATE_GPIO);
+    if (!DL_GPIO_isPowerEnabled(AM13E_GATE_GPIO))
         for(;;){__NOP();}
 
     gate_hold_inactive(); /* Load inactive DATA before enabling output. */
-    DL_GPIO_initDigitalOutput(IOMUX_PINCM_PB13);
-    DL_GPIO_enableOutput(GPIO1,GATE_EN_PIN);
+    DL_GPIO_initDigitalOutput(AM13E_GATE_PINCM);
+    DL_GPIO_enableOutput(AM13E_GATE_GPIO,GATE_EN_PIN);
     __DSB();
-    if ((GPIO1->DOE31_0&GATE_EN_PIN)==0U ||
-        (((GPIO1->DOUT31_0&GATE_EN_PIN)!=0U)==
+    if ((AM13E_GATE_GPIO->DOE31_0&GATE_EN_PIN)==0U ||
+        (((AM13E_GATE_GPIO->DOUT31_0&GATE_EN_PIN)!=0U)==
          (AM13E_BOARD_PB13_ACTIVE_LEVEL!=0)))
         for(;;){__NOP();}
     initialized=1U;
@@ -63,18 +63,18 @@ void am13e_power_stage_force_off(void)
 #if AM13E_MOTOR_OUTPUT_CONFIGURED
 int am13e_power_stage_inactive(void)
 {
-    return initialized && (((GPIO1->DOUT31_0&GATE_EN_PIN)!=0U)!=(AM13E_BOARD_PB13_ACTIVE_LEVEL!=0));
+    return initialized && (((AM13E_GATE_GPIO->DOUT31_0&GATE_EN_PIN)!=0U)!=(AM13E_BOARD_PB13_ACTIVE_LEVEL!=0));
 }
 int am13e_power_stage_enable(void)
 {
     if(!initialized || __get_PRIMASK()!=1U)return 0;
 #if AM13E_BOARD_PB13_ACTIVE_LEVEL == 1
-    DL_GPIO_setPins(GPIO1,GATE_EN_PIN);
+    DL_GPIO_setPins(AM13E_GATE_GPIO,GATE_EN_PIN);
 #else
-    DL_GPIO_clearPins(GPIO1,GATE_EN_PIN);
+    DL_GPIO_clearPins(AM13E_GATE_GPIO,GATE_EN_PIN);
 #endif
     __DSB();
-    return (GPIO1->DOE31_0&GATE_EN_PIN)!=0U &&
-        (((GPIO1->DOUT31_0&GATE_EN_PIN)!=0U)==(AM13E_BOARD_PB13_ACTIVE_LEVEL!=0));
+    return (AM13E_GATE_GPIO->DOE31_0&GATE_EN_PIN)!=0U &&
+        (((AM13E_GATE_GPIO->DOUT31_0&GATE_EN_PIN)!=0U)==(AM13E_BOARD_PB13_ACTIVE_LEVEL!=0));
 }
 #endif

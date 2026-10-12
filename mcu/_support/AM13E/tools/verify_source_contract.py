@@ -151,13 +151,17 @@ def main():
 
     rx=src("mcu/AM13E/hal/command_capture.c")
     route=src("mcu/AM13E/hal/command_input_reference.h")
-    check("COMMAND_PINCM IOMUX_PINCM_PA26" in route and
-          "COMMAND_CAPTURE_FUNCTION IOMUX_PA26_TIMG4_0_CCP0" in route and
+    target=src("mcu/AM13E/config.h")
+    board=src("mcu/AM13E/hal/board_io.h")
+    check("COMMAND_PINCM IO_PINCM" in route and
+          "IO_PINCM AM13E_COMMAND_PINCM" in target and "AM13E_COMMAND_PINCM 26U" in board and
+          "COMMAND_CAPTURE_FUNCTION IOTIM_CAPTURE_FUNCTION" in route and
+          "IOTIM_CAPTURE_FUNCTION IOMUX_PA26_TIMG4_0_CCP0" in target and
           "DL_TIMER_CC_MODE_CAPTURE" in rx and "DL_TIMER_CC_CCOND_TRIG_EDGE" in rx and
-          "DL_DMA_TRIGGER_SOURCE_TIMG4_0_GEN_EVENT1" in rx and
+          "IOTIM_DMA_TRIGGER" in rx and "DL_DMA_TRIGGER_SOURCE_TIMG4_0_GEN_EVENT1" in target and
           "COUNTERREGS.CC_01[0]" in rx and "ECAP0" not in rx and
-          "IOMUX_PINCM_PA26" in src("boot/mcu/AM13E/hal/io.c") and
-          "#define BOOT_IO_PORT GPIO0" in src("boot/mcu/AM13E/hal/io.c"),
+          "AM13E_COMMAND_PINCM" in src("boot/mcu/AM13E/hal/io.c") and
+          "#define BOOT_IO_PORT AM13E_COMMAND_GPIO" in src("boot/mcu/AM13E/hal/io.c"),
           "Application/Boot must share native PA26; no command ECAP0 fallback")
     isr=rx.split("static void drain_locked(void)")[1]
     check(isr.index("am13e_pb14_bidir_tx_start(") <

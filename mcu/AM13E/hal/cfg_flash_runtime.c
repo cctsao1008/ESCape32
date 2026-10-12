@@ -1,3 +1,4 @@
+#include "../config.h"
 /*
  * AM13E reference AM13E23019 — real Rel17 savecfg() Flash persistence backend.
  *
@@ -114,7 +115,7 @@ int am13e_app_cfg_commit(const void *destination,const void *source,
     const uint32_t ps=__get_PRIMASK();
     __disable_irq();
     /* Rel17 only calls savecfg() with ertm==0 and busy==0. Drag/Lock
-     * Brake may nevertheless have left MCPWM0's internal counter active.
+     * Brake may nevertheless have left MOTOR_PWM's internal counter active.
      * Move to the already-implemented safe Stop state BEFORE Flash
      * erase; this never activates PB13 or a physical PWM pad.
      */

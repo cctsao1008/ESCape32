@@ -13,6 +13,7 @@
 #include "telem_mode_plan.h"
 #include "board_reference_io.h"
 #include "board_configuration.h"
+#include "../config.h"
 #include <soc.h>
 #include <dl_gpio.h>
 #include <dl_unicommuart.h>
@@ -44,12 +45,11 @@ _Static_assert(AM13E_BOARD_TELEM_TWO_WIRE==1U &&
                AM13E_BOARD_TELEM_BUSCLK_HZ>=2000000U &&
                AM13E_BOARD_TELEM_BUSCLK_HZ<=200000000U,
                "Invalid or overlapping UNICOMM telemetry board profile");
-_Static_assert(AM13E_BOARD_TELEM_RX_PINCM!=IOMUX_PINCM_PA26 &&
-               AM13E_BOARD_TELEM_TX_PINCM!=IOMUX_PINCM_PA26 &&
-               AM13E_BOARD_TELEM_RX_PINCM!=IOMUX_PINCM_PB13 &&
-               AM13E_BOARD_TELEM_TX_PINCM!=IOMUX_PINCM_PB13 &&
-               AM13E_BOARD_TELEM_RX_PINCM!=IOMUX_PINCM_PB15 &&
-               AM13E_BOARD_TELEM_TX_PINCM!=IOMUX_PINCM_PB15,
+_Static_assert(AM13E_PIN_AVAILABLE(AM13E_BOARD_TELEM_RX_PINCM) &&
+               AM13E_PIN_AVAILABLE(AM13E_BOARD_TELEM_TX_PINCM) &&
+               !AM13E_PIN_HALL(AM13E_BOARD_TELEM_RX_PINCM) && !AM13E_PIN_HALL(AM13E_BOARD_TELEM_TX_PINCM) &&
+               !AM13E_PIN_ANALOG(AM13E_BOARD_TELEM_RX_PINCM) && !AM13E_PIN_ANALOG(AM13E_BOARD_TELEM_TX_PINCM) &&
+               !AM13E_PIN_AUX(AM13E_BOARD_TELEM_RX_PINCM) && !AM13E_PIN_AUX(AM13E_BOARD_TELEM_TX_PINCM),
                "Telemetry cannot claim motor enable, input or fault pins");
 #ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
 _Static_assert(AM13E_BOARD_TELEM_UC_INDEX!=AM13E_BOARD_SERIAL_RX_UC_INDEX &&
@@ -59,33 +59,9 @@ _Static_assert(AM13E_BOARD_TELEM_UC_INDEX!=AM13E_BOARD_SERIAL_RX_UC_INDEX &&
                AM13E_BOARD_TELEM_TX_PINCM!=AM13E_BOARD_SERIAL_TX_PINCM,
                "Serial input and telemetry require different hardware instances/pins");
 #endif
-#if AM13E_BOARD_TELEM_UC_INDEX==0
-#define TEL_UC UC0_INST_PTR
-#define TEL_IRQ UC0_INT_IRQn
-#define TEL_HANDLER UC0_IRQHandler
-#elif AM13E_BOARD_TELEM_UC_INDEX==1
-#define TEL_UC UC1_INST_PTR
-#define TEL_IRQ UC1_INT_IRQn
-#define TEL_HANDLER UC1_IRQHandler
-#elif AM13E_BOARD_TELEM_UC_INDEX==2
-#define TEL_UC UC2_INST_PTR
-#define TEL_IRQ UC2_INT_IRQn
-#define TEL_HANDLER UC2_IRQHandler
-#elif AM13E_BOARD_TELEM_UC_INDEX==3
-#define TEL_UC UC3_INST_PTR
-#define TEL_IRQ UC3_INT_IRQn
-#define TEL_HANDLER UC3_IRQHandler
-#elif AM13E_BOARD_TELEM_UC_INDEX==4
-#define TEL_UC UC4_INST_PTR
-#define TEL_IRQ UC4_INT_IRQn
-#define TEL_HANDLER UC4_IRQHandler
-#elif AM13E_BOARD_TELEM_UC_INDEX==5
-#define TEL_UC UC5_INST_PTR
-#define TEL_IRQ UC5_INT_IRQn
-#define TEL_HANDLER UC5_IRQHandler
-#else
-#error "Telemetry UC selection must be UNICOMM0..5"
-#endif
+#define TEL_UC TELEM_UART
+#define TEL_IRQ TELEM_UART_IRQ
+#define TEL_HANDLER TELEM_UART_HANDLER
 
 #define BYTE_ERRORS (UNICOMMUART_RXDATA_FRMERR_SET | \
                      UNICOMMUART_RXDATA_PARERR_SET | \

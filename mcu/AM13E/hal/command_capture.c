@@ -22,14 +22,14 @@
 #include <stddef.h>
 
 extern void hard_fault_handler(void);
-#define RX_TIMER TIMG4
-#define RX_CH 2U
+#define RX_TIMER IOTIM
+#define RX_CH IOTIM_DMA_CHANNEL
 #define RX_HZ (AM13E_APP_MCLK_HZ/2U)
 #define RX_EVENTS DL_TIMER_EVENT_CC0_UP_EVENT
 #define RX_DMA_FLAGS (DL_DMA_INTERRUPT_CHANNEL2|DL_DMA_FULL_CH_INTERRUPT_EARLY_CHANNEL2|DL_DMA_INTERRUPT_ADDR_ERROR)
-_Static_assert(RX_HZ==100000000U && DL_DMA_TRIGGER_SOURCE_TIMG4_0_GEN_EVENT1==34U,
+_Static_assert(RX_HZ==100000000U && IOTIM_DMA_TRIGGER==34U,
     "PA26 TIMG4 clock/DMA routing changed");
-static uint32_t edges[32] __attribute__((aligned(4)));
+static uint32_t edges[IOTIM_CAPTURE_SIZE] __attribute__((aligned(4)));
 static AM13E_PB14_Decoder decoder;
 static volatile uint32_t initialized,epoch,suspended,service_owns_input;
 static unsigned consumed;
@@ -52,30 +52,30 @@ void am13e_pa26_rx_suspend(void)
 {
     DL_Timer_disableEvent(RX_TIMER,DL_TIMER_GEN_EVENT1,UINT32_MAX);
     DL_Timer_clearEventsStatus(RX_TIMER,DL_TIMER_GEN_EVENT1,UINT32_MAX);
-    DL_DMA_disableChannel(DMA0,RX_CH);
+    DL_DMA_disableChannel(IOTIM_DMA,RX_CH);
     DL_Timer_stopCounter(RX_TIMER);
-    DL_Timer_setCaptureCompareCtl(RX_TIMER,DL_TIMER_CC_MODE_COMPARE,DL_TIMER_CC_CCOND_NOCAPTURE,DL_TIMER_CC_0_INDEX);
+    DL_Timer_setCaptureCompareCtl(RX_TIMER,DL_TIMER_CC_MODE_COMPARE,DL_TIMER_CC_CCOND_NOCAPTURE,IOTIM_CAPTURE_CHANNEL);
     DL_Timer_disableInterrupt(RX_TIMER,UINT32_MAX);
     DL_Timer_clearInterruptStatus(RX_TIMER,UINT32_MAX);
-    DL_DMA_clearInterruptStatus(DMA0,RX_DMA_FLAGS);
-    NVIC_ClearPendingIRQ(TIMG4_0_INT_IRQn);NVIC_ClearPendingIRQ(DMA0_INT_IRQn);
+    DL_DMA_clearInterruptStatus(IOTIM_DMA,RX_DMA_FLAGS);
+    NVIC_ClearPendingIRQ(IOTIM_IRQ);NVIC_ClearPendingIRQ(IOTIM_DMA_IRQ);
     suspended=1U;
 }
 static void dma_arm(void)
 {
     DL_Timer_disableEvent(RX_TIMER,DL_TIMER_GEN_EVENT1,UINT32_MAX);
     DL_Timer_clearEventsStatus(RX_TIMER,DL_TIMER_GEN_EVENT1,UINT32_MAX);
-    DL_DMA_disableChannel(DMA0,RX_CH);
-    DL_DMA_configTransfer(DMA0,RX_CH,DL_DMA_SINGLE_TRANSFER_MODE,DL_DMA_NORMAL_MODE,
+    DL_DMA_disableChannel(IOTIM_DMA,RX_CH);
+    DL_DMA_configTransfer(IOTIM_DMA,RX_CH,DL_DMA_SINGLE_TRANSFER_MODE,DL_DMA_NORMAL_MODE,
         DL_DMA_WIDTH_WORD,DL_DMA_WIDTH_WORD,DL_DMA_ADDR_UNCHANGED,DL_DMA_ADDR_INCREMENT);
-    DL_DMA_setTrigger(DMA0,RX_CH,DL_DMA_TRIGGER_SOURCE_TIMG4_0_GEN_EVENT1,DL_DMA_TRIGGER_TYPE_EXTERNAL);
-    DL_DMA_setSrcAddr(DMA0,RX_CH,(uint32_t)(uintptr_t)&RX_TIMER->COUNTERREGS.CC_01[0]);
-    DL_DMA_setDestAddr(DMA0,RX_CH,(uint32_t)(uintptr_t)edges);
-    DL_DMA_setTransferSize(DMA0,RX_CH,32U);
-    DL_DMA_Full_Ch_setEarlyInterruptThreshold(DMA0,RX_CH,DL_DMA_EARLY_INTERRUPT_THRESHOLD_HALF);
-    DL_DMA_enableInterrupt(DMA0,RX_DMA_FLAGS);
-    DL_DMA_clearInterruptStatus(DMA0,RX_DMA_FLAGS);
-    consumed=0U;__DMB();DL_DMA_enableChannel(DMA0,RX_CH);
+    DL_DMA_setTrigger(IOTIM_DMA,RX_CH,IOTIM_DMA_TRIGGER,DL_DMA_TRIGGER_TYPE_EXTERNAL);
+    DL_DMA_setSrcAddr(IOTIM_DMA,RX_CH,(uint32_t)(uintptr_t)&RX_TIMER->COUNTERREGS.CC_01[0]);
+    DL_DMA_setDestAddr(IOTIM_DMA,RX_CH,(uint32_t)(uintptr_t)edges);
+    DL_DMA_setTransferSize(IOTIM_DMA,RX_CH,IOTIM_CAPTURE_SIZE);
+    DL_DMA_Full_Ch_setEarlyInterruptThreshold(IOTIM_DMA,RX_CH,DL_DMA_EARLY_INTERRUPT_THRESHOLD_HALF);
+    DL_DMA_enableInterrupt(IOTIM_DMA,RX_DMA_FLAGS);
+    DL_DMA_clearInterruptStatus(IOTIM_DMA,RX_DMA_FLAGS);
+    consumed=0U;__DMB();DL_DMA_enableChannel(IOTIM_DMA,RX_CH);
     DL_Timer_enableEvent(RX_TIMER,DL_TIMER_GEN_EVENT1,RX_EVENTS);
 }
 void am13e_pb14_resume_rx(void)
@@ -90,9 +90,9 @@ void am13e_pb14_resume_rx(void)
         .period=0xffffU,.startTimer=DL_TIMER_STOP,.edgeCaptMode=DL_TIMER_CAPTURE_EDGE_DETECTION_MODE_RISING,
         .inputChan=DL_TIMER_INPUT_CHAN_0,.inputInvMode=inverted_rx?DL_TIMER_CC_INPUT_INV_INVERT:DL_TIMER_CC_INPUT_INV_NOINVERT};
     DL_Timer_initCaptureMode(RX_TIMER,&c);
-    DL_Timer_disableCaptureCompareInputFilter(RX_TIMER,DL_TIMER_CC_0_INDEX);
+    DL_Timer_disableCaptureCompareInputFilter(RX_TIMER,IOTIM_CAPTURE_CHANNEL);
     DL_Timer_setCaptureCompareCtl(RX_TIMER,DL_TIMER_CC_MODE_CAPTURE,
-        DL_TIMER_CC_ZCOND_NONE|DL_TIMER_CC_ACOND_TIMCLK|DL_TIMER_CC_LCOND_NONE|DL_TIMER_CC_CCOND_TRIG_EDGE,DL_TIMER_CC_0_INDEX);
+        DL_TIMER_CC_ZCOND_NONE|DL_TIMER_CC_ACOND_TIMCLK|DL_TIMER_CC_LCOND_NONE|DL_TIMER_CC_CCOND_TRIG_EDGE,IOTIM_CAPTURE_CHANNEL);
     DL_Timer_setCaptureCompareCtl(RX_TIMER,DL_TIMER_CC_MODE_COMPARE,DL_TIMER_CC_CCOND_NOCAPTURE,DL_TIMER_CC_1_INDEX);
     DL_Timer_setCounterValueAfterEnable(RX_TIMER,DL_TIMER_COUNT_AFTER_EN_ZERO);
     DL_Timer_setTimerCount(RX_TIMER,0U);epoch=0U;
@@ -113,8 +113,8 @@ void initio(void)
     am13e_app_io_watchdog_prepare();
     am13e_pb14_bidir_tx_init(); /* Establishes verified 100 MHz TIMG4 clock. */
     initialized=1U;am13e_pb14_resume_rx();
-    NVIC_SetPriority(TIMG4_0_INT_IRQn,0U);NVIC_SetPriority(DMA0_INT_IRQn,0U);
-    NVIC_EnableIRQ(TIMG4_0_INT_IRQn);NVIC_EnableIRQ(DMA0_INT_IRQn);
+    NVIC_SetPriority(IOTIM_IRQ,0U);NVIC_SetPriority(IOTIM_DMA_IRQ,0U);
+    NVIC_EnableIRQ(IOTIM_IRQ);NVIC_EnableIRQ(IOTIM_DMA_IRQ);
     const unsigned mode=am13e_app_io_input_mode();
 #ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
 #ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
@@ -130,21 +130,21 @@ void initio(void)
 static void drain_locked(void)
 {
     if(suspended || service_owns_input || capture_desynced)return;
-    const unsigned remaining=DL_DMA_getTransferSize(DMA0,RX_CH);
-    if(remaining>32U)input_fail_closed();
-    const unsigned available=32U-remaining;
+    const unsigned remaining=DL_DMA_getTransferSize(IOTIM_DMA,RX_CH);
+    if(remaining>IOTIM_CAPTURE_SIZE)input_fail_closed();
+    const unsigned available=IOTIM_CAPTURE_SIZE-remaining;
     if(available<consumed)input_fail_closed();
     __DMB();
     const uint32_t now=am13e_pa26_rx_now();
-    if(available==32U && (DL_Timer_getCaptureCompareValue(RX_TIMER,DL_TIMER_CC_0_INDEX)&0xffffU)!=(edges[31]&0xffffU)){
+    if(available==IOTIM_CAPTURE_SIZE && (DL_Timer_getCaptureCompareValue(RX_TIMER,IOTIM_CAPTURE_CHANNEL)&0xffffU)!=(edges[IOTIM_CAPTURE_SIZE-1U]&0xffffU)){
         ++capture_overruns;capture_desynced=1U;am13e_pb14_decoder_abort(&decoder);return;
     }
     if(available>consumed){
-        const uint32_t cc=DL_Timer_getCaptureCompareValue(RX_TIMER,DL_TIMER_CC_0_INDEX)&0xffffU;
+        const uint32_t cc=DL_Timer_getCaptureCompareValue(RX_TIMER,IOTIM_CAPTURE_CHANNEL)&0xffffU;
         if(cc!=(edges[available-1U]&0xffffU))return; /* Pending DMA beat; retry. */
         const unsigned level=DL_GPIO_readPins(COMMAND_GPIO,COMMAND_PIN)!=0U;
-        if(DL_DMA_getTransferSize(DMA0,RX_CH)!=remaining ||
-           (DL_Timer_getCaptureCompareValue(RX_TIMER,DL_TIMER_CC_0_INDEX)&0xffffU)!=cc)return;
+        if(DL_DMA_getTransferSize(IOTIM_DMA,RX_CH)!=remaining ||
+           (DL_Timer_getCaptureCompareValue(RX_TIMER,IOTIM_CAPTURE_CHANNEL)&0xffffU)!=cc)return;
         /* A lost/noisy edge must not complement a complete DShot packet:
          * bitwise-complemented data can also have a valid CRC. Verify
          * observed final edge polarity before forwarding this prefix. */
@@ -175,7 +175,7 @@ static void drain_locked(void)
         if(am13e_app_io_input_mode()==0U && old==AM13E_PB14_RX_UNDECIDED && decoder.rx_mode!=old)am13e_app_io_watchdog_arm();
         if(suspended){++consumed;break;} /* Current valid frame owns the TX handover. */
     }
-    if(available==32U){
+    if(available==IOTIM_CAPTURE_SIZE){
         if(!suspended)dma_arm();
     }
 }
@@ -188,9 +188,9 @@ static void drain(void)
 }
 void am13e_pa26_rx_dma_irq(void)
 {
-    const uint32_t flags=DL_DMA_getEnabledInterruptStatus(DMA0,RX_DMA_FLAGS);
+    const uint32_t flags=DL_DMA_getEnabledInterruptStatus(IOTIM_DMA,RX_DMA_FLAGS);
     if(!flags)return;
-    DL_DMA_clearInterruptStatus(DMA0,flags);
+    DL_DMA_clearInterruptStatus(IOTIM_DMA,flags);
     if(flags&DL_DMA_INTERRUPT_ADDR_ERROR)input_fail_closed();
     if(!suspended && (flags&(DL_DMA_INTERRUPT_CHANNEL2|DL_DMA_FULL_CH_INTERRUPT_EARLY_CHANNEL2)))drain();
 }
@@ -207,7 +207,7 @@ void am13e_app_pb14_systick(void)
     am13e_app_serial_rx_systick();
 #ifdef AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED
     am13e_app_serial_cli_entry_poll(DL_GPIO_readPins(COMMAND_GPIO,COMMAND_PIN)!=0U,
-        DL_DMA_getTransferSize(DMA0,RX_CH)!=32U,decoder.rx_mode!=AM13E_PB14_RX_UNDECIDED);
+        DL_DMA_getTransferSize(IOTIM_DMA,RX_CH)!=IOTIM_CAPTURE_SIZE,decoder.rx_mode!=AM13E_PB14_RX_UNDECIDED);
 #endif
 #endif
     am13e_pb14_bidir_tx_systick();
@@ -215,10 +215,10 @@ void am13e_app_pb14_systick(void)
     const uint32_t mask=__get_PRIMASK();__disable_irq();
     if(capture_desynced){
         const uint32_t now=am13e_pa26_rx_now();
-        const uint32_t cc=DL_Timer_getCaptureCompareValue(RX_TIMER,DL_TIMER_CC_0_INDEX)&0xffffU;
+        const uint32_t cc=DL_Timer_getCaptureCompareValue(RX_TIMER,IOTIM_CAPTURE_CHANNEL)&0xffffU;
         if((DL_GPIO_readPins(COMMAND_GPIO,COMMAND_PIN)!=0U)==inverted_rx &&
            (uint16_t)((uint16_t)now-(uint16_t)cc)>RX_HZ/300000U*4U &&
-           (DL_Timer_getCaptureCompareValue(RX_TIMER,DL_TIMER_CC_0_INDEX)&0xffffU)==cc){
+           (DL_Timer_getCaptureCompareValue(RX_TIMER,IOTIM_CAPTURE_CHANNEL)&0xffffU)==cc){
             dma_arm();capture_desynced=0U;
         }
         __set_PRIMASK(mask);return;
@@ -228,7 +228,7 @@ void am13e_app_pb14_systick(void)
         const uint32_t now=am13e_pa26_rx_now();
         const uint32_t period=decoder.last_bit_period?decoder.last_bit_period:
             decoder.rx_mode==AM13E_PB14_RX_DSHOT?RX_HZ/(300000U<<decoder.dshot_rate):0U;
-        const uint32_t cc=DL_Timer_getCaptureCompareValue(RX_TIMER,DL_TIMER_CC_0_INDEX)&0xffffU;
+        const uint32_t cc=DL_Timer_getCaptureCompareValue(RX_TIMER,IOTIM_CAPTURE_CHANNEL)&0xffffU;
         am13e_pb14_decoder_idle(&decoder,now,am13e_app_io_dshot_packet);
         /* A truncated/noisy DShot frame must not shift the next frame's
          * edge pairs or DMA ownership. Rebase only on an observed quiet
@@ -236,8 +236,8 @@ void am13e_app_pb14_systick(void)
         if(decoder.rx_mode==AM13E_PB14_RX_DSHOT && period && consumed &&
            (uint16_t)((uint16_t)now-(uint16_t)cc)>period*4U &&
            (DL_GPIO_readPins(COMMAND_GPIO,COMMAND_PIN)!=0U)==inverted_rx &&
-           DL_DMA_getTransferSize(DMA0,RX_CH)==32U-consumed &&
-           (DL_Timer_getCaptureCompareValue(RX_TIMER,DL_TIMER_CC_0_INDEX)&0xffffU)==cc){
+           DL_DMA_getTransferSize(IOTIM_DMA,RX_CH)==IOTIM_CAPTURE_SIZE-consumed &&
+           (DL_Timer_getCaptureCompareValue(RX_TIMER,IOTIM_CAPTURE_CHANNEL)&0xffffU)==cc){
             am13e_pb14_decoder_abort(&decoder);dma_arm();
         }
     }

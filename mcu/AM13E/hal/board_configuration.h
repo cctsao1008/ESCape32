@@ -119,3 +119,5 @@
 #define AM13E_BOARD_CURRENT_SENSE_PINCM 0
 #endif
 
+
+#include "board_pin_ownership.h"

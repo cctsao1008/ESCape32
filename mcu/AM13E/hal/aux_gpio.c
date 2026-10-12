@@ -14,16 +14,8 @@
  * explicit auxiliary/serial reservations. A new board must reconcile
  * resource ownership rather than selecting a conflicting spare pad.
  */
-#define FREE_PIN(p) ((p)>0U && (p)<96U && \
-    (p)!=IOMUX_PINCM_PC16_X1 && (p)!=IOMUX_PINCM_PC17_X2 && \
-    (p)!=IOMUX_PINCM_PB13 && (p)!=IOMUX_PINCM_PA26 && (p)!=IOMUX_PINCM_PB15 && \
-    (p)!=IOMUX_PINCM_PA8 && (p)!=IOMUX_PINCM_PA11 && (p)!=IOMUX_PINCM_PA9 && \
-    (p)!=IOMUX_PINCM_PA30 && (p)!=IOMUX_PINCM_PA10 && (p)!=IOMUX_PINCM_PA31 && \
-    (p)!=IOMUX_PINCM_PA6 && (p)!=IOMUX_PINCM_PA28 && (p)!=IOMUX_PINCM_PA17 && \
-    (p)!=IOMUX_PINCM_PA4 && (p)!=IOMUX_PINCM_PA3 && (p)!=IOMUX_PINCM_PA2 && \
-    (p)!=IOMUX_PINCM_PA16 && (p)!=IOMUX_PINCM_PA18 && \
-    (p)!=AM13E_BOARD_OC_GPIO_PINCM && (p)!=AM13E_BOARD_SERIAL_TX_PINCM && \
-    (p)!=AM13E_BOARD_CURRENT_SENSE_PINCM)
+#define FREE_PIN(p) ((p)>0U && (p)<96U && AM13E_PIN_AVAILABLE(p) && \
+    !AM13E_PIN_SERIAL(p) && !AM13E_PIN_TELEM(p) && !AM13E_PIN_ANALOG(p) && !AM13E_PIN_HALL(p))
 #define SINGLE_PIN(mask) ((mask)!=0U && ((mask)&((mask)-1U))==0U)
 _Static_assert(IOMUX_PINCM_PA0==0U && IOMUX_PINCM_PB0==32U &&
                IOMUX_PINCM_PB31==63U && IOMUX_PINCM_PC0==64U &&
@@ -56,7 +48,7 @@ static int available(GPIO_Regs *gpio,uint32_t mask,unsigned pin)
     !defined(AM13E_BOARD_PARK_PINCM)
 #error "PARK_PIN needs explicit AM13E GPIO/mask/PINCM board routing"
 #endif
-_Static_assert(FREE_PIN(AM13E_BOARD_PARK_PINCM) &&
+_Static_assert(FREE_PIN(AM13E_BOARD_PARK_PINCM) && !AM13E_PIN_LED(AM13E_BOARD_PARK_PINCM) && !AM13E_PIN_BEC(AM13E_BOARD_PARK_PINCM) &&
                SINGLE_PIN(AM13E_BOARD_PARK_MASK) &&
                AM13E_BOARD_PARK_MASK==(UINT32_C(1)<<(AM13E_BOARD_PARK_PINCM&31U)),
                "PARK route conflicts or mask is invalid");
@@ -66,7 +58,7 @@ _Static_assert(FREE_PIN(AM13E_BOARD_PARK_PINCM) &&
     !defined(AM13E_BOARD_ERPM_PINCM)
 #error "ERPM_PIN needs explicit AM13E GPIO/mask/PINCM board routing"
 #endif
-_Static_assert(FREE_PIN(AM13E_BOARD_ERPM_PINCM) &&
+_Static_assert(FREE_PIN(AM13E_BOARD_ERPM_PINCM) && !AM13E_PIN_LED(AM13E_BOARD_ERPM_PINCM) && !AM13E_PIN_BEC(AM13E_BOARD_ERPM_PINCM) &&
                SINGLE_PIN(AM13E_BOARD_ERPM_MASK) &&
                AM13E_BOARD_ERPM_MASK==(UINT32_C(1)<<(AM13E_BOARD_ERPM_PINCM&31U)),
                "ERPM route conflicts or mask is invalid");
@@ -91,7 +83,7 @@ static int bec_owns_pin(unsigned pin);
 #if !defined(AM13E_BOARD_LED1_GPIO) || !defined(AM13E_BOARD_LED1_MASK) || !defined(AM13E_BOARD_LED1_PINCM)
 #error "LED_MAP needs explicit AM13E GPIO/mask/PINCM for each selected LED"
 #endif
-_Static_assert(FREE_PIN(AM13E_BOARD_LED1_PINCM) &&
+_Static_assert(FREE_PIN(AM13E_BOARD_LED1_PINCM) && !AM13E_PIN_AUX_CONTROL(AM13E_BOARD_LED1_PINCM) && !AM13E_PIN_BEC(AM13E_BOARD_LED1_PINCM) &&
     SINGLE_PIN(AM13E_BOARD_LED1_MASK) &&
     AM13E_BOARD_LED1_MASK==(UINT32_C(1)<<(AM13E_BOARD_LED1_PINCM&31U)),
     "LED route conflicts or mask is invalid");
@@ -105,7 +97,7 @@ _Static_assert(FREE_PIN(AM13E_BOARD_LED1_PINCM) &&
 #if !defined(AM13E_BOARD_LED2_GPIO) || !defined(AM13E_BOARD_LED2_MASK) || !defined(AM13E_BOARD_LED2_PINCM)
 #error "LED_MAP needs explicit AM13E GPIO/mask/PINCM for each selected LED"
 #endif
-_Static_assert(FREE_PIN(AM13E_BOARD_LED2_PINCM) &&
+_Static_assert(FREE_PIN(AM13E_BOARD_LED2_PINCM) && !AM13E_PIN_AUX_CONTROL(AM13E_BOARD_LED2_PINCM) && !AM13E_PIN_BEC(AM13E_BOARD_LED2_PINCM) &&
     SINGLE_PIN(AM13E_BOARD_LED2_MASK) &&
     AM13E_BOARD_LED2_MASK==(UINT32_C(1)<<(AM13E_BOARD_LED2_PINCM&31U)),
     "LED route conflicts or mask is invalid");
@@ -119,7 +111,7 @@ _Static_assert(FREE_PIN(AM13E_BOARD_LED2_PINCM) &&
 #if !defined(AM13E_BOARD_LED3_GPIO) || !defined(AM13E_BOARD_LED3_MASK) || !defined(AM13E_BOARD_LED3_PINCM)
 #error "LED_MAP needs explicit AM13E GPIO/mask/PINCM for each selected LED"
 #endif
-_Static_assert(FREE_PIN(AM13E_BOARD_LED3_PINCM) &&
+_Static_assert(FREE_PIN(AM13E_BOARD_LED3_PINCM) && !AM13E_PIN_AUX_CONTROL(AM13E_BOARD_LED3_PINCM) && !AM13E_PIN_BEC(AM13E_BOARD_LED3_PINCM) &&
     SINGLE_PIN(AM13E_BOARD_LED3_MASK) &&
     AM13E_BOARD_LED3_MASK==(UINT32_C(1)<<(AM13E_BOARD_LED3_PINCM&31U)),
     "LED route conflicts or mask is invalid");
@@ -133,7 +125,7 @@ _Static_assert(FREE_PIN(AM13E_BOARD_LED3_PINCM) &&
 #if !defined(AM13E_BOARD_LED4_GPIO) || !defined(AM13E_BOARD_LED4_MASK) || !defined(AM13E_BOARD_LED4_PINCM)
 #error "LED_MAP needs explicit AM13E GPIO/mask/PINCM for each selected LED"
 #endif
-_Static_assert(FREE_PIN(AM13E_BOARD_LED4_PINCM) &&
+_Static_assert(FREE_PIN(AM13E_BOARD_LED4_PINCM) && !AM13E_PIN_AUX_CONTROL(AM13E_BOARD_LED4_PINCM) && !AM13E_PIN_BEC(AM13E_BOARD_LED4_PINCM) &&
     SINGLE_PIN(AM13E_BOARD_LED4_MASK) &&
     AM13E_BOARD_LED4_MASK==(UINT32_C(1)<<(AM13E_BOARD_LED4_PINCM&31U)),
     "LED route conflicts or mask is invalid");
@@ -263,7 +255,7 @@ typedef struct { GPIO_Regs *gpio; uint32_t mask; unsigned pin; } BecRoute;
 #if !defined(AM13E_BOARD_BEC1_GPIO) || !defined(AM13E_BOARD_BEC1_MASK) || !defined(AM13E_BOARD_BEC1_PINCM)
 #error "BEC_MAP needs explicit AM13E GPIO/mask/PINCM for each bit"
 #endif
-_Static_assert(FREE_PIN(AM13E_BOARD_BEC1_PINCM) && SINGLE_PIN(AM13E_BOARD_BEC1_MASK) &&
+_Static_assert(FREE_PIN(AM13E_BOARD_BEC1_PINCM) && !AM13E_PIN_AUX_CONTROL(AM13E_BOARD_BEC1_PINCM) && !AM13E_PIN_LED(AM13E_BOARD_BEC1_PINCM) && SINGLE_PIN(AM13E_BOARD_BEC1_MASK) &&
  AM13E_BOARD_BEC1_MASK==(UINT32_C(1)<<(AM13E_BOARD_BEC1_PINCM&31U)),
  "BEC route conflicts or mask is invalid");
 #endif
@@ -271,7 +263,7 @@ _Static_assert(FREE_PIN(AM13E_BOARD_BEC1_PINCM) && SINGLE_PIN(AM13E_BOARD_BEC1_M
 #if !defined(AM13E_BOARD_BEC2_GPIO) || !defined(AM13E_BOARD_BEC2_MASK) || !defined(AM13E_BOARD_BEC2_PINCM)
 #error "BEC_MAP needs explicit AM13E GPIO/mask/PINCM for each bit"
 #endif
-_Static_assert(FREE_PIN(AM13E_BOARD_BEC2_PINCM) && SINGLE_PIN(AM13E_BOARD_BEC2_MASK) &&
+_Static_assert(FREE_PIN(AM13E_BOARD_BEC2_PINCM) && !AM13E_PIN_AUX_CONTROL(AM13E_BOARD_BEC2_PINCM) && !AM13E_PIN_LED(AM13E_BOARD_BEC2_PINCM) && SINGLE_PIN(AM13E_BOARD_BEC2_MASK) &&
  AM13E_BOARD_BEC2_MASK==(UINT32_C(1)<<(AM13E_BOARD_BEC2_PINCM&31U)),
  "BEC route conflicts or mask is invalid");
 #endif
@@ -279,7 +271,7 @@ _Static_assert(FREE_PIN(AM13E_BOARD_BEC2_PINCM) && SINGLE_PIN(AM13E_BOARD_BEC2_M
 #if !defined(AM13E_BOARD_BEC3_GPIO) || !defined(AM13E_BOARD_BEC3_MASK) || !defined(AM13E_BOARD_BEC3_PINCM)
 #error "BEC_MAP needs explicit AM13E GPIO/mask/PINCM for each bit"
 #endif
-_Static_assert(FREE_PIN(AM13E_BOARD_BEC3_PINCM) && SINGLE_PIN(AM13E_BOARD_BEC3_MASK) &&
+_Static_assert(FREE_PIN(AM13E_BOARD_BEC3_PINCM) && !AM13E_PIN_AUX_CONTROL(AM13E_BOARD_BEC3_PINCM) && !AM13E_PIN_LED(AM13E_BOARD_BEC3_PINCM) && SINGLE_PIN(AM13E_BOARD_BEC3_MASK) &&
  AM13E_BOARD_BEC3_MASK==(UINT32_C(1)<<(AM13E_BOARD_BEC3_PINCM&31U)),
  "BEC route conflicts or mask is invalid");
 #endif

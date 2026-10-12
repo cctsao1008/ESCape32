@@ -141,7 +141,8 @@ def main():
             "DL_GPIO_disableInterrupt(" in fault and
             "am13e_app_nfault_asserted(" not in vectors,
             "Reference PB15 trip/interrupt unexpectedly activated")
-    require("DL_GPIO_initDigitalOutput(IOMUX_PINCM_PB13)" in stage,
+    require("DL_GPIO_initDigitalOutput(AM13E_GATE_PINCM)" in stage and
+            "#define AM13E_GATE_PINCM 45U" in (root/"mcu/AM13E/hal/board_io.h").read_text(),
             "Reference PB13 inactive GPIO initialization lost")
     for pin in ("OC_GPIO","SERIAL_TX","CURRENT_SENSE"):
         require(re.search(r"#define AM13E_BOARD_"+pin+r"_PINCM 0\b",cfg),

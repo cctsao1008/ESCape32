@@ -10,6 +10,7 @@
 #include "board_reference_io.h" /* Provisional AM13E reference phase/BEMF pinmux */
 #include "motor_event_timer.h" /* Cancel obsolete TIMG12 on BEMF timeout */
 #include "clock_backend.h"
+#include "../config.h"
 #include "irq_vectors.h"
 #include <soc.h>
 #include <dl_ecap.h>
@@ -24,7 +25,7 @@ static volatile uint32_t blank_required,blank_active;
 #include <dl_gpio.h>
 #include <stdint.h>
 
-#define BEMF_ECAP ECAP1
+#define BEMF_ECAP BEMF_CAPTURE
 /* ECAP1 clock can differ from MCPWM/TIMG12 BUSCLK. It is measured
  * against the verified 16 kHz SysTick before any BEMF capture arms.
  */
@@ -106,8 +107,8 @@ static void capture_stop(void)
     if(!am13e_motor_output_start_pending())
 #endif
         events|=DL_MCPWM_INT_ET_1;
-    DL_MCPWM_disableInterrupt(MCPWM0,events);
-    DL_MCPWM_clearInterrupt(MCPWM0,events);
+    DL_MCPWM_disableInterrupt(MOTOR_PWM,events);
+    DL_MCPWM_clearInterrupt(MOTOR_PWM,events);
     DL_ECAP_disableTimeStampCapture(BEMF_ECAP);
 #endif
     DL_ECAP_disableInterrupt(BEMF_ECAP,BEMF_FLAGS);
@@ -303,7 +304,7 @@ void am13e_app_motor_bemf_interval_select(int ertm_us)
 #ifdef SW_BLANKING
         /* Original nextstep enables blanking only in its slowest band. */
         blank_required=(ertm_us>=2000);
-        if(blank_required)DL_MCPWM_enableInterrupt(MCPWM0,BLANK_EVENTS);
+        if(blank_required)DL_MCPWM_enableInterrupt(MOTOR_PWM,BLANK_EVENTS);
         am13e_app_motor_bemf_pwm_event();
 #endif
         DL_ECAP_startCounter(BEMF_ECAP);
@@ -328,7 +329,7 @@ void am13e_app_motor_bemf_pwm_event(void)
         /* Use actual position when ZERO/CMPC flags coalesce. Processing
          * a stale CMPC after a newer ZERO must not reopen the blank window. */
         const unsigned blank=blank_required &&
-            DL_MCPWM_getTimeBaseCounterValue(MCPWM0)<AM13E_BEMF_BLANK_TICKS;
+            DL_MCPWM_getTimeBaseCounterValue(MOTOR_PWM)<AM13E_BEMF_BLANK_TICKS;
         if(blank){
             /* Preserve an already latched crossing from before blanking.
              * Process it through the real ISR/Core policy, not a second

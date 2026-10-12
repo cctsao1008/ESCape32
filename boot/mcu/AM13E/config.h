@@ -4,6 +4,7 @@
  * Those are owned by the validated boot backend.
  */
 #pragma once
+#include "../../../mcu/AM13E/hal/board_io.h"
 #ifndef AM13E
 #error "AM13E boot config selected without AM13E"
 #endif

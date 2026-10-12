@@ -8,13 +8,14 @@
 #include "motor_backend.h"
 #include "motor_audio_hw.h"
 #include "clock_backend.h"
+#include "../config.h"
 #include <limits.h>
 #include <soc.h>
 #include <dl_timer.h>
 #include <dl_sysctl.h>
 #include <stdint.h>
 
-#define MOTOR_TIMER TIMG12
+#define MOTOR_TIMER IFTIM
 #define MOTOR_TIMER_HZ (AM13E_APP_MCLK_HZ / 2U)
 _Static_assert(MOTOR_TIMER_HZ == UINT32_C(100000000),
                "TIMG12 peripheral clock contract changed");

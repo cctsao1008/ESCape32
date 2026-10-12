@@ -1,4 +1,5 @@
-/* AM13E reference: PB15 nFAULT (GPIO47) -> INPUTXBAR2 -> PWMXBAR1 -> MCPWM0 OST1.
+#include "../config.h"
+/* AM13E reference: PB15 nFAULT (GPIO47) -> INPUTXBAR2 -> PWMXBAR1 -> MOTOR_PWM OST1.
  * This is an asynchronous driver-fault hardware interlock, distinct from
  * independent over-current sensing. Never touches PB13 or motor pad mux.
  * Software must not clear the latched OST while nFAULT is unqualified.
@@ -13,11 +14,11 @@
 #include "board_configuration.h"
 #include <dl_gpio.h>
 
-#define AM13E_REF_NFAULT_GPIO_INDEX 47U
-#define AM13E_REF_NFAULT_INPUTXBAR DL_XBAR_INPUT2
-#define AM13E_REF_NFAULT_PWMXBAR DL_XBAR_TRIP1
-#define AM13E_REF_NFAULT_TZ_SIGNAL DL_MCPWM_TZ_SIGNAL_OST1
-#define AM13E_REF_NFAULT_SOURCE DL_XBAR_PWM_INPUTXBAR2
+#define AM13E_REF_NFAULT_GPIO_INDEX AM13E_NFAULT_PINCM
+#define AM13E_REF_NFAULT_INPUTXBAR AM13E_NFAULT_INPUTXBAR
+#define AM13E_REF_NFAULT_PWMXBAR AM13E_NFAULT_PWMXBAR
+#define AM13E_REF_NFAULT_TZ_SIGNAL AM13E_NFAULT_TZ_SIGNAL
+#define AM13E_REF_NFAULT_SOURCE AM13E_NFAULT_SOURCE
 
 _Static_assert(AM13E_REF_NFAULT_SOURCE == 0x15U &&
                AM13E_REF_NFAULT_TZ_SIGNAL == MCPWM_TZSEL_OST1_MASK &&
@@ -26,7 +27,7 @@ _Static_assert(AM13E_REF_NFAULT_SOURCE == 0x15U &&
 
 /* Reference routing is deliberately owned by this board adapter. */
 static const AM13E_FaultTripRoute reference_nfault_route = {
-    .mcpwm = MCPWM0,
+    .mcpwm = MOTOR_PWM,
     .gpio_index = AM13E_REF_NFAULT_GPIO_INDEX,
     .input_xbar = AM13E_REF_NFAULT_INPUTXBAR,
     .pwm_trip = AM13E_REF_NFAULT_PWMXBAR,
@@ -46,9 +47,9 @@ int am13e_app_motor_nfault_trip_ready(void)
 {
 #if AM13E_MOTOR_OUTPUT_CONFIGURED
     if(!NVIC_GetEnableIRQ(MCPWM0_INT_IRQn) || NVIC_GetPriority(MCPWM0_INT_IRQn)!=0U ||
-       !(MCPWM0->INTEN&DL_MCPWM_INT_TZ_OST) || !DL_GPIO_isInputEnabled(IOMUX_PINCM_PB15) ||
+       !(MOTOR_PWM->INTEN&DL_MCPWM_INT_TZ_OST) || !DL_GPIO_isInputEnabled(IOMUX_PINCM_PB15) ||
        DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PB15)!=IOMUX_PB15_GPIO47 ||
-       (((GPIO1->DIN31_0&DL_GPIO_PIN(15U))!=0U)==(AM13E_MOTOR_NFAULT_ACTIVE_LOW==0)))return 0;
+       (((AM13E_NFAULT_GPIO->DIN31_0&AM13E_NFAULT_MASK)!=0U)==(AM13E_MOTOR_NFAULT_ACTIVE_LOW==0)))return 0;
 #endif
     return hardware_trip_installed &&
            am13e_mcu_fault_trip_ready(&reference_nfault_route);
@@ -59,7 +60,7 @@ void am13e_app_motor_nfault_trip_init(void)
     if (__get_PRIMASK() == 0U || hardware_trip_installed)
         am13e_app_motor_fault_reset();
     /* A low nFAULT is allowed to latch OST, not cleared. Boot and
-     * GPIO1/PB15 ownership, motor gate fail-closed policy unchanged.
+     * AM13E_NFAULT_GPIO/PB15 ownership, motor gate fail-closed policy unchanged.
      */
     am13e_mcu_fault_trip_install(&reference_nfault_route);
     hardware_trip_installed = 1U;

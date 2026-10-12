@@ -6,13 +6,13 @@
 #include "board_reference_io.h"
 
 static const AM13E_MotorPadRoute reference_route = {
-    .gpio = GPIO0,
-    .gpio_mask = DL_GPIO_PIN(8U) | DL_GPIO_PIN(11U) |
-                 DL_GPIO_PIN(9U) | DL_GPIO_PIN(30U) |
-                 DL_GPIO_PIN(10U) | DL_GPIO_PIN(31U),
+    .gpio = AM13E_MOTOR_GPIO,
+    .gpio_mask = DL_GPIO_PIN(AM13E_IO_PWM_UH_PINCM) | DL_GPIO_PIN(AM13E_IO_PWM_UL_PINCM) |
+                 DL_GPIO_PIN(AM13E_IO_PWM_VH_PINCM) | DL_GPIO_PIN(AM13E_IO_PWM_VL_PINCM) |
+                 DL_GPIO_PIN(AM13E_IO_PWM_WH_PINCM) | DL_GPIO_PIN(AM13E_IO_PWM_WL_PINCM),
     .pin_bits = {
-        DL_GPIO_PIN(8U), DL_GPIO_PIN(11U), DL_GPIO_PIN(9U),
-        DL_GPIO_PIN(30U), DL_GPIO_PIN(10U), DL_GPIO_PIN(31U)
+        DL_GPIO_PIN(AM13E_IO_PWM_UH_PINCM), DL_GPIO_PIN(AM13E_IO_PWM_UL_PINCM), DL_GPIO_PIN(AM13E_IO_PWM_VH_PINCM),
+        DL_GPIO_PIN(AM13E_IO_PWM_VL_PINCM), DL_GPIO_PIN(AM13E_IO_PWM_WH_PINCM), DL_GPIO_PIN(AM13E_IO_PWM_WL_PINCM)
     },
     .pincm = {
         AM13E_IO_PWM_UH_PINCM, AM13E_IO_PWM_UL_PINCM,

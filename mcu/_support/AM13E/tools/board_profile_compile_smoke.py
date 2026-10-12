@@ -186,3 +186,8 @@ for name,passed in checks:
     if not passed:
         raise SystemExit("IO-only non-operation contract failed: "+name)
     print("PASS: "+name+" IO-only")
+
+for flag in ["-DAM13E_COMMAND_PINCM=14", "-DAM13E_IO_TIMER_INDEX=12",
+             "-DAM13E_IO_DMA_CHANNEL=1", "-DAM13E_IO_CAPTURE_CHANNEL=1"]:
+    syntax_check(observed["main.c"],[flag],False)
+print("PASS: incompatible command pin/timer/capture/DMA combinations rejected")

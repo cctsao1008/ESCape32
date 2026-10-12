@@ -16,26 +16,14 @@
 #include "aux_gpio.h"
 #include "motor_hall.h"
 
-#define AM13E_NFAULT_GPIO GPIO1
-#define AM13E_NFAULT_PIN DL_GPIO_PIN(15U)
-#define AM13E_NFAULT_PINCM IOMUX_PINCM_PB15
+#define AM13E_NFAULT_PIN AM13E_NFAULT_MASK
 
 _Static_assert(IOMUX_PINCM_PB15 == 47U &&
                IOMUX_PINCM_PB13 == 45U &&
                IOMUX_PINCM_PB14 == 46U,
                "Reference auxiliary IO map changed");
 
-#define AM13E_RESERVED_IO_VALID(p) \
-    ((p)==0 || ((p)>0 && (p)<64 && \
-     (p)!=IOMUX_PINCM_PB13 && (p)!=IOMUX_PINCM_PA26 && \
-     (p)!=IOMUX_PINCM_PB15 && (p)!=IOMUX_PINCM_PA8 && \
-     (p)!=IOMUX_PINCM_PA11 && (p)!=IOMUX_PINCM_PA9 && \
-     (p)!=IOMUX_PINCM_PA30 && (p)!=IOMUX_PINCM_PA10 && \
-     (p)!=IOMUX_PINCM_PA31 && (p)!=IOMUX_PINCM_PA6 && \
-     (p)!=IOMUX_PINCM_PA28 && (p)!=IOMUX_PINCM_PA17 && \
-     (p)!=IOMUX_PINCM_PA4 && (p)!=IOMUX_PINCM_PA3 && \
-     (p)!=IOMUX_PINCM_PA2 && (p)!=IOMUX_PINCM_PA16 && \
-     (p)!=IOMUX_PINCM_PA18))
+#define AM13E_RESERVED_IO_VALID(p) ((p)==0 || ((p)>0 && (p)<64 && !AM13E_PIN_FIXED(p)))
 _Static_assert(AM13E_RESERVED_IO_VALID(AM13E_BOARD_OC_GPIO_PINCM) &&
                (AM13E_RESERVED_IO_VALID(AM13E_BOARD_SERIAL_TX_PINCM)
 #if defined(AM13E_BOARD_SERIAL_TX_TWO_WIRE) && AM13E_BOARD_SERIAL_TX_TWO_WIRE==0

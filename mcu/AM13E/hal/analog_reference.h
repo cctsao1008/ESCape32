@@ -8,13 +8,14 @@
 #ifndef AM13E
 #error "AM13E reference ADC route requires AM13E"
 #endif
+#include "board_io.h"
 #include <soc.h>
 #include <dl_adc.h>
 #include <stdint.h>
 #define AM13E_ADC                    ADC0
 #define AM13E_ADC_RESULTS            ADC0RESULT
-#define AM13E_ADC_NTC_PINCM          IOMUX_PINCM_PA6
-#define AM13E_ADC_VBUS_PINCM         IOMUX_PINCM_PA28
+#define AM13E_ADC_NTC_PINCM          AM13E_NTC_PINCM
+#define AM13E_ADC_VBUS_PINCM         AM13E_VBUS_PINCM
 #define AM13E_ADC_NTC_SOC            DL_ADC_SOC_NUMBER0
 #define AM13E_ADC_VBUS_SOC           DL_ADC_SOC_NUMBER1
 #define AM13E_ADC_SEQUENCE          DL_ADC_SEQ_NUMBER1

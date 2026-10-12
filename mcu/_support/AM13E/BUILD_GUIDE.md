@@ -118,3 +118,10 @@ reuse original parsers/reply policy. CLI mode0 does not steal capture until
 original HIGH-timeout entry. No native simultaneous RX/TX pin function or
 hardware collision detector is implied. External electrical routing,
 pull-ups/level conversion and physical timings remain unqualified.
+
+Target resource selection is in mcu/AM13E/config.h; board_io.h owns the
+shared physical route used by Boot and Application without runtime
+dependencies. board_pin_ownership.h supplies compile-time predicates, not
+a runtime allocator. Changing the PA26/TIMG4/CC0/DMA2 tuple to unsupported
+values fails compilation. SDK capability and electrical-profile checks
+remain separate from pin ownership.

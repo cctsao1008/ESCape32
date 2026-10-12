@@ -1,0 +1,51 @@
+/* Selected development routing. Scalar PINCM definitions are shared by
+ * Application and Boot; no Application runtime or SDK dependency here.
+ * PA26 intentionally differs from the immutable Rev1.6 PB14 originals.
+ * Allocation is not electrical qualification. */
+#pragma once
+#include <stdint.h>
+#ifndef AM13E_COMMAND_PINCM
+#define AM13E_COMMAND_PINCM 26U
+#endif
+#define AM13E_COMMAND_GPIO GPIO0
+#define AM13E_COMMAND_MASK (UINT32_C(1)<<AM13E_COMMAND_PINCM)
+#define AM13E_MOTOR_GPIO GPIO0
+#define AM13E_GATE_GPIO GPIO1
+#define AM13E_NFAULT_GPIO GPIO1
+#define AM13E_GATE_PINCM 45U
+#define AM13E_NFAULT_PINCM 47U
+#define AM13E_NTC_PINCM 6U
+#define AM13E_VBUS_PINCM 28U
+#define AM13E_XTAL1_PINCM 80U
+#define AM13E_XTAL2_PINCM 81U
+#define AM13E_IO_PWM_UH_PINCM 8U
+#define AM13E_IO_PWM_UL_PINCM 11U
+#define AM13E_IO_PWM_VH_PINCM 9U
+#define AM13E_IO_PWM_VL_PINCM 30U
+#define AM13E_IO_PWM_WH_PINCM 10U
+#define AM13E_IO_PWM_WL_PINCM 31U
+#define AM13E_BEMF_CMP0_HP_PINCM 17U
+#define AM13E_BEMF_CMP0_HN_PINCM 4U
+#define AM13E_BEMF_CMP1_HP_PINCM 3U
+#define AM13E_BEMF_CMP1_HN_PINCM 2U
+#define AM13E_BEMF_CMP3_HP_PINCM 16U
+#define AM13E_BEMF_CMP3_HN_PINCM 18U
+#define AM13E_PIN_MOTOR(p) ((p)==AM13E_IO_PWM_UH_PINCM || (p)==AM13E_IO_PWM_UL_PINCM || \
+    (p)==AM13E_IO_PWM_VH_PINCM || (p)==AM13E_IO_PWM_VL_PINCM || \
+    (p)==AM13E_IO_PWM_WH_PINCM || (p)==AM13E_IO_PWM_WL_PINCM)
+#define AM13E_PIN_BEMF(p) ((p)==AM13E_BEMF_CMP0_HP_PINCM || (p)==AM13E_BEMF_CMP0_HN_PINCM || \
+    (p)==AM13E_BEMF_CMP1_HP_PINCM || (p)==AM13E_BEMF_CMP1_HN_PINCM || \
+    (p)==AM13E_BEMF_CMP3_HP_PINCM || (p)==AM13E_BEMF_CMP3_HN_PINCM)
+#define AM13E_PIN_FIXED(p) (AM13E_PIN_MOTOR(p) || AM13E_PIN_BEMF(p) || \
+    (p)==AM13E_COMMAND_PINCM || (p)==AM13E_GATE_PINCM || (p)==AM13E_NFAULT_PINCM || \
+    (p)==AM13E_NTC_PINCM || (p)==AM13E_VBUS_PINCM || \
+    (p)==AM13E_XTAL1_PINCM || (p)==AM13E_XTAL2_PINCM)
+_Static_assert(AM13E_COMMAND_PINCM==26U,"Selected command route requires PA26, not a portable arbitrary pad");
+
+#define AM13E_GATE_MASK (UINT32_C(1)<<(AM13E_GATE_PINCM&31U))
+#define AM13E_NFAULT_MASK (UINT32_C(1)<<(AM13E_NFAULT_PINCM&31U))
+
+#define AM13E_NFAULT_INPUTXBAR DL_XBAR_INPUT2
+#define AM13E_NFAULT_PWMXBAR DL_XBAR_TRIP1
+#define AM13E_NFAULT_TZ_SIGNAL DL_MCPWM_TZ_SIGNAL_OST1
+#define AM13E_NFAULT_SOURCE DL_XBAR_PWM_INPUTXBAR2

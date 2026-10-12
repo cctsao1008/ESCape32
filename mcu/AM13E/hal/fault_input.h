@@ -6,5 +6,6 @@
 #ifndef AM13E
 #error "AM13E auxiliary IO initialization only"
 #endif
-#define AM13E_APP_NFAULT_PIN_MASK (1UL<<15)
+#include "board_io.h"
+#define AM13E_APP_NFAULT_PIN_MASK AM13E_NFAULT_MASK
 void initgpio(void);

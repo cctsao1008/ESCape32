@@ -10,8 +10,8 @@
 #include "handoff.h"
 
 /* Revised board command route: PA26 / GPIO0 bit26. */
-#define BOOT_IO_PORT GPIO0
-#define BOOT_IO_MASK (UINT32_C(1) << 26)
+#define BOOT_IO_PORT AM13E_COMMAND_GPIO
+#define BOOT_IO_MASK AM13E_COMMAND_MASK
 #define BOOT_TICK_HZ UINT32_C(32000000)
 #define BOOT_BIT_TICKS ((BOOT_TICK_HZ + 19200U) / 38400U)
 #define BOOT_TIMEOUT_TICKS (BOOT_TICK_HZ / 2U)
@@ -53,7 +53,7 @@ uint8_t boot_am13e_io_id(void) {
 
 void initio(void) {
     DL_GPIO_enablePower(BOOT_IO_PORT);
-    DL_GPIO_initDigitalInput(IOMUX_PINCM_PA26);
+    DL_GPIO_initDigitalInput(AM13E_COMMAND_PINCM);
     DL_GPIO_clearPins(BOOT_IO_PORT, BOOT_IO_MASK);
     release_line();
     DL_SYSTICK_init(BOOT_TICK_MASK + 1U);

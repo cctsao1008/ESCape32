@@ -25,6 +25,16 @@ run_test () {
   if [ "$name" = bemf_commutation ]; then
     set -- -DREL17_BEMF_POLICY_FIXTURE -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Isrc/tests/AM13E/aux_mock "$@" src/tests/AM13E/rel17_defaults_host.c
   fi
+  if [ "$name" = aux_serial_conflict ] || [ "$name" = led_serial_conflict ] || \
+     [ "$name" = aux_led_conflict ] || [ "$name" = led_erpm_conflict ]; then
+    # Same ownership rejection now occurs at compile time, before ANY
+    # GPIO operation. The old runtime fixture deliberately overlapped RX.
+    if cc $flags "$@" -o "/tmp/am13e_$name" >"/tmp/am13e_$name.log" 2>&1; then
+      echo 'FAIL: serial/ERPM pin conflict compiled' >&2; exit 1
+    fi
+    grep -Eq '(ERPM|LED) route conflicts' "/tmp/am13e_$name.log"
+    echo "PASS: $name"; return
+  fi
   cc $flags "$@" -o "/tmp/am13e_$name" || exit 1
   "/tmp/am13e_$name" || exit 1
   echo "PASS: $name"

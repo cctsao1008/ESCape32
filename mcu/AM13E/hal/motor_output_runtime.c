@@ -1,3 +1,4 @@
+#include "../config.h"
 #include "motor_output_runtime.h"
 #if AM13E_MOTOR_OUTPUT_CONFIGURED
 #include "motor_backend.h"
@@ -21,21 +22,21 @@ void am13e_motor_output_update_begin(void)
 {
     /* PRIMASK does not stop hardware ZERO events. One-shot global load
      * excludes partial AQ/period/compare transfers during the transaction. */
-    DL_MCPWM_clearGlobalLoadOneShotLatch(MCPWM0);
+    DL_MCPWM_clearGlobalLoadOneShotLatch(MOTOR_PWM);
     __DSB();
-    if(DL_MCPWM_getGlobalLoadOneShotLatchStatus(MCPWM0))output_fault();
-    DL_MCPWM_enableGlobalLoadOneShotMode(MCPWM0);
-    DL_MCPWM_setGlobalLoadTrigger(MCPWM0,DL_MCPWM_GL_LOAD_PULSE_CNTR_ZERO);
-    DL_MCPWM_enableGlobalLoad(MCPWM0);
+    if(DL_MCPWM_getGlobalLoadOneShotLatchStatus(MOTOR_PWM))output_fault();
+    DL_MCPWM_enableGlobalLoadOneShotMode(MOTOR_PWM);
+    DL_MCPWM_setGlobalLoadTrigger(MOTOR_PWM,DL_MCPWM_GL_LOAD_PULSE_CNTR_ZERO);
+    DL_MCPWM_enableGlobalLoad(MOTOR_PWM);
 }
 void am13e_motor_output_stage(const uint16_t aq[6],const uint16_t compare[6],uint16_t period)
 {
     if(__get_PRIMASK()!=1U)output_fault();
     /* Counts are in current TBCLK. Audio divider changes are handled by
      * the caller's DB configuration, not guessed electrical pulse widths. */
-    const uint32_t red=MCPWM0->DBRED & MCPWM_DBRED_DBRED_MASK;
-    const uint32_t fed=(MCPWM0->DBCTL & (UINT32_C(1)<<(DL_MCPWM_DB_FED+MCPWM_DBCTL_OUT_MODE_OFS))) ?
-        MCPWM0->DBFED & MCPWM_DBFED_DBFED_MASK : 0U;
+    const uint32_t red=MOTOR_PWM->DBRED & MCPWM_DBRED_DBRED_MASK;
+    const uint32_t fed=(MOTOR_PWM->DBCTL & (UINT32_C(1)<<(DL_MCPWM_DB_FED+MCPWM_DBCTL_OUT_MODE_OFS))) ?
+        MOTOR_PWM->DBFED & MCPWM_DBFED_DBFED_MASK : 0U;
 #ifdef PWM_ENABLE
     if(red!=fed || period<=red)output_fault();
 #else
@@ -43,7 +44,7 @@ void am13e_motor_output_stage(const uint16_t aq[6],const uint16_t compare[6],uin
 #endif
     am13e_motor_output_update_begin();
     uint16_t image_aq[6],image_compare[6];
-    DL_MCPWM_setTimeBasePeriodShadow(MCPWM0,period);
+    DL_MCPWM_setTimeBasePeriodShadow(MOTOR_PWM,period);
     for(unsigned i=0;i<6U;++i){
         uint16_t action=aq[i];
 #ifdef PWM_ENABLE
@@ -87,24 +88,24 @@ void am13e_motor_output_stage(const uint16_t aq[6],const uint16_t compare[6],uin
         if(cc==0U)cc=1U; /* TRM26.6 zero-compare/shadow-load contention. */
         if(cc>UINT16_MAX)output_fault();
         image_aq[i]=action;image_compare[i]=(uint16_t)cc;
-        DL_MCPWM_setCounterCompareShadowValue(MCPWM0,compares[i],(uint16_t)cc);
-        DL_MCPWM_setActionQualifierActionCompleteShadow(MCPWM0,outputs[i],action);
+        DL_MCPWM_setCounterCompareShadowValue(MOTOR_PWM,compares[i],(uint16_t)cc);
+        DL_MCPWM_setActionQualifierActionCompleteShadow(MOTOR_PWM,outputs[i],action);
     }
-    if((MCPWM0->TBCTL&MCPWM_TBCTL_CTRMODE_MASK)==DL_MCPWM_COUNTER_MODE_STOP_FREEZE){
+    if((MOTOR_PWM->TBCTL&MCPWM_TBCTL_CTRMODE_MASK)==DL_MCPWM_COUNTER_MODE_STOP_FREEZE){
         if(!am13e_power_stage_inactive())output_fault();
         /* TRM26.6 immediate mode requires global load disabled. Seed the
          * entire first ACTIVE image with the external driver disabled;
          * no dependence on a ZERO/force pulse while TBCLK is stopped. */
-        DL_MCPWM_disableGlobalLoad(MCPWM0);
-        DL_MCPWM_setTimeBasePeriodActive(MCPWM0,period);
+        DL_MCPWM_disableGlobalLoad(MOTOR_PWM);
+        DL_MCPWM_setTimeBasePeriodActive(MOTOR_PWM,period);
         for(unsigned i=0;i<6U;++i){
-            DL_MCPWM_setCounterCompareActiveValue(MCPWM0,compares[i],image_compare[i]);
-            DL_MCPWM_setActionQualifierActionCompleteActive(MCPWM0,outputs[i],image_aq[i]);
-            if(DL_MCPWM_getCounterCompareActiveValue(MCPWM0,compares[i])!=image_compare[i])output_fault();
+            DL_MCPWM_setCounterCompareActiveValue(MOTOR_PWM,compares[i],image_compare[i]);
+            DL_MCPWM_setActionQualifierActionCompleteActive(MOTOR_PWM,outputs[i],image_aq[i]);
+            if(DL_MCPWM_getCounterCompareActiveValue(MOTOR_PWM,compares[i])!=image_compare[i])output_fault();
         }
-        if(DL_MCPWM_getTimeBasePeriodActive(MCPWM0)!=period)output_fault();
-        DL_MCPWM_enableGlobalLoad(MCPWM0);
-    }else DL_MCPWM_setGlobalLoadOneShotLatch(MCPWM0);
+        if(DL_MCPWM_getTimeBasePeriodActive(MOTOR_PWM)!=period)output_fault();
+        DL_MCPWM_enableGlobalLoad(MOTOR_PWM);
+    }else DL_MCPWM_setGlobalLoadOneShotLatch(MOTOR_PWM);
 }
 int am13e_motor_output_start(void)
 {
@@ -114,9 +115,9 @@ int am13e_motor_output_start(void)
     /* Clear retained AQ latches while the external driver is disabled.
      * Continuous LOW is released; ZERO/AQ/dead-band now own the signals. */
     for(unsigned i=0;i<6U;++i){
-        DL_MCPWM_setActionQualifierSWAction(MCPWM0,outputs[i],DL_MCPWM_AQ_SW_ONE_SHOT_LOW);
-        DL_MCPWM_forceActionQualifierSWAction(MCPWM0,outputs[i]);
-        DL_MCPWM_setActionQualifierSWAction(MCPWM0,outputs[i],DL_MCPWM_AQ_SW_FORCE_DISABLED);
+        DL_MCPWM_setActionQualifierSWAction(MOTOR_PWM,outputs[i],DL_MCPWM_AQ_SW_ONE_SHOT_LOW);
+        DL_MCPWM_forceActionQualifierSWAction(MOTOR_PWM,outputs[i]);
+        DL_MCPWM_setActionQualifierSWAction(MOTOR_PWM,outputs[i],DL_MCPWM_AQ_SW_FORCE_DISABLED);
     }
     if(!am13e_mcu_motor_pads_connect_pwm(route,AM13E_MOTOR_PAD_INVERT_MASK) ||
        !am13e_mcu_motor_pads_pwm_matches(route,AM13E_MOTOR_PAD_INVERT_MASK) ||
@@ -129,24 +130,24 @@ int am13e_motor_output_start(void)
     /* The ET generator retains a queued event even after INTFLAG clears.
      * Drain it while TBCLK is frozen, so an old ZERO cannot count toward
      * the new bridge's two-ZERO startup interval. */
-    DL_MCPWM_disableInterrupt(MCPWM0,DL_MCPWM_INT_ET_1);
-    DL_MCPWM_clearInterrupt(MCPWM0,DL_MCPWM_INT_ET_1);
-    DL_MCPWM_forceInterrupt(MCPWM0,DL_MCPWM_INT_ET_1);
+    DL_MCPWM_disableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
+    DL_MCPWM_clearInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
+    DL_MCPWM_forceInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
     __DSB();
-    DL_MCPWM_clearInterrupt(MCPWM0,DL_MCPWM_INT_ET_1);
-    if(DL_MCPWM_getEventTriggerEventCount(MCPWM0,DL_MCPWM_ET_1)!=0U)return 0;
+    DL_MCPWM_clearInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
+    if(DL_MCPWM_getEventTriggerEventCount(MOTOR_PWM,DL_MCPWM_ET_1)!=0U)return 0;
     start_zero_events=2U;
-    DL_MCPWM_setEventTriggerSource(MCPWM0,DL_MCPWM_ET_1,DL_MCPWM_EVT_TBCTR_ZERO);
-    DL_MCPWM_setEventTriggerEventPrescale(MCPWM0,DL_MCPWM_ET_1,1U);
-    DL_MCPWM_enableInterrupt(MCPWM0,DL_MCPWM_INT_ET_1);
+    DL_MCPWM_setEventTriggerSource(MOTOR_PWM,DL_MCPWM_ET_1,DL_MCPWM_EVT_TBCTR_ZERO);
+    DL_MCPWM_setEventTriggerEventPrescale(MOTOR_PWM,DL_MCPWM_ET_1,1U);
+    DL_MCPWM_enableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
     return 1;
 }
 void am13e_motor_output_cancel(void)
 {
     start_zero_events=0U;
-    DL_MCPWM_clearGlobalLoadOneShotLatch(MCPWM0);
-    DL_MCPWM_disableInterrupt(MCPWM0,DL_MCPWM_INT_ET_1);
-    DL_MCPWM_clearInterrupt(MCPWM0,DL_MCPWM_INT_ET_1);
+    DL_MCPWM_clearGlobalLoadOneShotLatch(MOTOR_PWM);
+    DL_MCPWM_disableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
+    DL_MCPWM_clearInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
 }
 int am13e_motor_output_start_pending(void) { return start_zero_events!=0U; }
 int am13e_motor_output_zero_irq(void)
@@ -157,7 +158,7 @@ int am13e_motor_output_zero_irq(void)
 #ifdef SW_BLANKING
         if(!am13e_app_motor_bemf_blanking_enabled())
 #endif
-        DL_MCPWM_disableInterrupt(MCPWM0,DL_MCPWM_INT_ET_1);
+        DL_MCPWM_disableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
         const uint32_t mask=__get_PRIMASK();
         __disable_irq();
         if(!am13e_app_motor_nfault_trip_ready() || !am13e_power_stage_enable() ||

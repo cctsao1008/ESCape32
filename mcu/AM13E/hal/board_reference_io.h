@@ -16,18 +16,13 @@
 #elif AM13E_REF_IO_PLAN_V1 != 1
 #error "AM13E reference IO Plan selection must equal 1; 0 is not an enabled plan"
 #endif
+#include "board_io.h"
 #include <soc.h>
 #include <dl_sysctl.h>
 
 /* Six output alternatives; keep as GPIO INPUT/Hi-Z until gate and trip
  * electrical design has been qualified. These are NOT output-enable ops.
  */
-#define AM13E_IO_PWM_UH_PINCM IOMUX_PINCM_PA8
-#define AM13E_IO_PWM_UL_PINCM IOMUX_PINCM_PA11
-#define AM13E_IO_PWM_VH_PINCM IOMUX_PINCM_PA9
-#define AM13E_IO_PWM_VL_PINCM IOMUX_PINCM_PA30
-#define AM13E_IO_PWM_WH_PINCM IOMUX_PINCM_PA10
-#define AM13E_IO_PWM_WL_PINCM IOMUX_PINCM_PA31
 
 _Static_assert(AM13E_IO_PWM_UH_PINCM == 8U &&
                AM13E_IO_PWM_UL_PINCM == 11U &&
@@ -53,12 +48,6 @@ _Static_assert(AM13E_IO_PWM_UH_PINCM == 8U &&
 #define AM13E_BEMF_PHASE2_CMPSS_IDX 1U
 #define AM13E_BEMF_PHASE3_CMPSS_IDX 3U
 
-#define AM13E_BEMF_CMP0_HP_PINCM IOMUX_PINCM_PA17
-#define AM13E_BEMF_CMP0_HN_PINCM IOMUX_PINCM_PA4
-#define AM13E_BEMF_CMP1_HP_PINCM IOMUX_PINCM_PA3
-#define AM13E_BEMF_CMP1_HN_PINCM IOMUX_PINCM_PA2
-#define AM13E_BEMF_CMP3_HP_PINCM IOMUX_PINCM_PA16
-#define AM13E_BEMF_CMP3_HN_PINCM IOMUX_PINCM_PA18
 
 #define AM13E_BEMF_CMP0_HP_MUX DL_SYSCTL_CMP_HP0
 #define AM13E_BEMF_CMP0_HN_MUX DL_SYSCTL_CMP_HN1

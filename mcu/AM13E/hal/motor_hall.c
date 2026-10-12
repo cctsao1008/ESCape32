@@ -25,11 +25,8 @@
 /* Native GPIO edge detection substitutes for TIM3's three-input XOR.
  * USE_XOR selects that same any-Hall-edge intent; it reserves no extra pin.
  */
-#define FREE_HALL(p) ((p)>0U && (p)<32U && \
-    (p)!=26U && (p)!=8U && (p)!=11U && (p)!=9U && (p)!=30U && (p)!=10U && (p)!=31U && \
-    (p)!=6U && (p)!=28U && (p)!=17U && (p)!=4U && (p)!=3U && (p)!=2U && \
-    (p)!=16U && (p)!=18U && (p)!=AM13E_BOARD_OC_GPIO_PINCM && \
-    (p)!=AM13E_BOARD_SERIAL_TX_PINCM && (p)!=AM13E_BOARD_CURRENT_SENSE_PINCM)
+#define FREE_HALL(p) ((p)>0U && (p)<32U && AM13E_PIN_AVAILABLE(p) && \
+    !AM13E_PIN_SERIAL(p) && !AM13E_PIN_TELEM(p) && !AM13E_PIN_ANALOG(p) && !AM13E_PIN_AUX(p))
 _Static_assert(FREE_HALL(AM13E_HALL_PIN1) && FREE_HALL(AM13E_HALL_PIN2) &&
     FREE_HALL(AM13E_HALL_PIN3) && AM13E_HALL_PIN1!=AM13E_HALL_PIN2 &&
     AM13E_HALL_PIN1!=AM13E_HALL_PIN3 && AM13E_HALL_PIN2!=AM13E_HALL_PIN3,

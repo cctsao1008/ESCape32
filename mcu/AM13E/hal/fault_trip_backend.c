@@ -1,3 +1,4 @@
+#include "../config.h"
 #include "fault_trip_backend.h"
 #include "fault_trip_route_plan.h"
 #include <soc.h>
@@ -15,7 +16,7 @@ _Static_assert(DL_XBAR_PWM_INPUTXBAR1 == 0x14U &&
 int am13e_mcu_fault_trip_route_valid(const AM13E_FaultTripRoute *route)
 {
     if (route == NULL ||
-        (route->mcpwm != MCPWM0 && route->mcpwm != MCPWM1 &&
+        (route->mcpwm != MOTOR_PWM && route->mcpwm != MCPWM1 &&
          route->mcpwm != MCPWM2 && route->mcpwm != MCPWM3 &&
          route->mcpwm != MCPWM4)) {
         return 0;

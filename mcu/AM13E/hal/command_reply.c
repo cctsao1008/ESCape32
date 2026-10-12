@@ -16,9 +16,9 @@
 #include <dl_sysctl.h>
 #include <stddef.h>
 extern void hard_fault_handler(void);
-#define TX_TIMER TIMG4
-#define TX_DMA DMA0
-#define TX_CH 2U
+#define TX_TIMER IOTIM
+#define TX_DMA IOTIM_DMA
+#define TX_CH IOTIM_DMA_CHANNEL
 #define TX_PIN COMMAND_PIN
 #define TX_CLK (AM13E_APP_MCLK_HZ/2U)
 /* AM13E230x SDK dl_dma.h advertises DATA_ERROR, but hw_dma.h
@@ -27,7 +27,7 @@ extern void hard_fault_handler(void);
  * completion and address-error interrupt handling as implemented.
  */
 #define TX_DMA_FLAGS (DL_DMA_INTERRUPT_CHANNEL2 | DL_DMA_INTERRUPT_ADDR_ERROR)
-_Static_assert(DL_DMA_TRIGGER_SOURCE_TIMG4_0_GEN_EVENT1==34U,"TIMG4 DMA trigger mismatch");
+_Static_assert(IOTIM_DMA_TRIGGER==34U,"TIMG4 DMA trigger mismatch");
 _Static_assert(AM13E_BIDIR_DMA_TRANSFERS==23U,"Telemetry symbol count mismatch");
 
 static uint32_t tx_words[AM13E_BIDIR_DMA_TRANSFERS] __attribute__((aligned(4)));
@@ -49,7 +49,7 @@ bool am13e_pb14_release_timer_for_sbus2(void)
     DL_DMA_disableChannel(TX_DMA, TX_CH);
     DL_DMA_clearInterruptStatus(TX_DMA, TX_DMA_FLAGS);
     DL_Timer_clearInterruptStatus(TX_TIMER, DL_TIMER_INTERRUPT_ZERO_EVENT);
-    NVIC_ClearPendingIRQ(TIMG4_0_INT_IRQn);
+    NVIC_ClearPendingIRQ(IOTIM_IRQ);
     serial_timer_owner=true;
     return true;
 }
@@ -101,7 +101,7 @@ void am13e_pb14_bidir_tx_init(void)
     DL_DMA_configTransfer(TX_DMA,TX_CH,DL_DMA_SINGLE_TRANSFER_MODE,
         DL_DMA_NORMAL_MODE,DL_DMA_WIDTH_WORD,DL_DMA_WIDTH_WORD,
         DL_DMA_ADDR_INCREMENT,DL_DMA_ADDR_UNCHANGED);
-    DL_DMA_setTrigger(TX_DMA,TX_CH,(uint8_t)DL_DMA_TRIGGER_SOURCE_TIMG4_0_GEN_EVENT1,
+    DL_DMA_setTrigger(TX_DMA,TX_CH,(uint8_t)IOTIM_DMA_TRIGGER,
                       DL_DMA_TRIGGER_TYPE_EXTERNAL);
     DL_DMA_setDestAddr(TX_DMA,TX_CH,(uint32_t)(uintptr_t)&COMMAND_GPIO->DOUTTGL31_0);
     DL_DMA_setSrcAddr(TX_DMA,TX_CH,(uint32_t)(uintptr_t)tx_words);
@@ -117,12 +117,12 @@ void am13e_pb14_bidir_tx_init(void)
     uint8_t prepared[AM13E_BIDIR_DMA_LEVELS];
     am13e_app_io_bidir_telemetry_levels(prepared);
     am13e_bidir_toggle_plan(prepared,TX_PIN,tx_words);
-    NVIC_SetPriority(TIMG4_0_INT_IRQn,0U);
-    NVIC_SetPriority(DMA0_INT_IRQn,0U);
-    NVIC_ClearPendingIRQ(TIMG4_0_INT_IRQn);
-    NVIC_ClearPendingIRQ(DMA0_INT_IRQn);
-    NVIC_EnableIRQ(TIMG4_0_INT_IRQn);
-    NVIC_EnableIRQ(DMA0_INT_IRQn);
+    NVIC_SetPriority(IOTIM_IRQ,0U);
+    NVIC_SetPriority(IOTIM_DMA_IRQ,0U);
+    NVIC_ClearPendingIRQ(IOTIM_IRQ);
+    NVIC_ClearPendingIRQ(IOTIM_DMA_IRQ);
+    NVIC_EnableIRQ(IOTIM_IRQ);
+    NVIC_EnableIRQ(IOTIM_DMA_IRQ);
 #ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
     tx_initialized=true;
 #endif

@@ -47,6 +47,7 @@ _Static_assert(AM13E_BOARD_EXBUS_STABLE_DEVICE_ID!=0U &&
 #endif
 #include "board_reference_io.h"
 #include "board_configuration.h"
+#include "../config.h"
 #include <soc.h>
 #include <dl_gpio.h>
 #include <dl_unicommuart.h>
@@ -89,22 +90,11 @@ _Static_assert(AM13E_BOARD_SERIAL_RX_PINCM!=IOMUX_PINCM_PA26 ||
      (AM13E_BOARD_SERIAL_RX_UC_INDEX==3 && AM13E_BOARD_SERIAL_RX_PIN_FUNCTION==11)),
     "PA26 UART RX must select its actual UC0/UC3 function");
 _Static_assert(AM13E_BOARD_SERIAL_RX_PINCM!=IOMUX_PINCM_PB14 &&
-               AM13E_BOARD_SERIAL_RX_PINCM!=IOMUX_PINCM_PB15 &&
-               AM13E_BOARD_SERIAL_RX_PINCM!=IOMUX_PINCM_PB13 &&
-               AM13E_BOARD_SERIAL_RX_PINCM!=IOMUX_PINCM_PA6 &&
-               AM13E_BOARD_SERIAL_RX_PINCM!=IOMUX_PINCM_PA28 &&
-               AM13E_BOARD_SERIAL_RX_PINCM!=AM13E_IO_PWM_UH_PINCM &&
-               AM13E_BOARD_SERIAL_RX_PINCM!=AM13E_IO_PWM_UL_PINCM &&
-               AM13E_BOARD_SERIAL_RX_PINCM!=AM13E_IO_PWM_VH_PINCM &&
-               AM13E_BOARD_SERIAL_RX_PINCM!=AM13E_IO_PWM_VL_PINCM &&
-               AM13E_BOARD_SERIAL_RX_PINCM!=AM13E_IO_PWM_WH_PINCM &&
-               AM13E_BOARD_SERIAL_RX_PINCM!=AM13E_IO_PWM_WL_PINCM &&
-               AM13E_BOARD_SERIAL_RX_PINCM!=AM13E_BEMF_CMP0_HP_PINCM &&
-               AM13E_BOARD_SERIAL_RX_PINCM!=AM13E_BEMF_CMP0_HN_PINCM &&
-               AM13E_BOARD_SERIAL_RX_PINCM!=AM13E_BEMF_CMP1_HP_PINCM &&
-               AM13E_BOARD_SERIAL_RX_PINCM!=AM13E_BEMF_CMP1_HN_PINCM &&
-               AM13E_BOARD_SERIAL_RX_PINCM!=AM13E_BEMF_CMP3_HP_PINCM &&
-               AM13E_BOARD_SERIAL_RX_PINCM!=AM13E_BEMF_CMP3_HN_PINCM &&
+               (!AM13E_PIN_FIXED(AM13E_BOARD_SERIAL_RX_PINCM) || AM13E_BOARD_SERIAL_RX_PINCM==IO_PINCM) &&
+               !AM13E_PIN_TELEM(AM13E_BOARD_SERIAL_RX_PINCM) &&
+               !AM13E_PIN_HALL(AM13E_BOARD_SERIAL_RX_PINCM) &&
+               !AM13E_PIN_ANALOG(AM13E_BOARD_SERIAL_RX_PINCM) &&
+               !AM13E_PIN_AUX(AM13E_BOARD_SERIAL_RX_PINCM) &&
                (AM13E_BOARD_SERIAL_TX_PINCM==0U ||
                 (AM13E_BOARD_SERIAL_RX_PINCM!=AM13E_BOARD_SERIAL_TX_PINCM ||
 #ifdef PA26_SINGLE_WIRE
@@ -141,33 +131,9 @@ _Static_assert(AM13E_BOARD_SERIAL_TX_TWO_WIRE==1U &&
 #endif
 #endif
 
-#if AM13E_BOARD_SERIAL_RX_UC_INDEX==0
-#define RX_UC UC0_INST_PTR
-#define RX_IRQ UC0_INT_IRQn
-#define RX_HANDLER UC0_IRQHandler
-#elif AM13E_BOARD_SERIAL_RX_UC_INDEX==1
-#define RX_UC UC1_INST_PTR
-#define RX_IRQ UC1_INT_IRQn
-#define RX_HANDLER UC1_IRQHandler
-#elif AM13E_BOARD_SERIAL_RX_UC_INDEX==2
-#define RX_UC UC2_INST_PTR
-#define RX_IRQ UC2_INT_IRQn
-#define RX_HANDLER UC2_IRQHandler
-#elif AM13E_BOARD_SERIAL_RX_UC_INDEX==3
-#define RX_UC UC3_INST_PTR
-#define RX_IRQ UC3_INT_IRQn
-#define RX_HANDLER UC3_IRQHandler
-#elif AM13E_BOARD_SERIAL_RX_UC_INDEX==4
-#define RX_UC UC4_INST_PTR
-#define RX_IRQ UC4_INT_IRQn
-#define RX_HANDLER UC4_IRQHandler
-#elif AM13E_BOARD_SERIAL_RX_UC_INDEX==5
-#define RX_UC UC5_INST_PTR
-#define RX_IRQ UC5_INT_IRQn
-#define RX_HANDLER UC5_IRQHandler
-#else
-#error "Select AM13E UNICOMM0..UNICOMM5, with no other owner"
-#endif
+#define RX_UC IO_UART
+#define RX_IRQ IO_UART_IRQ
+#define RX_HANDLER IO_UART_HANDLER
 
 /* SDK 26.01's DL_UART_ERROR_OVERRUN references an undefined
  * RXDATA_OVRERR_SET; real overrun is a separate IIDX IRQ, not a
@@ -263,7 +229,7 @@ static bool crsf_tx_start(const uint8_t *p,unsigned n);
  * This two-wire adapter mutes RX in software until the real final EOT.
  * Single-wire driver enable/Hi-Z turnaround remains a board blocker.
  */
-#define SBUS2_TIMER TIMG4
+#define SBUS2_TIMER IOTIM
 #define SBUS2_IRQ DL_TIMER_INTERRUPT_CC1_UP_EVENT
 static bool sbus2_timer_owned;
 static volatile bool sbus2_active,sbus2_release_due;
@@ -286,7 +252,7 @@ static bool sbus2_compare(uint16_t deadline)
     sbus2_deadline=deadline;
     DL_Timer_disableInterrupt(SBUS2_TIMER,SBUS2_IRQ);
     DL_Timer_clearInterruptStatus(SBUS2_TIMER,SBUS2_IRQ);
-    NVIC_ClearPendingIRQ(TIMG4_0_INT_IRQn);
+    NVIC_ClearPendingIRQ(IOTIM_IRQ);
     DL_Timer_setCaptureCompareValue(SBUS2_TIMER,deadline,DL_TIMER_CC_1_INDEX);
     /* Reject a deadline passed during publication instead of waiting a wrap. */
     if((int16_t)(deadline-sbus2_now())<=0)return false;
@@ -314,14 +280,14 @@ static bool sbus2_timer_init(void)
         DL_TIMER_CC_1_INDEX);
     DL_Timer_disableInterrupt(SBUS2_TIMER,SBUS2_IRQ);
     DL_Timer_clearInterruptStatus(SBUS2_TIMER,SBUS2_IRQ);
-    NVIC_ClearPendingIRQ(TIMG4_0_INT_IRQn);
+    NVIC_ClearPendingIRQ(IOTIM_IRQ);
     sbus2_active=sbus2_release_due=false;
     sbus2_timer_owned=true;
     /* Same priority as UART: timer TX and UART FIFO/EOT cannot interrupt
      * each other's queue mutation. Motor/ECAP/SysTick stay at priority0.
      * In BiDShot mode the original TIMG4 priority0 remains unchanged.
      */
-    NVIC_SetPriority(TIMG4_0_INT_IRQn,1U);
+    NVIC_SetPriority(IOTIM_IRQ,1U);
     DL_Timer_startCounter(SBUS2_TIMER);
     return true;
 }
@@ -417,7 +383,7 @@ static uint32_t wire_started;
 extern void hard_fault_handler(void);
 static void wire_rx(void)
 {
-    DL_GPIO_disableOutput(GPIO0,DL_GPIO_PIN(26U));
+    DL_GPIO_disableOutput(IO_GPIO,IO_PIN);
     DL_UART_setDirection(RX_UC,DL_UART_DIRECTION_RX);
     DL_GPIO_initPeripheralInputFunctionFeatures(AM13E_BOARD_SERIAL_RX_PINCM,
         AM13E_BOARD_SERIAL_RX_PIN_FUNCTION,
@@ -436,7 +402,7 @@ static bool wire_tx(void)
     if(wire_tx_active || !DL_UART_isRXFIFOEmpty(RX_UC) || DL_UART_isBusy(RX_UC))return false;
     DL_UART_disableInterrupt(RX_UC,DL_UART_INTERRUPT_RX|RX_IRQ_ERRORS);
     DL_UART_setDirection(RX_UC,DL_UART_DIRECTION_TX);
-    DL_GPIO_disableOutput(GPIO0,DL_GPIO_PIN(26U));
+    DL_GPIO_disableOutput(IO_GPIO,IO_PIN);
     DL_GPIO_initPeripheralOutputFunction(AM13E_BOARD_SERIAL_TX_PINCM,AM13E_BOARD_SERIAL_TX_PIN_FUNCTION);
 #ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
     DL_GPIO_setDataInversion(AM13E_BOARD_SERIAL_TX_PINCM,
@@ -471,7 +437,7 @@ static void wire_abort(void)
     if(sbus2_timer_owned){
         DL_Timer_disableInterrupt(SBUS2_TIMER,SBUS2_IRQ);
         DL_Timer_clearInterruptStatus(SBUS2_TIMER,SBUS2_IRQ);
-        NVIC_ClearPendingIRQ(TIMG4_0_INT_IRQn);
+        NVIC_ClearPendingIRQ(IOTIM_IRQ);
         sbus2_active=sbus2_release_due=false;sbus2_count=0U;
     }
 #endif
@@ -487,13 +453,13 @@ void am13e_app_serial_transport_service_pending(void)
     const uint32_t uart_enabled=NVIC_GetEnableIRQ(RX_IRQ);
     NVIC_DisableIRQ(RX_IRQ);
 #ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
-    const uint32_t timer_enabled=NVIC_GetEnableIRQ(TIMG4_0_INT_IRQn);
-    if(sbus2_timer_owned)NVIC_DisableIRQ(TIMG4_0_INT_IRQn);
+    const uint32_t timer_enabled=NVIC_GetEnableIRQ(IOTIM_IRQ);
+    if(sbus2_timer_owned)NVIC_DisableIRQ(IOTIM_IRQ);
 #endif
     __DSB();wire_abort_pending=false;
     if(wire_tx_active && (uint32_t)(serial_rx_tick-wire_started)>=512U)wire_abort();
 #ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
-    if(sbus2_timer_owned && timer_enabled)NVIC_EnableIRQ(TIMG4_0_INT_IRQn);
+    if(sbus2_timer_owned && timer_enabled)NVIC_EnableIRQ(IOTIM_IRQ);
 #endif
     if(uart_enabled)NVIC_EnableIRQ(RX_IRQ);
 #endif
