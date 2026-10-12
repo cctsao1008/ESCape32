@@ -63,7 +63,7 @@ for invalid in missing_route motor_pad duplicate_pad bad_inversion unspecified_t
   if cc "${hall_args[@]}" "${args[@]}" >"$out/hall-$invalid.log" 2>&1; then
     echo "FAIL: invalid Hall definition accepted: $invalid" >&2; exit 1
   fi
-  rg -q "$expected" "$out/hall-$invalid.log"
+  grep -q -- "$expected" "$out/hall-$invalid.log"
   echo "PASS: rejected Hall definition: $invalid"
 done
 
