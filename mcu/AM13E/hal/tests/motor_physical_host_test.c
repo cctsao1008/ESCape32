@@ -174,7 +174,9 @@ static int gate_on(void)
 static void start(void)
 {
     am13e_app_motor_commutation_commit();
+    MCPWM0->ETCNT|=1U<<MCPWM_ETCNT_ET1_CNT_OFS; /* queued pre-stop ZERO */
     am13e_app_motor_commutation_enable(1);
+    assert(DL_MCPWM_getEventTriggerEventCount(MCPWM0,DL_MCPWM_ET_1)==0U);
     assert(am13e_mcu_motor_pads_pwm_matches(am13e_board_motor_pad_route(),AM13E_MOTOR_PAD_INVERT_MASK));
     assert(!gate_on());
     assert(!MCPWM0->PWM1_AQSFRC && !MCPWM0->PWM2_AQSFRC && !MCPWM0->PWM3_AQSFRC);
@@ -324,7 +326,10 @@ int main(void)
     MCPWM0_IRQHandler();
     assert(!(MCPWM0->INTEN&DL_MCPWM_INT_ET_2));
     assert(MCPWM0->INTFLAG&DL_MCPWM_INT_ET_2);
-    am13e_app_audio_music_tick();zero();carrier();
+    MCPWM0->ETCNT=1U<<MCPWM_ETCNT_ET2_CNT_OFS; /* queued extra old period */
+    am13e_app_audio_music_tick();
+    assert(DL_MCPWM_getEventTriggerEventCount(MCPWM0,DL_MCPWM_ET_2)==0U);
+    zero();carrier();
     assert(MCPWM0->PWM3_AQCTLA==DL_MCPWM_AQ_OUTPUT_HIGH_ZERO);
     assert(MCPWM0->PWM1_AQCTLA==DL_MCPWM_AQ_OUTPUT_LOW_ZERO);
     assert(!(MCPWM0->INTFLAG&DL_MCPWM_INT_ET_2));

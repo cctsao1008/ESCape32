@@ -33,3 +33,11 @@ void test_aq_forced(MCPWM_Regs *p,DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE o);
 static inline void test_force_aq(MCPWM_Regs *p,DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE o)
 { DL_MCPWM_forceActionQualifierSWAction(p,o);test_aq_forced(p,o); }
 #define DL_MCPWM_forceActionQualifierSWAction test_force_aq
+
+static inline void test_force_event(MCPWM_Regs *p,uint16_t flags)
+{
+    DL_MCPWM_forceInterrupt(p,flags);p->INTFLAG|=flags;
+    if(flags&DL_MCPWM_INT_ET_1)p->ETCNT&=~MCPWM_ETCNT_ET1_CNT_MASK;
+    if(flags&DL_MCPWM_INT_ET_2)p->ETCNT&=~MCPWM_ETCNT_ET2_CNT_MASK;
+}
+#define DL_MCPWM_forceInterrupt test_force_event

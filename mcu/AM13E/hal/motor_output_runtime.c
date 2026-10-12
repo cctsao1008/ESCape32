@@ -101,8 +101,16 @@ int am13e_motor_output_start(void)
      * Core has already requested operation; this is peripheral startup,
      * not an additional application arming condition.
      */
-    start_zero_events=2U;
+    /* The ET generator retains a queued event even after INTFLAG clears.
+     * Drain it while TBCLK is frozen, so an old ZERO cannot count toward
+     * the new bridge's two-ZERO startup interval. */
+    DL_MCPWM_disableInterrupt(MCPWM0,DL_MCPWM_INT_ET_1);
     DL_MCPWM_clearInterrupt(MCPWM0,DL_MCPWM_INT_ET_1);
+    DL_MCPWM_forceInterrupt(MCPWM0,DL_MCPWM_INT_ET_1);
+    __DSB();
+    DL_MCPWM_clearInterrupt(MCPWM0,DL_MCPWM_INT_ET_1);
+    if(DL_MCPWM_getEventTriggerEventCount(MCPWM0,DL_MCPWM_ET_1)!=0U)return 0;
+    start_zero_events=2U;
     DL_MCPWM_setEventTriggerSource(MCPWM0,DL_MCPWM_ET_1,DL_MCPWM_EVT_TBCTR_ZERO);
     DL_MCPWM_setEventTriggerEventPrescale(MCPWM0,DL_MCPWM_ET_1,1U);
     DL_MCPWM_enableInterrupt(MCPWM0,DL_MCPWM_INT_ET_1);

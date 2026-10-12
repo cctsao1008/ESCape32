@@ -1225,6 +1225,15 @@ int am13e_app_motor_audio_period_elapsed(void)
     if(elapsed){
         DL_MCPWM_disableInterrupt(MCPWM0,DL_MCPWM_INT_ET_2);
         DL_MCPWM_clearInterrupt(MCPWM0,DL_MCPWM_INT_ET_2);
+        /* TRM26.9 queues one further event while the flag is latched.
+         * Rel17 UIF instead collapses all old periods into one poll.
+         * Force a masked ET2 event to drain its event counter (TRM Table26-42:
+         * INTFLAG generation clears ETCNT irrespective of INTEN), then
+         * discard that synthetic flag before accepting a new period.
+         * Do not write the read-only ETCNT register. */
+        DL_MCPWM_forceInterrupt(MCPWM0,DL_MCPWM_INT_ET_2);
+        __DSB();
+        DL_MCPWM_clearInterrupt(MCPWM0,DL_MCPWM_INT_ET_2);
         DL_MCPWM_enableInterrupt(MCPWM0,DL_MCPWM_INT_ET_2);
     }
     /* Do not acknowledge the global interrupt: a simultaneous OST must
