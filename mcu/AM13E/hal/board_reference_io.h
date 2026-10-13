@@ -25,50 +25,26 @@
  */
 
 _Static_assert(AM13E_IO_PWM_UH_PINCM == 8U &&
-               AM13E_IO_PWM_UL_PINCM == 11U &&
-               AM13E_IO_PWM_VH_PINCM == 9U &&
-               AM13E_IO_PWM_VL_PINCM == 30U &&
+               AM13E_IO_PWM_UL_PINCM == 21U &&
+               AM13E_IO_PWM_VH_PINCM == 24U &&
+               AM13E_IO_PWM_VL_PINCM == 2U &&
                AM13E_IO_PWM_WH_PINCM == 10U &&
-               AM13E_IO_PWM_WL_PINCM == 31U &&
-               IOMUX_PA8_MCPWM0_1A == 7U &&
-               IOMUX_PA11_MCPWM0_1B == 7U &&
-               IOMUX_PA9_MCPWM0_2A == 7U &&
-               IOMUX_PA30_MCPWM0_2B == 7U &&
-               IOMUX_PA10_MCPWM0_3A == 7U &&
-               IOMUX_PA31_MCPWM0_3B == 5U,
-               "AM13E reference IO Plan Six-step MCPWM0 pin/function drift");
+               AM13E_IO_PWM_WL_PINCM == 25U &&
+               IOMUX_PA8_MCPWM4_1A == 6U &&
+               IOMUX_PA21_MCPWM4_1B == 5U &&
+               IOMUX_PA24_MCPWM4_2A == 4U &&
+               IOMUX_PA2_MCPWM4_2B == 6U &&
+               IOMUX_PA10_MCPWM4_3A == 4U &&
+               IOMUX_PA25_MCPWM4_3B == 12U,
+               "AM13E reference IO Plan Six-step MCPWM4 pin/function drift");
 
-/* Rel17 logical phase 1=U / 2=V / 3=W.
- * BEMF phase -> comparator: U=0, V=1, W=3 (distinct and fixed).
- * CMPSS high comparator positive pin: U PA17 HP0, V PA3 HP0,
- * W PA16 HP1; virtual-neutral COM negative: PA4 HN1, PA2 HN0,
- * PA18 HN0. Analog inputs do NOT use digital IOMUX function 7.
- */
-#define AM13E_BEMF_PHASE1_CMPSS_IDX 0U
-#define AM13E_BEMF_PHASE2_CMPSS_IDX 1U
-#define AM13E_BEMF_PHASE3_CMPSS_IDX 3U
-
-
-#define AM13E_BEMF_CMP0_HP_MUX DL_SYSCTL_CMP_HP0
-#define AM13E_BEMF_CMP0_HN_MUX DL_SYSCTL_CMP_HN1
-#define AM13E_BEMF_CMP1_HP_MUX DL_SYSCTL_CMP_HP0
-#define AM13E_BEMF_CMP1_HN_MUX DL_SYSCTL_CMP_HN0
-#define AM13E_BEMF_CMP3_HP_MUX DL_SYSCTL_CMP_HP1
-#define AM13E_BEMF_CMP3_HN_MUX DL_SYSCTL_CMP_HN0
-
-_Static_assert(AM13E_BEMF_CMP0_HP_PINCM==17U &&
-               AM13E_BEMF_CMP0_HN_PINCM==4U &&
-               AM13E_BEMF_CMP1_HP_PINCM==3U &&
-               AM13E_BEMF_CMP1_HN_PINCM==2U &&
-               AM13E_BEMF_CMP3_HP_PINCM==16U &&
-               AM13E_BEMF_CMP3_HN_PINCM==18U &&
-               AM13E_BEMF_CMP0_HP_MUX==DL_SYSCTL_CMP_HP0 &&
-               AM13E_BEMF_CMP0_HN_MUX==DL_SYSCTL_CMP_HN1 &&
-               AM13E_BEMF_CMP1_HP_MUX==DL_SYSCTL_CMP_HP0 &&
-               AM13E_BEMF_CMP1_HN_MUX==DL_SYSCTL_CMP_HN0 &&
-               AM13E_BEMF_CMP3_HP_MUX==DL_SYSCTL_CMP_HP1 &&
-               AM13E_BEMF_CMP3_HN_MUX==DL_SYSCTL_CMP_HN0,
-               "AM13E reference IO Plan BEMF analog pin/mux drift");
+/* Option 1: one high comparator, HP0/1/2 selected for logical U/V/W.
+ * DACH replaces the former external neutral inputs; calibration and live
+ * mux/DAC behavior remain unqualified. CMPSS1/2/3 belong to overcurrent. */
+_Static_assert(AM13E_BEMF_U_PINCM==17U && AM13E_BEMF_V_PINCM==1U &&
+               AM13E_BEMF_W_PINCM==29U && DL_SYSCTL_CMP_HP0==0U &&
+               DL_SYSCTL_CMP_HP1==1U && DL_SYSCTL_CMP_HP2==2U,
+               "Option 1 CMPSS0 phase input mapping drift");
 
 /* PA26 is the revised development command selection; PB15 is IO-only nFAULT input.
  * PB13 Gate Enable is initialized as an INACTIVE GPIO output, with

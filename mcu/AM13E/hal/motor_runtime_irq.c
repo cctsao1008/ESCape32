@@ -1,3 +1,4 @@
+#include "../config.h"
 /* AM13E reference ESCape32 Rel17 AM13E FW1 interrupt release barrier.
  * Release PRIMASK for real PA26 DShot, 16 kHz SysTick, BEMF and motor
  * commutation IRQs; the Rel17 motor/audio runtime alone requests gate
@@ -77,7 +78,7 @@ void am13e_app_motor_runtime_enable_interrupts(void)
         !vector_matches(TIMG12_0_INT_IRQn,TIMG12_0_IRQHandler) ||
         !vector_matches(TIMG4_0_INT_IRQn,TIMG4_0_IRQHandler) ||
         !vector_matches(DMA0_INT_IRQn,DMA0_IRQHandler) ||
-        !vector_matches(MCPWM0_INT_IRQn,MCPWM0_IRQHandler))
+        !vector_matches(MOTOR_PWM_IRQ,MCPWM4_IRQHandler))
         irq_barrier_fault();
 
     if ((SysTick->CTRL & (SysTick_CTRL_ENABLE_Msk |

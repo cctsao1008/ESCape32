@@ -46,7 +46,7 @@ static volatile uint32_t hardware_trip_installed;
 int am13e_app_motor_nfault_trip_ready(void)
 {
 #if AM13E_MOTOR_OUTPUT_CONFIGURED
-    if(!NVIC_GetEnableIRQ(MCPWM0_INT_IRQn) || NVIC_GetPriority(MCPWM0_INT_IRQn)!=0U ||
+    if(!NVIC_GetEnableIRQ(MOTOR_PWM_IRQ) || NVIC_GetPriority(MOTOR_PWM_IRQ)!=0U ||
        !(MOTOR_PWM->INTEN&DL_MCPWM_INT_TZ_OST) || !DL_GPIO_isInputEnabled(IOMUX_PINCM_PB15) ||
        DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PB15)!=IOMUX_PB15_GPIO47 ||
        (((AM13E_NFAULT_GPIO->DIN31_0&AM13E_NFAULT_MASK)!=0U)==(AM13E_MOTOR_NFAULT_ACTIVE_LOW==0)))return 0;

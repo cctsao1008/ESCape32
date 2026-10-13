@@ -109,7 +109,8 @@ void am13e_motor_output_stage(const uint16_t aq[6],const uint16_t compare[6],uin
 }
 int am13e_motor_output_start(void)
 {
-    if(__get_PRIMASK()!=1U || !am13e_app_motor_nfault_trip_ready())return 0;
+    if(!AM13E_OPTION1_OUTPUTS_QUALIFIED || __get_PRIMASK()!=1U ||
+       !am13e_app_motor_nfault_trip_ready())return 0;
     const AM13E_MotorPadRoute *route=am13e_board_motor_pad_route();
     am13e_power_stage_force_off();
     /* Clear retained AQ latches while the external driver is disabled.

@@ -13,6 +13,7 @@
 #include "../../../../src/main.c"
 #include "motor_safety.h"
 #include "motor_output_runtime.h"
+#include "motor_power_stage.h"
 #include "board_motor_output_provider.h"
 #include "motor_bemf.h"
 #include "motor_event_timer.h"
@@ -22,6 +23,7 @@
 #endif
 #include <dl_mcpwm.h>
 #include <dl_sysctl.h>
+#include <dl_cmpss_lite.h>
 #include <dl_gpio.h>
 #include <dl_ecap.h>
 #include <dl_timer.h>
@@ -85,10 +87,10 @@ int am13e_app_io_watchdog_fault_arm(void)
         (((GPIO1->DOUT31_0&AM13E_GATE_MASK)!=0U)!=(AM13E_MOTOR_GATE_ACTIVE_LEVEL!=0)));
     if(fixture_gpio_power_failure){
         const uint32_t low=(uint32_t)DL_MCPWM_AQ_SW_CONTINUOUS_LOW*17U;
-        assert(MCPWM0->PWM1_AQSFRC==low && MCPWM0->PWM2_AQSFRC==low && MCPWM0->PWM3_AQSFRC==low);
+        assert(MCPWM4->PWM1_AQSFRC==low && MCPWM4->PWM2_AQSFRC==low && MCPWM4->PWM3_AQSFRC==low);
     }else assert(am13e_mcu_motor_pads_disconnected(am13e_board_motor_pad_route()));
-    assert((MCPWM0->TBCTL&MCPWM_TBCTL_CTRMODE_MASK)==DL_MCPWM_COUNTER_MODE_STOP_FREEZE);
-    assert(!DL_MCPWM_getGlobalLoadOneShotLatchStatus(MCPWM0));
+    assert((MCPWM4->TBCTL&MCPWM_TBCTL_CTRMODE_MASK)==DL_MCPWM_COUNTER_MODE_STOP_FREEZE);
+    assert(!DL_MCPWM_getGlobalLoadOneShotLatchStatus(MCPWM4));
 #endif
     ++watchdog_arms;return 1;
 }
@@ -127,8 +129,8 @@ static void active_image(MCPWM_Regs *p,uint32_t image[16])
 void test_shadow_written(MCPWM_Regs *p)
 {
     if(inject_trip){
-        MCPWM0->TZCBCOSTFLAG=DL_MCPWM_TZ_FLAG_OST_TZ1;
-        MCPWM0->INTFLAG|=DL_MCPWM_INT_TZ_OST;inject_trip=0U;
+        MCPWM4->TZCBCOSTFLAG=DL_MCPWM_TZ_FLAG_OST_TZ1;
+        MCPWM4->INTFLAG|=DL_MCPWM_INT_TZ_OST;inject_trip=0U;
     }
     if(!inject_shadow_zero)return;
     uint32_t before[16],after[16];active_image(p,before);
@@ -146,7 +148,7 @@ static uint64_t fed_deadline[3];
 static unsigned off_seen[6];
 void test_aq_forced(MCPWM_Regs *p,DL_MCPWM_ACTION_QUALIFIER_OUTPUT_MODULE o)
 {
-    assert(p==MCPWM0 && (unsigned)o<6U);
+    assert(p==MCPWM4 && (unsigned)o<6U);
     const uint32_t sw[3]={p->PWM1_AQSFRC,p->PWM2_AQSFRC,p->PWM3_AQSFRC};
     assert(((sw[(unsigned)o/2U]>>((unsigned)o%2U?MCPWM_PWM1_AQSFRC_PWMB_OFS:MCPWM_PWM1_AQSFRC_PWMA_OFS))&7U)==DL_MCPWM_AQ_SW_ONE_SHOT_LOW);
     aq_state[(unsigned)o]=gate_state[(unsigned)o]=0U;
@@ -160,21 +162,21 @@ static void aq_event(unsigned i,unsigned action)
 }
 static void carrier(void)
 {
-    uint32_t aq[6]={MCPWM0->PWM1_AQCTLA,MCPWM0->PWM1_AQCTLB,
-        MCPWM0->PWM2_AQCTLA,MCPWM0->PWM2_AQCTLB,MCPWM0->PWM3_AQCTLA,MCPWM0->PWM3_AQCTLB};
-    uint32_t cc[6]={MCPWM0->PWM1_CMPA,MCPWM0->PWM1_CMPB,
-        MCPWM0->PWM2_CMPA,MCPWM0->PWM2_CMPB,MCPWM0->PWM3_CMPA,MCPWM0->PWM3_CMPB};
-    const unsigned red=MCPWM0->DBRED;
+    uint32_t aq[6]={MCPWM4->PWM1_AQCTLA,MCPWM4->PWM1_AQCTLB,
+        MCPWM4->PWM2_AQCTLA,MCPWM4->PWM2_AQCTLB,MCPWM4->PWM3_AQCTLA,MCPWM4->PWM3_AQCTLB};
+    uint32_t cc[6]={MCPWM4->PWM1_CMPA,MCPWM4->PWM1_CMPB,
+        MCPWM4->PWM2_CMPA,MCPWM4->PWM2_CMPB,MCPWM4->PWM3_CMPA,MCPWM4->PWM3_CMPB};
+    const unsigned red=MCPWM4->DBRED;
 #ifdef PWM_ENABLE
-    assert(MCPWM0->DBFED==red && (MCPWM0->DBCTL&MCPWM_DBCTL_OUT_MODE_MASK)==3U);
+    assert(MCPWM4->DBFED==red && (MCPWM4->DBCTL&MCPWM_DBCTL_OUT_MODE_MASK)==3U);
 #else
-    assert(MCPWM0->DBFED==1U && (MCPWM0->DBCTL&MCPWM_DBCTL_OUT_MODE_MASK)==(1U<<DL_MCPWM_DB_RED));
+    assert(MCPWM4->DBFED==1U && (MCPWM4->DBCTL&MCPWM_DBCTL_OUT_MODE_MASK)==(1U<<DL_MCPWM_DB_RED));
 #endif
-    for(unsigned tick=0;tick<=MCPWM0->TBPRD;++tick,++virtual_tick){
-        MCPWM0->TBCTR=tick;
+    for(unsigned tick=0;tick<=MCPWM4->TBPRD;++tick,++virtual_tick){
+        MCPWM4->TBCTR=tick;
 #ifdef SW_BLANKING
-        if(tick==AM13E_BEMF_BLANK_TICKS && (MCPWM0->INTEN&DL_MCPWM_INT_ET_2)){
-            MCPWM0->INTFLAG=DL_MCPWM_INT_ET_2;MCPWM0_IRQHandler();
+        if(tick==AM13E_BEMF_BLANK_TICKS && (MCPWM4->INTEN&DL_MCPWM_INT_ET_2)){
+            MCPWM4->INTFLAG=DL_MCPWM_INT_ET_2;MCPWM4_IRQHandler();
         }
 #endif
         for(unsigned phase=0;phase<3U;++phase){
@@ -191,7 +193,7 @@ static void carrier(void)
              * delays its activation; a rising input cancels a short pulse. */
             if(aq_state[b]){gate_state[b]=1U;fed_deadline[phase]=UINT64_MAX;}
             else if(previous[1]){
-                if(fed_deadline[phase]==UINT64_MAX)fed_deadline[phase]=virtual_tick+MCPWM0->DBFED;
+                if(fed_deadline[phase]==UINT64_MAX)fed_deadline[phase]=virtual_tick+MCPWM4->DBFED;
                 if(virtual_tick==fed_deadline[phase])gate_state[b]=0U;
             }
 #else
@@ -215,8 +217,8 @@ static void expect_sixstep(void)
     /* Rel17 documented C|B, A|B, A|C, B|C, B|A, C|A sequence. */
     static const unsigned positive[6]={2,0,0,1,1,2};
     static const unsigned negative[6]={1,1,2,2,0,0};
-    const uint32_t aq[6]={MCPWM0->PWM1_AQCTLA,MCPWM0->PWM1_AQCTLB,
-        MCPWM0->PWM2_AQCTLA,MCPWM0->PWM2_AQCTLB,MCPWM0->PWM3_AQCTLA,MCPWM0->PWM3_AQCTLB};
+    const uint32_t aq[6]={MCPWM4->PWM1_AQCTLA,MCPWM4->PWM1_AQCTLB,
+        MCPWM4->PWM2_AQCTLA,MCPWM4->PWM2_AQCTLB,MCPWM4->PWM3_AQCTLA,MCPWM4->PWM3_AQCTLB};
     assert(step>=1 && step<=6);
     for(unsigned phase=0;phase<3U;++phase){
 #ifdef PWM_ENABLE
@@ -248,12 +250,12 @@ static void capture(unsigned ticks)
 }
 static void zero(void)
 {
-    test_global_load(MCPWM0);
+    test_global_load(MCPWM4);
     uint32_t events=DL_MCPWM_INT_ET_1;
-    MCPWM0->TBCTR=0U;
-    if(MCPWM0->INTEN&events){
+    MCPWM4->TBCTR=0U;
+    if(MCPWM4->INTEN&events){
         uint32_t mask=test_primask;test_primask=0U;
-        MCPWM0->INTFLAG=MCPWM0->INTEN&events;MCPWM0_IRQHandler();test_primask=mask;
+        MCPWM4->INTFLAG=MCPWM4->INTEN&events;MCPWM4_IRQHandler();test_primask=mask;
     }
 }
 static int gate_on(void)
@@ -261,12 +263,12 @@ static int gate_on(void)
 static void start(void)
 {
     am13e_app_motor_commutation_commit();
-    MCPWM0->ETCNT|=1U<<MCPWM_ETCNT_ET1_CNT_OFS; /* queued pre-stop ZERO */
+    MCPWM4->ETCNT|=1U<<MCPWM_ETCNT_ET1_CNT_OFS; /* queued pre-stop ZERO */
     am13e_app_motor_commutation_enable(1);
-    assert(DL_MCPWM_getEventTriggerEventCount(MCPWM0,DL_MCPWM_ET_1)==0U);
+    assert(DL_MCPWM_getEventTriggerEventCount(MCPWM4,DL_MCPWM_ET_1)==0U);
     assert(am13e_mcu_motor_pads_pwm_matches(am13e_board_motor_pad_route(),AM13E_MOTOR_PAD_INVERT_MASK));
     assert(!gate_on());
-    assert(!MCPWM0->PWM1_AQSFRC && !MCPWM0->PWM2_AQSFRC && !MCPWM0->PWM3_AQSFRC);
+    assert(!MCPWM4->PWM1_AQSFRC && !MCPWM4->PWM2_AQSFRC && !MCPWM4->PWM3_AQSFRC);
     zero();assert(!gate_on());
     zero();assert(gate_on());
 }
@@ -322,7 +324,7 @@ static void fatal_paths(int early)
                         fixture_gpio_power_failure=1U;
                         am13e_app_motor_commutation_enable(0);break;
                     case 15:
-                        DL_MCPWM_init(MCPWM0,NULL);break; /* actual SDK ASSERT(false) */
+                        DL_MCPWM_init(MCPWM4,NULL);break; /* actual SDK ASSERT(false) */
                     default:assert(0);
                 }
                 assert(0); /* Every injected fatal condition is nonreturning. */
@@ -429,17 +431,36 @@ int main(void)
     am13e_app_aux_gpio_init();
 #endif
     am13e_app_motor_init();
-    assert((MCPWM0->TBCTL&MCPWM_TBCTL_CLKDIV_MASK)==
+    assert((MCPWM4->TBCTL&MCPWM_TBCTL_CLKDIV_MASK)==
         (uint32_t)DL_MCPWM_CLOCK_DIVIDER_2<<MCPWM_TBCTL_CLKDIV_OFS);
     assert(am13e_app_motor_inactive_aq_boot_preflight());
     am13e_app_motor_bemf_init();
+    assert(!am13e_app_motor_bemf_reference_set(0U));
+    assert(am13e_app_motor_bemf_reference_set(2048U));
 #ifdef PWM_ENABLE
-    assert((MCPWM0->TZCTL&MCPWM_TZCTL_TZB_MASK)==
+    assert((MCPWM4->TZCTL&MCPWM_TZCTL_TZB_MASK)==
         ((uint32_t)DL_MCPWM_TZ_ACTION_HIGH<<MCPWM_TZCTL_TZB_OFS));
     checkcfg();assert(cfg.damp==1);
 #endif
     for(unsigned n=0;n<18U;++n){ECAP1->TSCTR+=12500U;am13e_app_motor_bemf_tick();}
     assert(am13e_app_motor_inactive_preflight_ok());
+    assert(CMPSS0->DACHVALS==2048U);
+    assert((CMPSS0->COMPCTL&CMPSS_LITE_COMPCTL_COMPHSOURCE_MASK)==DL_CMPSSLITE_INSRC_DAC);
+    for(unsigned phase=1U;phase<=3U;++phase){
+        for(unsigned invert=0U;invert<2U;++invert){
+            compctl((int)(phase|(invert<<2U)));
+            assert((SYSCTL->SOCLOCK.CMPHPMXSEL&SYSCTL_CMPHPMXSEL_CMP0HPMXSEL_MASK)==phase-1U);
+            assert((ECAP1->ECCTL0&ECAP_ECCTL0_INPUTSEL_MASK)==DL_ECAP_INPUT_CMPSS0_CTRIPH);
+            assert(!am13e_app_motor_bemf_reference_set(1024U));
+        }
+    }
+    compctl(0);
+#if !AM13E_OPTION1_OUTPUTS_QUALIFIED
+    assert(!am13e_motor_output_start() && !am13e_power_stage_enable());
+    assert(am13e_app_motor_inactive_preflight_ok() && !gate_on());
+    puts("PASS unqualified Option 1 refuses PWM pad connection and Gate Enable");
+    assert(munmap(r,0x07000000)==0);return 0;
+#endif
 #ifdef HALL_MAP
     hall_runtime();assert(munmap(r,0x07000000)==0);return 0;
 #endif
@@ -449,8 +470,8 @@ int main(void)
 #ifdef AM13E_FATAL_PATH_FIXTURE
     fatal_paths(0);
 #endif
-    assert(MCPWM0->DBRED==AM13E_MOTOR_OUTPUT_RED_TICKS &&
-        MCPWM0->DBFED==(AM13E_MOTOR_OUTPUT_FED_TICKS?AM13E_MOTOR_OUTPUT_FED_TICKS:1U));
+    assert(MCPWM4->DBRED==AM13E_MOTOR_OUTPUT_RED_TICKS &&
+        MCPWM4->DBFED==(AM13E_MOTOR_OUTPUT_FED_TICKS?AM13E_MOTOR_OUTPUT_FED_TICKS:1U));
     inject_shadow_zero=1U;
     for(unsigned n=0;n<12U;++n){nextstep();zero();expect_sixstep();carrier();assert(am13e_mcu_motor_pads_pwm_matches(am13e_board_motor_pad_route(),AM13E_MOTOR_PAD_INVERT_MASK));}
     reverse=1;for(unsigned n=0;n<12U;++n){nextstep();zero();expect_sixstep();carrier();}
@@ -462,15 +483,15 @@ int main(void)
     const int before_blank=ival;
     ECAP1->CAP1=500000U;ECAP1->ECFLG=DL_ECAP_ISR_SOURCE_CEVT1;
     ECAP1_IRQHandler();assert(ival==before_blank);
-    MCPWM0->TBCTR=10U;MCPWM0->INTFLAG=DL_MCPWM_INT_ET_1|DL_MCPWM_INT_ET_2;
-    MCPWM0_IRQHandler();assert(!(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK));
-    MCPWM0->TBCTR=AM13E_BEMF_BLANK_TICKS;MCPWM0->INTFLAG=DL_MCPWM_INT_ET_2;
-    MCPWM0_IRQHandler();assert(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK);
+    MCPWM4->TBCTR=10U;MCPWM4->INTFLAG=DL_MCPWM_INT_ET_1|DL_MCPWM_INT_ET_2;
+    MCPWM4_IRQHandler();assert(!(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK));
+    MCPWM4->TBCTR=AM13E_BEMF_BLANK_TICKS;MCPWM4->INTFLAG=DL_MCPWM_INT_ET_2;
+    MCPWM4_IRQHandler();assert(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK);
     assert(ECAP1->TSCTR==elapsed);
 #endif
     /* Empty vectors after replacement must preserve the new hardware owner. */
     const int before_empty=step;
-    MCPWM0->INTFLAG=0U;MCPWM0_IRQHandler();assert(gate_on());
+    MCPWM4->INTFLAG=0U;MCPWM4_IRQHandler();assert(gate_on());
     ECAP1->ECFLG=0U;ECAP1_IRQHandler();
     am13e_app_motor_bemf_commutation_delay_us(1234);
     *(volatile uint32_t *)(uintptr_t)&TIMG12->CPU_INT.MIS=0U;
@@ -527,7 +548,7 @@ int main(void)
     const int stopped_step=step;
     *(volatile uint32_t *)(uintptr_t)&TIMG12->CPU_INT.MIS=DL_TIMER_INTERRUPT_ZERO_EVENT;
     TIMG12_0_IRQHandler();ECAP1_IRQHandler();
-    MCPWM0->INTFLAG=DL_MCPWM_INT_ET_1;MCPWM0_IRQHandler();
+    MCPWM4->INTFLAG=DL_MCPWM_INT_ET_1;MCPWM4_IRQHandler();
     assert(step==stopped_step && !gate_on());
     /* Original lock laststep and ZTC coast, then native brushed COM output. */
     for(int hold=1;hold<=2;++hold){
@@ -548,11 +569,11 @@ int main(void)
     /* Actual audio hardware ownership, clock/dead-time scaling and release. */
     for(int mode=1;mode<=2;++mode){
         am13e_app_motor_audio_begin(mode);
-        assert((MCPWM0->TBCTL&MCPWM_TBCTL_CLKDIV_MASK)==
+        assert((MCPWM4->TBCTL&MCPWM_TBCTL_CLKDIV_MASK)==
             (uint32_t)(mode==1?DL_MCPWM_CLOCK_DIVIDER_32:DL_MCPWM_CLOCK_DIVIDER_2)<<MCPWM_TBCTL_CLKDIV_OFS);
-        assert(MCPWM0->DBRED==(mode==1?(AM13E_MOTOR_OUTPUT_RED_TICKS+15U)/16U:AM13E_MOTOR_OUTPUT_RED_TICKS));
+        assert(MCPWM4->DBRED==(mode==1?(AM13E_MOTOR_OUTPUT_RED_TICKS+15U)/16U:AM13E_MOTOR_OUTPUT_RED_TICKS));
 #ifdef PWM_ENABLE
-        assert(MCPWM0->DBFED==MCPWM0->DBRED);
+        assert(MCPWM4->DBFED==MCPWM4->DBRED);
 #endif
         am13e_app_motor_audio_period(2000U);
         am13e_app_motor_audio_compare(400U,700U);zero();zero();carrier();assert(gate_on());
@@ -561,29 +582,29 @@ int main(void)
         am13e_app_motor_audio_compare(0U,400U);zero();zero();carrier();
         am13e_app_motor_audio_end();assert(!gate_on());
         assert(am13e_app_motor_inactive_preflight_ok());
-        assert(MCPWM0->DBRED==AM13E_MOTOR_OUTPUT_RED_TICKS);
+        assert(MCPWM4->DBRED==AM13E_MOTOR_OUTPUT_RED_TICKS);
     }
     /* Actual music adapter: constant-tone CCR>ARR and sticky UIF behavior
      * after a missed period, even when counter order does not show wrap. */
     am13e_app_audio_music_begin();zero();zero();
     am13e_app_audio_music_note(0,10,255);zero();zero();carrier();
-    assert(MCPWM0->PWM1_AQCTLA==DL_MCPWM_AQ_OUTPUT_HIGH_ZERO);
-    assert(MCPWM0->PWM1_AQCTLB==DL_MCPWM_AQ_OUTPUT_LOW_ZERO);
-    assert((MCPWM0->ETSEL&MCPWM_ETSEL_ET2_SEL_MASK)==
+    assert(MCPWM4->PWM1_AQCTLA==DL_MCPWM_AQ_OUTPUT_HIGH_ZERO);
+    assert(MCPWM4->PWM1_AQCTLB==DL_MCPWM_AQ_OUTPUT_LOW_ZERO);
+    assert((MCPWM4->ETSEL&MCPWM_ETSEL_ET2_SEL_MASK)==
         (uint32_t)DL_MCPWM_EVT_TBCTR_ZERO<<MCPWM_ETSEL_ET2_SEL_OFS);
-    MCPWM0->TBCTR=5U;MCPWM0->INTFLAG|=DL_MCPWM_INT_ET_2;
-    MCPWM0_IRQHandler();
-    assert(!(MCPWM0->INTEN&DL_MCPWM_INT_ET_2));
-    assert(MCPWM0->INTFLAG&DL_MCPWM_INT_ET_2);
-    MCPWM0->ETCNT=1U<<MCPWM_ETCNT_ET2_CNT_OFS; /* queued extra old period */
+    MCPWM4->TBCTR=5U;MCPWM4->INTFLAG|=DL_MCPWM_INT_ET_2;
+    MCPWM4_IRQHandler();
+    assert(!(MCPWM4->INTEN&DL_MCPWM_INT_ET_2));
+    assert(MCPWM4->INTFLAG&DL_MCPWM_INT_ET_2);
+    MCPWM4->ETCNT=1U<<MCPWM_ETCNT_ET2_CNT_OFS; /* queued extra old period */
     am13e_app_audio_music_tick();
-    assert(DL_MCPWM_getEventTriggerEventCount(MCPWM0,DL_MCPWM_ET_2)==0U);
+    assert(DL_MCPWM_getEventTriggerEventCount(MCPWM4,DL_MCPWM_ET_2)==0U);
     zero();carrier();
-    assert(MCPWM0->PWM3_AQCTLA==DL_MCPWM_AQ_OUTPUT_HIGH_ZERO);
-    assert(MCPWM0->PWM1_AQCTLA==DL_MCPWM_AQ_OUTPUT_LOW_ZERO);
-    assert(!(MCPWM0->INTFLAG&DL_MCPWM_INT_ET_2));
+    assert(MCPWM4->PWM3_AQCTLA==DL_MCPWM_AQ_OUTPUT_HIGH_ZERO);
+    assert(MCPWM4->PWM1_AQCTLA==DL_MCPWM_AQ_OUTPUT_LOW_ZERO);
+    assert(!(MCPWM4->INTFLAG&DL_MCPWM_INT_ET_2));
     am13e_app_audio_music_tick(); /* no new ZERO: no second swap */
-    zero();carrier();assert(MCPWM0->PWM3_AQCTLA==DL_MCPWM_AQ_OUTPUT_HIGH_ZERO);
+    zero();carrier();assert(MCPWM4->PWM3_AQCTLA==DL_MCPWM_AQ_OUTPUT_HIGH_ZERO);
     am13e_app_audio_music_pause();zero();carrier();
     am13e_app_audio_end();assert(!gate_on());
     /* Maximum 16-bit carrier image: inactive/freewheel compares must not
@@ -593,9 +614,9 @@ int main(void)
             DL_MCPWM_AQ_OUTPUT_LOW_ZERO|DL_MCPWM_AQ_OUTPUT_HIGH_UP_CMPB,0,DL_MCPWM_AQ_OUTPUT_HIGH_ZERO,0,0};
         const uint16_t maximum[6]={65535,65535,65535,65535,65535,65535};
         am13e_motor_output_stage(image,maximum,65534U);
-        assert(MCPWM0->PWM1_AQCTLA==DL_MCPWM_AQ_OUTPUT_HIGH_ZERO);
-        assert(MCPWM0->PWM1_AQCTLB==DL_MCPWM_AQ_OUTPUT_LOW_ZERO);
-        assert(MCPWM0->PWM1_CMPA==1U && MCPWM0->PWM1_CMPB==1U);
+        assert(MCPWM4->PWM1_AQCTLA==DL_MCPWM_AQ_OUTPUT_HIGH_ZERO);
+        assert(MCPWM4->PWM1_AQCTLB==DL_MCPWM_AQ_OUTPUT_LOW_ZERO);
+        assert(MCPWM4->PWM1_CMPA==1U && MCPWM4->PWM1_CMPB==1U);
         assert(!gate_on());
     }
     /* A trip can latch halfway through masked SHADOW writes. Test in
@@ -613,17 +634,17 @@ int main(void)
         }
         if(!setjmp(fault_return)){
             if(fault_case){
-                inject_ack_trip=1U;MCPWM0->INTFLAG=DL_MCPWM_INT_ET_2;
+                inject_ack_trip=1U;MCPWM4->INTFLAG=DL_MCPWM_INT_ET_2;
             }else{
                 inject_trip=1U;
                 am13e_app_motor_pwm_apply(1000,24,48,ertm,1,0,0,1);
-                assert(test_primask==0U && (MCPWM0->TZCBCOSTFLAG&DL_MCPWM_TZ_FLAG_OST_TZ1));
+                assert(test_primask==0U && (MCPWM4->TZCBCOSTFLAG&DL_MCPWM_TZ_FLAG_OST_TZ1));
             }
-            MCPWM0_IRQHandler();assert(0);
+            MCPWM4_IRQHandler();assert(0);
         }
         assert(!gate_on() && watchdog_arms==1U);
         assert(am13e_mcu_motor_pads_disconnected(am13e_board_motor_pad_route()));
-        assert(!DL_MCPWM_getGlobalLoadOneShotLatchStatus(MCPWM0));
+        assert(!DL_MCPWM_getGlobalLoadOneShotLatchStatus(MCPWM4));
         _exit(0);
     }
     int child_status;assert(waitpid(child,&child_status,0)==child);
@@ -633,16 +654,16 @@ int main(void)
     sine=0;step=0;lock=0;nextstep();am13e_app_motor_commutation_commit();
     am13e_app_motor_commutation_enable(1);
     if(!setjmp(fault_return)){
-        MCPWM0->TZCBCOSTFLAG=DL_MCPWM_TZ_FLAG_OST_TZ1;
-        MCPWM0->INTFLAG=DL_MCPWM_INT_TZ_OST|DL_MCPWM_INT_ET_1;
-        MCPWM0_IRQHandler();assert(0);
+        MCPWM4->TZCBCOSTFLAG=DL_MCPWM_TZ_FLAG_OST_TZ1;
+        MCPWM4->INTFLAG=DL_MCPWM_INT_TZ_OST|DL_MCPWM_INT_ET_1;
+        MCPWM4_IRQHandler();assert(0);
     }
     assert(watchdog_arms==1U && !gate_on());
     assert(am13e_mcu_motor_pads_disconnected(am13e_board_motor_pad_route()));
-    assert(MCPWM0->TZCBCOSTFLAG&DL_MCPWM_TZ_FLAG_OST_TZ1);
+    assert(MCPWM4->TZCBCOSTFLAG&DL_MCPWM_TZ_FLAG_OST_TZ1);
     if(!setjmp(fault_return)){am13e_app_motor_commutation_enable(1);assert(0);}
     assert(!gate_on());
-    assert(!(MCPWM0->INTEN&DL_MCPWM_INT_ET_1));
+    assert(!(MCPWM4->INTEN&DL_MCPWM_INT_ET_1));
     assert(munmap(r,0x07000000)==0);
     puts("PASS original Core -> native MCPWM/pinmux/gate, sine/sixstep/reverse/brake and dominant OST shutdown");
 }

@@ -19,24 +19,28 @@
 #define AM13E_XTAL1_PINCM 80U
 #define AM13E_XTAL2_PINCM 81U
 #define AM13E_IO_PWM_UH_PINCM 8U
-#define AM13E_IO_PWM_UL_PINCM 11U
-#define AM13E_IO_PWM_VH_PINCM 9U
-#define AM13E_IO_PWM_VL_PINCM 30U
+#define AM13E_IO_PWM_UL_PINCM 21U
+#define AM13E_IO_PWM_VH_PINCM 24U
+#define AM13E_IO_PWM_VL_PINCM 2U
 #define AM13E_IO_PWM_WH_PINCM 10U
-#define AM13E_IO_PWM_WL_PINCM 31U
-#define AM13E_BEMF_CMP0_HP_PINCM 17U
-#define AM13E_BEMF_CMP0_HN_PINCM 4U
-#define AM13E_BEMF_CMP1_HP_PINCM 3U
-#define AM13E_BEMF_CMP1_HN_PINCM 2U
-#define AM13E_BEMF_CMP3_HP_PINCM 16U
-#define AM13E_BEMF_CMP3_HN_PINCM 18U
+#define AM13E_IO_PWM_WL_PINCM 25U
+#define AM13E_BEMF_U_PINCM 17U
+#define AM13E_BEMF_V_PINCM 1U
+#define AM13E_BEMF_W_PINCM 29U
 #define AM13E_PIN_MOTOR(p) ((p)==AM13E_IO_PWM_UH_PINCM || (p)==AM13E_IO_PWM_UL_PINCM || \
     (p)==AM13E_IO_PWM_VH_PINCM || (p)==AM13E_IO_PWM_VL_PINCM || \
     (p)==AM13E_IO_PWM_WH_PINCM || (p)==AM13E_IO_PWM_WL_PINCM)
-#define AM13E_PIN_BEMF(p) ((p)==AM13E_BEMF_CMP0_HP_PINCM || (p)==AM13E_BEMF_CMP0_HN_PINCM || \
-    (p)==AM13E_BEMF_CMP1_HP_PINCM || (p)==AM13E_BEMF_CMP1_HN_PINCM || \
-    (p)==AM13E_BEMF_CMP3_HP_PINCM || (p)==AM13E_BEMF_CMP3_HN_PINCM)
-#define AM13E_PIN_FIXED(p) (AM13E_PIN_MOTOR(p) || AM13E_PIN_BEMF(p) || \
+#define AM13E_PIN_BEMF(p) ((p)==AM13E_BEMF_U_PINCM || \
+    (p)==AM13E_BEMF_V_PINCM || (p)==AM13E_BEMF_W_PINCM)
+/* TI Option 1 shared-board allocations: no Six-Step reuse of FOC,
+ * debug, CAN, DAC, IPD or timing/fault test pads. Spare PA12/28/31
+ * remain available; reservation alone does not enable a peripheral. */
+#define AM13E_PIN_OPTION1_RESERVED(p) ((p)==0U || (p)==1U || (p)==3U || \
+    (p)==4U || (p)==5U || (p)==6U || (p)==7U || (p)==9U || (p)==11U || \
+    (p)==13U || (p)==14U || (p)==15U || (p)==16U || (p)==17U || \
+    (p)==18U || (p)==19U || (p)==20U || (p)==22U || (p)==23U || \
+    (p)==29U || (p)==30U || (p)==46U || (p)==47U)
+#define AM13E_PIN_FIXED(p) (AM13E_PIN_OPTION1_RESERVED(p) || AM13E_PIN_MOTOR(p) || AM13E_PIN_BEMF(p) || \
     (p)==AM13E_COMMAND_PINCM || (p)==AM13E_GATE_PINCM || (p)==AM13E_NFAULT_PINCM || \
     (p)==AM13E_NTC_PINCM || (p)==AM13E_VBUS_PINCM || \
     (p)==AM13E_XTAL1_PINCM || (p)==AM13E_XTAL2_PINCM)

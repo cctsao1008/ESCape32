@@ -42,35 +42,15 @@ static volatile uint32_t blank_required,blank_active;
 #define BEMF_FLAGS (DL_ECAP_ISR_SOURCE_CEVT1 | DL_ECAP_ISR_SOURCE_CEVT2 | \
                     DL_ECAP_ISR_SOURCE_CEVT3 | DL_ECAP_ISR_SOURCE_CEVT4 | \
                     DL_ECAP_ISR_SOURCE_CTROVF)
-_Static_assert(DL_ECAP_INPUT_CMPSS0_CTRIPH == 45U &&
-               DL_ECAP_INPUT_CMPSS1_CTRIPH == 46U &&
-               DL_ECAP_INPUT_CMPSS3_CTRIPH == 48U,
-               "TRM CMPSS/ECAP1 routing changed");
-
-/* IO Plan v1.0 is proposed for TI review; it is not physical electrical
- * verification. It DOES specify usable analog pad / CMPSS mux candidates.
- * Gate outputs still remain isolated by motor_safety.c.
- */
-_Static_assert((AM13E_BEMF_PHASE1_CMPSS_IDX == 0 ||
-                AM13E_BEMF_PHASE1_CMPSS_IDX == 1 ||
-                AM13E_BEMF_PHASE1_CMPSS_IDX == 3) &&
-               (AM13E_BEMF_PHASE2_CMPSS_IDX == 0 ||
-                AM13E_BEMF_PHASE2_CMPSS_IDX == 1 ||
-                AM13E_BEMF_PHASE2_CMPSS_IDX == 3) &&
-               (AM13E_BEMF_PHASE3_CMPSS_IDX == 0 ||
-                AM13E_BEMF_PHASE3_CMPSS_IDX == 1 ||
-                AM13E_BEMF_PHASE3_CMPSS_IDX == 3) &&
-                AM13E_BEMF_PHASE1_CMPSS_IDX != AM13E_BEMF_PHASE2_CMPSS_IDX &&
-                AM13E_BEMF_PHASE2_CMPSS_IDX != AM13E_BEMF_PHASE3_CMPSS_IDX &&
-                AM13E_BEMF_PHASE1_CMPSS_IDX != AM13E_BEMF_PHASE3_CMPSS_IDX,
-               "Rel17 logical BEMF phases require unique CMPSS0/1/3");
+_Static_assert(DL_ECAP_INPUT_CMPSS0_CTRIPH == 45U,
+               "TRM CMPSS0/ECAP1 route changed");
 
 /* Retain the original public Rel17 comparator-control signature without
  * importing legacy STM32 GPIO/timer implementation into this backend.
  */
 void compctl(int x);
 
-static volatile uint32_t initialized,selected_code,armed;
+static volatile uint32_t initialized,selected_code,armed,reference_ready;
 static volatile uint32_t captured_events,rejected_events,interval_us;
 /* 16 complete SysTick intervals form 1ms; retain the FULL ECAP tick
  * count instead of rounding to an integer MHz (ticks/us).
@@ -92,8 +72,6 @@ static void bemf_fault(void)
 static void sense_comparators_off(void)
 {
     DL_CMPSSLITE_disableModule(CMPSS0);
-    DL_CMPSSLITE_disableModule(CMPSS1);
-    DL_CMPSSLITE_disableModule(CMPSS3);
 }
 #endif
 
@@ -111,6 +89,7 @@ static void capture_stop(void)
     DL_MCPWM_clearInterrupt(MOTOR_PWM,events);
     DL_ECAP_disableTimeStampCapture(BEMF_ECAP);
 #endif
+    DL_ECAP_disableTimeStampCapture(BEMF_ECAP);
     DL_ECAP_disableInterrupt(BEMF_ECAP,BEMF_FLAGS);
     DL_ECAP_stopCounter(BEMF_ECAP);
     DL_ECAP_clearInterrupt(BEMF_ECAP,BEMF_FLAGS);
@@ -134,47 +113,34 @@ void am13e_app_motor_bemf_abort(void)
 }
 
 #ifdef AM13E_REF_IO_PLAN_V1
-static unsigned phase_cmp_instance(unsigned logical)
+static DL_SYSCTL_CMP_HP phase_hp(unsigned logical)
 {
-    switch(logical) {
-        case 1U:return AM13E_BEMF_PHASE1_CMPSS_IDX;
-        case 2U:return AM13E_BEMF_PHASE2_CMPSS_IDX;
-        case 3U:return AM13E_BEMF_PHASE3_CMPSS_IDX;
+    switch(logical){
+        case 1U:return DL_SYSCTL_CMP_HP0;
+        case 2U:return DL_SYSCTL_CMP_HP1;
+        case 3U:return DL_SYSCTL_CMP_HP2;
         default:bemf_fault();
     }
     __builtin_unreachable();
 }
-static CMPSS_LITE_Regs *phase_cmp(unsigned logical)
+static void configure_bemf_cmp(void)
 {
-    switch(phase_cmp_instance(logical)) {
-        case 0U:return CMPSS0;
-        case 1U:return CMPSS1;
-        case 3U:return CMPSS3;
-        default:bemf_fault();
-    }
-    __builtin_unreachable();
-}
-static void configure_phase_cmp(CMPSS_LITE_Regs *cmp,
-          DL_SYSCTL_PERIPH_POWER power,DL_SYSCTL_CMPSS_MUX id,
-          uint32_t hp_pin,uint32_t hn_pin,
-          DL_SYSCTL_CMP_HP hp,DL_SYSCTL_CMP_HN hn)
-{
-    DL_SYSCTL_enablePower(power);
-    if(!DL_SYSCTL_isPowerEnabled(power))bemf_fault();
-    DL_GPIO_initPeripheralAnalogFunction(hp_pin);
-    DL_GPIO_initPeripheralAnalogFunction(hn_pin);
-    DL_SYSCTL_setCompartorHPMux(id,hp);
-    DL_SYSCTL_setCompartorHNMux(id,hn);
-    DL_CMPSSLITE_configHighComparator(cmp,DL_CMPSSLITE_INSRC_PIN);
-    DL_CMPSSLITE_configFilterInputHigh(cmp,DL_CMPSSLITE_FILTIN_COMPOUT);
-    DL_CMPSSLITE_configFilterHigh(cmp,0U,5U,3U);
-    DL_CMPSSLITE_initFilterHigh(cmp);
-    DL_CMPSSLITE_configOutputsHigh(cmp,
+    DL_SYSCTL_enablePower(DL_SYSCTL_PWREN_CMPSS0);
+    if(!DL_SYSCTL_isPowerEnabled(DL_SYSCTL_PWREN_CMPSS0))bemf_fault();
+    DL_CMPSSLITE_disableModule(CMPSS0);
+    DL_GPIO_initPeripheralAnalogFunction(AM13E_BEMF_U_PINCM);
+    DL_GPIO_initPeripheralAnalogFunction(AM13E_BEMF_V_PINCM);
+    DL_GPIO_initPeripheralAnalogFunction(AM13E_BEMF_W_PINCM);
+    DL_SYSCTL_setCompartorHPMux(DL_SYSCTL_CMPSS0_MUX,DL_SYSCTL_CMP_HP0);
+    DL_CMPSSLITE_configHighComparator(CMPSS0,DL_CMPSSLITE_INSRC_DAC);
+    DL_CMPSSLITE_configDACHigh(CMPSS0,DL_CMPSSLITE_DACVAL_MCLK);
+    DL_CMPSSLITE_setDACValueHigh(CMPSS0,0U);
+    DL_CMPSSLITE_configFilterInputHigh(CMPSS0,DL_CMPSSLITE_FILTIN_COMPOUT);
+    DL_CMPSSLITE_configFilterHigh(CMPSS0,0U,5U,3U);
+    DL_CMPSSLITE_initFilterHigh(CMPSS0);
+    DL_CMPSSLITE_configOutputsHigh(CMPSS0,
          DL_CMPSSLITE_TRIP_FILTER|DL_CMPSSLITE_TRIPOUT_FILTER);
-    /* Rel17 does not leave every phase comparator active while idle.
-     * compctl() enables exactly the selected comparator at commutation.
-     */
-    DL_CMPSSLITE_disableModule(cmp);
+    reference_ready=0U; /* Zero is an inactive value, not a Vdc/2 calibration. */
 }
 #endif
 void am13e_app_motor_bemf_init(void)
@@ -210,24 +176,30 @@ void am13e_app_motor_bemf_init(void)
     DL_ECAP_startCounter(BEMF_ECAP);
     calibration_start=0U; /* first SysTick provides phase-aligned origin */
 #ifdef AM13E_REF_IO_PLAN_V1
-    configure_phase_cmp(CMPSS0,DL_SYSCTL_PWREN_CMPSS0,DL_SYSCTL_CMPSS0_MUX,
-        AM13E_BEMF_CMP0_HP_PINCM,AM13E_BEMF_CMP0_HN_PINCM,
-        (DL_SYSCTL_CMP_HP)AM13E_BEMF_CMP0_HP_MUX,
-        (DL_SYSCTL_CMP_HN)AM13E_BEMF_CMP0_HN_MUX);
-    configure_phase_cmp(CMPSS1,DL_SYSCTL_PWREN_CMPSS1,DL_SYSCTL_CMPSS1_MUX,
-        AM13E_BEMF_CMP1_HP_PINCM,AM13E_BEMF_CMP1_HN_PINCM,
-        (DL_SYSCTL_CMP_HP)AM13E_BEMF_CMP1_HP_MUX,
-        (DL_SYSCTL_CMP_HN)AM13E_BEMF_CMP1_HN_MUX);
-    configure_phase_cmp(CMPSS3,DL_SYSCTL_PWREN_CMPSS3,DL_SYSCTL_CMPSS3_MUX,
-        AM13E_BEMF_CMP3_HP_PINCM,AM13E_BEMF_CMP3_HN_PINCM,
-        (DL_SYSCTL_CMP_HP)AM13E_BEMF_CMP3_HP_MUX,
-        (DL_SYSCTL_CMP_HN)AM13E_BEMF_CMP3_HN_MUX);
+    configure_bemf_cmp();
 #endif
     initialized=1U;
     NVIC_SetPriority(ECAP1_INT_IRQn,0U);
     NVIC_ClearPendingIRQ(ECAP1_INT_IRQn);
     NVIC_EnableIRQ(ECAP1_INT_IRQn);
 }
+/* Board-calibrated raw DACH code only. Live tracking/settling has no
+ * established contract, so updates cannot disturb an armed capture.
+ * The selected Reference never supplies a guessed Vdc/2 code. */
+int am13e_app_motor_bemf_reference_set(uint16_t code)
+{
+    if(!initialized || __get_PRIMASK()!=1U || armed || selected_code ||
+       code==0U || code>4095U)return 0;
+    DL_CMPSSLITE_disableModule(CMPSS0);
+    DL_CMPSSLITE_setDACValueHigh(CMPSS0,code);
+    DL_CMPSSLITE_initFilterHigh(CMPSS0);
+    DL_ECAP_clearInterrupt(BEMF_ECAP,BEMF_FLAGS);
+    DL_ECAP_clearGlobalInterrupt(BEMF_ECAP);
+    NVIC_ClearPendingIRQ(ECAP1_INT_IRQn);
+    reference_ready=1U;
+    return 1;
+}
+
 /* Rel17 x&3 selects the previous BEMF phase; x&4 reverses polarity.
  * Keep source change isolated from the interval filter/IRQ arming.
  */
@@ -248,17 +220,16 @@ void compctl(int x)
         bemf_fault();
 #else
         const unsigned phase=(unsigned)x&3U;
-        const unsigned hw=phase_cmp_instance(phase);
-        const DL_ECAP_INPUT input=hw==0U?
-            DL_ECAP_INPUT_CMPSS0_CTRIPH:hw==1U?
-            DL_ECAP_INPUT_CMPSS1_CTRIPH:DL_ECAP_INPUT_CMPSS3_CTRIPH;
+        DL_SYSCTL_setCompartorHPMux(DL_SYSCTL_CMPSS0_MUX,phase_hp(phase));
+        DL_CMPSSLITE_initFilterHigh(CMPSS0);
+        const DL_ECAP_INPUT input=DL_ECAP_INPUT_CMPSS0_CTRIPH;
         DL_ECAP_selectECAPInput(BEMF_ECAP,input);
         if ((BEMF_ECAP->ECCTL0 & ECAP_ECCTL0_INPUTSEL_MASK) !=
                 (uint32_t)input)
             bemf_fault();
         DL_ECAP_setEventPolarity(BEMF_ECAP,DL_ECAP_EVENT_1,
              (x&4)?DL_ECAP_EVENT_FALLING_EDGE:DL_ECAP_EVENT_RISING_EDGE);
-        DL_CMPSSLITE_enableModule(phase_cmp(phase));
+        if(reference_ready)DL_CMPSSLITE_enableModule(CMPSS0);
         selected_code=(uint32_t)x;
 #endif
     }
@@ -285,16 +256,17 @@ void am13e_app_motor_bemf_interval_select(int ertm_us)
     }
     interval_us=(uint32_t)ertm_us;
     rejected_events=0U;
-    if(selected_code) {
+    if(selected_code && reference_ready) {
         if (!calibration_done || capture_ticks_per_ms == 0U ||
             capture_timeout_ticks == 0U) bemf_fault();
 #ifdef AM13E_REF_IO_PLAN_V1
         const uint32_t prescale=ertm_us<100?0U:ertm_us<200?1U:
               ertm_us<1000?3U:ertm_us<2000?7U:15U;
-        CMPSS_LITE_Regs *cmp=phase_cmp(selected_code&3U);
+        CMPSS_LITE_Regs *cmp=CMPSS0;
         DL_CMPSSLITE_configFilterHigh(cmp,prescale,5U,3U);
         DL_CMPSSLITE_initFilterHigh(cmp);
         DL_ECAP_resetCounters(BEMF_ECAP);
+        DL_ECAP_enableTimeStampCapture(BEMF_ECAP);
         DL_ECAP_clearInterrupt(BEMF_ECAP,BEMF_FLAGS);
         DL_ECAP_clearGlobalInterrupt(BEMF_ECAP);
         NVIC_ClearPendingIRQ(ECAP1_INT_IRQn);

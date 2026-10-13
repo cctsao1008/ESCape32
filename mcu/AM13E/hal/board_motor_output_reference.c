@@ -1,5 +1,5 @@
-/* Existing Reference v1.6 motor pad routing only (not a universal BSP).
- * PA8/PA11, PA9/PA30, PA10/PA31 remain the exact old MCPWM0 map.
+/* Selected TI v1.2 Option 1 motor routing (not electrical qualification).
+ * PA8/PA21, PA24/PA2, PA10/PA25 are the selected MCPWM4 map.
  * These values do NOT authorize output without gate/Trip/RED/FED review.
  */
 #include "board_motor_output_provider.h"
@@ -20,14 +20,14 @@ static const AM13E_MotorPadRoute reference_route = {
         AM13E_IO_PWM_WH_PINCM, AM13E_IO_PWM_WL_PINCM
     },
     .gpio_functions = {
-        IOMUX_PA8_GPIO08, IOMUX_PA11_GPIO11,
-        IOMUX_PA9_GPIO09, IOMUX_PA30_GPIO30,
-        IOMUX_PA10_GPIO10, IOMUX_PA31_GPIO31
+        IOMUX_PA8_GPIO08, IOMUX_PA21_GPIO21,
+        IOMUX_PA24_GPIO24, IOMUX_PA2_GPIO02,
+        IOMUX_PA10_GPIO10, IOMUX_PA25_GPIO25
     },
     .pwm_functions = {
-        IOMUX_PA8_MCPWM0_1A, IOMUX_PA11_MCPWM0_1B,
-        IOMUX_PA9_MCPWM0_2A, IOMUX_PA30_MCPWM0_2B,
-        IOMUX_PA10_MCPWM0_3A, IOMUX_PA31_MCPWM0_3B
+        IOMUX_PA8_MCPWM4_1A, IOMUX_PA21_MCPWM4_1B,
+        IOMUX_PA24_MCPWM4_2A, IOMUX_PA2_MCPWM4_2B,
+        IOMUX_PA10_MCPWM4_3A, IOMUX_PA25_MCPWM4_3B
     }
 };
 

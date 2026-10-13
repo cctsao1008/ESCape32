@@ -25,6 +25,15 @@
 #endif
 
 #include "motor_output_configuration.h"
+/* Option 1's live analog mux/DAC and asynchronous trip contracts are
+ * unresolved. Production profiles remain physically output-disabled.
+ * Host register fixtures may explicitly model a qualified board; this
+ * declaration is not an application arming policy or a TI approval. */
+#ifndef AM13E_OPTION1_OUTPUTS_QUALIFIED
+#define AM13E_OPTION1_OUTPUTS_QUALIFIED 0
+#endif
+_Static_assert(AM13E_OPTION1_OUTPUTS_QUALIFIED==0 || AM13E_OPTION1_OUTPUTS_QUALIFIED==1,
+               "Option 1 qualification declaration must be binary");
 
 /* Existing six motor pads, PB13/PA26/PB15 and ADC pin routing stay in
  * board_reference_io.h, board_motor_output_reference.c,

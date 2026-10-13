@@ -32,7 +32,9 @@
 #define IOTIM_CAPTURE_SIZE 32U
 #define IFTIM TIMG12
 #define BEMF_CAPTURE ECAP1
-#define MOTOR_PWM MCPWM0
+#define MOTOR_PWM MCPWM4
+#define MOTOR_PWM_IRQ MCPWM4_INT_IRQn
+#define MOTOR_PWM_HANDLER MCPWM4_IRQHandler
 
 /* UNICOMM instance selection is compile-time; pad/AF validity remains
  * checked against the selected board route by its native UART consumer. */

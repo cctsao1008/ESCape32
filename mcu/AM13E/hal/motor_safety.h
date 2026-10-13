@@ -24,6 +24,6 @@ int am13e_app_motor_stage_inactive_shadow(const AM13E_MotorShadowPlan *plan);
 int am13e_app_motor_stage_inactive_pwm_shadow(
     const AM13E_MotorPwmShadowInputs *input, AM13E_MotorShadowPlan *snapshot);
 /* Strong vector: physical Trip Zone fault or unexpected MCPWM IRQ. */
-void MCPWM0_IRQHandler(void);
+void MCPWM4_IRQHandler(void);
 /* Debug snapshots: no assertion of a validated hardware trip route. */
 void am13e_app_motor_trip_snapshot(uint32_t *irq, uint32_t *tz);

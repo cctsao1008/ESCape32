@@ -7,15 +7,16 @@ out=$(mktemp -d /tmp/am13e-motor-register.XXXXXX)
 trap 'rm -rf "$out"' EXIT
 python3 mcu/_support/AM13E/tools/prepare_sdk_sources.py --sdk-root "$sdk" --output "$out"
 # Synthetic electrical fixtures only; never a qualified board configuration.
-for fixture in high low full inverted blanking hall pwm_enable pwm_enable_full fatal; do
-polarity=1; mask=0; fed=0; extra=(); extra_sources=()
+for fixture in high low full inverted blanking hall pwm_enable pwm_enable_full fatal unqualified; do
+qualified=1; polarity=1; mask=0; fed=0; extra=(); extra_sources=()
 case "$fixture" in
+  unqualified) qualified=0 ;;
   low) polarity=0; mask=63 ;;
   full) extra=(-DFULL_DUTY) ;;
   inverted) mask=21; extra=(-DINVERTED_HIGH) ;;
   blanking) extra=(-DSW_BLANKING) ;;
   hall) extra=(-DHALL_MAP=1 -DUSE_XOR -DAM13E_HALL_GPIO_TIMESTAMP=1
-    -DAM13E_HALL_PIN1=5 -DAM13E_HALL_PIN2=7 -DAM13E_HALL_PIN3=12
+    -DAM13E_HALL_PIN1=12 -DAM13E_HALL_PIN2=27 -DAM13E_HALL_PIN3=31
     -DAM13E_HALL_PULL=DL_GPIO_RESISTOR_PULL_UP -DAM13E_HALL_INVERT_MASK=0) ;;
   pwm_enable) fed=120; extra=(-DPWM_ENABLE -DAM13E_MOTOR_PWM_ENABLE_TOPOLOGY=1 -DAM13E_MOTOR_PWM_ENABLE_DRIVER_DEAD_NS=1500) ;;
   pwm_enable_full) fed=120; mask=21; extra=(-DPWM_ENABLE -DAM13E_MOTOR_PWM_ENABLE_TOPOLOGY=1 -DAM13E_MOTOR_PWM_ENABLE_DRIVER_DEAD_NS=1500 -DFULL_DUTY -DINVERTED_HIGH -DSW_BLANKING) ;;
@@ -44,7 +45,7 @@ hw="$sdk/source/device/am13e230x/include/hw"
 dl="$sdk/source/driverlib/am13e230x"
 cc "${extra[@]}" -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections \
  -DAM13E -DAM13E_REF_IO_PLAN_V1=1 -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' \
- -DAM13E_MOTOR_GATE_ACTIVE_LEVEL="$polarity" -DAM13E_MOTOR_PAD_INVERT_MASK="$mask" -DAM13E_MOTOR_OUTPUT_RED_TICKS=120 -DAM13E_MOTOR_OUTPUT_FED_TICKS="$fed" -DAM13E_MOTOR_MIN_DEAD_TICKS=100 -DAM13E_MOTOR_NFAULT_ACTIVE_LOW=1 -DAM13E_MOTOR_GATE_RESET_INACTIVE=1 \
+ -DAM13E_OPTION1_OUTPUTS_QUALIFIED="$qualified" -DAM13E_MOTOR_GATE_ACTIVE_LEVEL="$polarity" -DAM13E_MOTOR_PAD_INVERT_MASK="$mask" -DAM13E_MOTOR_OUTPUT_RED_TICKS=120 -DAM13E_MOTOR_OUTPUT_FED_TICKS="$fed" -DAM13E_MOTOR_MIN_DEAD_TICKS=100 -DAM13E_MOTOR_NFAULT_ACTIVE_LOW=1 -DAM13E_MOTOR_GATE_RESET_INACTIVE=1 \
  "-DAM13E_TEST_TI_ECAP_HEADER=\"$dl/dl_ecap.h\"" "-DAM13E_TEST_TI_GPIO_HEADER=\"$dl/dl_gpio.h\"" "-DAM13E_TEST_TI_MCPWM_HEADER=\"$dl/dl_mcpwm.h\"" \
  "-DAM13E_TEST_TI_EQEP_HEADER=\"$dl/dl_eqep.h\"" \
  "-DAM13E_TEST_TI_UART_HEADER=\"$dl/dl_unicommuart.h\"" \
@@ -120,8 +121,8 @@ cc -no-pie -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-int-to-pointer-
 # any GPIO mode can overwrite a motor/receiver/sensor pad.
 hall_args=(-std=c11 -Werror -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
  -DAM13E -DCLK=200000000 -DHALL_MAP=1 -DAM13E_REF_IO_PLAN_V1=1
- -DAM13E_HALL_GPIO_TIMESTAMP=1 -DAM13E_HALL_PIN1=5 -DAM13E_HALL_PIN2=7
- -DAM13E_HALL_PIN3=12 -DAM13E_HALL_PULL=DL_GPIO_RESISTOR_PULL_UP
+ -DAM13E_HALL_GPIO_TIMESTAMP=1 -DAM13E_HALL_PIN1=12 -DAM13E_HALL_PIN2=27
+ -DAM13E_HALL_PIN3=31 -DAM13E_HALL_PULL=DL_GPIO_RESISTOR_PULL_UP
  -DAM13E_HALL_INVERT_MASK=0
  "-DAM13E_TEST_TI_GPIO_HEADER=\"$dl/dl_gpio.h\""
  "-DAM13E_TEST_TI_EQEP_HEADER=\"$dl/dl_eqep.h\""

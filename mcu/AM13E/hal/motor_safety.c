@@ -399,15 +399,15 @@ void am13e_app_motor_init(void)
     DL_MCPWM_setEventTriggerEventPrescale(MOTOR_PWM,DL_MCPWM_ET_1,1U);
     DL_MCPWM_setEventTriggerEventPrescale(MOTOR_PWM,DL_MCPWM_ET_2,1U);
     DL_MCPWM_disableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1|DL_MCPWM_INT_ET_2);
-    NVIC_SetPriority(MCPWM0_INT_IRQn,0U);
-    NVIC_ClearPendingIRQ(MCPWM0_INT_IRQn);
-    NVIC_EnableIRQ(MCPWM0_INT_IRQn);
+    NVIC_SetPriority(MOTOR_PWM_IRQ,0U);
+    NVIC_ClearPendingIRQ(MOTOR_PWM_IRQ);
+    NVIC_EnableIRQ(MOTOR_PWM_IRQ);
 #endif
 #if AM13E_MOTOR_OUTPUT_CONFIGURED
     DL_MCPWM_enableInterrupt(MOTOR_PWM,DL_MCPWM_INT_TZ_OST);
-    NVIC_SetPriority(MCPWM0_INT_IRQn,0U);
-    NVIC_ClearPendingIRQ(MCPWM0_INT_IRQn);
-    NVIC_EnableIRQ(MCPWM0_INT_IRQn);
+    NVIC_SetPriority(MOTOR_PWM_IRQ,0U);
+    NVIC_ClearPendingIRQ(MOTOR_PWM_IRQ);
+    NVIC_EnableIRQ(MOTOR_PWM_IRQ);
     am13e_app_motor_nfault_trip_init();
 #endif
     if (!pwm_pads_disconnected() || !pwm_registers_inactive()) {
@@ -1242,8 +1242,8 @@ void am13e_app_motor_audio_compare(uint16_t u,uint16_t w)
         DL_MCPWM_enableTBCLK();
         motor_timebase_running=1U;
         if(audio_owner==1U){
-            NVIC_SetPriority(MCPWM0_INT_IRQn,0U);
-            NVIC_EnableIRQ(MCPWM0_INT_IRQn);
+            NVIC_SetPriority(MOTOR_PWM_IRQ,0U);
+            NVIC_EnableIRQ(MOTOR_PWM_IRQ);
             DL_MCPWM_enableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_2);
         }
         if (!pwm_io_for_runtime() ||
@@ -1558,7 +1558,7 @@ static void motor_irq_ack(uint16_t flags)
     last_trip_zone_flags|=DL_MCPWM_getTripZoneFlagStatus(MOTOR_PWM);
     if(last_trip_zone_flags){am13e_app_motor_fault_shutdown();am13e_app_motor_fault_reset();}
 }
-void MCPWM0_IRQHandler(void)
+void MCPWM4_IRQHandler(void)
 {
     /* Polled music ET2 flags are raw status, not enabled CPU sources. */
     last_trip_irq_flags = DL_MCPWM_getInterruptSource(MOTOR_PWM)&MOTOR_PWM->INTEN;
