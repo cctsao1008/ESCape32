@@ -4,6 +4,8 @@
 #endif
 void am13e_app_motor_bemf_init(void);
 void am13e_app_motor_bemf_abort(void);
+/* Fault shutdown cancels calibration permanently until reset. */
+void am13e_app_motor_bemf_fault_stop(void);
 /* Associate a pending MCPWM image with sensing only after its ZERO load. */
 void am13e_app_motor_bemf_stage(unsigned code);
 int am13e_app_motor_bemf_publication_pending(void);

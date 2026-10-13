@@ -21,6 +21,7 @@
 #ifdef HALL_MAP
 #include <dl_eqep.h>
 #endif
+
 #include <dl_mcpwm.h>
 #include <dl_sysctl.h>
 #include <dl_xbar.h>
@@ -309,6 +310,70 @@ static void start(void)
     zero();assert(!gate_on());
     zero();assert(gate_on());
 }
+static void calibration_tick(void)
+{
+    /* Elapsed wall time advances TSCTR only when native counter runs. */
+    if(ECAP1->ECCTL2&ECAP_ECCTL2_TSCTRSTOP_MASK)ECAP1->TSCTR+=12500U;
+    am13e_app_motor_bemf_tick();
+}
+static void calibration_lifecycle(void)
+{
+    /* Fork preserves the same real initialized production state while each
+     * case begins before calibration. No production reset/test hook. */
+    static const unsigned entry_ticks[]={0U,1U,8U,16U};
+    for(volatile unsigned mode=0U;mode<6U;++mode){
+        pid_t child=fork();assert(child>=0);
+        if(child==0){
+            if(setjmp(fault_return))assert(!"unexpected calibration fault");
+            const unsigned early=mode<4U?entry_ticks[mode]:0U;
+            for(unsigned i=0;i<early;++i){calibration_tick();}
+            if(mode<4U){
+                resetcom();
+                assert(!(ECAP1->ECCTL2&ECAP_ECCTL2_TSCTRSTOP_MASK));
+                am13e_app_motor_audio_begin(1);
+                for(unsigned i=0;i<4U;++i){calibration_tick();}
+                am13e_app_motor_audio_end();
+                resetcom(); /* Cancel this incomplete second window too. */
+            }
+            if(mode==4U){
+                am13e_app_motor_fault_shutdown();
+                for(unsigned i=0;i<20U;++i){calibration_tick();}
+                assert(!(ECAP1->ECCTL2&ECAP_ECCTL2_TSCTRSTOP_MASK));
+                assert(!gate_on() && !(GPIO0->DOE31_0&(DL_GPIO_PIN(8U)|DL_GPIO_PIN(21U)|DL_GPIO_PIN(24U)|DL_GPIO_PIN(2U)|DL_GPIO_PIN(10U)|DL_GPIO_PIN(25U))));
+                _exit(0);
+            }
+            /* First tick establishes the fresh origin; sixteen COMPLETE
+             * intervals establish 200MHz. A shortened estimate would fail
+             * the actual Core interval/advance checks below. */
+            for(unsigned i=0;i<17U;++i){calibration_tick();}
+            test_primask=1U;compctl(1);
+            am13e_app_motor_bemf_interval_select(18000);
+            const uint32_t epoch=ECAP1->TSCTR;
+            cfg.timing=16;sync=fast=0;ertm=18000;
+#ifdef HALL_MAP
+            ival=6000;
+#else
+            ival=3000;
+#endif
+#ifdef SW_BLANKING
+            MCPWM4->TBCTR=AM13E_BEMF_BLANK_TICKS;
+            MCPWM4->INTFLAG=DL_MCPWM_INT_ET_2;MCPWM4_IRQHandler();
+#endif
+            ECAP1->CAP1=epoch+600000U;ECAP1->TSCTR=ECAP1->CAP1;
+            ECAP1->ECFLG=DL_ECAP_ISR_SOURCE_CEVT1;ECAP1_IRQHandler();
+#ifdef HALL_MAP
+            assert(ival==6000);
+#else
+            assert(ival==3000);
+#endif
+            assert(TIMG12->COUNTERREGS.LOAD==75000U-1U);
+            _exit(0);
+        }
+        int status;assert(waitpid(child,&status,0)==child);
+        assert(WIFEXITED(status) && WEXITSTATUS(status)==0);
+    }
+    puts("PASS calibration: early audio/reset cancellation, fresh 16-interval restart, uninterrupted window and latched fault stop");
+}
 #ifndef HALL_MAP
 static void absolute_capture(uint32_t stamp,uint16_t extra)
 {
@@ -551,6 +616,7 @@ int main(void)
     assert(!am13e_app_motor_bemf_reference_set(0U));
     assert(am13e_app_motor_bemf_reference_set(2048U));
     assert(am13e_app_motor_bemf_reference_ready());
+    calibration_lifecycle();
 #ifdef PWM_ENABLE
     assert((MCPWM4->TZCTL&MCPWM_TZCTL_TZB_MASK)==
         ((uint32_t)DL_MCPWM_TZ_ACTION_HIGH<<MCPWM_TZCTL_TZB_OFS));

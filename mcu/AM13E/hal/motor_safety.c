@@ -1542,7 +1542,7 @@ void am13e_app_motor_fault_shutdown(void)
     drag_brake_aq_staged=0U;
     lock_brake_aq_staged=0U;
     am13e_app_motor_timing_cancel();
-    am13e_app_motor_bemf_abort();
+    am13e_app_motor_bemf_fault_stop();
     force_pwm_inactive();
     disconnect_pwm_pads();
     motor_timebase_running=0U;

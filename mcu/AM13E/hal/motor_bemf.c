@@ -62,6 +62,7 @@ static volatile uint32_t captured_events,rejected_events,interval_us;
 static volatile uint32_t capture_ticks_per_ms, capture_timeout_ticks;
 static volatile uint32_t calibration_ticks,calibration_start;
 static volatile uint32_t calibration_done;
+static volatile uint32_t calibration_halted;
 static void bemf_fault(void)
 {
     am13e_app_motor_fault_shutdown();
@@ -95,7 +96,10 @@ static void capture_stop(void)
 #endif
     DL_ECAP_disableTimeStampCapture(BEMF_ECAP);
     DL_ECAP_disableInterrupt(BEMF_ECAP,BEMF_FLAGS);
-    if(!crossing_epoch_valid)DL_ECAP_stopCounter(BEMF_ECAP);
+    if(!crossing_epoch_valid) {
+        DL_ECAP_stopCounter(BEMF_ECAP);
+        if(!calibration_done)calibration_ticks=0U;
+    }
     DL_ECAP_clearInterrupt(BEMF_ECAP,BEMF_FLAGS);
     DL_ECAP_clearGlobalInterrupt(BEMF_ECAP);
     NVIC_ClearPendingIRQ(ECAP1_INT_IRQn);
@@ -123,6 +127,13 @@ void am13e_app_motor_bemf_abort(void)
             DL_MCPWM_disableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
     }
     __set_PRIMASK(primask);
+}
+void am13e_app_motor_bemf_fault_stop(void)
+{
+    /* Never preserve/restart ECAP timing through a latched motor fault. */
+    __disable_irq();
+    calibration_halted=1U;
+    am13e_app_motor_bemf_abort();
 }
 
 #ifdef AM13E_REF_IO_PLAN_V1
@@ -159,7 +170,7 @@ static void configure_bemf_cmp(void)
 #endif
 void am13e_app_motor_bemf_init(void)
 {
-    if(__get_PRIMASK()==0U || initialized)bemf_fault();
+    if(__get_PRIMASK()==0U || initialized || calibration_halted)bemf_fault();
     DL_SYSCTL_enablePower(DL_SYSCTL_PWREN_ECAP1);
     if(!DL_SYSCTL_isPowerEnabled(DL_SYSCTL_PWREN_ECAP1))bemf_fault();
     DL_ECAP_Config config;
@@ -486,7 +497,7 @@ void ECAP1_IRQHandler(void)
  */
 void am13e_app_motor_bemf_tick(void)
 {
-    if (!initialized) return;
+    if (!initialized || calibration_halted) return;
     /* Tick0..16 uses a real 1ms SysTick reference. No UART or MCU pin
      * is needed. Match the already-established PB14 ECAP0 approach.
      */
@@ -497,6 +508,11 @@ void am13e_app_motor_bemf_tick(void)
          * exactly sixteen complete subsequent 62.5us intervals.
          */
         if (calibration_ticks == 0U) {
+            /* Normal reset/audio abort may stop the otherwise dedicated
+             * ECAP timebase. Restart on a SysTick boundary and measure
+             * sixteen NEW complete intervals, never the shortened window.
+             * Audio owns MCPWM/TIMG12, not ECAP1. */
+            DL_ECAP_startCounter(BEMF_ECAP);
             calibration_start=DL_ECAP_getTimeStampCounter(BEMF_ECAP);
             calibration_ticks=1U;
             return;
