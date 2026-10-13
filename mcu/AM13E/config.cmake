@@ -90,10 +90,13 @@ include("${PROJECT_SOURCE_DIR}/mcu/_support/AM13E/cmake/ti.cmake")
             PROPERTIES COMPILE_OPTIONS "-Wno-unused-variable")
         set(am13e_source_dir "${PROJECT_SOURCE_DIR}/src")
 function(am13e_configure_reference_board target)
+        # Application assertions/unassigned vectors must shut down the
+        # bridge, not use the SDK's debugger halt. Boot keeps its own boundary.
+        target_link_options(${target} PRIVATE -Wl,--wrap=__error__)
         # Reference selects PB14 and has no qualified UART transport.
         # Source-defined serial modes are not permanently excluded.
         target_compile_definitions(${target} PRIVATE
-            AM13E_PB14_ONLY AM13E_REF_IO_PLAN_V1=1)
+            AM13E_PB14_ONLY AM13E_REF_IO_PLAN_V1=1 AM13E_APP_FAULT_HANDLERS=1)
         # Reference software control compiles; external Gate/OC/UART/
         # current routes remain unqualified and physically inactive.
         option(AM13E_MOTOR_RUNTIME_ENABLED

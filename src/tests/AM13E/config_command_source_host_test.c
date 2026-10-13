@@ -17,6 +17,8 @@ GPIO_Regs test_gpio[3];
 unsigned test_function[96],test_input[96],test_enable_calls,test_read_toggle;
 static jmp_buf bec_failed;
 void test_halt(void) { longjmp(bec_failed,1); }
+void am13e_app_motor_fault_shutdown(void) {}
+void am13e_app_motor_fault_reset(void) { longjmp(bec_failed,1); }
 void test_output_enable(GPIO_Regs *g,uint32_t mask)
 {
     assert(g==GPIO1 && mask && !(mask&~3U));

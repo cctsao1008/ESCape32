@@ -14,6 +14,19 @@
 
 static uint32_t app_mclk_hz;
 
+/* GNU ld --wrap redirects DriverLib assertions here. TI's default
+ * __error__ executes BKPT and can halt with a live bridge under a debugger.
+ * No LED or other diagnostic may delay the established shutdown/reset. */
+void __wrap___error__(const char *filename, uint32_t line);
+void __wrap___error__(const char *filename, uint32_t line)
+{
+    (void)filename;
+    (void)line;
+    am13e_app_motor_fault_shutdown();
+    am13e_app_motor_fault_reset();
+    for (;;) { __NOP(); }
+}
+
 void init(void)
 {
     if (__get_PRIMASK() != 1U || app_mclk_hz != 0U) {
@@ -60,6 +73,7 @@ int main(void)
     /* Rel17's main loop should never return. Do not restart firmware
      * or jump to a different image on an unexpected return.
      */
-    for (;;) {
-    }
+    am13e_app_motor_fault_shutdown();
+    am13e_app_motor_fault_reset();
+    for (;;) { __NOP(); }
 }

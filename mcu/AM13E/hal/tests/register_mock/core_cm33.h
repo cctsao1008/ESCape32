@@ -34,3 +34,6 @@ uint32_t NVIC_GetVector(IRQn_Type irq);
 typedef struct { uint32_t CTRL,LOAD,VAL; } TestSysTick;
 extern TestSysTick test_systick;
 #define SysTick (&test_systick)
+#define SysTick_CTRL_ENABLE_Msk 1U
+#define SysTick_CTRL_TICKINT_Msk 2U
+#define SysTick_CTRL_CLKSOURCE_Msk 4U

@@ -34,7 +34,7 @@ void test_output_enable(GPIO_Regs *g,uint32_t mask)
 }
 void am13e_app_motor_fault_shutdown(void) { ++fault_off; }
 __attribute__((noreturn)) void am13e_app_motor_fault_reset(void)
-{ assert(fault_off==1U && test_gpio[1].latch==physical(1U));longjmp(halt_return,1); }
+{ assert(fault_off==1U);longjmp(halt_return,1); }
 static void command(unsigned value)
 {
     unsigned body=value*2U+1U;
@@ -45,7 +45,8 @@ int main(void)
 {
     const unsigned before=test_enable_calls;
     if(!setjmp(halt_return)){ledctl(1);assert(0);}
-    assert(test_enable_calls==before); /* no write before initialization */
+    assert(fault_off==1U && test_enable_calls==before); /* shutdown, no uninitialized LED write */
+    fault_off=0U; /* new simulated task after the nonreturning reset */
     initled();
     assert(test_gpio[1].output==((1U<<LED_CNT)-1U) && test_gpio[1].latch==physical(0U));
     for(unsigned i=0U;i<LED_CNT;++i)assert((test_function[32U+i]&1U)==1U);
@@ -81,9 +82,10 @@ int main(void)
     assert(adc_calls==old_adc && test_gpio[1].latch==physical(2U)); /* original 1kHz divider */
     if(!setjmp(halt_return)){hard_fault_handler();assert(0);}
     assert(fault_off==1U && test_gpio[1].latch==physical(1U));
+    fault_off=0U;
     const unsigned enabled=test_enable_calls;
     if(!setjmp(halt_return)){initled();assert(0);}
-    assert(test_enable_calls==enabled && feeds==(LED_CNT==4?9U:7U) && telem_calls==5U);
+    assert(fault_off==1U && test_enable_calls==enabled && feeds==(LED_CNT==4?9U:7U) && telem_calls==5U);
     puts("PASS production discrete LED GPIO, DShot commands, PendSV status and fault-off ordering");
     return 0;
 }

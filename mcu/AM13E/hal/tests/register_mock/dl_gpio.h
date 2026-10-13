@@ -1,5 +1,11 @@
 #pragma once
 #include AM13E_TEST_TI_GPIO_HEADER
+#ifdef AM13E_FATAL_PATH_FIXTURE
+extern unsigned fixture_gpio_power_failure;
+static inline bool test_gpio_power_enabled(GPIO_Regs *g)
+{ return DL_GPIO_isPowerEnabled(g) && !(g==GPIO0 && fixture_gpio_power_failure); }
+#define DL_GPIO_isPowerEnabled test_gpio_power_enabled
+#endif
 /* Emulate GPIO atomic aliases only. Actual SDK writes still execute. */
 static inline void test_gpio_set(GPIO_Regs *g,uint32_t m)
 { DL_GPIO_setPins(g,m);g->DOUT31_0|=m; }

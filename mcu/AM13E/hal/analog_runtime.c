@@ -15,6 +15,7 @@
 #include "analog_sampling_backend.h"
 #include "analog_reference.h"
 #include "board_configuration.h"
+#include "motor_backend.h"
 #ifdef ANALOG_CHAN
 #include "board_reference_io.h"
 /* Analog input is an independently selected ADC0 channel, NOT the
@@ -61,8 +62,8 @@ static volatile AM13E_AdcRaw adc_latest;
 
 static void adc_fail_closed(void)
 {
-    __disable_irq();
-    for (;;) { __NOP(); }
+    am13e_app_motor_fault_shutdown();
+    am13e_app_motor_fault_reset();
 }
 
 /* Reference ADC0 ISR and Rel17 housekeeping adapter; MCU sequencer

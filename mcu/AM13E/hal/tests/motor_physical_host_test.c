@@ -25,12 +25,44 @@
 #include <dl_gpio.h>
 #include <dl_ecap.h>
 #include <dl_timer.h>
+#ifdef AM13E_FATAL_PATH_FIXTURE
+/* Run fatal branches from the actual ADC/UART/auxiliary units against the
+ * SAME configured motor backend, not mocked shutdown functions. */
+#include "../analog_runtime.c"
+#define initialized serial_fixture_initialized
+#define am13e_app_io_cli_line fixture_cli_result
+#include "../serial_uart_rx.c"
+#undef am13e_app_io_cli_line
+#undef initialized
+#define initialized aux_fixture_initialized
+#include "../aux_gpio.c"
+#undef initialized
+#define main fixture_returned_main
+#define am13e_rel17_app_main fixture_returning_core
+int fixture_returned_main(void);
+#include "../../config.c"
+#undef am13e_rel17_app_main
+#undef main
+void fixture_returning_core(void) {}
+unsigned fixture_uart_rx_pending;
+unsigned fixture_gpio_power_failure;
+static int cli_fault_result;
+int fixture_cli_result(char *line) { (void)line;return cli_fault_result; }
+void DL_Common_delayCycles(uint32_t cycles) { (void)cycles; }
+void am13e_app_io_watchdog_feed(void) { assert(0); }
+void am13e_app_io_watchdog_arm(void) { assert(0); }
+bool am13e_app_pb14_service_takeover(void) { return true; }
+int am13e_pb14_bidir_tx_busy(void) { return 0; }
+void am13e_app_service_reset(void) { assert(0); }
+#endif
 uint32_t test_primask=1U;
 TestSCB test_scb;
 static unsigned enabled[80],priority[80],watchdog_arms;
 static jmp_buf fault_return;
 void test_halt(void){longjmp(fault_return,1);}
+#ifndef AM13E_FATAL_PATH_FIXTURE
 void __error__(const char *file,uint32_t line){fprintf(stderr,"SDK assertion %s:%u\n",file,line);abort();}
+#endif
 void NVIC_SetPriority(IRQn_Type i,uint32_t p){assert(i>=0);priority[i]=p;}
 void NVIC_ClearPendingIRQ(IRQn_Type i){assert(i>=0);}
 void NVIC_EnableIRQ(IRQn_Type i){assert(i>=0);enabled[i]=1U;}
@@ -44,7 +76,22 @@ uint32_t NVIC_GetVector(IRQn_Type i){
 #endif
     (void)i;return 0U;
 }
-int am13e_app_io_watchdog_fault_arm(void){++watchdog_arms;return 1;}
+int am13e_app_io_watchdog_fault_arm(void)
+{
+#ifdef AM13E_FATAL_PATH_FIXTURE
+    /* Reset supervision is reached only AFTER the real bridge shutdown. */
+    assert(test_primask==1U);
+    assert(!(GPIO1->DOE31_0&AM13E_GATE_MASK) ||
+        (((GPIO1->DOUT31_0&AM13E_GATE_MASK)!=0U)!=(AM13E_MOTOR_GATE_ACTIVE_LEVEL!=0)));
+    if(fixture_gpio_power_failure){
+        const uint32_t low=(uint32_t)DL_MCPWM_AQ_SW_CONTINUOUS_LOW*17U;
+        assert(MCPWM0->PWM1_AQSFRC==low && MCPWM0->PWM2_AQSFRC==low && MCPWM0->PWM3_AQSFRC==low);
+    }else assert(am13e_mcu_motor_pads_disconnected(am13e_board_motor_pad_route()));
+    assert((MCPWM0->TBCTL&MCPWM_TBCTL_CTRMODE_MASK)==DL_MCPWM_COUNTER_MODE_STOP_FREEZE);
+    assert(!DL_MCPWM_getGlobalLoadOneShotLatchStatus(MCPWM0));
+#endif
+    ++watchdog_arms;return 1;
+}
 void test_global_load(MCPWM_Regs *p)
 {
     if(!(p->GLDOSHTSTS&MCPWM_GLDOSHTSTS_OSHTLATCH_MASK))return;
@@ -223,6 +270,81 @@ static void start(void)
     zero();assert(!gate_on());
     zero();assert(gate_on());
 }
+#ifdef AM13E_FATAL_PATH_FIXTURE
+static void fatal_paths(int early)
+{
+    const unsigned count=early?3U:16U;
+    for(volatile unsigned n=0;n<count;++n){
+        pid_t child=fork();assert(child>=0);
+        if(child==0){
+            watchdog_arms=0U;
+            if(!early){
+                assert(gate_on());
+                am13e_app_motor_bemf_commutation_delay_us(20);
+            }
+            test_primask=early?1U:0U;
+            if(!setjmp(fault_return)){
+                if(early){
+                    if(n==0U)ADC0_INT1_IRQHandler();
+                    else if(n==1U)RX_HANDLER();
+                    else {test_primask=0U;am13e_app_motor_init();}
+                }else switch(n){
+                    case 0:adc_initialized=0U;adctrig();break;
+                    case 1:adc_initialized=1U;adc_inflight=0U;ADC0_INT1_IRQHandler();break;
+                    case 2:
+                        adc_initialized=adc_inflight=1U;
+                        ADC0->ADCINTFLG=ADC_ADCINTFLG_ADCINT1_MASK|ADC_ADCINTFLG_ADCINT1RESULT_MASK;
+                        *(volatile uint16_t *)(uintptr_t)ADC0RESULT=4095U;
+                        ADC0_INT1_IRQHandler();break; /* exceeds synthetic profile fullscale */
+                    case 3:serial_fixture_initialized=0U;RX_HANDLER();break;
+                    case 4:
+                        serial_fixture_initialized=1U;crsf_tx_available=true;
+                        *(volatile uint32_t *)(uintptr_t)&RX_UC->uart->CPU_INT.IIDX=DL_UART_IIDX_EOT_DONE;
+                        RX_HANDLER();break;
+                    case 5:case 6:
+                        cli_active=true;am13e_cli_line_init(&cli_rx);
+                        assert(am13e_cli_line_byte(&cli_rx,'\n')==1);
+                        cli_fault_result=n==5U?-1:(int)sizeof cli_reply+1;
+                        am13e_app_serial_cli_service_pending();break;
+                    case 7:aux_fixture_initialized=0U;am13e_app_erpm_write(1);break;
+                    case 8:hard_fault_handler();break; /* LED not initialized: must not recurse */
+                    case 9:
+                        test_primask=1U;initled();test_primask=0U;
+                        hard_fault_handler();break;
+                    case 10:am13e_app_motor_init();break; /* invalid IRQ-enabled initialization */
+                    case 11:
+                        adc_initialized=adc_inflight=1U;
+                        ADC0->ADCINTFLG=ADC_ADCINTFLG_ADCINT1_MASK;
+                        ADC0_INT1_IRQHandler();break;
+                    case 12:(void)fixture_returned_main();break;
+                    case 13:test_primask=1U;am13e_app_motor_init();break; /* duplicate init */
+                    case 14:
+                        fixture_gpio_power_failure=1U;
+                        am13e_app_motor_commutation_enable(0);break;
+                    case 15:
+                        DL_MCPWM_init(MCPWM0,NULL);break; /* actual SDK ASSERT(false) */
+                    default:assert(0);
+                }
+                assert(0); /* Every injected fatal condition is nonreturning. */
+            }
+            assert(watchdog_arms==1U && test_primask==1U);
+            assert(!(GPIO1->DOE31_0&AM13E_GATE_MASK) || !gate_on());
+            if(!fixture_gpio_power_failure)
+                assert(am13e_mcu_motor_pads_disconnected(am13e_board_motor_pad_route()));
+            assert(!DL_Timer_isRunning(TIMG12));
+            assert(!(ECAP1->ECEINT&(DL_ECAP_ISR_SOURCE_CEVT1|DL_ECAP_ISR_SOURCE_CTROVF)));
+            /* Fault remains latched; an attempted restart also fails closed. */
+            if(!setjmp(fault_return)){am13e_app_motor_commutation_enable(1);assert(0);}
+            assert(watchdog_arms==2U);
+            _exit(0);
+        }
+        int status;assert(waitpid(child,&status,0)==child);
+        assert(WIFEXITED(status) && WEXITSTATUS(status)==0);
+    }
+    printf("PASS production fatal shutdown: %u %s injections, latched restart refusal and reset ordering\n",
+        count,early?"pre-initialization":"active-output");
+}
+#endif
 #ifdef HALL_MAP
 static void hall_input(unsigned code)
 {
@@ -302,6 +424,10 @@ int main(void)
     DL_GPIO_initDigitalInput(IOMUX_PINCM_PB15);
     *(volatile uint32_t *)(uintptr_t)&GPIO1->DIN31_0=DL_GPIO_PIN(15U);
     assert(!setjmp(fault_return));
+#ifdef AM13E_FATAL_PATH_FIXTURE
+    fatal_paths(1);
+    am13e_app_aux_gpio_init();
+#endif
     am13e_app_motor_init();
     assert((MCPWM0->TBCTL&MCPWM_TBCTL_CLKDIV_MASK)==
         (uint32_t)DL_MCPWM_CLOCK_DIVIDER_2<<MCPWM_TBCTL_CLKDIV_OFS);
@@ -320,6 +446,9 @@ int main(void)
     cfg.damp=1;cfg.sine_power=8;ertm=6000;ival=3000;sync=6;step=0;reverse=0;
     am13e_app_motor_pwm_apply(800,24,48,ertm,1,0,0,1);
     nextstep();start();carrier();
+#ifdef AM13E_FATAL_PATH_FIXTURE
+    fatal_paths(0);
+#endif
     assert(MCPWM0->DBRED==AM13E_MOTOR_OUTPUT_RED_TICKS &&
         MCPWM0->DBFED==(AM13E_MOTOR_OUTPUT_FED_TICKS?AM13E_MOTOR_OUTPUT_FED_TICKS:1U));
     inject_shadow_zero=1U;

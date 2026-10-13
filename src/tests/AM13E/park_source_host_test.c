@@ -12,6 +12,8 @@ TestSCB test_scb;
 unsigned test_function[96],test_input[96],test_enable_calls,test_read_toggle;
 static jmp_buf halt_return;
 void test_halt(void) { longjmp(halt_return,1); }
+void am13e_app_motor_fault_shutdown(void) {}
+void am13e_app_motor_fault_reset(void) { longjmp(halt_return,1); }
 static AM13E_SixstepPlan phase;
 static int comparator, selected_comparator, scheduled, sine_finished;
 static unsigned phase_writes, events;

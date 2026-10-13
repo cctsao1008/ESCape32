@@ -38,6 +38,9 @@ static volatile uint32_t fault_latched;
 static volatile uint32_t motor_timebase_running; /* Native MOTOR_PWM counter state */
 /* 0=Drive/idle, 1=Rel17 Music, 2=Rel17 AU/PCM. Configured audio uses the same physical output adapter. */
 static volatile uint32_t audio_owner;
+/* Prevent re-entering a failed pad disconnect from the existing reset
+ * path. Gate disable and PWM freeze precede that disconnect attempt. */
+static volatile uint32_t fault_shutdown_in_progress;
 static volatile AM13E_MotorOwner motor_owner_mode;
 static volatile uint32_t audio_period_valid;
 
@@ -143,7 +146,7 @@ static volatile uint32_t last_trip_zone_flags;
 static void disconnect_pwm_pads(void)
 {
     if (!am13e_mcu_motor_pads_disconnect(am13e_board_motor_pad_route()))
-        for (;;) { __NOP(); }
+        am13e_app_motor_fault_reset();
 }
 
 static int pwm_pads_disconnected(void)
@@ -337,10 +340,9 @@ void am13e_app_motor_init(void)
     /* Rel17 main() calls here after real clock/initgpio/input setup.
      * Boot must still hold PRIMASK while motor power is not qualified.
      */
-    if (__get_PRIMASK() == 0U) {
-        __disable_irq();
-        fault_latched = 1U;
-        for (;;) { __NOP(); }
+    if (__get_PRIMASK() == 0U || safety_initialized || fault_latched) {
+        am13e_app_motor_fault_shutdown();
+        am13e_app_motor_fault_reset();
     }
     safety_initialized = 0U;
     fault_latched = 0U;
@@ -1526,6 +1528,7 @@ void am13e_app_motor_fault_shutdown(void)
      * hardware gate-off proof and cannot authorize motor operation.
      */
     __disable_irq();
+    fault_shutdown_in_progress=1U;
     fault_latched = 1U;
     audio_owner=0U;
     motor_owner_mode=AM13E_OWNER_IDLE; /* Fault dominates all owners. */
@@ -1539,6 +1542,7 @@ void am13e_app_motor_fault_shutdown(void)
     force_pwm_inactive();
     disconnect_pwm_pads();
     motor_timebase_running=0U;
+    fault_shutdown_in_progress=0U;
 }
 
 /* Strong AM13E230x MOTOR_PWM startup vector. Only the actual hardware
@@ -1621,7 +1625,9 @@ void am13e_app_motor_fault_reset(void)
     __disable_irq();
     fault_latched = 1U;
 #if AM13E_MOTOR_OUTPUT_CONFIGURED
-    am13e_app_motor_fault_shutdown(); /* Also safe for direct fault callers. */
+    /* Also safe for direct callers, without recursive retries when the
+     * pad backend itself failed during the already-frozen shutdown. */
+    if(!fault_shutdown_in_progress)am13e_app_motor_fault_shutdown();
     /* Original hard_fault_handler resets after watchdog shutdown. The
      * externally reset-inactive gate circuit is a required board input.
      * Never clear OST or feed the watchdog from this nonreturning path. */

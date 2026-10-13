@@ -75,6 +75,13 @@ def fixed_startup(source: str) -> str:
         "    (pFunc)(uintptr_t)&__StackTop,",
         1, name
     )
+    source = exactly(source, "void Default_Handler(void)\n{",
+        "void Default_Handler(void)\n{\n"
+        "#ifdef AM13E_APP_FAULT_HANDLERS\n"
+        "    /* Application unassigned IRQs/exceptions are motor faults. */\n"
+        "    extern void __error__(const char *filename, uint32_t line);\n"
+        "    __error__(__FILE__, __LINE__); /* native link wraps safe shutdown */\n"
+        "#endif", 1, name)
     # ARM vector word 0 is an address, not a function; the pointer-sized
     # intermediate avoids ISO's direct object-pointer-to-function cast.
     return source

@@ -10,6 +10,7 @@
 #include "serial_uart_rx.h"
 #include "service_reset.h"
 #include "command_capture.h"
+#include "motor_backend.h"
 #if defined(AM13E_BOARD_SERIAL_TX_CONFIGURED) && \
     defined(AM13E_BOARD_SERIAL_TX_TWO_WIRE) && AM13E_BOARD_SERIAL_TX_TWO_WIRE==0
 #define PA26_SINGLE_WIRE 1
@@ -149,6 +150,8 @@ _Static_assert(AM13E_BOARD_SERIAL_TX_TWO_WIRE==1U &&
                        DL_UART_INTERRUPT_NOISE_ERROR)
 static AM13E_SerialFrameRx rx_state;
 static unsigned initialized;
+static void serial_fault(void)
+{ am13e_app_motor_fault_shutdown(); am13e_app_motor_fault_reset(); }
 static bool receiver_selected;
 /* 16 kHz MCU SysTick timebase. IRQ/PendSV share only an atomic
  * 32-bit snapshot; no serial state is reset from high-priority
@@ -586,7 +589,7 @@ void am13e_app_serial_cli_service_pending(void)
      */
     const int length=am13e_app_io_cli_line(cli_reply);
     if(length<0||length>(int)sizeof cli_reply){
-        __disable_irq();for(;;){__NOP();}
+        serial_fault();
     }
     cli_reply_length=(unsigned)length;
     cli_reply_offset=0U;
@@ -754,8 +757,7 @@ bool am13e_app_serial_rx_irq_ready(void)
 void RX_HANDLER(void)
 {
     if(!initialized){
-        __disable_irq();
-        for(;;) { __NOP(); }
+        serial_fault();
     }
     /* Extract error + byte in ONE read: DL_UART_getErrorStatus()
      * and DL_UART_receiveData() both access RXDATA and combining
@@ -767,8 +769,7 @@ void RX_HANDLER(void)
         if(crsf_tx_available && reason==DL_UART_IIDX_EOT_DONE){
             /* Shift register finished, not merely FIFO-filled. */
             if(!am13e_serial_tx_queue_waiting_eot(&crsf_tx)){
-                __disable_irq();
-                for(;;){__NOP();}
+                serial_fault();
             }
             DL_UART_disableInterrupt(RX_UC,
                 DL_UART_INTERRUPT_EOT_DONE|DL_UART_INTERRUPT_TX);

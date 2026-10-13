@@ -7,8 +7,8 @@ out=$(mktemp -d /tmp/am13e-motor-register.XXXXXX)
 trap 'rm -rf "$out"' EXIT
 python3 mcu/_support/AM13E/tools/prepare_sdk_sources.py --sdk-root "$sdk" --output "$out"
 # Synthetic electrical fixtures only; never a qualified board configuration.
-for fixture in high low full inverted blanking hall pwm_enable pwm_enable_full; do
-polarity=1; mask=0; fed=0; extra=()
+for fixture in high low full inverted blanking hall pwm_enable pwm_enable_full fatal; do
+polarity=1; mask=0; fed=0; extra=(); extra_sources=()
 case "$fixture" in
   low) polarity=0; mask=63 ;;
   full) extra=(-DFULL_DUTY) ;;
@@ -19,6 +19,26 @@ case "$fixture" in
     -DAM13E_HALL_PULL=DL_GPIO_RESISTOR_PULL_UP -DAM13E_HALL_INVERT_MASK=0) ;;
   pwm_enable) fed=120; extra=(-DPWM_ENABLE -DAM13E_MOTOR_PWM_ENABLE_TOPOLOGY=1 -DAM13E_MOTOR_PWM_ENABLE_DRIVER_DEAD_NS=1500) ;;
   pwm_enable_full) fed=120; mask=21; extra=(-DPWM_ENABLE -DAM13E_MOTOR_PWM_ENABLE_TOPOLOGY=1 -DAM13E_MOTOR_PWM_ENABLE_DRIVER_DEAD_NS=1500 -DFULL_DUTY -DINVERTED_HIGH -DSW_BLANKING) ;;
+  fatal)
+    # Deliberately inconsistent ADC fullscale makes a real scaling failure
+    # injectable. Synthetic LED/ERPM/UART definitions, never a board profile.
+    extra=(-DAM13E_FATAL_PATH_FIXTURE -DAM13E_BOARD_ADC_FULLSCALE=2047
+      -Wl,--wrap=__error__
+      -Wno-unused-parameter -Wno-unused-variable
+      -DLED_MAP=0xB0 -DAM13E_BOARD_LED1_GPIO=GPIO1 -DAM13E_BOARD_LED1_MASK=1U -DAM13E_BOARD_LED1_PINCM=32U
+      -DERPM_PIN=1 -DAM13E_BOARD_ERPM_GPIO=GPIO1 -DAM13E_BOARD_ERPM_MASK=2U -DAM13E_BOARD_ERPM_PINCM=33U
+      -DAM13E_BOARD_SERIAL_RX_CONFIGURED=1 -DAM13E_BOARD_SERIAL_RX_UC_INDEX=0
+      -DAM13E_BOARD_SERIAL_RX_PINCM=26 -DAM13E_BOARD_SERIAL_RX_PIN_FUNCTION=8
+      -DAM13E_BOARD_SERIAL_RX_BUSCLK_HZ=100000000 -DAM13E_BOARD_SERIAL_SBUS_PIN_INVERT=1
+      -DAM13E_BOARD_SERIAL_TX_CONFIGURED=1 -DAM13E_BOARD_SERIAL_TX_PINCM=26
+      -DAM13E_BOARD_SERIAL_TX_PIN_FUNCTION=9 -DAM13E_BOARD_SERIAL_TX_TWO_WIRE=0
+      -DAM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED=1)
+    extra_sources=(src/io.c src/serial/serial_frame_rx.c src/serial/cli_line_rx.c
+      mcu/AM13E/hal/serial_tx_queue.c mcu/AM13E/hal/crsf_deferred_command.c
+      mcu/AM13E/hal/analog_sampling_backend.c mcu/AM13E/hal/analog_calibration_plan.c
+      "$sdk/source/driverlib/am13e230x/dl_adc.c"
+      "$sdk/source/driverlib/am13e230x/dl_unicomm.c"
+      "$sdk/source/driverlib/am13e230x/dl_unicommuart.c") ;;
 esac
 hw="$sdk/source/device/am13e230x/include/hw"
 dl="$sdk/source/driverlib/am13e230x"
@@ -27,6 +47,7 @@ cc "${extra[@]}" -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-int-to-po
  -DAM13E_MOTOR_GATE_ACTIVE_LEVEL="$polarity" -DAM13E_MOTOR_PAD_INVERT_MASK="$mask" -DAM13E_MOTOR_OUTPUT_RED_TICKS=120 -DAM13E_MOTOR_OUTPUT_FED_TICKS="$fed" -DAM13E_MOTOR_MIN_DEAD_TICKS=100 -DAM13E_MOTOR_NFAULT_ACTIVE_LOW=1 -DAM13E_MOTOR_GATE_RESET_INACTIVE=1 \
  "-DAM13E_TEST_TI_ECAP_HEADER=\"$dl/dl_ecap.h\"" "-DAM13E_TEST_TI_GPIO_HEADER=\"$dl/dl_gpio.h\"" "-DAM13E_TEST_TI_MCPWM_HEADER=\"$dl/dl_mcpwm.h\"" \
  "-DAM13E_TEST_TI_EQEP_HEADER=\"$dl/dl_eqep.h\"" \
+ "-DAM13E_TEST_TI_UART_HEADER=\"$dl/dl_unicommuart.h\"" \
  -Isrc -Isrc/serial -Isrc/runtime -Imcu/AM13E -Imcu/AM13E/hal -Imcu/AM13E/hal/tests/register_mock -I"$hw" -I"$dl" \
  mcu/AM13E/hal/tests/motor_physical_host_test.c src/util.c \
  mcu/AM13E/hal/motor_hall.c \
@@ -34,7 +55,7 @@ cc "${extra[@]}" -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-int-to-po
  mcu/AM13E/hal/motor_fault_route.c mcu/AM13E/hal/fault_trip_backend.c mcu/AM13E/hal/fault_trip_route_plan.c \
  mcu/AM13E/hal/motor_phase_plan.c mcu/AM13E/hal/motor_aq_plan.c mcu/AM13E/hal/motor_shadow_plan.c mcu/AM13E/hal/motor_pwm_shadow_plan.c mcu/AM13E/hal/motor_frequency_plan.c mcu/AM13E/hal/motor_duty_plan.c mcu/AM13E/hal/motor_ownership_plan.c \
  mcu/AM13E/hal/motor_event_timer.c mcu/AM13E/hal/motor_timer_math.c mcu/AM13E/hal/motor_bemf.c mcu/AM13E/hal/motor_bemf_event_plan.c mcu/AM13E/preset.c \
- "$dl/dl_mcpwm.c" "$dl/dl_cmpss_lite.c" "$dl/dl_ecap.c" "$out/dl_timer.c" \
+ "$dl/dl_mcpwm.c" "$dl/dl_cmpss_lite.c" "$dl/dl_ecap.c" "$out/dl_timer.c" "${extra_sources[@]}" \
  -o "$out/motor-physical-test"
 "$out/motor-physical-test"
 done

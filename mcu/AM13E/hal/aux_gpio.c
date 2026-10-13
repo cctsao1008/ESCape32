@@ -1,5 +1,6 @@
 #include "aux_gpio.h"
 #include "board_configuration.h"
+#include "motor_backend.h"
 #include <soc.h>
 #include <dl_gpio.h>
 #include <hw_pinmap.h>
@@ -23,7 +24,10 @@ _Static_assert(IOMUX_PINCM_PA0==0U && IOMUX_PINCM_PB0==32U &&
 #if defined(PARK_PIN) || defined(ERPM_PIN)
 static unsigned initialized;
 #endif
-static void fail(void) { __disable_irq(); for(;;){__NOP();} }
+/* Do not recurse through hard_fault_handler's optional ledctl().
+ * This also covers a diagnostic requested before LED initialization. */
+static void fail(void)
+{ am13e_app_motor_fault_shutdown(); am13e_app_motor_fault_reset(); }
 static int available(GPIO_Regs *gpio,uint32_t mask,unsigned pin)
 {
     if(!FREE_PIN(pin))return 0;
