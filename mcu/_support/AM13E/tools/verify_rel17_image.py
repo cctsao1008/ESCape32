@@ -8,6 +8,8 @@ import re
 import struct
 import subprocess
 import sys
+import tempfile
+import bisect
 APP=0x6000
 END=0x80000
 MAX=END-APP
@@ -30,6 +32,69 @@ def sec(tool,elf):
 def check(value,reason):
     if not value:raise AssertionError(reason)
     print("PASS",reason)
+
+def check_m33_isa(readelf, objdump, compiler, elf):
+    """Check the final linked code, including selected runtime library code.
+
+    ELF attributes alone do not catch hand-written/incorrectly attributed
+    instructions. Reassemble every objdump-decoded instruction for M33.
+    Branch destinations are local placeholders: this checks ISA legality,
+    not relocation, control-flow correctness or execution on silicon.
+    objdump -d respects ELF code/data mapping symbols in executable sections.
+    """
+    attributes=run(readelf,"-A",elf)
+    check(re.search(r"Tag_CPU_arch:\s+v8-M\.mainline\s*$",attributes,re.M) and
+          "Tag_ABI_VFP_args: VFP registers" in attributes,
+          str(elf.name)+" Armv8-M mainline / hard-float attributes")
+    assembly=[".syntax unified", ".thumb", ".text"]
+    count=0
+    # Const objects share .text in the native linker layout; objdump
+    # displays their contents as ASCII rather than instructions.
+    objects=[]
+    mappings={}
+    for line in run(readelf,"-sW",elf).splitlines():
+        mapping=re.match(r"^\s*\d+:\s+([0-9a-fA-F]+)\s+\S+\s+NOTYPE\s+LOCAL\s+DEFAULT\s+\d+\s+\$([td])(?:\.|\s|$)",line)
+        if mapping:mappings[int(mapping[1],16)]=mapping[2]
+        match=re.match(r"^\s*\d+:\s+([0-9a-fA-F]+)\s+(\S+)\s+OBJECT\b",line)
+        if match:
+            address=int(match[1],16)
+            size=int(match[2],16 if match[2].startswith("0x") else 10)
+            objects.append((address,address+size))
+    mapping_addresses=sorted(mappings)
+    # Decode with the former superset too: a misleading M33 attribute
+    # must not turn an unsupported instruction into an ignored blank row.
+    for line in run(objdump,"-d","-z","-m","armv8.1-m.main",
+                    "--no-show-raw-insn",elf).splitlines():
+        address_match=re.match(r"^\s*([0-9a-fA-F]+):",line)
+        if not address_match:continue
+        address=int(address_match[1],16)
+        if any(start<=address<end for start,end in objects):continue
+        index=bisect.bisect_right(mapping_addresses,address)-1
+        if index>=0 and mappings[mapping_addresses[index]]=="d":continue
+        match=re.match(r"^\s*[0-9a-fA-F]+:\s+([\w.]+)\s*(.*)$",line)
+        if not match or "<UNDEFINED>" in line:
+            raise AssertionError("Undecoded instruction in "+str(elf)+": "+line)
+        opcode,operand=match[1],match[2]
+        # Literal pools are data, never permission to hide an unknown opcode.
+        if opcode in (".word", ".short", ".byte"):continue
+        check_opcode=opcode.lower()
+        if check_opcode.startswith("."):
+            raise AssertionError("Undecoded instruction in "+str(elf)+": "+line)
+        operand=operand.split("@")[0].strip()
+        operand=re.sub(r"\b[0-9a-fA-F]+\s+<[^>]+>",".+4",operand)
+        assembly.append(opcode+" "+operand)
+        count+=1
+    check(count>100,str(elf.name)+" final linked instructions decoded")
+    with tempfile.TemporaryDirectory(prefix="am13e-m33-isa-") as directory:
+        result=subprocess.run([compiler,"-mcpu=cortex-m33","-mthumb",
+            "-mfpu=fpv5-sp-d16","-mfloat-abi=hard","-x","assembler",
+            "-c","-o",str(Path(directory)/"isa.o"),"-"],
+            input="\n".join(assembly)+"\n",text=True,capture_output=True)
+        if result.returncode:
+            raise AssertionError(str(elf)+" contains instructions rejected for Cortex-M33:\n"+
+                                 result.stderr)
+    check(True,str(elf.name)+f" all {count} linked instructions accepted for Cortex-M33")
+    print("LIMIT: ISA validation is static; no silicon execution or timing claim")
 
 def check_ram_flash_branches(objdump, boot, ram_start, ram_bytes):
     """Audit direct branch targets in SRAM-resident Flash routines.
@@ -92,10 +157,13 @@ def main():
     p.add_argument("--nm",default="arm-none-eabi-nm")
     p.add_argument("--readelf",default="arm-none-eabi-readelf")
     p.add_argument("--objdump",default="arm-none-eabi-objdump")
+    p.add_argument("--compiler",default="arm-none-eabi-gcc")
     opt=p.parse_args()
     root=opt.build
     boot=root/"boot/BOOT5_PB14-rev4.elf"
     app=root/"AM13E-rev17.3.elf"
+    for elf in (boot,app):
+        check_m33_isa(opt.readelf,opt.objdump,opt.compiler,elf)
     raw=(root/"CMakeFiles/AM13E-rev17.3.elf.dir/image.raw.bin").read_bytes()
     flat=(root/"AM13E-rev17.3.bin").read_bytes()
     meta=json.loads((root/"AM13E-rev17.3.elf.json").read_text())

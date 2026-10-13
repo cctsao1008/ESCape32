@@ -49,7 +49,10 @@ if(AM13E_PROJECT_SYSCFG_DIR AND
     message(FATAL_ERROR
         "AM13E_PROJECT_SYSCFG_DIR is not an existing directory")
 endif()
-set(opts -march=armv8.1-m.main -mthumb -mfpu=fpv5-sp-d16
+# AM13E23019 implements Cortex-M33 / Armv8-M, not the Armv8.1-M
+# superset used by TI's generic GCC example. Select the CPU for every
+# native object AND link, retaining the single-precision hard-float ABI.
+set(opts -mcpu=cortex-m33 -mthumb -mfpu=fpv5-sp-d16
     -mfloat-abi=hard -fno-branch-count-reg -Werror)
 set(defs __DEVICE_SHORT__="am13e230x" __DEVICE_LONG__="AM13E230x"
     __CPU_SHORT__="m33" __CGT_SHORT__="gcc_arm")
