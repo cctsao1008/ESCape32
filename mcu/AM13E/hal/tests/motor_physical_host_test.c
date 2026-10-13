@@ -435,8 +435,12 @@ int main(void)
         (uint32_t)DL_MCPWM_CLOCK_DIVIDER_2<<MCPWM_TBCTL_CLKDIV_OFS);
     assert(am13e_app_motor_inactive_aq_boot_preflight());
     am13e_app_motor_bemf_init();
+    assert(!am13e_app_motor_bemf_reference_ready());
+    assert(!am13e_motor_output_start() && !gate_on());
+    assert(!am13e_app_motor_bemf_reference_set(4096U));
     assert(!am13e_app_motor_bemf_reference_set(0U));
     assert(am13e_app_motor_bemf_reference_set(2048U));
+    assert(am13e_app_motor_bemf_reference_ready());
 #ifdef PWM_ENABLE
     assert((MCPWM4->TZCTL&MCPWM_TZCTL_TZB_MASK)==
         ((uint32_t)DL_MCPWM_TZ_ACTION_HIGH<<MCPWM_TZCTL_TZB_OFS));
@@ -448,7 +452,10 @@ int main(void)
     assert((CMPSS0->COMPCTL&CMPSS_LITE_COMPCTL_COMPHSOURCE_MASK)==DL_CMPSSLITE_INSRC_DAC);
     for(unsigned phase=1U;phase<=3U;++phase){
         for(unsigned invert=0U;invert<2U;++invert){
+            ECAP1->ECFLG=DL_ECAP_ISR_SOURCE_CEVT1;
             compctl((int)(phase|(invert<<2U)));
+            assert(DL_ECAP_getInterruptSource(ECAP1)==0U);
+            assert(!(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK));
             assert((SYSCTL->SOCLOCK.CMPHPMXSEL&SYSCTL_CMPHPMXSEL_CMP0HPMXSEL_MASK)==phase-1U);
             assert((ECAP1->ECCTL0&ECAP_ECCTL0_INPUTSEL_MASK)==DL_ECAP_INPUT_CMPSS0_CTRIPH);
             assert(!am13e_app_motor_bemf_reference_set(1024U));

@@ -200,6 +200,9 @@ int am13e_app_motor_bemf_reference_set(uint16_t code)
     return 1;
 }
 
+int am13e_app_motor_bemf_reference_ready(void)
+{ return initialized && reference_ready; }
+
 /* Rel17 x&3 selects the previous BEMF phase; x&4 reverses polarity.
  * Keep source change isolated from the interval filter/IRQ arming.
  */
