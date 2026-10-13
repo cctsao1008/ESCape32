@@ -408,6 +408,7 @@ void am13e_app_motor_init(void)
     NVIC_SetPriority(MOTOR_PWM_IRQ,0U);
     NVIC_ClearPendingIRQ(MOTOR_PWM_IRQ);
     NVIC_EnableIRQ(MOTOR_PWM_IRQ);
+    am13e_app_motor_oc_trip_init();
     am13e_app_motor_nfault_trip_init();
 #endif
     if (!pwm_pads_disconnected() || !pwm_registers_inactive()) {

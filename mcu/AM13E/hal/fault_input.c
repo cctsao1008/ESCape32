@@ -18,7 +18,7 @@
 
 #define AM13E_NFAULT_PIN AM13E_NFAULT_MASK
 
-_Static_assert(IOMUX_PINCM_PB15 == 47U &&
+_Static_assert(IOMUX_PINCM_PA22 == 22U &&
                IOMUX_PINCM_PB13 == 45U &&
                IOMUX_PINCM_PB14 == 46U,
                "Reference auxiliary IO map changed");
@@ -65,7 +65,7 @@ void initgpio(void)
     DL_GPIO_clearInterruptStatus(AM13E_NFAULT_GPIO, AM13E_NFAULT_PIN);
     if (!DL_GPIO_isInputEnabled(AM13E_NFAULT_PINCM) ||
         DL_GPIO_getPeripheralFunctionBits(AM13E_NFAULT_PINCM)!=
-            IOMUX_PB15_GPIO47 ||
+            IOMUX_PA22_GPIO22 ||
         DL_GPIO_getEnabledInterrupts(AM13E_NFAULT_GPIO,
                                       AM13E_NFAULT_PIN)!=0U)
         io_init_fail();

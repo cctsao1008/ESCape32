@@ -52,5 +52,5 @@ _Static_assert(AM13E_BEMF_U_PINCM==17U && AM13E_BEMF_V_PINCM==1U &&
  */
 _Static_assert(IOMUX_PINCM_PB13==45U &&
                IOMUX_PINCM_PA26==26U &&
-               IOMUX_PINCM_PB15==47U,
+               IOMUX_PINCM_PA22==22U,
                "AM13E reference IO Plan Power Stage/DShot pins changed");

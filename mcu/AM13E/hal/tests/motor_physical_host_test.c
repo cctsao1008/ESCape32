@@ -23,6 +23,7 @@
 #endif
 #include <dl_mcpwm.h>
 #include <dl_sysctl.h>
+#include <dl_xbar.h>
 #include <dl_cmpss_lite.h>
 #include <dl_gpio.h>
 #include <dl_ecap.h>
@@ -115,7 +116,7 @@ static unsigned inject_shadow_zero,shadow_boundaries,inject_trip,inject_ack_trip
 void test_irq_ack_boundary(MCPWM_Regs *p)
 {
     if(inject_ack_trip){
-        p->TZCBCOSTFLAG=DL_MCPWM_TZ_FLAG_OST_TZ1;
+        p->TZCBCOSTFLAG=DL_MCPWM_TZ_FLAG_OST_TZ2;
         p->INTFLAG|=DL_MCPWM_INT_TZ_OST;inject_ack_trip=0U;
     }
 }
@@ -129,7 +130,7 @@ static void active_image(MCPWM_Regs *p,uint32_t image[16])
 void test_shadow_written(MCPWM_Regs *p)
 {
     if(inject_trip){
-        MCPWM4->TZCBCOSTFLAG=DL_MCPWM_TZ_FLAG_OST_TZ1;
+        MCPWM4->TZCBCOSTFLAG=DL_MCPWM_TZ_FLAG_OST_TZ2;
         MCPWM4->INTFLAG|=DL_MCPWM_INT_TZ_OST;inject_trip=0U;
     }
     if(!inject_shadow_zero)return;
@@ -351,6 +352,7 @@ static void fatal_paths(int early)
 static void hall_input(unsigned code)
 {
     *(volatile uint32_t *)(uintptr_t)&GPIO0->DIN31_0=
+        (GPIO0->DIN31_0&AM13E_NFAULT_MASK)|
         ((code&1U)?DL_GPIO_PIN(AM13E_HALL_PIN1):0U)|
         ((code&2U)?DL_GPIO_PIN(AM13E_HALL_PIN2):0U)|
         ((code&4U)?DL_GPIO_PIN(AM13E_HALL_PIN3):0U);
@@ -423,8 +425,8 @@ int main(void)
     assert(r==(void*)0x40000000);
     SYSCTL->SOCLOCK.MCLKCFG=DL_SYSCTL_MCLK_DIV_2_DIV_4;
     DL_GPIO_enablePower(GPIO1);
-    DL_GPIO_initDigitalInput(IOMUX_PINCM_PB15);
-    *(volatile uint32_t *)(uintptr_t)&GPIO1->DIN31_0=DL_GPIO_PIN(15U);
+    DL_GPIO_initDigitalInput(AM13E_NFAULT_PINCM);
+    *(volatile uint32_t *)(uintptr_t)&AM13E_NFAULT_GPIO->DIN31_0=AM13E_NFAULT_MASK;
     assert(!setjmp(fault_return));
 #ifdef AM13E_FATAL_PATH_FIXTURE
     fatal_paths(1);
@@ -434,6 +436,11 @@ int main(void)
     assert((MCPWM4->TBCTL&MCPWM_TBCTL_CLKDIV_MASK)==
         (uint32_t)DL_MCPWM_CLOCK_DIVIDER_2<<MCPWM_TBCTL_CLKDIV_OFS);
     assert(am13e_app_motor_inactive_aq_boot_preflight());
+    assert(INPUTXBAR->INPUTSELECT[DL_XBAR_INPUT2]==22U);
+    assert(PWMXBAR->PWM_XBAR_GXSEL[DL_XBAR_TRIP2].PWMXBARG0SEL==(1U<<21U));
+    assert(PWMXBAR->PWM_XBAR_GXSEL[DL_XBAR_TRIP3].PWMXBARG0SEL==0x54U);
+    assert((MCPWM4->TZSEL&(DL_MCPWM_TZ_SIGNAL_OST2|DL_MCPWM_TZ_SIGNAL_OST3))==
+           (DL_MCPWM_TZ_SIGNAL_OST2|DL_MCPWM_TZ_SIGNAL_OST3));
     am13e_app_motor_bemf_init();
     assert(!am13e_app_motor_bemf_reference_ready());
     assert(!am13e_motor_output_start() && !gate_on());
@@ -628,24 +635,27 @@ int main(void)
     }
     /* A trip can latch halfway through masked SHADOW writes. Test in
      * an isolated anonymous-RAM child because fault reset never returns. */
-    for(volatile unsigned fault_case=0;fault_case<2U;++fault_case){
+    for(volatile unsigned fault_case=0;fault_case<3U;++fault_case){
     pid_t child=fork();assert(child>=0);
     if(child==0){
         sine=0;step=0;lock=0;nextstep();
         am13e_app_motor_pwm_apply(800,24,48,ertm,1,0,0,1);start();carrier();
         test_primask=0U;
-        if(fault_case){
+        if(fault_case==1U){
             am13e_app_motor_commutation_enable(0);
             am13e_app_audio_music_begin();zero();zero();
             am13e_app_audio_music_note(0,0,50);zero();zero();carrier();
         }
         if(!setjmp(fault_return)){
-            if(fault_case){
+            if(fault_case==1U){
                 inject_ack_trip=1U;MCPWM4->INTFLAG=DL_MCPWM_INT_ET_2;
+            }else if(fault_case==2U){
+                MCPWM4->TZCBCOSTFLAG=DL_MCPWM_TZ_FLAG_OST_TZ3;
+                MCPWM4->INTFLAG=DL_MCPWM_INT_TZ_OST;
             }else{
                 inject_trip=1U;
                 am13e_app_motor_pwm_apply(1000,24,48,ertm,1,0,0,1);
-                assert(test_primask==0U && (MCPWM4->TZCBCOSTFLAG&DL_MCPWM_TZ_FLAG_OST_TZ1));
+                assert(test_primask==0U && (MCPWM4->TZCBCOSTFLAG&DL_MCPWM_TZ_FLAG_OST_TZ2));
             }
             MCPWM4_IRQHandler();assert(0);
         }
@@ -661,13 +671,13 @@ int main(void)
     sine=0;step=0;lock=0;nextstep();am13e_app_motor_commutation_commit();
     am13e_app_motor_commutation_enable(1);
     if(!setjmp(fault_return)){
-        MCPWM4->TZCBCOSTFLAG=DL_MCPWM_TZ_FLAG_OST_TZ1;
+        MCPWM4->TZCBCOSTFLAG=DL_MCPWM_TZ_FLAG_OST_TZ2;
         MCPWM4->INTFLAG=DL_MCPWM_INT_TZ_OST|DL_MCPWM_INT_ET_1;
         MCPWM4_IRQHandler();assert(0);
     }
     assert(watchdog_arms==1U && !gate_on());
     assert(am13e_mcu_motor_pads_disconnected(am13e_board_motor_pad_route()));
-    assert(MCPWM4->TZCBCOSTFLAG&DL_MCPWM_TZ_FLAG_OST_TZ1);
+    assert(MCPWM4->TZCBCOSTFLAG&DL_MCPWM_TZ_FLAG_OST_TZ2);
     if(!setjmp(fault_return)){am13e_app_motor_commutation_enable(1);assert(0);}
     assert(!gate_on());
     assert(!(MCPWM4->INTEN&DL_MCPWM_INT_ET_1));
