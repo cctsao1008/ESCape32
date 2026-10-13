@@ -297,7 +297,10 @@ static void fatal_paths(int early)
                     case 2:
                         adc_initialized=adc_inflight=1U;
                         ADC0->ADCINTFLG=ADC_ADCINTFLG_ADCINT1_MASK|ADC_ADCINTFLG_ADCINT1RESULT_MASK;
-                        *(volatile uint16_t *)(uintptr_t)ADC0RESULT=4095U;
+                        ADC1->ADCINTFLG=ADC2->ADCINTFLG=ADC0->ADCINTFLG;
+                        completed=0U;
+                        *(volatile uint16_t *)((uintptr_t)ADC2RESULT+ADC_ADCRESULT0+2U*DL_ADCRESULT_STEP)=4095U;
+                        ADC1_INT1_IRQHandler();ADC2_INT1_IRQHandler();
                         ADC0_INT1_IRQHandler();break; /* exceeds synthetic profile fullscale */
                     case 3:serial_fixture_initialized=0U;RX_HANDLER();break;
                     case 4:
@@ -441,7 +444,9 @@ int main(void)
     assert(PWMXBAR->PWM_XBAR_GXSEL[DL_XBAR_TRIP3].PWMXBARG0SEL==0x54U);
     assert((MCPWM4->TZSEL&(DL_MCPWM_TZ_SIGNAL_OST2|DL_MCPWM_TZ_SIGNAL_OST3))==
            (DL_MCPWM_TZ_SIGNAL_OST2|DL_MCPWM_TZ_SIGNAL_OST3));
+    CMPSS0->DACLVALS=333U; /* Stale unused low-DAC state from a prior owner. */
     am13e_app_motor_bemf_init();
+    assert(CMPSS0->DACLVALS==0U);
     assert(!am13e_app_motor_bemf_reference_ready());
     assert(!am13e_motor_output_start() && !gate_on());
     assert(!am13e_app_motor_bemf_reference_set(4096U));
@@ -482,6 +487,30 @@ int main(void)
     am13e_app_motor_pwm_apply(800,24,48,ertm,1,0,0,1);
     nextstep();start();carrier();
 #ifdef AM13E_FATAL_PATH_FIXTURE
+    const uint32_t saved_mask=test_primask;test_primask=1U;
+    am13e_app_adc_init();test_primask=saved_mask;
+    AM13E_AdcRaw raw;
+    assert(!am13e_app_adc_get_raw(&raw));
+    ADC_Regs *adcs[]={ADC0,ADC1,ADC2};
+    ADC_RESULT_Regs *results[]={ADC0RESULT,ADC1RESULT,ADC2RESULT};
+    const unsigned channels[3][3]={{5U,12U,4U},{4U,12U,2U},{12U,5U,19U}};
+    for(unsigned i=0;i<3U;++i){
+        for(unsigned j=0;j<3U;++j){
+            const uint32_t ctl=*(volatile uint32_t *)((uintptr_t)adcs[i]+ADC_ADCSOC0CTL+j*DL_ADCSOCCTL_STEP);
+            assert(((ctl&ADC_ADCSOC0CTL_CHSEL_MASK)>>ADC_ADCSOC0CTL_CHSEL_OFS)==channels[i][j]);
+            *(volatile uint16_t *)((uintptr_t)results[i]+ADC_ADCRESULT0+j*DL_ADCRESULT_STEP)=(uint16_t)(i*3U+j+1U);
+        }
+        adcs[i]->ADCINTFLG=ADC_ADCINTFLG_ADCINT1_MASK|ADC_ADCINTFLG_ADCINT1RESULT_MASK;
+    }
+    adctrig();adctrig();
+    ADC2_INT1_IRQHandler();assert(!am13e_app_adc_get_raw(&raw));
+    ADC0_INT1_IRQHandler();assert(!am13e_app_adc_get_raw(&raw));
+    ADC1_INT1_IRQHandler();assert(am13e_app_adc_get_raw(&raw));
+    assert(raw.current_v==1U && raw.phase_a==2U && raw.ibus==3U &&
+           raw.current_w==4U && raw.vbus==5U && raw.phase_b==6U &&
+           raw.current_u==7U && raw.phase_c==8U && raw.ntc==9U &&
+           raw.sample_count==1U && raw.trigger_overruns==1U);
+    puts("PASS actual Option 1 ADC0/1/2 SOC map, ordered completion and coherent nine-code snapshot");
     fatal_paths(0);
 #endif
     assert(MCPWM4->DBRED==AM13E_MOTOR_OUTPUT_RED_TICKS &&

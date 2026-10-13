@@ -930,6 +930,8 @@ void main(void) {
 	laststep();
 #if SENS_CNT >= 1
 	int cutoff = 0;
+#elif defined(AM13E) && defined(LED_STAT)
+    const int cutoff = 0; /* No calibrated voltage sensing: no cutoff status. */
 #endif
 	PID bpid = {.Kp = 50, .Ki = 0, .Kd = 1000}; // Stall protection
 #if SENS_CNT >= 2

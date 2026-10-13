@@ -39,3 +39,11 @@ void am13e_app_serial_sbus2_timer_irq(void);
 
 /* Lowest-priority UART transport recovery; no protocol parser/state policy. */
 void am13e_app_serial_transport_service_pending(void);
+
+#ifdef AM13E_BOARD_DEBUG_UART_BAUD
+#include <stdbool.h>
+#include <stdint.h>
+void am13e_app_debug_uart_init(void);
+bool am13e_app_debug_uart_try_write(uint8_t byte);
+bool am13e_app_debug_uart_try_read(uint8_t *byte);
+#endif

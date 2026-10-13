@@ -1,9 +1,9 @@
-/* MCPWM0 software-side inactive preflight diagnostics.
+/* MCPWM4 software-side inactive preflight diagnostics.
  * NOTE: This is NOT the power-stage ready/arm/trip-verified state.
  */
 #pragma once
 #if !defined(AM13E)
-#error "AM13E-only MCPWM0 safety diagnostics"
+#error "AM13E-only MCPWM4 safety diagnostics"
 #endif
 #include <stdint.h>
 #include "motor_shadow_plan.h"

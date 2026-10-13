@@ -1,3 +1,6 @@
+#ifdef AM13E_BOARD_DEBUG_UART_BAUD
+#include "serial_uart_rx.h"
+#endif
 /*
  * AM13E native Application config.c: original init() and 16kHz SysTick.
  *
@@ -45,6 +48,9 @@ void init(void)
         for (;;) { __NOP(); }
     }
     app_mclk_hz = hz;
+#ifdef AM13E_BOARD_DEBUG_UART_BAUD
+    am13e_app_debug_uart_init();
+#endif
 }
 
 void am13e_app_motor_runtime_tick_init(void)

@@ -1,24 +1,7 @@
-/* ESCape32 Rel17 STM32G431-derived AM13E numeric development defaults.
- * G431 PHOTONDRIVE1: DEAD_TIME=155, VOLT_MUL=224,
- * TEMP_FUNC=NTC10K3455UP10K, see original CMakeLists.txt.
- *
- * TIM1 DTG(155)=0x8D -> 154 timer cycles @168MHz = 916.7 ns.
- * AM13E MCPWM @100MHz -> 92 ticks = 920ns per RED/FED.
- * VOLT_MUL=224 approximated with 3.3V/12bit nominal ADC model
- * as divider 26820:1000. These are software estimates, not actual
- * AM13E VREF, external resistor values, gate polarity, or measurements.
- *
- * PB13 high=enable is a provisional active-high convention; the
- * reference software always holds it INACTIVE. No functional enable
- * output is implemented, regardless of the MCU PWM runtime.
- * Independent OC is unassigned (PINCM=0). PB15 nFAULT is configured
- * as GPIO Input only: NO OST1, IRQ or fault service in this profile.
- *
- * 0 for Hi-Z safety and shutdown proof means NOT HARDWARE VERIFIED.
- * Reference FW1 compiles motor PWM/ADC algorithms but keeps these five
- * auxiliary features IO-only. Numeric values are development settings.
- * All entries remain overridable via -D or CMake.
- */
+/* Selected Option 1 board contracts. Retained G431-derived internal
+ * dead-band arithmetic is an inactive development model, not a driver
+ * specification. Physical outputs, overcurrent and sensor calibration
+ * require explicit board inputs; the selected Reference is unqualified. */
 #pragma once
 #ifndef AM13E
 #error "AM13E board configuration is not for legacy MCU builds"
@@ -34,6 +17,8 @@
 #endif
 _Static_assert(AM13E_OPTION1_OUTPUTS_QUALIFIED==0 || AM13E_OPTION1_OUTPUTS_QUALIFIED==1,
                "Option 1 qualification declaration must be binary");
+_Static_assert(!AM13E_OPTION1_OUTPUTS_QUALIFIED || AM13E_MOTOR_OUTPUT_CONFIGURED,
+               "Qualified Option 1 needs a complete electrical output definition");
 
 /* Existing six motor pads, PB13/PA26/PB15 and ADC pin routing stay in
  * board_reference_io.h, board_motor_output_reference.c,
@@ -84,33 +69,12 @@ _Static_assert(AM13E_OPTION1_OUTPUTS_QUALIFIED==0 || AM13E_OPTION1_OUTPUTS_QUALI
 #define AM13E_MOTOR_DB_COMPARE_OFFSET_TICKS 92
 #endif
 
-/* Derived PHOTONDRIVE1 VOLT_MUL=224 model, not actual AM13E sensing:
- * 3300mV, 12-bit ADC and 26820/1000ohm divider approximate G431
- * voltage gain; NTC model3 = G431 NTC10K3455UP10K.
- */
-#ifndef AM13E_BOARD_ADC_FULLSCALE
-#define AM13E_BOARD_ADC_FULLSCALE 4095
-#endif
-#ifndef AM13E_BOARD_ADC_VREF_MV
-#define AM13E_BOARD_ADC_VREF_MV 3300
-#endif
-#ifndef AM13E_BOARD_NTC_SUPPLY_MV
-#define AM13E_BOARD_NTC_SUPPLY_MV 3300
-#endif
-#ifndef AM13E_BOARD_VBUS_TOP_OHMS
-#define AM13E_BOARD_VBUS_TOP_OHMS 26820
-#endif
-#ifndef AM13E_BOARD_VBUS_BOTTOM_OHMS
-#define AM13E_BOARD_VBUS_BOTTOM_OHMS 1000
-#endif
-#ifndef AM13E_BOARD_NTC_MODEL
-#define AM13E_BOARD_NTC_MODEL 3
-#endif
+/* Option 1 supplies no sensor calibration. An explicit board profile
+ * may define AM13E_BOARD_SENSORS_CONFIGURED and its complete numeric
+ * transfer model; there is no G431 calibration fallback. */
 
-/* Five explicit IO-only auxiliaries: PB15 nFAULT is a plain input,
- * never OST1 or SysTick sampled. Optional OC is pin-mode-only, never
- * OST2. COMP_MAP=132 is G431 BEMF, not independent OC.
- */
+/* Optional auxiliaries remain separately reserved. Option 1 phase OC
+ * uses CMPSS1/2/3; PA22 nFAULT uses the dedicated OST2 route. */
 #ifndef AM13E_BOARD_OC_GPIO_PINCM
 #define AM13E_BOARD_OC_GPIO_PINCM 0
 #endif

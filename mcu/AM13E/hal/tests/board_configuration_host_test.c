@@ -4,8 +4,7 @@
 #include "board_configuration.h"
 #include <stdio.h>
 #ifdef AM13E_BOARD_DEVELOPMENT_ACTIVE_TEST
-#if !defined(AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED) || \
-    !defined(AM13E_BOARD_SENSORS_CONFIGURED)
+#if !defined(AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED)
 #error "AM13E internal motor PWM/dead-band/ADC paths must compile"
 #endif
 #ifdef AM13E_BOARD_POWER_STAGE_PROFILE
@@ -39,13 +38,13 @@ _Static_assert(AM13E_MOTOR_DB_RED_TICKS==92 &&
                AM13E_MOTOR_DB_SWAP_B==0 &&
                AM13E_MOTOR_DB_COMPARE_OFFSET_TICKS==92,
                "G431-derived AM13E dead-band defaults drift");
-_Static_assert(AM13E_BOARD_ADC_FULLSCALE==4095 &&
-               AM13E_BOARD_ADC_VREF_MV==3300 &&
-               AM13E_BOARD_NTC_SUPPLY_MV==3300 &&
-               AM13E_BOARD_VBUS_TOP_OHMS==26820 &&
-               AM13E_BOARD_VBUS_BOTTOM_OHMS==1000 &&
-               AM13E_BOARD_NTC_MODEL==3,
-               "G431-inspired sensor model drift");
+#if defined(AM13E_BOARD_ADC_FULLSCALE) || defined(AM13E_BOARD_ADC_VREF_MV) || \
+    defined(AM13E_BOARD_NTC_SUPPLY_MV) || defined(AM13E_BOARD_VBUS_TOP_OHMS) || \
+    defined(AM13E_BOARD_VBUS_BOTTOM_OHMS) || defined(AM13E_BOARD_NTC_MODEL)
+#error "Option 1 reference must not invent sensor calibration"
+#endif
+_Static_assert(AM13E_OPTION1_OUTPUTS_QUALIFIED==0,
+               "Unqualified Option 1 must refuse physical outputs");
 _Static_assert(AM13E_BOARD_OC_GPIO_PINCM==0 &&
                AM13E_BOARD_OC_ACTIVE_LOW==1 &&
                AM13E_BOARD_SERIAL_TX_PINCM==0 &&
@@ -62,7 +61,7 @@ _Static_assert(AM13E_BOARD_PB13_ACTIVE_LEVEL==0 &&
 _Static_assert(AM13E_BOARD_GATE_PWM_INVERT_MASK==0 &&
                AM13E_BOARD_NTC_MODEL==3 &&
                AM13E_BOARD_OC_ACTIVE_LOW==1,
-               "Partial override must preserve other numeric defaults");
+               "Explicit fixture model and retained IO defaults drift");
 #endif
 int main(void){
     puts("PASS: numeric motor model plus auxiliary IO-only pin defaults/overrides");

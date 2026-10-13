@@ -971,3 +971,64 @@ void RX_HANDLER(void)
  */
 enum { AM13E_REFERENCE_SERIAL_RX_DISABLED = 0 };
 #endif /* board-selected UART input only */
+
+/* Option 1 UC1 debug/service transport. Separate fixed pads and FIFO
+ * ownership; no receiver parser, command mode or blocking logging loop. */
+#ifdef AM13E_BOARD_DEBUG_UART_BAUD
+#include "../config.h"
+#include "clock_backend.h"
+#include <soc.h>
+#include <dl_unicommuart.h>
+#include <dl_gpio.h>
+#if (defined(AM13E_BOARD_SERIAL_RX_UC_INDEX) && AM13E_BOARD_SERIAL_RX_UC_INDEX==1) || \
+    (defined(AM13E_BOARD_TELEM_UC_INDEX) && AM13E_BOARD_TELEM_UC_INDEX==1)
+#error "Option 1 debug UC1 cannot share receiver/telemetry ownership"
+#endif
+_Static_assert(IOMUX_PA0_UC1_TX_SDA_PICO==9U && IOMUX_PA9_UC1_RX_SCL_SCLK==5U,
+               "Option 1 UC1 pad functions changed");
+_Static_assert(AM13E_BOARD_DEBUG_UART_BAUD>0 &&
+    AM13E_BOARD_DEBUG_UART_BAUD<=AM13E_APP_MCLK_HZ/32U &&
+    (UINT64_C(2)*AM13E_APP_MCLK_HZ+AM13E_BOARD_DEBUG_UART_BAUD/2U)/
+      (AM13E_BOARD_DEBUG_UART_BAUD>0?AM13E_BOARD_DEBUG_UART_BAUD:1U)<=0x3fffffU,
+    "Debug baud requires representable 16x native divisor");
+static bool debug_uart_initialized;
+void am13e_app_debug_uart_init(void)
+{
+    if(__get_PRIMASK()!=1U || debug_uart_initialized){
+        am13e_app_motor_fault_shutdown();am13e_app_motor_fault_reset();
+    }
+    DL_UART_reset(UC1_INST_PTR);DL_UART_enablePower(UC1_INST_PTR);
+    if(!DL_UART_isPowerEnabled(UC1_INST_PTR)){
+        am13e_app_motor_fault_shutdown();am13e_app_motor_fault_reset();
+    }
+    DL_UART_ClockConfig clk={.clockSel=DL_UART_CLOCK_BUSCLK,
+                                  .divideRatio=DL_UART_CLOCK_DIVIDE_RATIO_1};
+    DL_UART_setClockConfig(UC1_INST_PTR,&clk);
+    DL_UART_Config cfg={.mode=DL_UART_MODE_NORMAL,
+        .direction=DL_UART_DIRECTION_TX_RX,.flowControl=DL_UART_FLOW_CONTROL_NONE,
+        .parity=DL_UART_PARITY_NONE,.wordLength=DL_UART_WORD_LENGTH_8_BITS,
+        .stopBits=DL_UART_STOP_BITS_ONE};
+    DL_UART_init(UC1_INST_PTR,&cfg);
+    DL_UART_configBaudRate(UC1_INST_PTR,AM13E_APP_MCLK_HZ/2U,AM13E_BOARD_DEBUG_UART_BAUD);
+    DL_UART_enableFIFOs(UC1_INST_PTR);
+    DL_UART_disableInterrupt(UC1_INST_PTR,UINT32_MAX);
+    DL_UART_clearInterruptStatus(UC1_INST_PTR,UINT32_MAX);
+    DL_GPIO_initPeripheralOutputFunction(AM13E_DEBUG_TX_PINCM,IOMUX_PA0_UC1_TX_SDA_PICO);
+    DL_GPIO_initPeripheralInputFunction(AM13E_DEBUG_RX_PINCM,IOMUX_PA9_UC1_RX_SCL_SCLK);
+    DL_UART_enable(UC1_INST_PTR);
+    debug_uart_initialized=true;
+}
+bool am13e_app_debug_uart_try_write(uint8_t byte)
+{
+    if(!debug_uart_initialized || DL_UART_isTXFIFOFull(UC1_INST_PTR))return false;
+    DL_UART_transmitData(UC1_INST_PTR,byte);return true;
+}
+bool am13e_app_debug_uart_try_read(uint8_t *byte)
+{
+    if(!debug_uart_initialized || !byte || DL_UART_isRXFIFOEmpty(UC1_INST_PTR))return false;
+    const uint32_t raw=UC1_INST_PTR->uart->RXDATA;
+    if(raw&(UNICOMMUART_RXDATA_FRMERR_MASK|UNICOMMUART_RXDATA_PARERR_MASK|
+            UNICOMMUART_RXDATA_BRKERR_MASK|UNICOMMUART_RXDATA_NERR_MASK))return false;
+    *byte=(uint8_t)raw;return true;
+}
+#endif

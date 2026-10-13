@@ -16,14 +16,14 @@ case "$fixture" in
   inverted) mask=21; extra=(-DINVERTED_HIGH) ;;
   blanking) extra=(-DSW_BLANKING) ;;
   hall) extra=(-DHALL_MAP=1 -DUSE_XOR -DAM13E_HALL_GPIO_TIMESTAMP=1
-    -DAM13E_HALL_PIN1=12 -DAM13E_HALL_PIN2=27 -DAM13E_HALL_PIN3=31
+    -DAM13E_HALL_PIN1=12 -DAM13E_HALL_PIN2=28 -DAM13E_HALL_PIN3=31
     -DAM13E_HALL_PULL=DL_GPIO_RESISTOR_PULL_UP -DAM13E_HALL_INVERT_MASK=0) ;;
   pwm_enable) fed=120; extra=(-DPWM_ENABLE -DAM13E_MOTOR_PWM_ENABLE_TOPOLOGY=1 -DAM13E_MOTOR_PWM_ENABLE_DRIVER_DEAD_NS=1500) ;;
   pwm_enable_full) fed=120; mask=21; extra=(-DPWM_ENABLE -DAM13E_MOTOR_PWM_ENABLE_TOPOLOGY=1 -DAM13E_MOTOR_PWM_ENABLE_DRIVER_DEAD_NS=1500 -DFULL_DUTY -DINVERTED_HIGH -DSW_BLANKING) ;;
   fatal)
     # Deliberately inconsistent ADC fullscale makes a real scaling failure
     # injectable. Synthetic LED/ERPM/UART definitions, never a board profile.
-    extra=(-DAM13E_FATAL_PATH_FIXTURE -DAM13E_BOARD_ADC_FULLSCALE=2047
+    extra=(-DAM13E_BOARD_ADC_VREF_MV=3300 -DAM13E_BOARD_NTC_SUPPLY_MV=3300 -DAM13E_BOARD_VBUS_TOP_OHMS=26820 -DAM13E_BOARD_VBUS_BOTTOM_OHMS=1000 -DAM13E_BOARD_NTC_MODEL=3 -DAM13E_FATAL_PATH_FIXTURE -DAM13E_BOARD_ADC_FULLSCALE=2047
       -Wl,--wrap=__error__
       -Wno-unused-parameter -Wno-unused-variable
       -DLED_MAP=0xB0 -DAM13E_BOARD_LED1_GPIO=GPIO1 -DAM13E_BOARD_LED1_MASK=1U -DAM13E_BOARD_LED1_PINCM=32U
@@ -75,14 +75,14 @@ cc -no-pie -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-int-to-pointer-
 "$out/command-pa26-test"
 
 for serial_baud in 460800 230400; do
-cc -DSERIAL_BR="$serial_baud" -no-pie -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-variable -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections \
+cc -DAM13E_BOARD_DEBUG_UART_BAUD=115200 -DSERIAL_BR="$serial_baud" -no-pie -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-variable -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections \
  -include src/tests/AM13E/newlib_host.h "-DAM13E_TEST_TI_DMA_HEADER=\"$dl/dl_dma.h\"" -DAM13E -DAM13E_REF_IO_PLAN_V1=1 -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' \
   \
  "-DAM13E_TEST_TI_ECAP_HEADER=\"$dl/dl_ecap.h\"" "-DAM13E_TEST_TI_GPIO_HEADER=\"$dl/dl_gpio.h\"" "-DAM13E_TEST_TI_MCPWM_HEADER=\"$dl/dl_mcpwm.h\"" \
  "-DAM13E_TEST_TI_EQEP_HEADER=\"$dl/dl_eqep.h\"" \
  "-DAM13E_TEST_TI_UART_HEADER=\"$dl/dl_unicommuart.h\"" -DAM13E_BOARD_SERIAL_RX_CONFIGURED=1 -DAM13E_BOARD_SERIAL_RX_UC_INDEX=0 -DAM13E_BOARD_SERIAL_RX_PINCM=26 -DAM13E_BOARD_SERIAL_RX_PIN_FUNCTION=8 -DAM13E_BOARD_SERIAL_RX_BUSCLK_HZ=100000000 -DAM13E_BOARD_SERIAL_SBUS_PIN_INVERT=1 -DAM13E_BOARD_SERIAL_TX_CONFIGURED=1 -DAM13E_BOARD_SERIAL_TX_PINCM=26 -DAM13E_BOARD_SERIAL_TX_PIN_FUNCTION=9 -DAM13E_BOARD_SERIAL_TX_TWO_WIRE=0 -DAM13E_BOARD_SBUS2_TIMED_REPLY=1 -DAM13E_BOARD_SBUS2_TX_PIN_INVERT=1 \
  -Isrc -Isrc/serial -Isrc/runtime -Imcu/AM13E -Imcu/AM13E/hal -Imcu/AM13E/hal/tests/register_mock -I"$hw" -I"$dl" \
- mcu/AM13E/hal/tests/serial_pa26_host_test.c src/io.c src/tests/AM13E/rel17_defaults_host.c \
+ mcu/AM13E/hal/tests/serial_pa26_host_test.c mcu/AM13E/hal/motor_power_stage.c src/io.c src/tests/AM13E/rel17_defaults_host.c \
  src/serial/serial_frame_rx.c mcu/AM13E/hal/serial_tx_queue.c mcu/AM13E/hal/crsf_deferred_command.c mcu/AM13E/hal/bidir_timing.c src/serial/bidir_codec.c \
  "$out/dl_timer.c" "$dl/dl_unicomm.c" "$dl/dl_unicommuart.c" \
  -o "$out/serial-pa26-test"
@@ -99,7 +99,7 @@ for invalid_baud in 0 1 6250001; do
  "-DAM13E_TEST_TI_EQEP_HEADER=\"$dl/dl_eqep.h\"" \
  "-DAM13E_TEST_TI_UART_HEADER=\"$dl/dl_unicommuart.h\"" -DAM13E_BOARD_SERIAL_RX_CONFIGURED=1 -DAM13E_BOARD_SERIAL_RX_UC_INDEX=0 -DAM13E_BOARD_SERIAL_RX_PINCM=26 -DAM13E_BOARD_SERIAL_RX_PIN_FUNCTION=8 -DAM13E_BOARD_SERIAL_RX_BUSCLK_HZ=100000000 -DAM13E_BOARD_SERIAL_SBUS_PIN_INVERT=1 -DAM13E_BOARD_SERIAL_TX_CONFIGURED=1 -DAM13E_BOARD_SERIAL_TX_PINCM=26 -DAM13E_BOARD_SERIAL_TX_PIN_FUNCTION=9 -DAM13E_BOARD_SERIAL_TX_TWO_WIRE=0 -DAM13E_BOARD_SBUS2_TIMED_REPLY=1 -DAM13E_BOARD_SBUS2_TX_PIN_INVERT=1 \
  -Isrc -Isrc/serial -Isrc/runtime -Imcu/AM13E -Imcu/AM13E/hal -Imcu/AM13E/hal/tests/register_mock -I"$hw" -I"$dl" \
- mcu/AM13E/hal/tests/serial_pa26_host_test.c src/io.c src/tests/AM13E/rel17_defaults_host.c \
+ mcu/AM13E/hal/tests/serial_pa26_host_test.c mcu/AM13E/hal/motor_power_stage.c src/io.c src/tests/AM13E/rel17_defaults_host.c \
  src/serial/serial_frame_rx.c mcu/AM13E/hal/serial_tx_queue.c mcu/AM13E/hal/crsf_deferred_command.c mcu/AM13E/hal/bidir_timing.c src/serial/bidir_codec.c \
  "$out/dl_timer.c" "$dl/dl_unicomm.c" "$dl/dl_unicommuart.c" \
   >"$out/baud-$invalid_baud.log" 2>&1; then
@@ -121,7 +121,7 @@ cc -no-pie -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-int-to-pointer-
 # any GPIO mode can overwrite a motor/receiver/sensor pad.
 hall_args=(-std=c11 -Werror -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
  -DAM13E -DCLK=200000000 -DHALL_MAP=1 -DAM13E_REF_IO_PLAN_V1=1
- -DAM13E_HALL_GPIO_TIMESTAMP=1 -DAM13E_HALL_PIN1=12 -DAM13E_HALL_PIN2=27
+ -DAM13E_HALL_GPIO_TIMESTAMP=1 -DAM13E_HALL_PIN1=12 -DAM13E_HALL_PIN2=28
  -DAM13E_HALL_PIN3=31 -DAM13E_HALL_PULL=DL_GPIO_RESISTOR_PULL_UP
  -DAM13E_HALL_INVERT_MASK=0
  "-DAM13E_TEST_TI_GPIO_HEADER=\"$dl/dl_gpio.h\""

@@ -1,4 +1,4 @@
-/* ESCape32 Rel17 Music and AU/PCM on the MOTOR MCPWM0.
+/* ESCape32 Rel17 Music and AU/PCM on the MOTOR MCPWM4.
  * Never a standalone buzzer GPIO. Score/PCM parser and blocking delay()
  * remain unchanged in src/util.c; this layer owns note/rate arithmetic
  * and delegates EXCLUSIVE physical register programming to motor_safety.
@@ -91,7 +91,7 @@ void am13e_app_audio_pcm_begin(uint32_t rate_hz,int volume)
     current_audio=AUDIO_PCM;
     pcm_volume=volume;
     pcm_sample_rate=rate_hz;
-    /* The original 24kHz TIM1 PWM carrier becomes MCPWM0.
+    /* The original 24kHz TIM1 PWM carrier becomes MCPWM4.
      * 100MHz / 24000Hz = 4166 ticks, no invented GPIO tone.
      */
     am13e_app_motor_audio_period((uint16_t)(100000000U/MCPWM_CARRIER_HZ-1U));

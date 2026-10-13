@@ -15,6 +15,7 @@
 #undef playmusic
 #undef resetcom
 #include "../serial_uart_rx.c"
+#include "motor_power_stage.h"
 unsigned fixture_uart_rx_pending;
 uint32_t test_primask=1U;TestSCB test_scb;
 static unsigned enabled[80],priority[80],feeds,arms,saves;
@@ -58,6 +59,20 @@ int main(void)
     assert(mmap((void*)0x40000000,0x07000000,PROT_READ|PROT_WRITE,
         MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED_NOREPLACE,-1,0)==(void*)0x40000000);
     assert(!setjmp(fault));
+    am13e_power_stage_init();am13e_power_stage_force_off();
+    assert(!(GPIO1->DOE31_0&AM13E_GATE_MASK) && DL_GPIO_isInputEnabled(AM13E_GATE_PINCM));
+#ifdef AM13E_BOARD_DEBUG_UART_BAUD
+    am13e_app_debug_uart_init();
+    assert(DL_GPIO_getPeripheralFunctionBits(AM13E_DEBUG_TX_PINCM)==9U &&
+           DL_GPIO_getPeripheralFunctionBits(AM13E_DEBUG_RX_PINCM)==5U);
+    *(volatile uint32_t *)(uintptr_t)&UC1_INST_PTR->uart->STAT=UNICOMMUART_STAT_RXFE_SET;
+    uint8_t debug_byte=0U;
+    assert(!am13e_app_debug_uart_try_read(&debug_byte));
+    assert(am13e_app_debug_uart_try_write(0x5aU) && UC1_INST_PTR->uart->TXDATA==0x5aU);
+    *(volatile uint32_t *)(uintptr_t)&UC1_INST_PTR->uart->STAT=0U;
+    *(volatile uint32_t *)(uintptr_t)&UC1_INST_PTR->uart->RXDATA=0x23U;
+    assert(am13e_app_debug_uart_try_read(&debug_byte) && debug_byte==0x23U);
+#endif
     cfg.input_mode=2;cfg.throt_min=1000;cfg.throt_mid=1500;cfg.throt_max=2000;
     assert(!am13e_app_serial_rx_init(5U)); /* Full-duplex TX rejected. */
     assert(am13e_app_serial_rx_init(2U));

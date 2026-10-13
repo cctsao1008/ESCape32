@@ -88,11 +88,11 @@ run_test motor_ownership mcu/AM13E/hal/motor_ownership_plan.c mcu/AM13E/hal/moto
 run_test fault_trip_route mcu/AM13E/hal/fault_trip_route_plan.c mcu/AM13E/hal/tests/fault_trip_route_plan_host_test.c
 run_test motor_pad_route mcu/AM13E/hal/motor_output_route_plan.c mcu/AM13E/hal/tests/motor_output_route_plan_host_test.c
 run_test board_configuration -DAM13E mcu/AM13E/hal/tests/board_configuration_host_test.c
-run_test board_configuration_motor -DAM13E -DAM13E_BOARD_DEVELOPMENT_ACTIVE_TEST -DAM13E_MOTOR_BOARD_DEADBAND_CONFIGURED=1 -DAM13E_BOARD_SENSORS_CONFIGURED=1 mcu/AM13E/hal/tests/board_configuration_host_test.c
+run_test board_configuration_motor -DAM13E -DAM13E_BOARD_DEVELOPMENT_ACTIVE_TEST -DAM13E_MOTOR_BOARD_DEADBAND_CONFIGURED=1 mcu/AM13E/hal/tests/board_configuration_host_test.c
 cc $flags -DAM13E -DAM13E_BOARD_DEFAULTS_OVERRIDE_TEST \
   -DAM13E_BOARD_PB13_ACTIVE_LEVEL=0 \
   -DAM13E_MOTOR_DB_RED_TICKS=64 \
-  -DAM13E_BOARD_ADC_VREF_MV=3000 \
+  -DAM13E_BOARD_ADC_VREF_MV=3000 -DAM13E_BOARD_NTC_MODEL=3 \
   -DAM13E_BOARD_OC_GPIO_PINCM=49 \
   -DAM13E_BOARD_SERIAL_TX_PINCM=50 \
   -DAM13E_BOARD_CURRENT_SENSE_PINCM=51 \

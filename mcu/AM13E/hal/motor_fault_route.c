@@ -1,5 +1,5 @@
 #include "../config.h"
-/* AM13E reference: PB15 nFAULT (GPIO47) -> INPUTXBAR2 -> PWMXBAR1 -> MOTOR_PWM OST1.
+/* AM13E reference: PA22 nFAULT (GPIO22) -> INPUTXBAR2 -> TRIP2 -> MOTOR_PWM OST2.
  * This is an asynchronous driver-fault hardware interlock, distinct from
  * independent over-current sensing. Never touches PB13 or motor pad mux.
  * Software must not clear the latched OST while nFAULT is unqualified.
@@ -23,7 +23,7 @@
 _Static_assert(AM13E_REF_NFAULT_SOURCE == 0x15U &&
                AM13E_REF_NFAULT_TZ_SIGNAL == MCPWM_TZSEL_OST2_MASK &&
                IOMUX_PINCM_PA22 == 22U,
-               "AM13E reference PB15 nFAULT hardware TZ routing changed");
+               "AM13E reference PA22 nFAULT hardware TZ routing changed");
 
 /* Reference routing is deliberately owned by this board adapter. */
 static const AM13E_FaultTripRoute reference_nfault_route = {
@@ -61,7 +61,7 @@ void am13e_app_motor_nfault_trip_init(void)
     if (__get_PRIMASK() == 0U || hardware_trip_installed)
         am13e_app_motor_fault_reset();
     /* A low nFAULT is allowed to latch OST, not cleared. Boot and
-     * AM13E_NFAULT_GPIO/PB15 ownership, motor gate fail-closed policy unchanged.
+     * AM13E_NFAULT_GPIO/PA22 ownership, motor gate fail-closed policy unchanged.
      */
     am13e_mcu_fault_trip_install(&reference_nfault_route);
     hardware_trip_installed = 1U;
@@ -93,6 +93,9 @@ _Static_assert(AM13E_OC_U_DAC_CODE>0 && AM13E_OC_U_DAC_CODE<=4095 &&
 #else
 #define OC_CONFIGURED 0
 #endif
+#if AM13E_OPTION1_OUTPUTS_QUALIFIED && !OC_CONFIGURED
+#error "Qualified Option 1 requires explicit overcurrent contracts"
+#endif
 _Static_assert(DL_XBAR_PWM_CMPSS1_CTRIPH==2U && DL_XBAR_PWM_CMPSS2_CTRIPH==4U &&
                DL_XBAR_PWM_CMPSS3_CTRIPH==6U && DL_XBAR_TRIP3==2U &&
                DL_MCPWM_TZ_SIGNAL_OST3==0x40000U && DL_MCPWM_TZ_FLAG_OST_TZ3==0x40000U,
@@ -122,11 +125,11 @@ void am13e_app_motor_oc_trip_init(void)
     if(__get_PRIMASK()!=1U || oc_installed)am13e_app_motor_fault_reset();
 #if OC_CONFIGURED
     oc_comparator(CMPSS1,DL_SYSCTL_PWREN_CMPSS1,DL_SYSCTL_CMPSS1_MUX,
-                  DL_SYSCTL_CMP_HP1,7U,AM13E_OC_W_DAC_CODE,AM13E_OC_W_INVERT);
+                  DL_SYSCTL_CMP_HP1,AM13E_CURRENT_W_PINCM,AM13E_OC_W_DAC_CODE,AM13E_OC_W_INVERT);
     oc_comparator(CMPSS2,DL_SYSCTL_PWREN_CMPSS2,DL_SYSCTL_CMPSS2_MUX,
-                  DL_SYSCTL_CMP_HP3,30U,AM13E_OC_V_DAC_CODE,AM13E_OC_V_INVERT);
+                  DL_SYSCTL_CMP_HP3,AM13E_CURRENT_V_PINCM,AM13E_OC_V_DAC_CODE,AM13E_OC_V_INVERT);
     oc_comparator(CMPSS3,DL_SYSCTL_PWREN_CMPSS3,DL_SYSCTL_CMPSS3_MUX,
-                  DL_SYSCTL_CMP_HP1,16U,AM13E_OC_U_DAC_CODE,AM13E_OC_U_INVERT);
+                  DL_SYSCTL_CMP_HP1,AM13E_CURRENT_U_PINCM,AM13E_OC_U_DAC_CODE,AM13E_OC_U_INVERT);
     DL_XBAR_clearPWMXBARSourceSelection(DL_XBAR_TRIP3);
     DL_XBAR_selectPWMXBARSource(DL_XBAR_TRIP3,DL_XBAR_PWM_CMPSS1_CTRIPH);
     DL_XBAR_selectPWMXBARSource(DL_XBAR_TRIP3,DL_XBAR_PWM_CMPSS2_CTRIPH);

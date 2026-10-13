@@ -4,7 +4,7 @@
  * output driver is enabled. A complete electrical board configuration
  * permits the original Core motor/audio lifecycle to activate it.
  *
- * The actual MCPWM0 six-phase PWM and RED/FED software pipeline lives
+ * The actual MCPWM4 six-phase PWM and RED/FED software pipeline lives
  * in motor_safety.c; its physical pads remain disconnected as GPIO
  * inputs until a board supplies the required electrical definitions.
  */
@@ -22,6 +22,7 @@ _Static_assert(AM13E_BOARD_PB13_ACTIVE_LEVEL==0 ||
 
 static volatile uint32_t initialized;
 
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
 static void gate_hold_inactive(void)
 {
 #if AM13E_BOARD_PB13_ACTIVE_LEVEL == 1
@@ -31,6 +32,7 @@ static void gate_hold_inactive(void)
 #endif
 }
 
+#endif
 void am13e_power_stage_init(void)
 {
     if (__get_PRIMASK()!=1U || initialized)
@@ -40,7 +42,15 @@ void am13e_power_stage_init(void)
     if (!DL_GPIO_isPowerEnabled(AM13E_GATE_GPIO))
         for(;;){__NOP();}
 
-    gate_hold_inactive(); /* Load inactive DATA before enabling output. */
+#if !AM13E_MOTOR_OUTPUT_CONFIGURED
+    /* Option 1 provides no gate polarity/reset circuit. Do not actively
+     * drive a guessed inactive level on an unqualified power stage. */
+    DL_GPIO_disableOutput(AM13E_GATE_GPIO,GATE_EN_PIN);
+    DL_GPIO_initDigitalInput(AM13E_GATE_PINCM);
+    initialized=1U;
+    return;
+#else
+    gate_hold_inactive(); /* Explicit inactive DATA before enabling output. */
     DL_GPIO_initDigitalOutput(AM13E_GATE_PINCM);
     DL_GPIO_enableOutput(AM13E_GATE_GPIO,GATE_EN_PIN);
     __DSB();
@@ -49,13 +59,18 @@ void am13e_power_stage_init(void)
          (AM13E_BOARD_PB13_ACTIVE_LEVEL!=0)))
         for(;;){__NOP();}
     initialized=1U;
+#endif
 }
 
 void am13e_power_stage_force_off(void)
 {
     /* Idempotent inactive-only write; never changes PB13 to ACTIVE. */
     if (initialized) {
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
         gate_hold_inactive();
+#else
+        DL_GPIO_disableOutput(AM13E_GATE_GPIO,GATE_EN_PIN);
+#endif
         __DSB();
     }
 }

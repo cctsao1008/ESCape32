@@ -1,6 +1,6 @@
-/* ESCape32 Rel17 BEMF: CMPSS0/1/3 CTRIPH -> ECAP1 -> Rel17 policy.
- * ECAP0 belongs to PB14 DShot; TIMG12 owns delayed commutation.
- * AM13E230x TRM SPRUJF2B Table 24-1: CTRIPH ECAP index 45/46/48.
+/* ESCape32 Rel17 BEMF: CMPSS0 H CTRIPH -> ECAP1 -> Rel17 policy.
+ * TIMG4 belongs to PA26 DShot; TIMG12 owns delayed commutation.
+ * AM13E230x TRM SPRUJF2B Table 24-1: CMPSS0 CTRIPH ECAP index 45.
  * External analog phase/neutral connections MUST be board-confirmed.
  */
 #include "motor_backend.h"
@@ -64,7 +64,7 @@ static void bemf_fault(void)
     am13e_app_motor_fault_reset();
     for(;;) __NOP();
 }
-/* Only BEMF-owned CMPSS0/1/3. A board-qualified OC trip must use
+/* Only BEMF-owned CMPSS0. A board-qualified OC trip must use
  * independently mapped protection hardware, not these sense outputs.
  * Match Rel17 compctl(0) which disables the sensing comparators.
  */
@@ -134,6 +134,7 @@ static void configure_bemf_cmp(void)
     DL_SYSCTL_setCompartorHPMux(DL_SYSCTL_CMPSS0_MUX,DL_SYSCTL_CMP_HP0);
     DL_CMPSSLITE_configHighComparator(CMPSS0,DL_CMPSSLITE_INSRC_DAC);
     DL_CMPSSLITE_configDACHigh(CMPSS0,DL_CMPSSLITE_DACVAL_MCLK);
+    DL_CMPSSLITE_setDACValueLow(CMPSS0,0U); /* TRM: unused low DAC must not limit DACH. */
     DL_CMPSSLITE_setDACValueHigh(CMPSS0,0U);
     DL_CMPSSLITE_configFilterInputHigh(CMPSS0,DL_CMPSSLITE_FILTIN_COMPOUT);
     DL_CMPSSLITE_configFilterHigh(CMPSS0,0U,5U,3U);
@@ -179,6 +180,9 @@ void am13e_app_motor_bemf_init(void)
     configure_bemf_cmp();
 #endif
     initialized=1U;
+#ifdef AM13E_BEMF_INITIAL_DAC_CODE
+    if(!am13e_app_motor_bemf_reference_set(AM13E_BEMF_INITIAL_DAC_CODE))bemf_fault();
+#endif
     NVIC_SetPriority(ECAP1_INT_IRQn,0U);
     NVIC_ClearPendingIRQ(ECAP1_INT_IRQn);
     NVIC_EnableIRQ(ECAP1_INT_IRQn);

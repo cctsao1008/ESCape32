@@ -1,14 +1,7 @@
-/* AM13E reference AM13E23019 ESCape32 Rel17: nonblocking ADC raw acquisition.
- *
- * HW Architecture Baseline v1.6: PA6 -> NTC_MAIN (A0_17),
- * PA28 -> VBUS_SENSE (A0_11). Physical ADC mux mapping verified against
- * TI AM13E23019 datasheet Table 5-2; driver calls are SDK 26.01.
- *
- * The G431-derived editable numeric model feeds REAL ADC pair samples
- * into Rel17 voltage/NTC functions by default. Values are DEVELOPMENT
- * assumptions, NOT electrical calibration of an AM13E power board.
- * No reference current-sense channel is assigned.
- */
+/* Option 1 raw ADC0/1/2 housekeeping acquisition. The proposed SOC map
+ * is not frozen or PWM synchronized. Only an explicit board calibration
+ * enables Rel17 voltage/temperature policy; current codes remain raw.
+ * No phase-current gain, NTC curve or Vdc/2 tracking is inferred here. */
 #include "analog_runtime.h"
 #include "clock_backend.h"
 #include "analog_calibration_plan.h"
@@ -69,57 +62,55 @@ static void adc_fail_closed(void)
 /* Reference ADC0 ISR and Rel17 housekeeping adapter; MCU sequencer
  * register programming belongs to the reusable analog_sampling_backend.
  */
+static volatile uint32_t completed;
+static uint16_t pending[3][3];
+#ifdef ANALOG_CHAN
+static uint16_t pending_analog;
+#endif
 void am13e_app_adc_init(void)
 {
-    const AM13E_AdcPairRoute reference_route = {
-        .adc = AM13E_ADC,
-        .first_pincm = AM13E_ADC_NTC_PINCM,
-        .second_pincm = AM13E_ADC_VBUS_PINCM,
-        .first_channel = AM13E_ADC_NTC_CHANNEL,
-        .second_channel = AM13E_ADC_VBUS_CHANNEL,
-        .first_soc = AM13E_ADC_NTC_SOC,
-        .second_soc = AM13E_ADC_VBUS_SOC,
-        .sequencer = AM13E_ADC_SEQUENCE,
-        .interrupt = AM13E_ADC_IRQ,
-        .clock_prescale = DL_ADC_CLOCK_DIVIDE_8_0,
-        .acquisition_cycles = AM13E_ADC_ACQ_WINDOW_CYCLES
+    if(adc_initialized || __get_PRIMASK()!=1U)adc_fail_closed();
+    const unsigned pins[]={AM13E_CURRENT_U_PINCM,AM13E_CURRENT_V_PINCM,
+        AM13E_CURRENT_W_PINCM,AM13E_BEMF_U_PINCM,AM13E_BEMF_V_PINCM,
+        AM13E_BEMF_W_PINCM,AM13E_VBUS_PINCM,AM13E_IBUS_PINCM,AM13E_NTC_PINCM};
+    for(unsigned i=0;i<sizeof pins/sizeof pins[0];++i)
+        DL_GPIO_initPeripheralAnalogFunction(pins[i]);
 #ifdef ANALOG_CHAN
-        , .analog_enabled = 1U,
-        .analog_pincm = AM13E_BOARD_ANALOG_INPUT_PINCM,
-        .analog_channel = (DL_ADC_CHANNEL)AM13E_BOARD_ANALOG_INPUT_CHANNEL,
-        .analog_soc = DL_ADC_SOC_NUMBER2
+    DL_GPIO_initPeripheralAnalogFunction(AM13E_BOARD_ANALOG_INPUT_PINCM);
+    const int extra=AM13E_BOARD_ANALOG_INPUT_CHANNEL;
+#else
+    const int extra=-1;
 #endif
-    };
-
-    /* ADC0 is reserved for this reference PA6/PA28 slow monitoring.
-     * Never disturb PA26 command input, PB15 fault, or gate output pads.
-     */
-    if (!am13e_mcu_adc_pair_initialize(&reference_route, AM13E_APP_MCLK_HZ))
+    if(!am13e_mcu_adc_scan_initialize(ADC0,AM13E_ADC0_CURRENT_CHANNEL,
+         AM13E_ADC0_PHASE_CHANNEL,AM13E_ADC0_IBUS_CHANNEL,extra,AM13E_APP_MCLK_HZ) ||
+       !am13e_mcu_adc_scan_initialize(ADC1,AM13E_ADC1_CURRENT_CHANNEL,
+         AM13E_ADC1_VBUS_CHANNEL,AM13E_ADC1_PHASE_CHANNEL,-1,AM13E_APP_MCLK_HZ) ||
+       !am13e_mcu_adc_scan_initialize(ADC2,AM13E_ADC2_CURRENT_CHANNEL,
+         AM13E_ADC2_PHASE_CHANNEL,AM13E_ADC2_NTC_CHANNEL,-1,AM13E_APP_MCLK_HZ))
         adc_fail_closed();
-
-    adc_initialized = 1U;
-    NVIC_SetPriority(ADC0_INT1_INT_IRQn, 1U);
-    NVIC_EnableIRQ(ADC0_INT1_INT_IRQn);
-    /* Boot PRIMASK remains set until the motor safe-enable barrier. */
+    completed=0U;adc_initialized=1U;
+    NVIC_ClearPendingIRQ(ADC0_INT1_INT_IRQn);NVIC_ClearPendingIRQ(ADC1_INT1_INT_IRQn);
+    NVIC_ClearPendingIRQ(ADC2_INT1_INT_IRQn);
+    NVIC_SetPriority(ADC0_INT1_INT_IRQn,1U);NVIC_EnableIRQ(ADC0_INT1_INT_IRQn);
+    NVIC_SetPriority(ADC1_INT1_INT_IRQn,1U);NVIC_EnableIRQ(ADC1_INT1_INT_IRQn);
+    NVIC_SetPriority(ADC2_INT1_INT_IRQn,1U);NVIC_EnableIRQ(ADC2_INT1_INT_IRQn);
 }
-
-/* Invoked at Rel17's original 1kHz PendSV housekeeping point. */
 void adctrig(void)
 {
-    if (!adc_initialized) adc_fail_closed();
-    if (adc_inflight || DL_ADC_isBusy(AM13E_ADC)) {
-        ++adc_latest.trigger_overruns;
-        return;
+    if(!adc_initialized)adc_fail_closed();
+    if(adc_inflight || DL_ADC_isBusy(ADC0) || DL_ADC_isBusy(ADC1) || DL_ADC_isBusy(ADC2)){
+        ++adc_latest.trigger_overruns;return;
     }
-    adc_inflight = 1U;
-    DL_ADC_forceSequencer(AM13E_ADC, AM13E_ADC_SEQUENCE);
+    completed=0U;adc_inflight=1U;
+    /* Sequential software requests, not simultaneous/PWM sampling. */
+    DL_ADC_forceSequencer(ADC0,AM13E_ADC_SEQUENCE);
+    DL_ADC_forceSequencer(ADC1,AM13E_ADC_SEQUENCE);
+    DL_ADC_forceSequencer(ADC2,AM13E_ADC_SEQUENCE);
 }
 
 /* TI startup_gcc_arm.c actual ADC0/INT1 vector. */
 
-/* G431-derived values provide a numeric transfer model for Rel17
- * ADC policy, not verified VREF, voltage divider or thermistor wiring.
- */
+/* Optional explicit board transfer model; never an automatic calibration. */
 #ifdef AM13E_BOARD_SENSORS_CONFIGURED
 #if AM13E_BOARD_SENSORS_CONFIGURED != 1
 #error "AM13E_BOARD_SENSORS_CONFIGURED must be 1"
@@ -153,47 +144,44 @@ static int32_t board_ntc_qc(uint16_t ntc_mv)
 }
 #endif
 
-void ADC0_INT1_IRQHandler(void)
+static void adc_complete(unsigned instance,ADC_Regs *adc,ADC_RESULT_Regs *result)
 {
-    if (!adc_initialized || !adc_inflight ||
-        !DL_ADC_getInterruptStatus(AM13E_ADC, AM13E_ADC_IRQ) ||
-        !DL_ADC_getInterruptResultReadyStatus(AM13E_ADC, AM13E_ADC_IRQ)) {
-        adc_fail_closed();
-    }
-
-    /* The pair is delivered together. Sequence increments bracket writes,
-     * providing coherent debugging reads without blocking the ISR.
-     */
-    ++adc_sample_seq;
-    adc_latest.ntc_main_adc0_in17 =
-        DL_ADC_readResult(AM13E_ADC_RESULTS, AM13E_ADC_NTC_SOC);
-    adc_latest.vbus_adc0_in11 =
-        DL_ADC_readResult(AM13E_ADC_RESULTS, AM13E_ADC_VBUS_SOC);
+    const uint32_t bit=1U<<instance;
+    if(!adc_initialized || !adc_inflight || (completed&bit) ||
+       !DL_ADC_getInterruptStatus(adc,AM13E_ADC_IRQ) ||
+       !DL_ADC_getInterruptResultReadyStatus(adc,AM13E_ADC_IRQ))adc_fail_closed();
+    for(unsigned soc=0U;soc<3U;++soc)
+        pending[instance][soc]=DL_ADC_readResult(result,(DL_ADC_SOC_NUMBER)soc);
 #ifdef ANALOG_CHAN
-    /* ADC0 sequencer completion now occurs after SOC2, so the
-     * receiver sample belongs to this same coherent acquisition.
-     */
-    const uint16_t analog_raw =
-        DL_ADC_readResult(AM13E_ADC_RESULTS, DL_ADC_SOC_NUMBER2);
+    if(instance==0U)pending_analog=DL_ADC_readResult(result,DL_ADC_SOC_NUMBER3);
 #endif
+    DL_ADC_clearInterruptStatus(adc,AM13E_ADC_IRQ);
+    completed|=bit;
+    if(completed!=7U)return;
+    ++adc_sample_seq;
+    adc_latest.current_v=pending[0][0];adc_latest.phase_a=pending[0][1];
+    adc_latest.ibus=pending[0][2];adc_latest.current_w=pending[1][0];
+    adc_latest.vbus=pending[1][1];adc_latest.phase_b=pending[1][2];
+    adc_latest.current_u=pending[2][0];adc_latest.phase_c=pending[2][1];
+    adc_latest.ntc=pending[2][2];
     ++adc_latest.sample_count;
     ++adc_sample_seq;
 #ifdef AM13E_BOARD_SENSORS_CONFIGURED
     /* Feed the ACTUAL Rel17 smoothing/temperature/voltage protection
-     * only after one coherent two-channel ADC sequence has completed.
-     * The board's physical NTC and VBUS calibration values are required.
-     * No current sensor appears in IO Plan v1.0; original SENS_CNT is
-     * restricted to one (voltage) in this calibrated build.
+     * only after all three scans complete the raw epoch.
+     * Board NTC and VBUS calibration values are required. Phase/IBUS
+     * codes remain raw until a current transfer model is provided;
+     * they are not substituted for Rel17 calibrated current units.
      */
     AM13E_AdcScaled scaled;
     if(!am13e_adc_scale_pair(&adc_board_cal,
-           adc_latest.ntc_main_adc0_in17,adc_latest.vbus_adc0_in11,
+           adc_latest.ntc,adc_latest.vbus,
            &scaled)) adc_fail_closed();
     int analog_mv=0;
 #ifdef ANALOG_CHAN
     uint16_t sample_mv=0U;
     if(!am13e_adc_receiver_millivolts(
-            analog_raw,AM13E_BOARD_ANALOG_INPUT_FULLSCALE,
+            pending_analog,AM13E_BOARD_ANALOG_INPUT_FULLSCALE,
             AM13E_BOARD_ANALOG_INPUT_VREF_MV,&sample_mv))
         adc_fail_closed();
     analog_mv=(int)sample_mv;
@@ -204,22 +192,17 @@ void ADC0_INT1_IRQHandler(void)
     adcdata(board_ntc_qc(scaled.ntc_normalized_mv),0,
             (int)scaled.vbus_centivolts,0,analog_mv);
 #endif
-    DL_ADC_clearInterruptStatus(AM13E_ADC, AM13E_ADC_IRQ);
     adc_inflight = 0U;
 }
 
+void ADC0_INT1_IRQHandler(void){adc_complete(0U,ADC0,ADC0RESULT);}
+void ADC1_INT1_IRQHandler(void){adc_complete(1U,ADC1,ADC1RESULT);}
+void ADC2_INT1_IRQHandler(void){adc_complete(2U,ADC2,ADC2RESULT);}
 int am13e_app_adc_get_raw(AM13E_AdcRaw *out)
 {
-    uint32_t a, b;
-    if (out == NULL || adc_latest.sample_count == 0U) return 0;
-    for (;;) {
-        a = adc_sample_seq;
-        if (a & 1U) continue;
-        out->ntc_main_adc0_in17 = adc_latest.ntc_main_adc0_in17;
-        out->vbus_adc0_in11 = adc_latest.vbus_adc0_in11;
-        out->sample_count = adc_latest.sample_count;
-        out->trigger_overruns = adc_latest.trigger_overruns;
-        b = adc_sample_seq;
-        if (a == b && !(b & 1U)) return 1;
-    }
+    if(out==NULL || !adc_latest.sample_count)return 0;
+    uint32_t a,b;
+    do {a=adc_sample_seq;if(a&1U)continue;*out=adc_latest;b=adc_sample_seq;}
+    while((a&1U) || a!=b);
+    return 1;
 }

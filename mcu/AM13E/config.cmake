@@ -103,8 +103,7 @@ function(am13e_configure_reference_board target)
             "Compile Reference motor/ADC software (power stage unqualified)" ON)
         if(AM13E_MOTOR_RUNTIME_ENABLED)
             target_compile_definitions(${target} PRIVATE
-                AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED=1
-                AM13E_BOARD_SENSORS_CONFIGURED=1)
+                AM13E_MOTOR_BOARD_DEADBAND_CONFIGURED=1)
         endif()
 
         # Production Board Electrical Configuration is supplied as an

@@ -1,6 +1,6 @@
 /*
- * AM13E reference AM13E23019 IO Plan for TI Review v1.0 — PROVISIONAL pin mapping.
- * Source: initial provisional IO mapping, rows 9–25.
+ * AM13E reference AM13E23019 TI v1.2 Option 1 — PROVISIONAL pin mapping.
+ * Source: selected Option 1 worksheet, rows 7–42.
  * Pin mapping is user-selected for FW1 porting, NOT electrical sign-off.
  *
  * This file identifies real MCU pad/PINCM and analog comparator selections.
@@ -46,7 +46,7 @@ _Static_assert(AM13E_BEMF_U_PINCM==17U && AM13E_BEMF_V_PINCM==1U &&
                DL_SYSCTL_CMP_HP1==1U && DL_SYSCTL_CMP_HP2==2U,
                "Option 1 CMPSS0 phase input mapping drift");
 
-/* PA26 is the revised development command selection; PB15 is IO-only nFAULT input.
+/* PA26 is the revised development command selection; PA22 is the nFAULT input.
  * PB13 Gate Enable is initialized as an INACTIVE GPIO output, with
  * no motor or audio runtime transitions. These are reference pins.
  */

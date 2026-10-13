@@ -74,6 +74,8 @@ void am13e_app_motor_runtime_enable_interrupts(void)
         !vector_matches(HardFault_IRQn,HardFault_Handler) ||
         !vector_matches(GPIO1_INT_IRQn,GPIO1_IRQHandler) ||
         !vector_matches(ADC0_INT1_INT_IRQn,ADC0_INT1_IRQHandler) ||
+        !vector_matches(ADC1_INT1_INT_IRQn,ADC1_INT1_IRQHandler) ||
+        !vector_matches(ADC2_INT1_INT_IRQn,ADC2_INT1_IRQHandler) ||
         !vector_matches(ECAP1_INT_IRQn,ECAP1_IRQHandler) ||
         !vector_matches(TIMG12_0_INT_IRQn,TIMG12_0_IRQHandler) ||
         !vector_matches(TIMG4_0_INT_IRQn,TIMG4_0_IRQHandler) ||
@@ -96,7 +98,8 @@ void am13e_app_motor_runtime_enable_interrupts(void)
             0U ||
 #endif
         NVIC_GetPriority(DMA0_INT_IRQn)!=0U ||
-        NVIC_GetPriority(ADC0_INT1_INT_IRQn)!=1U)
+        NVIC_GetPriority(ADC0_INT1_INT_IRQn)!=1U ||
+        NVIC_GetPriority(ADC1_INT1_INT_IRQn)!=1U || NVIC_GetPriority(ADC2_INT1_INT_IRQn)!=1U)
         irq_barrier_fault();
 
 #ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
@@ -117,7 +120,8 @@ void am13e_app_motor_runtime_enable_interrupts(void)
         !NVIC_GetEnableIRQ(TIMG12_0_INT_IRQn) ||
         !NVIC_GetEnableIRQ(TIMG4_0_INT_IRQn) ||
         !NVIC_GetEnableIRQ(DMA0_INT_IRQn) ||
-        !NVIC_GetEnableIRQ(ADC0_INT1_INT_IRQn))
+        !NVIC_GetEnableIRQ(ADC0_INT1_INT_IRQn) ||
+        !NVIC_GetEnableIRQ(ADC1_INT1_INT_IRQn) || !NVIC_GetEnableIRQ(ADC2_INT1_INT_IRQn))
         irq_barrier_fault();
 
     AM13E_PB14_Status rx={0};
