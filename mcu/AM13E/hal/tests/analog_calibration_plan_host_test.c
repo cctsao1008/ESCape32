@@ -13,6 +13,27 @@ static void sc5_conversion(void)
         .vdda_uv=3300000U,.dac_gain_ppm=1000000U,
         .bus_min_uv=1000U,.bus_max_uv=50000000U,.max_age_ticks=32U};
     uint16_t code[3]={99,99,99};
+    assert(!am13e_bemf_reference_convert(NULL,2048U,code));
+    assert(!am13e_bemf_reference_convert(&c,2048U,NULL));
+    const AM13E_BemfCalibration valid=c;
+    for(unsigned bad=0;bad<10U;++bad){
+        AM13E_BemfCalibration invalid=valid;
+        switch(bad){
+        case 0:invalid.adc_span_uv=0U;break;
+        case 1:invalid.adc_gain_ppm=0U;break;
+        case 2:invalid.bus_den=0U;break;
+        case 3:invalid.vdda_uv=0U;break;
+        case 4:invalid.dac_gain_ppm=0U;break;
+        case 5:invalid.bus_min_uv=invalid.bus_max_uv+1U;break;
+        case 6:invalid.max_age_ticks=0U;break;
+        case 7:invalid.max_age_ticks=UINT32_MAX;break;
+        case 8:invalid.phase_den[2]=0U;break;
+        case 9:invalid.phase_offset_uv[2]=INT32_MIN;break;
+        }
+        assert(!am13e_bemf_reference_convert(&invalid,2048U,code));
+        /* Invalid final phase must not partially publish earlier codes. */
+        assert(code[0]==99U && code[1]==99U && code[2]==99U);
+    }
     assert(am13e_bemf_reference_convert(&c,2048U,code));
     assert(code[0]==775U && code[1]==620U && code[2]==495U);
     /* Independent ideal voltage oracle with distinct ADC/DAC references. */

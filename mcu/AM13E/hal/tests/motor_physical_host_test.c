@@ -342,24 +342,103 @@ static void zero(void)
 }
 #ifdef AM13E_SC5_FIXTURE
 static int gate_on(void);
+static void sc5_failures(void)
+{
+    /* Fork copies the real active HAL state. Each failure uses the actual
+     * fatal shutdown/reset path; latched state cannot contaminate siblings. */
+    for(volatile unsigned failure=0;failure<7U;++failure){
+        const pid_t child=fork();assert(child>=0);
+        if(child==0){
+            const unsigned before=watchdog_arms;
+            if(setjmp(fault_return)==0){
+                switch(failure){
+                case 0: CMPSS0->COMPDACHCTL^=2U;break;
+                case 1: MCPWM4->TBCTL^=1U<<MCPWM_TBCTL_SYNCPERSEL_OFS;break;
+                case 2: *(volatile uint16_t *)(uintptr_t)&CMPSS0->DACHVALA^=1U;break;
+                case 3: tick+=33U;break;
+                case 4:
+                    *(volatile uint16_t *)((uintptr_t)ADC1RESULT+ADC_ADCRESULT0+DL_ADCRESULT_STEP)=0U;
+                    ADC0_INT1_IRQHandler();ADC1_INT1_IRQHandler();ADC2_INT1_IRQHandler();adctrig();
+                    {AM13E_BemfReference ref;assert(!am13e_app_adc_get_reference(&ref));}
+                    break;
+                case 5: nextstep();am13e_app_motor_fault_shutdown();am13e_app_motor_fault_reset();break;
+                case 6:
+                    nextstep();defer_dach_load=1U;zero();tick+=33U;break;
+                }
+                am13e_app_motor_bemf_tick();assert(!"reference failure did not shut down");
+            }
+            assert(watchdog_arms==before+1U && !gate_on());
+            assert(am13e_mcu_motor_pads_disconnected(am13e_board_motor_pad_route()));
+            assert(!(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK));
+            assert(!(ECAP1->ECCTL2&ECAP_ECCTL2_TSCTRSTOP_MASK));
+            assert((MCPWM4->TBCTL&MCPWM_TBCTL_CTRMODE_MASK)==DL_MCPWM_COUNTER_MODE_STOP_FREEZE);
+            assert(!am13e_app_motor_bemf_publication_pending());
+            AM13E_BemfReferenceStatus status;am13e_app_motor_bemf_reference_status(&status);
+            assert(!status.published && !status.capture_synchronized);
+            _exit(0);
+        }
+        int status;assert(waitpid(child,&status,0)==child && WIFEXITED(status) && WEXITSTATUS(status)==0);
+    }
+    puts("PASS SC5 wrong sync, active mismatch, stale/invalid reference and pending/fault shutdown");
+}
+static void sc5_no_sample(void)
+{
+    const pid_t child=fork();assert(child>=0);
+    if(child==0){
+        const unsigned before=watchdog_arms;
+        if(setjmp(fault_return)==0){
+            cfg.damp=1;step=0;reverse=0;sine=prep=0;ertm=18000;
+            am13e_app_motor_pwm_apply(800,24,48,ertm,1,0,0,1);
+            nextstep();
+            assert(!am13e_app_motor_bemf_reference_start_ready());
+            zero();
+#if AM13E_OPTION1_OUTPUTS_QUALIFIED
+            assert(!"missing sample accepted");
+#endif
+        }
+        AM13E_BemfReferenceStatus status;am13e_app_motor_bemf_reference_status(&status);
+        assert(!status.calculated && !status.published && !status.capture_synchronized && !gate_on());
+        assert(watchdog_arms==before+AM13E_OPTION1_OUTPUTS_QUALIFIED);
+        _exit(0);
+    }
+    int status;assert(waitpid(child,&status,0)==child && WIFEXITED(status) && WEXITSTATUS(status)==0);
+    puts("PASS SC5 no initial sample cannot authorize capture or motor start");
+}
 static void sc5_publication(void)
 {
     AM13E_BemfReferenceStatus status;
     assert(!am13e_app_motor_bemf_reference_set(2048U));
+#if AM13E_OPTION1_OUTPUTS_QUALIFIED
+    /* Synthetic qualification declaration in this host fixture ONLY.
+     * Native timebase calibration still requires sixteen full intervals. */
+    for(unsigned n=0;n<17U;++n){ECAP1->TSCTR+=12500U;am13e_app_motor_bemf_tick();}
+#endif
     cfg.damp=1;sine=prep=0;step=0;reverse=0;sync=0;ival=3000;ertm=18000;
     am13e_app_motor_pwm_apply(800,24,48,ertm,1,0,0,1);
     nextstep();am13e_app_motor_commutation_commit();
     am13e_app_motor_bemf_reference_status(&status);
     assert(status.configured && status.calculated && !status.published);
     assert(status.expected_code==775U && CMPSS0->DACHVALS==775U);
+#if AM13E_OPTION1_OUTPUTS_QUALIFIED
+    am13e_app_motor_commutation_enable(1);assert(!gate_on());
+#endif
     defer_dach_load=1U;zero();
     am13e_app_motor_bemf_reference_status(&status);
     assert(!status.published && !status.capture_synchronized);
     assert(am13e_app_motor_bemf_publication_pending());
     defer_dach_load=0U;zero();
     am13e_app_motor_bemf_reference_status(&status);
-    assert(status.published && !status.capture_synchronized);
+    assert(status.published);
+#if AM13E_OPTION1_OUTPUTS_QUALIFIED
+    assert(status.capture_synchronized && gate_on());
+    /* No raw/background update is authorized while capture is armed. */
+    const uint16_t shadow=CMPSS0->DACHVALS;
+    assert(!am13e_app_motor_bemf_reference_set(1234U) && CMPSS0->DACHVALS==shadow);
+    adctrig();assert(CMPSS0->DACHVALS==shadow);
+#else
+    assert(!status.capture_synchronized);
     assert(!(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK) && !gate_on());
+#endif
     /* Shadow-to-active must match every floating phase and edge without
      * granting the unqualified fixture analog capture authorization. */
     static const unsigned high[6]={2,0,0,1,1,2},low[6]={1,1,2,2,0,0};
@@ -367,13 +446,19 @@ static void sc5_publication(void)
     for(unsigned direction=0;direction<2U;++direction){
         reverse=(int)direction;
         for(unsigned n=0;n<6U;++n){
-            nextstep();zero();am13e_app_motor_bemf_reference_status(&status);
+            nextstep();zero();expect_sixstep();am13e_app_motor_bemf_reference_status(&status);
             const unsigned floating=3U-high[step-1]-low[step-1];
             assert(status.published && status.expected_code==codes[floating]);
             assert((SYSCTL->SOCLOCK.CMPHPMXSEL&SYSCTL_CMPHPMXSEL_CMP0HPMXSEL_MASK)==floating);
+            assert((ECAP1->ECCTL1&ECAP_ECCTL1_CAP1POL_MASK)==
+                   (((step^reverse)&1)?DL_ECAP_EVENT_RISING_EDGE:DL_ECAP_EVENT_FALLING_EDGE));
+#if AM13E_OPTION1_OUTPUTS_QUALIFIED
+            assert(status.capture_synchronized);
+#else
             const int before=ival;
             ECAP1->CAP1=123U;ECAP1->ECFLG=DL_ECAP_ISR_SOURCE_CEVT1;ECAP1_IRQHandler();
             assert(ival==before && !status.capture_synchronized);
+#endif
         }
     }
     /* A later image replaces the pending association, not just the code. */
@@ -381,6 +466,26 @@ static void sc5_publication(void)
     const unsigned floating=3U-high[step-1]-low[step-1];
     defer_dach_load=0U;zero();am13e_app_motor_bemf_reference_status(&status);
     assert(status.published && status.expected_code==codes[floating]);
+#if AM13E_OPTION1_OUTPUTS_QUALIFIED
+    /* Accepted N -> delayed commutation -> accepted N+1. DAC publication
+     * neither resets the free-running epoch nor acts as a crossing. */
+    ival=3000;sync=0;ertm=18000;
+    capture(600000U);assert(ival==3000 && TIMG12->COUNTERREGS.LOAD==750U*100U-1U);
+    *(volatile uint32_t *)(uintptr_t)&TIMG12->CPU_INT.IIDX=DL_TIMER_IIDX_ZERO;TIMG12_0_IRQHandler();zero();
+    const int before=ival;
+    ECAP1->ECFLG=DL_ECAP_ISR_SOURCE_CEVT1; /* stale edge quarantined by stage */
+    nextstep();zero();assert(ival==before);
+    capture(600000U);assert(ival==3000);
+    /* Rearm a fresh image for active-state fault injection. */
+    nextstep();zero();
+#endif
+    sc5_failures();
+#if AM13E_OPTION1_OUTPUTS_QUALIFIED
+    am13e_app_motor_commutation_enable(0);assert(!gate_on());
+    nextstep();am13e_app_motor_commutation_commit();
+    am13e_app_motor_commutation_enable(1);zero();zero();assert(gate_on());
+    am13e_app_motor_commutation_enable(0);
+#endif
     nextstep();am13e_app_motor_bemf_abort();zero();
     am13e_app_motor_bemf_reference_status(&status);
     assert(!status.published && !am13e_app_motor_bemf_publication_pending());
@@ -720,7 +825,7 @@ int main(void)
     CMPSS0->DACLVALS=333U; /* Stale unused low-DAC state from a prior owner. */
     am13e_app_motor_bemf_init();
 #ifdef AM13E_SC5_FIXTURE
-    sc5_adc();sc5_publication();assert(munmap(r,0x07000000)==0);return 0;
+    sc5_no_sample();sc5_adc();sc5_publication();assert(munmap(r,0x07000000)==0);return 0;
 #endif
     assert(CMPSS0->DACLVALS==0U);
     assert(!am13e_app_motor_bemf_reference_ready());

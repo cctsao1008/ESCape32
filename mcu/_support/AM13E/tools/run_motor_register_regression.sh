@@ -7,10 +7,11 @@ out=$(mktemp -d /tmp/am13e-motor-register.XXXXXX)
 trap 'rm -rf "$out"' EXIT
 python3 mcu/_support/AM13E/tools/prepare_sdk_sources.py --sdk-root "$sdk" --output "$out"
 # Synthetic electrical fixtures only; never a qualified board configuration.
-for fixture in high low full inverted blanking hall pwm_enable pwm_enable_full fatal unqualified sc5; do
+for fixture in high low full inverted blanking hall pwm_enable pwm_enable_full fatal unqualified sc5 sc5_model; do
 qualified=1; polarity=1; mask=0; fed=0; extra=(); extra_sources=()
 case "$fixture" in
-  sc5) qualified=0
+  sc5|sc5_model)
+    if [[ "$fixture" == sc5 ]]; then qualified=0; fi
     extra=(-DAM13E_SC5_FIXTURE -include mcu/AM13E/hal/tests/sc5_calibration_fixture.h
       -DAM13E_BOARD_ADC_FULLSCALE=4095 -DAM13E_BOARD_ADC_VREF_MV=2500
       -DAM13E_BOARD_NTC_SUPPLY_MV=3300 -DAM13E_BOARD_NTC_MODEL=3
@@ -66,6 +67,26 @@ cc "${extra[@]}" -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-int-to-po
  "$dl/dl_mcpwm.c" "$dl/dl_cmpss_lite.c" "$dl/dl_ecap.c" "$out/dl_timer.c" "${extra_sources[@]}" \
  -o "$out/motor-physical-test"
 "$out/motor-physical-test"
+done
+
+# Native SC5 ADC reference/package contracts must be explicit and valid.
+for contract in missing_mode invalid_mode qfn_internal; do
+  ref_flags=('-DAM13E_BOARD_SC5_CALIBRATION={}' -DAM13E_BOARD_ADC_PACKAGE_QFN48=0)
+  case "$contract" in
+    missing_mode) expected='SC5 requires explicit native ADC reference mode' ;;
+    invalid_mode) ref_flags+=(-DAM13E_BOARD_ADC_REFERENCE_MODE=99); expected='Unsupported native ADC reference mode' ;;
+    qfn_internal) ref_flags=(-DAM13E_BOARD_SC5_CALIBRATION={} -DAM13E_BOARD_ADC_PACKAGE_QFN48=1
+      -DAM13E_BOARD_ADC_REFERENCE_MODE=DL_SYSCTL_VREF_INTERNAL_2_5_V); expected='QFN48 uses VDDA/VSSA' ;;
+  esac
+  if cc -fsyntax-only -std=c11 -DAM13E -DCLK=200000000 '-DTARGET_NAME="Host"' \
+      -DAM13E_REF_IO_PLAN_V1=1 "${ref_flags[@]}" -Wno-int-to-pointer-cast \
+      -Isrc -Isrc/serial -Isrc/runtime -Imcu/AM13E -Imcu/AM13E/hal \
+      -Imcu/AM13E/hal/tests/register_mock -I"$hw" -I"$dl" \
+      mcu/AM13E/hal/analog_runtime.c >"$out/$contract.log" 2>&1; then
+    echo "FAIL: invalid SC5 ADC contract compiled: $contract" >&2; exit 1
+  fi
+  rg -q "$expected" "$out/$contract.log"
+  echo "PASS: rejected SC5 ADC contract: $contract"
 done
 
 # Exercise the native PA26 capture/DMA/reply path and original io.c policy.
