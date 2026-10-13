@@ -145,9 +145,14 @@ int am13e_pb14_bidir_tx_start(uint32_t final_edge,uint32_t rx_bit_ticks,
      * host-regressed unsigned-wrap/clock-domain policy, never start
      * a late or sub-16-clock reply on PA26.
      */
+    /* The RX counter owns final-edge -> snapshot elapsed time. Start the
+     * CPU reconfiguration interval AFTER that snapshot, so acquisition
+     * work cannot also be deducted from the remaining deadline. These
+     * consecutive clock-domain observations are not a pin-time guarantee. */
+    const uint32_t counter_now=am13e_pa26_rx_now();
     const uint32_t cycle_start=SysTick->VAL;
     const uint32_t remaining=am13e_bidir_turnaround_ticks(
-        final_edge,am13e_pa26_rx_now(),
+        final_edge,counter_now,
         capture_hz,TX_CLK);
     if(!remaining){++tx_rejected;return 0;}
     symbol_ticks=ticks;
@@ -173,6 +178,15 @@ int am13e_pb14_bidir_tx_start(uint32_t final_edge,uint32_t rx_bit_ticks,
     }
     DL_Timer_setLoadValue(TX_TIMER,remaining-used-1U);
     __DSB();DL_Timer_startCounter(TX_TIMER);
+    /* Publication itself also consumes budget. If load/start MMIO or an
+     * interruption crosses the deadline, cancel before GPIO ownership.
+     * ISR delivery and pad propagation still require physical measurement. */
+    const uint32_t published=SysTick->VAL;
+    const uint32_t total=cycle_start>=published?cycle_start-published:
+        cycle_start+(SysTick->LOAD+1U)-published;
+    if((total+1U)/2U>=remaining){
+        ++tx_rejected;state=TX_IDLE;am13e_pb14_resume_rx();return 0;
+    }
     return 1;
 }
 void TIMG4_0_IRQHandler(void)

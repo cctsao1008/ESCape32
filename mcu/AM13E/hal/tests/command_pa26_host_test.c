@@ -18,7 +18,9 @@
 #undef resetcom
 #define am13e_app_io_dshot_packet fixture_dshot_packet
 #define am13e_app_io_servo_pulse fixture_servo_pulse
+#define am13e_pa26_rx_now fixture_capture_now
 #include "../command_capture.c"
+#undef am13e_pa26_rx_now
 #undef am13e_app_io_dshot_packet
 #undef am13e_app_io_servo_pulse
 extern int am13e_app_io_dshot_packet(uint16_t frame,int inverted);
@@ -33,16 +35,37 @@ void fixture_servo_pulse(unsigned width,unsigned period)
     assert(__get_PRIMASK()==0U);
     am13e_app_io_servo_pulse(width,period);
 }
-static unsigned reconfiguration_cycles;
+static unsigned acquisition_cycles,reconfiguration_cycles,publication_cycles;
+static void advance_cpu(unsigned cycles)
+{
+    const unsigned reload=SysTick->LOAD+1U;
+    SysTick->VAL=(SysTick->VAL+reload-cycles)%reload;
+}
+/* Advance both real clock domains during acquisition, independently of
+ * timer reconfiguration. This detects the former overlapping intervals. */
+uint32_t am13e_pa26_rx_now(void)
+{
+    advance_cpu(acquisition_cycles);
+    const unsigned low=(DL_Timer_getTimerCount(TIMG4)+acquisition_cycles/2U);
+    TIMG4->COUNTERREGS.CTR=low&0xffffU;
+    if(low>0xffffU)epoch+=0x10000U;
+    return fixture_capture_now();
+}
 static void fixture_timer_setup(GPTIMER_Regs *t,DL_Timer_TimerConfig *c)
 {
     DL_Timer_initTimerMode(t,c); /* Actual SDK programming still executes. */
-    const unsigned reload=SysTick->LOAD+1U;
-    SysTick->VAL=(SysTick->VAL+reload-reconfiguration_cycles)%reload;
+    advance_cpu(reconfiguration_cycles);
 }
+static void fixture_timer_start(GPTIMER_Regs *t)
+{
+    DL_Timer_startCounter(t);
+    advance_cpu(publication_cycles);
+}
+#define DL_Timer_startCounter fixture_timer_start
 #define DL_Timer_initTimerMode fixture_timer_setup
 #include "../command_reply.c"
 #undef DL_Timer_initTimerMode
+#undef DL_Timer_startCounter
 uint32_t test_primask=1U;TestSCB test_scb;
 TestSysTick test_systick={.LOAD=12499U,.VAL=12000U};
 static unsigned enabled[80],priority[80],feeds,arms,saves;
@@ -187,13 +210,14 @@ int main(void)
     for(unsigned repeat=0;repeat<3U;++repeat){
     inverted_rx=1;am13e_pb14_decoder_reset(&decoder,RX_HZ,1);
     am13e_pb14_resume_rx();time_now=0;
+    acquisition_cycles=repeat<2U?100U:0U;
     reconfiguration_cycles=repeat<2U?100U:0U;
     SysTick->VAL=repeat==1U?20U:12000U;
     const unsigned inverted_before=feeds;
     frame(rates[repeat],packet(512,1),1);assert(state==TX_DELAY && suspended);
     assert(feeds==inverted_before+1U);
-    assert(TIMG4->COUNTERREGS.LOAD==2999U-reconfiguration_cycles/2U);
-    reconfiguration_cycles=0U;
+    assert(TIMG4->COUNTERREGS.LOAD==2999U-(acquisition_cycles+reconfiguration_cycles)/2U);
+    acquisition_cycles=reconfiguration_cycles=0U;
     assert(!DL_DMA_isChannelEnabled(DMA0,2U));
     *(volatile uint32_t *)(uintptr_t)&TIMG4->CPU_INT.MIS=DL_TIMER_INTERRUPT_ZERO_EVENT;
     TIMG4_0_IRQHandler();
@@ -222,6 +246,19 @@ int main(void)
     reconfiguration_cycles=6000U;
     frame(167U,packet(512,1),1);assert(state==TX_IDLE && !suspended);
     reconfiguration_cycles=0U;
+    /* Acquisition and reconfiguration are distinct intervals. Their SUM
+     * can exhaust the budget even when neither interval alone does. */
+    am13e_pb14_decoder_reset(&decoder,RX_HZ,1);am13e_pb14_resume_rx();time_now=0;
+    acquisition_cycles=2000U;reconfiguration_cycles=4000U;
+    frame(167U,packet(512,1),1);
+    assert(state==TX_IDLE && !suspended && (GPIO0->DOE31_0&COMMAND_PIN)==0U);
+    acquisition_cycles=reconfiguration_cycles=0U;
+    /* Load/barrier/start publication crosses the deadline: no output enabled. */
+    am13e_pb14_decoder_reset(&decoder,RX_HZ,1);am13e_pb14_resume_rx();time_now=0;
+    reconfiguration_cycles=5800U;publication_cycles=400U;
+    frame(167U,packet(512,1),1);
+    assert(state==TX_IDLE && !suspended && (GPIO0->DOE31_0&COMMAND_PIN)==0U);
+    reconfiguration_cycles=publication_cycles=0U;
     /* No TX completion: original timeout restores capture without a stale reply. */
     am13e_pb14_decoder_reset(&decoder,RX_HZ,1);am13e_pb14_resume_rx();time_now=0;
     frame(167U,packet(512,1),1);assert(state==TX_DELAY);
