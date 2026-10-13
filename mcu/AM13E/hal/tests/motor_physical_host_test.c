@@ -99,6 +99,21 @@ uint32_t test_primask=1U;
 TestSCB test_scb;
 static unsigned enabled[80],priority[80],watchdog_arms;
 static jmp_buf fault_return;
+#ifdef AM13E_SC5_FIXTURE
+static unsigned defer_dach_load;
+#endif
+void test_dach_written(CMPSS_LITE_Regs *p)
+{
+#ifdef AM13E_SC5_FIXTURE
+    if(p!=CMPSS0)return;
+    assert(!(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK));
+    if(!(p->COMPDACHCTL&CMPSS_LITE_COMPDACHCTL_SWLOADSEL_MASK) ||
+       (MCPWM4->TBCTR==0U && MCPWM4->TBPRD==0U))
+        *(volatile uint16_t *)(uintptr_t)&p->DACHVALA=p->DACHVALS;
+#else
+    (void)p;
+#endif
+}
 void test_halt(void){longjmp(fault_return,1);}
 #ifndef AM13E_FATAL_PATH_FIXTURE
 void __error__(const char *file,uint32_t line){fprintf(stderr,"SDK assertion %s:%u\n",file,line);abort();}
@@ -310,6 +325,14 @@ static void capture(unsigned ticks)
 static void zero(void)
 {
     test_global_load(MCPWM4);
+#ifdef AM13E_SC5_FIXTURE
+    if(!defer_dach_load &&
+       (CMPSS0->COMPDACHCTL&CMPSS_LITE_COMPDACHCTL_RAMPSOURCE_MASK)==
+       (4U<<CMPSS_LITE_COMPDACHCTL_RAMPSOURCE_OFS) &&
+       (MCPWM4->TBCTL&MCPWM_TBCTL_SYNCPERSEL_MASK)==
+       (3U<<MCPWM_TBCTL_SYNCPERSEL_OFS))
+        *(volatile uint16_t *)(uintptr_t)&CMPSS0->DACHVALA=CMPSS0->DACHVALS;
+#endif
     uint32_t events=DL_MCPWM_INT_ET_1;
     MCPWM4->TBCTR=0U;
     if(MCPWM4->INTEN&events){
@@ -317,6 +340,57 @@ static void zero(void)
         MCPWM4->INTFLAG=MCPWM4->INTEN&events;MCPWM4_IRQHandler();test_primask=mask;
     }
 }
+#ifdef AM13E_SC5_FIXTURE
+static int gate_on(void);
+static void sc5_publication(void)
+{
+    AM13E_BemfReferenceStatus status;
+    assert(!am13e_app_motor_bemf_reference_set(2048U));
+    cfg.damp=1;sine=prep=0;step=0;reverse=0;sync=0;ival=3000;ertm=18000;
+    am13e_app_motor_pwm_apply(800,24,48,ertm,1,0,0,1);
+    nextstep();am13e_app_motor_commutation_commit();
+    am13e_app_motor_bemf_reference_status(&status);
+    assert(status.configured && status.calculated && !status.published);
+    assert(status.expected_code==775U && CMPSS0->DACHVALS==775U);
+    defer_dach_load=1U;zero();
+    am13e_app_motor_bemf_reference_status(&status);
+    assert(!status.published && !status.capture_synchronized);
+    assert(am13e_app_motor_bemf_publication_pending());
+    defer_dach_load=0U;zero();
+    am13e_app_motor_bemf_reference_status(&status);
+    assert(status.published && !status.capture_synchronized);
+    assert(!(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK) && !gate_on());
+    /* Shadow-to-active must match every floating phase and edge without
+     * granting the unqualified fixture analog capture authorization. */
+    static const unsigned high[6]={2,0,0,1,1,2},low[6]={1,1,2,2,0,0};
+    static const unsigned codes[3]={775U,620U,495U};
+    for(unsigned direction=0;direction<2U;++direction){
+        reverse=(int)direction;
+        for(unsigned n=0;n<6U;++n){
+            nextstep();zero();am13e_app_motor_bemf_reference_status(&status);
+            const unsigned floating=3U-high[step-1]-low[step-1];
+            assert(status.published && status.expected_code==codes[floating]);
+            assert((SYSCTL->SOCLOCK.CMPHPMXSEL&SYSCTL_CMPHPMXSEL_CMP0HPMXSEL_MASK)==floating);
+            const int before=ival;
+            ECAP1->CAP1=123U;ECAP1->ECFLG=DL_ECAP_ISR_SOURCE_CEVT1;ECAP1_IRQHandler();
+            assert(ival==before && !status.capture_synchronized);
+        }
+    }
+    /* A later image replaces the pending association, not just the code. */
+    defer_dach_load=1U;nextstep();nextstep();
+    const unsigned floating=3U-high[step-1]-low[step-1];
+    defer_dach_load=0U;zero();am13e_app_motor_bemf_reference_status(&status);
+    assert(status.published && status.expected_code==codes[floating]);
+    nextstep();am13e_app_motor_bemf_abort();zero();
+    am13e_app_motor_bemf_reference_status(&status);
+    assert(!status.published && !am13e_app_motor_bemf_publication_pending());
+    /* Documented frozen ZERO/period-zero level-load case. */
+    MCPWM4->TBCTR=MCPWM4->TBPRD=0U;nextstep();
+    assert(DL_CMPSSLITE_getDACValueHigh(CMPSS0)==CMPSS0->DACHVALS);
+    am13e_app_motor_bemf_abort();
+    puts("PASS SC5 DACH active publication, independent DAC/PWM completion, phase association, replacement and stop");
+}
+#endif
 static void step_publication(void)
 {
     uint32_t before[16],after[16];active_image(MCPWM4,before);
@@ -646,7 +720,7 @@ int main(void)
     CMPSS0->DACLVALS=333U; /* Stale unused low-DAC state from a prior owner. */
     am13e_app_motor_bemf_init();
 #ifdef AM13E_SC5_FIXTURE
-    sc5_adc();assert(munmap(r,0x07000000)==0);return 0;
+    sc5_adc();sc5_publication();assert(munmap(r,0x07000000)==0);return 0;
 #endif
     assert(CMPSS0->DACLVALS==0U);
     assert(!am13e_app_motor_bemf_reference_ready());

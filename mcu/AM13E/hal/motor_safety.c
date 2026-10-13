@@ -362,6 +362,9 @@ void am13e_app_motor_init(void)
     config.timeBaseConfig.counterMode = DL_MCPWM_COUNTER_MODE_STOP_FREEZE;
     /* TRM3.4.1: MCPWMCLK=MCLK200MHz, not MCLKDIV2/BUSCLK. */
     config.timeBaseConfig.clockDivider = DL_MCPWM_CLOCK_DIVIDER_2;
+#ifdef AM13E_BOARD_SC5_CALIBRATION
+    config.timeBaseConfig.syncPerSource=DL_MCPWM_SYNCPERSEL_SOURCE_ZERO;
+#endif
     config.timeBaseConfig.periodValue=(uint16_t)((AM13E_APP_MCLK_HZ/2U)/24000U-1U);
     config.actionQualifierConfig.aqPwm1A.pwmSwForceAction =
         DL_MCPWM_AQ_SW_CONTINUOUS_LOW;

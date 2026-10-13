@@ -112,7 +112,7 @@ int am13e_motor_output_start(void)
 {
     if(!AM13E_OPTION1_OUTPUTS_QUALIFIED || __get_PRIMASK()!=1U ||
        !am13e_app_motor_nfault_trip_ready() ||
-       !am13e_app_motor_bemf_reference_ready())return 0;
+       !am13e_app_motor_bemf_reference_start_ready())return 0;
     const AM13E_MotorPadRoute *route=am13e_board_motor_pad_route();
     am13e_power_stage_force_off();
     /* Clear retained AQ latches while the external driver is disabled.
@@ -158,6 +158,9 @@ int am13e_motor_output_zero_irq(void)
     if(!start_zero_events)return 0;
     if(!am13e_app_motor_nfault_trip_ready())output_fault();
     if(--start_zero_events==0U){
+#ifdef AM13E_BOARD_SC5_CALIBRATION
+        if(!am13e_app_motor_bemf_reference_gate_ready())output_fault();
+#endif
 #ifdef SW_BLANKING
         if(!am13e_app_motor_bemf_blanking_enabled())
 #endif

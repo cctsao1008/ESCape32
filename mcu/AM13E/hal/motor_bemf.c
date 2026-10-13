@@ -24,6 +24,16 @@ static volatile uint32_t blank_required,blank_active;
 #include <dl_sysctl.h>
 #include <dl_gpio.h>
 #include <stdint.h>
+#ifdef AM13E_BOARD_SC5_CALIBRATION
+#include "analog_runtime.h"
+extern volatile uint32_t tick;
+static AM13E_BemfReference staged_reference;
+static uint16_t expected_dach;
+static uint32_t reference_calculated,reference_published;
+#ifdef AM13E_BEMF_INITIAL_DAC_CODE
+#error "Dynamic SC5 requires an acquired calibrated sample, not a raw initial DACH seed"
+#endif
+#endif
 
 #define BEMF_ECAP BEMF_CAPTURE
 /* ECAP1 clock can differ from MCPWM/TIMG12 BUSCLK. It is measured
@@ -110,6 +120,9 @@ void am13e_app_motor_bemf_abort(void)
     const uint32_t primask=__get_PRIMASK();
     __disable_irq();
     pending_code=pending_interval=0U;
+#ifdef AM13E_BOARD_SC5_CALIBRATION
+    reference_calculated=reference_published=reference_ready=0U;
+#endif
     if(initialized) {
         capture_stop();
         DL_ECAP_stopCounter(BEMF_ECAP);
@@ -157,7 +170,14 @@ static void configure_bemf_cmp(void)
     DL_GPIO_initPeripheralAnalogFunction(AM13E_BEMF_W_PINCM);
     DL_SYSCTL_setCompartorHPMux(DL_SYSCTL_CMPSS0_MUX,DL_SYSCTL_CMP_HP0);
     DL_CMPSSLITE_configHighComparator(CMPSS0,DL_CMPSSLITE_INSRC_DAC);
+#ifdef AM13E_BOARD_SC5_CALIBRATION
+    /* Motor initialization has already configured SYNCPER and a nonzero
+     * period. TRM22.5.1: do not configure a level load before the PWM. */
+    DL_CMPSSLITE_configureSyncSourceHigh(CMPSS0,DL_CMPSSLITE_SYNCSOURCE_MCPWM4_SYNCPER);
+    DL_CMPSSLITE_configDACHigh(CMPSS0,DL_CMPSSLITE_DACVAL_PWMSYNC);
+#else
     DL_CMPSSLITE_configDACHigh(CMPSS0,DL_CMPSSLITE_DACVAL_MCLK);
+#endif
     DL_CMPSSLITE_setDACValueLow(CMPSS0,0U); /* TRM: unused low DAC must not limit DACH. */
     DL_CMPSSLITE_setDACValueHigh(CMPSS0,0U);
     DL_CMPSSLITE_configFilterInputHigh(CMPSS0,DL_CMPSSLITE_FILTIN_COMPOUT);
@@ -216,6 +236,9 @@ void am13e_app_motor_bemf_init(void)
  * The selected Reference never supplies a guessed Vdc/2 code. */
 int am13e_app_motor_bemf_reference_set(uint16_t code)
 {
+#ifdef AM13E_BOARD_SC5_CALIBRATION
+    (void)code;return 0; /* Tracking never accepts unassociated raw seeds. */
+#else
     if(!initialized || __get_PRIMASK()!=1U || armed || selected_code || pending_code ||
        code==0U || code>4095U)return 0;
     DL_CMPSSLITE_disableModule(CMPSS0);
@@ -226,10 +249,70 @@ int am13e_app_motor_bemf_reference_set(uint16_t code)
     NVIC_ClearPendingIRQ(ECAP1_INT_IRQn);
     reference_ready=1U;
     return 1;
+#endif
 }
 
+#ifdef AM13E_BOARD_SC5_CALIBRATION
+static int reference_route_matches(void);
+#endif
 int am13e_app_motor_bemf_reference_ready(void)
-{ return initialized && reference_ready; }
+{
+#ifdef AM13E_BOARD_SC5_CALIBRATION
+    AM13E_BemfReference latest;
+    return initialized && reference_published &&
+           am13e_app_adc_get_reference(&latest) && reference_route_matches() &&
+           am13e_bemf_reference_fresh(&staged_reference,tick) &&
+           DL_CMPSSLITE_getDACValueHigh(CMPSS0)==expected_dach;
+#else
+    return initialized && reference_ready;
+#endif
+}
+int am13e_app_motor_bemf_reference_start_ready(void)
+{
+#ifdef AM13E_BOARD_SC5_CALIBRATION
+    /* Starting TBCLK with driver held inactive precedes the first DAC
+     * sync. The second startup ZERO still verifies active publication. */
+    if(!selected_code && !pending_code)return 1; /* Core brake/audio/coast does not use BEMF. */
+    return initialized && reference_calculated &&
+           am13e_bemf_reference_fresh(&staged_reference,tick);
+#else
+    return am13e_app_motor_bemf_reference_ready();
+#endif
+}
+int am13e_app_motor_bemf_reference_gate_ready(void)
+{
+#ifdef AM13E_BOARD_SC5_CALIBRATION
+    return (!selected_code && !pending_code) || am13e_app_motor_bemf_reference_ready();
+#else
+    return am13e_app_motor_bemf_reference_ready();
+#endif
+}
+void am13e_app_motor_bemf_reference_status(AM13E_BemfReferenceStatus *out)
+{
+    if(!out)return;
+    const uint32_t mask=__get_PRIMASK();__disable_irq();
+    *out=(AM13E_BemfReferenceStatus){0};
+#ifdef AM13E_BOARD_SC5_CALIBRATION
+    out->configured=initialized && reference_route_matches();
+    out->calculated=reference_calculated && am13e_bemf_reference_fresh(&staged_reference,tick);
+    out->published=am13e_app_motor_bemf_reference_ready();
+    out->capture_synchronized=out->published && armed;
+    out->expected_code=expected_dach;out->sample=staged_reference.sample;
+    if(initialized)out->active_code=DL_CMPSSLITE_getDACValueHigh(CMPSS0);
+#endif
+    __set_PRIMASK(mask);
+}
+#ifdef AM13E_BOARD_SC5_CALIBRATION
+static int reference_route_matches(void)
+{
+    return (CMPSS0->COMPDACHCTL &
+           (CMPSS_LITE_COMPDACHCTL_RAMPSOURCE_MASK|CMPSS_LITE_COMPDACHCTL_SWLOADSEL_MASK))==
+           (((unsigned)DL_CMPSSLITE_SYNCSOURCE_MCPWM4_SYNCPER<<CMPSS_LITE_COMPDACHCTL_RAMPSOURCE_OFS)|
+            DL_CMPSSLITE_DACVAL_PWMSYNC) &&
+           (MOTOR_PWM->TBCTL&MCPWM_TBCTL_SYNCPERSEL_MASK)==
+           ((unsigned)DL_MCPWM_SYNCPERSEL_SOURCE_ZERO<<MCPWM_TBCTL_SYNCPERSEL_OFS);
+}
+#endif
 
 /* Rel17 x&3 selects the previous BEMF phase; x&4 reverses polarity.
  * Keep source change isolated from the interval filter/IRQ arming.
@@ -242,6 +325,9 @@ void compctl(int x)
         (x!=0 && am13e_app_motor_audio_mode())) bemf_fault();
     if(x==0) {
         pending_code=pending_interval=0U;
+#ifdef AM13E_BOARD_SC5_CALIBRATION
+        reference_calculated=reference_published=reference_ready=0U;
+#endif
 #if AM13E_MOTOR_OUTPUT_CONFIGURED
         if(!am13e_motor_output_start_pending())
 #endif
@@ -310,6 +396,13 @@ void am13e_app_motor_bemf_interval_select(int ertm_us)
         return;
     }
     rejected_events=0U;
+#ifdef AM13E_BOARD_SC5_CALIBRATION
+    /* Digital publication is not analog qualification. The selected
+     * production Reference cannot rearm a newly tracked analog path. */
+    if(!AM13E_OPTION1_OUTPUTS_QUALIFIED || !am13e_app_motor_bemf_reference_ready()){
+        __set_PRIMASK(primask);return;
+    }
+#endif
     if(selected_code && reference_ready) {
         if (!calibration_done || capture_ticks_per_ms == 0U ||
             capture_timeout_ticks == 0U) bemf_fault();
@@ -351,6 +444,15 @@ void am13e_app_motor_bemf_stage(unsigned code)
     selected_code=0U;
     pending_code=code;
     pending_interval=0U;
+#ifdef AM13E_BOARD_SC5_CALIBRATION
+    reference_calculated=reference_published=reference_ready=0U;
+    if(!reference_route_matches())bemf_fault();
+    if(am13e_app_adc_get_reference(&staged_reference)) {
+        expected_dach=staged_reference.code[(code&3U)-1U];
+        DL_CMPSSLITE_setDACValueHigh(CMPSS0,expected_dach);
+        reference_calculated=1U;
+    }
+#endif
 }
 int am13e_app_motor_bemf_publication_pending(void) { return pending_code!=0U; }
 int am13e_app_motor_bemf_carrier_zero(void)
@@ -360,6 +462,21 @@ int am13e_app_motor_bemf_carrier_zero(void)
     /* An old queued ZERO may precede the newly armed global-load latch.
      * Keep capture disarmed until hardware has consumed the entire image. */
     if(DL_MCPWM_getGlobalLoadOneShotLatchStatus(MOTOR_PWM))return 1;
+#endif
+#ifdef AM13E_BOARD_SC5_CALIBRATION
+    if(!reference_route_matches())bemf_fault();
+    if(!reference_calculated) {
+        if(AM13E_OPTION1_OUTPUTS_QUALIFIED)bemf_fault();
+        pending_code=pending_interval=0U;
+        DL_MCPWM_disableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
+        return 1;
+    }
+    if(!am13e_bemf_reference_fresh(&staged_reference,tick))bemf_fault();
+    /* No busy wait and no assumption that the independent DAC load has
+     * occurred merely because Global Load completed. Remain quarantined
+     * until a subsequent native event, bounded by the explicit sample age. */
+    if(DL_CMPSSLITE_getDACValueHigh(CMPSS0)!=expected_dach)return 1;
+    reference_ready=reference_published=1U;
 #endif
     const uint32_t mask=__get_PRIMASK();
     __disable_irq();
@@ -498,6 +615,14 @@ void ECAP1_IRQHandler(void)
 void am13e_app_motor_bemf_tick(void)
 {
     if (!initialized || calibration_halted) return;
+#ifdef AM13E_BOARD_SC5_CALIBRATION
+    if(reference_calculated && (selected_code || pending_code)) {
+        AM13E_BemfReference latest;
+        if(!am13e_app_adc_get_reference(&latest) ||
+           !am13e_bemf_reference_fresh(&staged_reference,tick) || !reference_route_matches() ||
+           (reference_published && DL_CMPSSLITE_getDACValueHigh(CMPSS0)!=expected_dach))bemf_fault();
+    }
+#endif
     /* Tick0..16 uses a real 1ms SysTick reference. No UART or MCU pin
      * is needed. Match the already-established PB14 ECAP0 approach.
      */

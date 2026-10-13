@@ -13,6 +13,14 @@ int am13e_app_motor_bemf_carrier_zero(void);
 #include <stdint.h>
 int am13e_app_motor_bemf_reference_set(uint16_t code);
 int am13e_app_motor_bemf_reference_ready(void);
+int am13e_app_motor_bemf_reference_start_ready(void);
+int am13e_app_motor_bemf_reference_gate_ready(void);
+typedef struct {
+    unsigned configured,calculated,published,capture_synchronized;
+    uint16_t expected_code,active_code;
+    uint32_t sample;
+} AM13E_BemfReferenceStatus;
+void am13e_app_motor_bemf_reference_status(AM13E_BemfReferenceStatus *out);
 /* Rel17 STM32G431 TIM2: 168 MHz / (PSC20+1) = 8 MHz,
  * ARR = (1U << (IFTIM_XRES + 16)) - 1 = 262143, XRES=2.
  * 262144 / 8 MHz = 32768us. Do not reduce to 16-bit ARR.
