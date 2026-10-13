@@ -85,7 +85,7 @@ for contract in missing_mode invalid_mode qfn_internal; do
       mcu/AM13E/hal/analog_runtime.c >"$out/$contract.log" 2>&1; then
     echo "FAIL: invalid SC5 ADC contract compiled: $contract" >&2; exit 1
   fi
-  rg -q "$expected" "$out/$contract.log"
+  grep -q "$expected" "$out/$contract.log"
   echo "PASS: rejected SC5 ADC contract: $contract"
 done
 
