@@ -14,9 +14,9 @@
 #include "irq_vectors.h"
 #include <soc.h>
 #include <dl_ecap.h>
-#ifdef SW_BLANKING
 #include <dl_mcpwm.h>
 #include "motor_output_runtime.h"
+#ifdef SW_BLANKING
 static volatile uint32_t blank_required,blank_active;
 #define BLANK_EVENTS (DL_MCPWM_INT_ET_1|DL_MCPWM_INT_ET_2)
 #endif
@@ -51,6 +51,7 @@ _Static_assert(DL_ECAP_INPUT_CMPSS0_CTRIPH == 45U,
 void compctl(int x);
 
 static volatile uint32_t initialized,selected_code,armed,reference_ready;
+static volatile uint32_t pending_code,pending_interval;
 static volatile uint32_t captured_events,rejected_events,interval_us;
 /* 16 complete SysTick intervals form 1ms; retain the FULL ECAP tick
  * count instead of rounding to an integer MHz (ticks/us).
@@ -101,6 +102,7 @@ void am13e_app_motor_bemf_abort(void)
 {
     const uint32_t primask=__get_PRIMASK();
     __disable_irq();
+    pending_code=pending_interval=0U;
     if(initialized) {
         capture_stop();
 #ifdef AM13E_REF_IO_PLAN_V1
@@ -109,6 +111,12 @@ void am13e_app_motor_bemf_abort(void)
     }
     selected_code=0U;
     interval_us=0U;
+    if(initialized) {
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+        if(!am13e_motor_output_start_pending())
+#endif
+            DL_MCPWM_disableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
+    }
     __set_PRIMASK(primask);
 }
 
@@ -192,7 +200,7 @@ void am13e_app_motor_bemf_init(void)
  * The selected Reference never supplies a guessed Vdc/2 code. */
 int am13e_app_motor_bemf_reference_set(uint16_t code)
 {
-    if(!initialized || __get_PRIMASK()!=1U || armed || selected_code ||
+    if(!initialized || __get_PRIMASK()!=1U || armed || selected_code || pending_code ||
        code==0U || code>4095U)return 0;
     DL_CMPSSLITE_disableModule(CMPSS0);
     DL_CMPSSLITE_setDACValueHigh(CMPSS0,code);
@@ -216,6 +224,13 @@ void compctl(int x)
     __disable_irq();
     if(!initialized || x<0 || x>7 ||
         (x!=0 && am13e_app_motor_audio_mode())) bemf_fault();
+    if(x==0) {
+        pending_code=pending_interval=0U;
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+        if(!am13e_motor_output_start_pending())
+#endif
+            DL_MCPWM_disableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
+    }
     capture_stop();
     selected_code=0U;
 #ifdef AM13E_REF_IO_PLAN_V1
@@ -235,7 +250,9 @@ void compctl(int x)
                 (uint32_t)input)
             bemf_fault();
         DL_ECAP_setEventPolarity(BEMF_ECAP,DL_ECAP_EVENT_1,
-             (x&4)?DL_ECAP_EVENT_FALLING_EDGE:DL_ECAP_EVENT_RISING_EDGE);
+             /* G431 captures rising(reference > phase), optionally inverted.
+              * Native CMPSS is phase > DACH: reverse that edge relation. */
+             (x&4)?DL_ECAP_EVENT_RISING_EDGE:DL_ECAP_EVENT_FALLING_EDGE);
         if(reference_ready)DL_CMPSSLITE_enableModule(CMPSS0);
         selected_code=(uint32_t)x;
 #endif
@@ -257,11 +274,21 @@ void am13e_app_motor_bemf_interval_select(int ertm_us)
      * capture for a stationary motor. Real running starts with ertm>0.
      */
     if (ertm_us<=0) {
+        pending_code=pending_interval=0U;
         interval_us=0U;
         __set_PRIMASK(primask);
         return;
     }
     interval_us=(uint32_t)ertm_us;
+    if(pending_code) {
+        pending_interval=(uint32_t)ertm_us;
+        DL_MCPWM_setEventTriggerSource(MOTOR_PWM,DL_MCPWM_ET_1,DL_MCPWM_EVT_TBCTR_ZERO);
+        DL_MCPWM_setEventTriggerEventPrescale(MOTOR_PWM,DL_MCPWM_ET_1,1U);
+        DL_MCPWM_clearInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
+        DL_MCPWM_enableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
+        __set_PRIMASK(primask);
+        return;
+    }
     rejected_events=0U;
     if(selected_code && reference_ready) {
         if (!calibration_done || capture_ticks_per_ms == 0U ||
@@ -292,6 +319,41 @@ void am13e_app_motor_bemf_interval_select(int ertm_us)
 #endif
     }
     __set_PRIMASK(primask);
+}
+void am13e_app_motor_bemf_stage(unsigned code)
+{
+    if(__get_PRIMASK()!=1U || !initialized || code>7U || !(code&3U))bemf_fault();
+    capture_stop();
+    sense_comparators_off();
+    selected_code=0U;
+    pending_code=code;
+    pending_interval=0U;
+}
+int am13e_app_motor_bemf_publication_pending(void) { return pending_code!=0U; }
+int am13e_app_motor_bemf_carrier_zero(void)
+{
+    if(!pending_code || !pending_interval)return 0;
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    /* An old queued ZERO may precede the newly armed global-load latch.
+     * Keep capture disarmed until hardware has consumed the entire image. */
+    if(DL_MCPWM_getGlobalLoadOneShotLatchStatus(MOTOR_PWM))return 1;
+#endif
+    const uint32_t mask=__get_PRIMASK();
+    __disable_irq();
+    const unsigned code=pending_code,interval=pending_interval;
+    pending_code=pending_interval=0U;
+    compctl((int)code);
+    am13e_app_motor_bemf_interval_select((int)interval);
+    if(!am13e_app_motor_bemf_publication_pending()
+#ifdef SW_BLANKING
+       && !am13e_app_motor_bemf_blanking_enabled()
+#endif
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+       && !am13e_motor_output_start_pending()
+#endif
+       )DL_MCPWM_disableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
+    __set_PRIMASK(mask);
+    return 1;
 }
 void am13e_app_motor_bemf_stop(void)
 {

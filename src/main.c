@@ -225,7 +225,11 @@ static void nextstep(void) {
 		if (++step > 6) step = 1;
 	}
 	static const uint16_t seq[] = REL17_COMMUTATION_SEQUENCE;
+#if defined(AM13E)
+	static int val, cnt, buf[6];
+#else
 	static int pcc, val, cnt, buf[6];
+#endif
 	int x = seq[step - 1];
 	int m = x >> 3; // Energized phase mask
 	int p = x & m; // Positive phase
@@ -320,8 +324,12 @@ static void nextstep(void) {
 	TIM1_CCMR2 = m2;
 	TIM1_CCER = er;
 #endif /* AM13E phase interface */
+#if !defined(AM13E)
+	/* TIM1 COM has loaded the previous preload image. MCPWM instead
+	 * associates BEMF with its native carrier-ZERO publication. */
 	compctl(pcc);
 	pcc = cc;
+#endif
 	if (ival > 1000 << MOTOR_TIME_SHIFT) {
 		val = 1000 << MOTOR_TIME_SHIFT;
 		cnt = 0;

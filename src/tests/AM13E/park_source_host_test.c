@@ -20,13 +20,13 @@ static unsigned phase_writes, events;
 void am13e_app_motor_sixstep_write(int p,int n,int cc,int damp,int rev)
 {
     assert(am13e_motor_plan_sixstep(p,n,cc,damp,rev,&phase));
-    comparator=cc;
+    comparator=cc;selected_comparator=cc;
     ++phase_writes;
     assert(events++==0U);
 }
-void compctl(int cc) { selected_comparator=cc; assert(events++==1U); }
+void compctl(int cc) { selected_comparator=cc;selected_comparator=cc; assert(events++==1U); }
 void am13e_app_motor_bemf_interval_select(int interval)
-{ (void)interval; assert(events++==2U); }
+{ (void)interval; assert(events++==1U); }
 void am13e_app_motor_sine_schedule_us(int interval) { scheduled=interval; }
 void am13e_app_motor_sine_write(int a,int b,int c,int power,int start)
 {
@@ -42,19 +42,16 @@ static void motor_source(void)
      */
     step=0;sine=0;prep=0;sync=6;ival=2000;ertm=6000;reverse=0;
     cfg.damp=1;cfg.throt_ztc=0;throt=1000;
-    int old_cc=0;
     for(unsigned n=0;n<6U;++n){
         events=0U;nextstep();
-        assert(step==(int)n+1 && events==3U && selected_comparator==old_cc);
-        old_cc=comparator;
+        assert(step==(int)n+1 && events==2U && selected_comparator==comparator);
         assert(test_gpio[1].latch==(step>=4?2U:0U));
     }
     assert(phase_writes==6U && ertm==6000);
     reverse=1;step=1;
     for(unsigned n=0;n<6U;++n){
         events=0U;nextstep();
-        assert(step==6-(int)n && phase.reverse && selected_comparator==old_cc);
-        old_cc=comparator;
+        assert(step==6-(int)n && phase.reverse && selected_comparator==comparator);
     }
     cfg.throt_ztc=1;throt=0;events=0;nextstep();
     for(unsigned n=0;n<3U;++n)assert(phase.phase[n]==AM13E_PHASE_FLOATING);

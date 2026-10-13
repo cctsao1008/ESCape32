@@ -161,7 +161,8 @@ int am13e_motor_output_zero_irq(void)
 #ifdef SW_BLANKING
         if(!am13e_app_motor_bemf_blanking_enabled())
 #endif
-        DL_MCPWM_disableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
+        if(!am13e_app_motor_bemf_publication_pending())
+            DL_MCPWM_disableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
         const uint32_t mask=__get_PRIMASK();
         __disable_irq();
         if(!am13e_app_motor_nfault_trip_ready() || !am13e_power_stage_enable() ||

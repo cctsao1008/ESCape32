@@ -221,6 +221,19 @@ static void expect_sixstep(void)
     const uint32_t aq[6]={MCPWM4->PWM1_AQCTLA,MCPWM4->PWM1_AQCTLB,
         MCPWM4->PWM2_AQCTLA,MCPWM4->PWM2_AQCTLB,MCPWM4->PWM3_AQCTLA,MCPWM4->PWM3_AQCTLB};
     assert(step>=1 && step<=6);
+    const unsigned floating=3U-positive[step-1]-negative[step-1];
+    assert((SYSCTL->SOCLOCK.CMPHPMXSEL&SYSCTL_CMPHPMXSEL_CMP0HPMXSEL_MASK)==floating);
+    /* Independent analog relation: G431 sees reference>phase, optionally
+     * inverted, while native CMPSS sees phase>reference. */
+    const unsigned rising=((step&1)!=0)^(reverse!=0);
+    const unsigned native_falling=(ECAP1->ECCTL1&ECAP_ECCTL1_CAP1POL_MASK)!=0U;
+    for(unsigned before=0;before<2U;++before){
+        const unsigned after=!before;
+        const unsigned g431_before=(!before)^rising,g431_after=(!after)^rising;
+        const unsigned original_capture=!g431_before && g431_after;
+        const unsigned native_capture=native_falling?(before&&!after):(!before&&after);
+        assert(original_capture==native_capture);
+    }
     for(unsigned phase=0;phase<3U;++phase){
 #ifdef PWM_ENABLE
         if(phase==positive[step-1]){
@@ -258,6 +271,21 @@ static void zero(void)
         uint32_t mask=test_primask;test_primask=0U;
         MCPWM4->INTFLAG=MCPWM4->INTEN&events;MCPWM4_IRQHandler();test_primask=mask;
     }
+}
+static void step_publication(void)
+{
+    uint32_t before[16],after[16];active_image(MCPWM4,before);
+    const int previous=step;
+    nextstep();
+    assert(step==(reverse?(previous>1?previous-1:6):(previous<6?previous+1:1)));
+    assert(!(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK));
+    assert(!am13e_app_motor_bemf_reference_set(1024U)); /* Pending is not inactive. */
+    active_image(MCPWM4,after);assert(memcmp(before,after,sizeof before)==0);
+    /* Already queued ZERO cannot publish a still-armed shadow image. */
+    MCPWM4->INTFLAG=DL_MCPWM_INT_ET_1;MCPWM4_IRQHandler();
+    assert(!(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK));
+    ECAP1->ECFLG=DL_ECAP_ISR_SOURCE_CEVT1;ECAP1_IRQHandler();
+    zero();expect_sixstep();carrier();
 }
 static int gate_on(void)
 { return ((GPIO1->DOUT31_0&DL_GPIO_PIN(13U))!=0U)==(AM13E_MOTOR_GATE_ACTIVE_LEVEL!=0); }
@@ -474,6 +502,18 @@ int main(void)
         }
     }
     compctl(0);
+#if AM13E_OPTION1_OUTPUTS_QUALIFIED && !defined(HALL_MAP)
+    /* Real laststep() stages a lock image, then disables sensing. A later
+     * ZERO must not resurrect that cancelled comparator association. */
+    for(unsigned hold=0U;hold<=2U;++hold){
+        sine=prep=0;step=2;lock=(char)hold;reverse=0;
+        ertm=18000;ival=3000;sync=0;
+        laststep();
+        assert(!am13e_app_motor_bemf_publication_pending());
+        zero();assert(!(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK));
+    }
+    lock=0;
+#endif
 #if !AM13E_OPTION1_OUTPUTS_QUALIFIED
     assert(!am13e_motor_output_start() && !am13e_power_stage_enable());
     assert(am13e_app_motor_inactive_preflight_ok() && !gate_on());
@@ -516,8 +556,8 @@ int main(void)
     assert(MCPWM4->DBRED==AM13E_MOTOR_OUTPUT_RED_TICKS &&
         MCPWM4->DBFED==(AM13E_MOTOR_OUTPUT_FED_TICKS?AM13E_MOTOR_OUTPUT_FED_TICKS:1U));
     inject_shadow_zero=1U;
-    for(unsigned n=0;n<12U;++n){nextstep();zero();expect_sixstep();carrier();assert(am13e_mcu_motor_pads_pwm_matches(am13e_board_motor_pad_route(),AM13E_MOTOR_PAD_INVERT_MASK));}
-    reverse=1;for(unsigned n=0;n<12U;++n){nextstep();zero();expect_sixstep();carrier();}
+    for(unsigned n=0;n<12U;++n){step_publication();assert(am13e_mcu_motor_pads_pwm_matches(am13e_board_motor_pad_route(),AM13E_MOTOR_PAD_INVERT_MASK));}
+    reverse=1;for(unsigned n=0;n<12U;++n){step_publication();}
 #ifdef SW_BLANKING
     /* Real ZERO/CMPC IRQ -> ECAP capture gating, elapsed counter intact.
      * Coalesced old-CMPC/new-ZERO events must leave capture blanked. */

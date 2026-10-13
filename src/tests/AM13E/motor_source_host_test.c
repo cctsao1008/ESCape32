@@ -48,7 +48,7 @@ static void stop(unsigned mask,int hold,int sine_step)
     lock=(char)hold;reverse=0;throt=0;ertm=0;ival=2000;sync=0;
     laststep();
     assert(test_primask==mask && !step && !sine && !prep && selected_comparator==0);
-    if(hold)assert(!strcmp(trace,"dRSCFLKCm") && held_step==oldstep);
+    if(hold)assert(!strcmp(trace,"dRSFLKCm") && held_step==oldstep);
     else assert(!strcmp(trace,"dRDKCm"));
     if(sine_step==359)assert(oldstep==(hold?2:1)); /* original sine-to-sixstep rounding/wrap */
 }
@@ -81,7 +81,7 @@ int main(void)
     stop(0U,1,0);stop(1U,2,359);
     clear_trace();test_primask=0;step=0;sync=0;sine=0;prep=0;reverse=0;ertm=3000;ival=2000;
     am13e_app_motor_on_commutation_event();
-    assert(step==1 && !strcmp(trace,"SCF") && filter_ertm==3000);
+    assert(step==1 && !strcmp(trace,"SF") && filter_ertm==3000);
     /* Source desync detector: establish old interval then six fast
      * commutations with >50% interval change, without copying its state. */
     ival=2000;am13e_app_motor_on_commutation_event();

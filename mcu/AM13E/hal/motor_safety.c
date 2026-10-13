@@ -403,11 +403,13 @@ void am13e_app_motor_init(void)
     NVIC_ClearPendingIRQ(MOTOR_PWM_IRQ);
     NVIC_EnableIRQ(MOTOR_PWM_IRQ);
 #endif
-#if AM13E_MOTOR_OUTPUT_CONFIGURED
-    DL_MCPWM_enableInterrupt(MOTOR_PWM,DL_MCPWM_INT_TZ_OST);
+    /* ZERO delivery is also used once per commutation to associate BEMF
+     * with the active native image; no permanent extra carrier interrupt. */
     NVIC_SetPriority(MOTOR_PWM_IRQ,0U);
     NVIC_ClearPendingIRQ(MOTOR_PWM_IRQ);
     NVIC_EnableIRQ(MOTOR_PWM_IRQ);
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    DL_MCPWM_enableInterrupt(MOTOR_PWM,DL_MCPWM_INT_TZ_OST);
     am13e_app_motor_oc_trip_init();
     am13e_app_motor_nfault_trip_init();
 #endif
@@ -682,6 +684,7 @@ void am13e_app_motor_sixstep_write(int positive_mask,int negative_mask,
     const uint32_t primask=__get_PRIMASK();
     __disable_irq();
     owner_move(AM13E_OWNER_EVENT_SIXSTEP);
+    am13e_app_motor_bemf_stage((unsigned)floating_phase);
     for(unsigned i=0U;i<6U;++i) {
         DL_MCPWM_setActionQualifierShadowLoadMode(
             MOTOR_PWM,runtime_aq_modules[i],DL_MCPWM_AQ_LOAD_ON_CNTR_ZERO);
@@ -1588,6 +1591,8 @@ void MCPWM4_IRQHandler(void)
     const uint32_t events=DL_MCPWM_INT_ET_1|DL_MCPWM_INT_ET_2;
     if(!last_trip_zone_flags && !fault_latched && !(last_trip_irq_flags&~events)){
         motor_irq_ack((uint16_t)last_trip_irq_flags);
+        if(last_trip_irq_flags&DL_MCPWM_INT_ET_1)
+            (void)am13e_app_motor_bemf_carrier_zero();
         if(last_trip_irq_flags&(DL_MCPWM_INT_ET_1|DL_MCPWM_INT_ET_2))
             am13e_app_motor_bemf_pwm_event();
 #if AM13E_MOTOR_OUTPUT_CONFIGURED
@@ -1597,14 +1602,18 @@ void MCPWM4_IRQHandler(void)
         return;
     }
 #endif
-#if AM13E_MOTOR_OUTPUT_CONFIGURED
     /* Asynchronous TZ overrides ET startup even when both are pending. */
     if(last_trip_zone_flags==0U && last_trip_irq_flags==DL_MCPWM_INT_ET_1 && !fault_latched){
         /* Acknowledge before starting the driver: a later OST keeps its
          * own global/pending interrupt and is not accidentally consumed. */
         motor_irq_ack(DL_MCPWM_INT_ET_1);
+        (void)am13e_app_motor_bemf_carrier_zero();
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
         if(am13e_motor_output_zero_irq())return;
+#endif
+        return;
     }
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
     if(last_trip_zone_flags==0U && (last_trip_irq_flags&~DL_MCPWM_INT_ET_1)==0U &&
        !motor_timebase_running && !(MOTOR_PWM->INTEN&DL_MCPWM_INT_ET_1)){
         /* A stop may have cleared the source after NVIC latched it. */
