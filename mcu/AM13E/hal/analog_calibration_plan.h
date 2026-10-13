@@ -27,3 +27,24 @@ int am13e_adc_receiver_millivolts(uint16_t raw,uint32_t fullscale,
 int am13e_adc_scale_pair(const AM13E_AdcCalibration *calibration,
                          uint16_t ntc_raw,uint16_t vbus_raw,
                          AM13E_AdcScaled *out);
+/* Explicit electrical contract, in microvolts and rational gains. No defaults.
+ * ADC/DAC gain calibration is ppm; ADC offset is in native code units.
+ * VDDA is the CMPSS reference, independently of the effective ADC span. */
+typedef struct {
+    uint32_t adc_span_uv,adc_gain_ppm;
+    int32_t adc_low_uv,adc_offset_code;
+    uint32_t bus_num,bus_den;
+    int32_t bus_offset_uv;
+    uint32_t phase_num[3],phase_den[3];
+    int32_t phase_offset_uv[3],comparator_correction_uv[3];
+    uint32_t vdda_uv,dac_gain_ppm;
+    int32_t dac_offset_uv;
+    uint32_t bus_min_uv,bus_max_uv,max_age_ticks;
+} AM13E_BemfCalibration;
+typedef struct {
+    uint16_t code[3];
+    uint32_t sample,acquisition_tick,completion_tick,max_age_ticks;
+} AM13E_BemfReference;
+int am13e_bemf_reference_convert(const AM13E_BemfCalibration *cal,
+                                uint16_t raw,uint16_t code[3]);
+int am13e_bemf_reference_fresh(const AM13E_BemfReference *ref,uint32_t now);

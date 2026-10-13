@@ -29,10 +29,46 @@
 #include <dl_gpio.h>
 #include <dl_ecap.h>
 #include <dl_timer.h>
+#if defined(AM13E_FATAL_PATH_FIXTURE) || defined(AM13E_SC5_FIXTURE)
+#include "../analog_runtime.c"
+#endif
+#ifdef AM13E_SC5_FIXTURE
+void DL_Common_delayCycles(uint32_t cycles) { (void)cycles; }
+static void sc5_adc(void)
+{
+    test_primask=1U;am13e_app_adc_init();
+    assert(SYSCTL->SOCLOCK.ANAREFCTL==DL_SYSCTL_VREF_EXTERNAL_FULL_SCALE);
+    AM13E_BemfReference ref;AM13E_AdcRaw raw;
+    assert(!am13e_app_adc_get_raw(&raw) && !am13e_app_adc_get_reference(&ref));
+    ADC_Regs *adcs[]={ADC0,ADC1,ADC2};
+    ADC_RESULT_Regs *results[]={ADC0RESULT,ADC1RESULT,ADC2RESULT};
+    for(unsigned i=0;i<3U;++i){
+        for(unsigned j=0;j<3U;++j)
+            *(volatile uint16_t *)((uintptr_t)results[i]+ADC_ADCRESULT0+j*DL_ADCRESULT_STEP)=2048U;
+        adcs[i]->ADCINTFLG=ADC_ADCINTFLG_ADCINT1_MASK|ADC_ADCINTFLG_ADCINT1RESULT_MASK;
+    }
+    tick=UINT32_MAX-3U;adctrig();adctrig();
+    ADC2_INT1_IRQHandler();ADC0_INT1_IRQHandler();
+    assert(!am13e_app_adc_get_raw(&raw));
+    tick=2U;ADC1_INT1_IRQHandler();adctrig();
+    assert(am13e_app_adc_get_reference(&ref));
+    assert(ref.sample==1U && ref.acquisition_tick==UINT32_MAX-3U && ref.completion_tick==2U);
+    assert(ref.code[0]==775U && ref.code[1]==620U && ref.code[2]==495U);
+    tick=40U;assert(!am13e_app_adc_get_reference(&ref));
+    adc_latest.sample_count=UINT32_MAX;adc_sample_seq=UINT32_MAX-1U;
+    ADC0_INT1_IRQHandler();ADC1_INT1_IRQHandler();ADC2_INT1_IRQHandler();
+    assert(am13e_app_adc_get_raw(&raw) && raw.sample_count==0U && adc_sample_seq==0U);
+    /* Completion cannot freshen an acquisition that began too long ago. */
+    adctrig();assert(!am13e_app_adc_get_reference(&ref));
+    tick=41U;ADC0_INT1_IRQHandler();ADC1_INT1_IRQHandler();ADC2_INT1_IRQHandler();adctrig();
+    assert(am13e_app_adc_get_reference(&ref) && ref.sample==1U);
+    adc_sample_seq=1U;assert(!am13e_app_adc_get_raw(&raw));adc_sample_seq=0U;
+    puts("PASS SC5 actual ADC reference, coherent freshness, busy skips and sequence/time wrap");
+}
+#endif
 #ifdef AM13E_FATAL_PATH_FIXTURE
 /* Run fatal branches from the actual ADC/UART/auxiliary units against the
  * SAME configured motor backend, not mocked shutdown functions. */
-#include "../analog_runtime.c"
 #define initialized serial_fixture_initialized
 #define am13e_app_io_cli_line fixture_cli_result
 #include "../serial_uart_rx.c"
@@ -609,6 +645,9 @@ int main(void)
            (DL_MCPWM_TZ_SIGNAL_OST2|DL_MCPWM_TZ_SIGNAL_OST3));
     CMPSS0->DACLVALS=333U; /* Stale unused low-DAC state from a prior owner. */
     am13e_app_motor_bemf_init();
+#ifdef AM13E_SC5_FIXTURE
+    sc5_adc();assert(munmap(r,0x07000000)==0);return 0;
+#endif
     assert(CMPSS0->DACLVALS==0U);
     assert(!am13e_app_motor_bemf_reference_ready());
     assert(!am13e_motor_output_start() && !gate_on());
@@ -674,6 +713,10 @@ int main(void)
     ADC_RESULT_Regs *results[]={ADC0RESULT,ADC1RESULT,ADC2RESULT};
     const unsigned channels[3][3]={{5U,12U,4U},{4U,12U,2U},{12U,5U,19U}};
     for(unsigned i=0;i<3U;++i){
+        const uint32_t seq=*(volatile uint32_t *)((uintptr_t)adcs[i]+
+            ADC_ADCSEQ1CONFIG+AM13E_ADC_SEQUENCE*DL_ADCSEQCONFIG_STEP);
+        assert(!(seq&ADC_ADCSEQ1CONFIG_SAMPCAPRESETDISABLE_MASK));
+        assert(!(seq&ADC_ADCSEQ1CONFIG_SAMPCAPRESETSEL_MASK));
         for(unsigned j=0;j<3U;++j){
             const uint32_t ctl=*(volatile uint32_t *)((uintptr_t)adcs[i]+ADC_ADCSOC0CTL+j*DL_ADCSOCCTL_STEP);
             assert(((ctl&ADC_ADCSOC0CTL_CHSEL_MASK)>>ADC_ADCSOC0CTL_CHSEL_OFS)==channels[i][j]);
@@ -681,14 +724,19 @@ int main(void)
         }
         adcs[i]->ADCINTFLG=ADC_ADCINTFLG_ADCINT1_MASK|ADC_ADCINTFLG_ADCINT1RESULT_MASK;
     }
-    adctrig();adctrig();
+    tick=UINT32_MAX-3U;adctrig();adctrig();
     ADC2_INT1_IRQHandler();assert(!am13e_app_adc_get_raw(&raw));
     ADC0_INT1_IRQHandler();assert(!am13e_app_adc_get_raw(&raw));
-    ADC1_INT1_IRQHandler();assert(am13e_app_adc_get_raw(&raw));
+    tick=2U;ADC1_INT1_IRQHandler();assert(am13e_app_adc_get_raw(&raw));
     assert(raw.current_v==1U && raw.phase_a==2U && raw.ibus==3U &&
            raw.current_w==4U && raw.vbus==5U && raw.phase_b==6U &&
            raw.current_u==7U && raw.phase_c==8U && raw.ntc==9U &&
            raw.sample_count==1U && raw.trigger_overruns==1U);
+    assert(raw.acquisition_tick==UINT32_MAX-3U && raw.completion_tick==2U);
+    adc_latest.sample_count=UINT32_MAX;adc_sample_seq=UINT32_MAX-1U;
+    adctrig();ADC0_INT1_IRQHandler();ADC1_INT1_IRQHandler();ADC2_INT1_IRQHandler();
+    assert(am13e_app_adc_get_raw(&raw) && raw.sample_count==0U && adc_sample_seq==0U);
+    adc_sample_seq=1U;assert(!am13e_app_adc_get_raw(&raw));adc_sample_seq=0U;
     puts("PASS actual Option 1 ADC0/1/2 SOC map, ordered completion and coherent nine-code snapshot");
     fatal_paths(0);
 #endif

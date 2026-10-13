@@ -7,9 +7,16 @@ out=$(mktemp -d /tmp/am13e-motor-register.XXXXXX)
 trap 'rm -rf "$out"' EXIT
 python3 mcu/_support/AM13E/tools/prepare_sdk_sources.py --sdk-root "$sdk" --output "$out"
 # Synthetic electrical fixtures only; never a qualified board configuration.
-for fixture in high low full inverted blanking hall pwm_enable pwm_enable_full fatal unqualified; do
+for fixture in high low full inverted blanking hall pwm_enable pwm_enable_full fatal unqualified sc5; do
 qualified=1; polarity=1; mask=0; fed=0; extra=(); extra_sources=()
 case "$fixture" in
+  sc5) qualified=0
+    extra=(-DAM13E_SC5_FIXTURE -include mcu/AM13E/hal/tests/sc5_calibration_fixture.h
+      -DAM13E_BOARD_ADC_FULLSCALE=4095 -DAM13E_BOARD_ADC_VREF_MV=2500
+      -DAM13E_BOARD_NTC_SUPPLY_MV=3300 -DAM13E_BOARD_NTC_MODEL=3
+      -DAM13E_BOARD_VBUS_TOP_OHMS=15000 -DAM13E_BOARD_VBUS_BOTTOM_OHMS=1000)
+    extra_sources=(mcu/AM13E/hal/analog_sampling_backend.c
+      mcu/AM13E/hal/analog_calibration_plan.c "$sdk/source/driverlib/am13e230x/dl_adc.c") ;;
   unqualified) qualified=0 ;;
   low) polarity=0; mask=63 ;;
   full) extra=(-DFULL_DUTY) ;;

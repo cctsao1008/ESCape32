@@ -43,6 +43,7 @@ _Static_assert(AM13E_BOARD_ANALOG_INPUT_CHANNEL<=31U &&
 #include <dl_adc.h>
 #include <dl_gpio.h>
 #include <dl_common.h>
+#include <dl_sysctl.h>
 #include <stddef.h>
 
 /* Volatile because the hardware ISR produces both samples and PendSV
@@ -52,6 +53,26 @@ static volatile uint32_t adc_initialized;
 static volatile uint32_t adc_inflight;
 static volatile uint32_t adc_sample_seq;
 static volatile AM13E_AdcRaw adc_latest;
+static volatile uint32_t adc_have_sample;
+static uint32_t acquisition_tick;
+static volatile AM13E_BemfReference reference_latest;
+static volatile uint32_t reference_valid;
+#ifdef AM13E_BOARD_SC5_CALIBRATION
+#if !defined(AM13E_BOARD_ADC_REFERENCE_MODE) || !defined(AM13E_BOARD_ADC_PACKAGE_QFN48)
+#error "SC5 requires explicit native ADC reference mode and package contract"
+#endif
+_Static_assert(AM13E_BOARD_ADC_PACKAGE_QFN48==0 || AM13E_BOARD_ADC_PACKAGE_QFN48==1,
+               "ADC package contract must be binary");
+_Static_assert(AM13E_BOARD_ADC_REFERENCE_MODE==DL_SYSCTL_VREF_EXTERNAL_FULL_SCALE ||
+               AM13E_BOARD_ADC_REFERENCE_MODE==DL_SYSCTL_VREF_EXTERNAL_HALF_SCALE ||
+               AM13E_BOARD_ADC_REFERENCE_MODE==DL_SYSCTL_VREF_INTERNAL_3_3_V ||
+               AM13E_BOARD_ADC_REFERENCE_MODE==DL_SYSCTL_VREF_INTERNAL_2_5_V,
+               "Unsupported native ADC reference mode");
+_Static_assert(!AM13E_BOARD_ADC_PACKAGE_QFN48 ||
+               AM13E_BOARD_ADC_REFERENCE_MODE==DL_SYSCTL_VREF_EXTERNAL_FULL_SCALE,
+               "QFN48 uses VDDA/VSSA and cannot use internal or half-scale reference");
+static const AM13E_BemfCalibration reference_cal=AM13E_BOARD_SC5_CALIBRATION;
+#endif
 
 static void adc_fail_closed(void)
 {
@@ -70,6 +91,10 @@ static uint16_t pending_analog;
 void am13e_app_adc_init(void)
 {
     if(adc_initialized || __get_PRIMASK()!=1U)adc_fail_closed();
+#ifdef AM13E_BOARD_ADC_REFERENCE_MODE
+    DL_SYSCTL_setVREF(AM13E_BOARD_ADC_REFERENCE_MODE);
+    if(SYSCTL->SOCLOCK.ANAREFCTL!=(uint32_t)AM13E_BOARD_ADC_REFERENCE_MODE)adc_fail_closed();
+#endif
     const unsigned pins[]={AM13E_CURRENT_U_PINCM,AM13E_CURRENT_V_PINCM,
         AM13E_CURRENT_W_PINCM,AM13E_BEMF_U_PINCM,AM13E_BEMF_V_PINCM,
         AM13E_BEMF_W_PINCM,AM13E_VBUS_PINCM,AM13E_IBUS_PINCM,AM13E_NTC_PINCM};
@@ -98,10 +123,29 @@ void am13e_app_adc_init(void)
 void adctrig(void)
 {
     if(!adc_initialized)adc_fail_closed();
+#ifdef AM13E_BOARD_SC5_CALIBRATION
+    /* Existing PendSV housekeeping is the sole producer. Arithmetic stays
+     * outside priority-0 commutation/capture IRQs and global masking. */
+    AM13E_AdcRaw raw;
+    AM13E_BemfReference ref;
+    if(am13e_app_adc_get_raw(&raw) &&
+       (!reference_valid || reference_latest.sample!=raw.sample_count ||
+        (uint32_t)(tick-reference_latest.acquisition_tick)>reference_latest.max_age_ticks)) {
+        ref.sample=raw.sample_count;ref.acquisition_tick=raw.acquisition_tick;
+        ref.completion_tick=raw.completion_tick;ref.max_age_ticks=reference_cal.max_age_ticks;
+        const int valid=am13e_bemf_reference_fresh(&ref,tick) &&
+              am13e_bemf_reference_convert(&reference_cal,raw.vbus,ref.code);
+        const uint32_t mask=__get_PRIMASK();__disable_irq();
+        reference_valid=0U;
+        if(valid){reference_latest=ref;reference_valid=1U;}
+        __set_PRIMASK(mask);
+    }
+#endif
     if(adc_inflight || DL_ADC_isBusy(ADC0) || DL_ADC_isBusy(ADC1) || DL_ADC_isBusy(ADC2)){
         ++adc_latest.trigger_overruns;return;
     }
     completed=0U;adc_inflight=1U;
+    acquisition_tick=tick;
     /* Sequential software requests, not simultaneous/PWM sampling. */
     DL_ADC_forceSequencer(ADC0,AM13E_ADC_SEQUENCE);
     DL_ADC_forceSequencer(ADC1,AM13E_ADC_SEQUENCE);
@@ -165,6 +209,9 @@ static void adc_complete(unsigned instance,ADC_Regs *adc,ADC_RESULT_Regs *result
     adc_latest.current_u=pending[2][0];adc_latest.phase_c=pending[2][1];
     adc_latest.ntc=pending[2][2];
     ++adc_latest.sample_count;
+    adc_latest.acquisition_tick=acquisition_tick;
+    adc_latest.completion_tick=tick;
+    adc_have_sample=1U;
     ++adc_sample_seq;
 #ifdef AM13E_BOARD_SENSORS_CONFIGURED
     /* Feed the ACTUAL Rel17 smoothing/temperature/voltage protection
@@ -200,9 +247,20 @@ void ADC1_INT1_IRQHandler(void){adc_complete(1U,ADC1,ADC1RESULT);}
 void ADC2_INT1_IRQHandler(void){adc_complete(2U,ADC2,ADC2RESULT);}
 int am13e_app_adc_get_raw(AM13E_AdcRaw *out)
 {
-    if(out==NULL || !adc_latest.sample_count)return 0;
-    uint32_t a,b;
-    do {a=adc_sample_seq;if(a&1U)continue;*out=adc_latest;b=adc_sample_seq;}
-    while((a&1U) || a!=b);
-    return 1;
+    if(out==NULL || !adc_have_sample)return 0;
+    for(unsigned attempt=0;attempt<2U;++attempt){
+        const uint32_t a=adc_sample_seq;if(a&1U)return 0;
+        *out=adc_latest;
+        if(a==adc_sample_seq)return 1;
+    }
+    return 0; /* Never spin behind a preempted lower-priority writer. */
+}
+int am13e_app_adc_get_reference(AM13E_BemfReference *out)
+{
+    if(!out)return 0;
+    const uint32_t mask=__get_PRIMASK();__disable_irq();
+    const int valid=reference_valid!=0U;
+    if(valid)*out=reference_latest;
+    __set_PRIMASK(mask);
+    return valid && am13e_bemf_reference_fresh(out,tick);
 }

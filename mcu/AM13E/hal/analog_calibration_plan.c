@@ -1,6 +1,60 @@
 #include "analog_calibration_plan.h"
 #include <stddef.h>
 #include <stdint.h>
+#include <limits.h>
+
+static int checked_product(uint64_t a,uint64_t b,uint64_t *out)
+{
+    if(b && a>UINT64_MAX/b)return 0;
+    *out=a*b;return 1;
+}
+static int rounded_ratio(uint64_t n,uint64_t d,uint64_t *out)
+{
+    if(!d || n>UINT64_MAX-d/2U)return 0;
+    *out=(n+d/2U)/d;return 1;
+}
+int am13e_bemf_reference_fresh(const AM13E_BemfReference *ref,uint32_t now)
+{
+    return ref && ref->max_age_ticks && ref->max_age_ticks<=INT32_MAX &&
+           (uint32_t)(now-ref->acquisition_tick)<=ref->max_age_ticks;
+}
+int am13e_bemf_reference_convert(const AM13E_BemfCalibration *c,
+                                uint16_t raw,uint16_t code[3])
+{
+    if(!c || !code || !raw || raw>=4095U || !c->adc_span_uv ||
+       !c->adc_gain_ppm || !c->bus_num || !c->bus_den || !c->vdda_uv ||
+       !c->dac_gain_ppm || !c->bus_min_uv || c->bus_min_uv>c->bus_max_uv ||
+       !c->max_age_ticks || c->max_age_ticks>INT32_MAX)return 0;
+    const int64_t corrected=(int64_t)raw-c->adc_offset_code;
+    uint64_t n,d,pin,bus;
+    if(corrected<=0 || !checked_product((uint64_t)corrected,c->adc_span_uv,&n) ||
+       !checked_product(n,1000000U,&n) ||
+       !checked_product(4096U,c->adc_gain_ppm,&d) || !rounded_ratio(n,d,&pin) ||
+       pin>UINT32_MAX)return 0;
+    const int64_t sensed=(int64_t)pin+c->adc_low_uv-c->bus_offset_uv;
+    if(sensed<=0 || !checked_product((uint64_t)sensed,c->bus_den,&n) ||
+       !rounded_ratio(n,c->bus_num,&bus) ||
+       bus<c->bus_min_uv || bus>c->bus_max_uv)return 0;
+    uint16_t result[3];
+    for(unsigned j=0;j<3U;++j){
+        uint64_t phase,value;
+        if(!c->phase_num[j] || !c->phase_den[j] ||
+           !checked_product(bus,c->phase_num[j],&n) ||
+           !rounded_ratio(n,(uint64_t)c->phase_den[j]*2U,&phase) ||
+           phase>UINT32_MAX)return 0;
+        const int64_t target=(int64_t)phase+c->phase_offset_uv[j]+
+                             c->comparator_correction_uv[j];
+        const int64_t adjusted=target-c->dac_offset_uv;
+        if(target<=0 || (uint64_t)target>=c->vdda_uv || adjusted<=0 ||
+           !checked_product((uint64_t)adjusted,4096U,&n) ||
+           !checked_product(n,1000000U,&n) ||
+           !checked_product(c->vdda_uv,c->dac_gain_ppm,&d) ||
+           !rounded_ratio(n,d,&value) || value<=1U || value>4096U)return 0;
+        result[j]=(uint16_t)(value-1U); /* TRM22.3: (D+1)*VDDA/4096 */
+    }
+    for(unsigned j=0;j<3U;++j)code[j]=result[j];
+    return 1;
+}
 
 int am13e_adc_scale_pair(const AM13E_AdcCalibration *calibration,
                          uint16_t ntc_raw,uint16_t vbus_raw,

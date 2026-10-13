@@ -21,6 +21,9 @@ int am13e_mcu_adc_scan_initialize(ADC_Regs *adc,DL_ADC_CHANNEL soc0,
     const DL_ADC_SOC_NUMBER last=soc3>=0?DL_ADC_SOC_NUMBER3:DL_ADC_SOC_NUMBER2;
     config.seqConfig.endSocNumber=last;
     config.seqConfig.seqNConfig[AM13E_ADC_SEQUENCE].enableSequencer=true;
+    /* Device datasheet6.9.1 requires cap reset enabled to VREFLO. */
+    config.seqConfig.seqNConfig[AM13E_ADC_SEQUENCE].enableSampleCapReset=true;
+    config.seqConfig.seqNConfig[AM13E_ADC_SEQUENCE].capResetVal=DL_ADC_SAMPLE_CAP_RESET_SELECT_VREFLO;
     config.seqConfig.seqNConfig[AM13E_ADC_SEQUENCE].sampleWindow=AM13E_ADC_ACQ_WINDOW_CYCLES;
     config.seqConfig.seqNConfig[AM13E_ADC_SEQUENCE].trigger=DL_ADC_TRIGGER_SOFTWARE;
     config.seqConfig.seqNConfig[AM13E_ADC_SEQUENCE].socStartNumber=DL_ADC_SOC_NUMBER0;

@@ -7,12 +7,14 @@
 #error "AM13E ADC backend must not be used by legacy targets"
 #endif
 #include <stdint.h>
+#include "analog_calibration_plan.h"
 
 typedef struct {
     uint16_t current_u,current_v,current_w;
     uint16_t phase_a,phase_b,phase_c;
     uint16_t vbus,ibus,ntc;
     uint32_t sample_count,trigger_overruns;
+    uint32_t acquisition_tick,completion_tick;
 } AM13E_AdcRaw;
 
 /* Rel17's original main/housekeeping owns scheduling. */
@@ -27,3 +29,6 @@ void ADC2_INT1_IRQHandler(void);
  * Reads are coherent against all three ADC INT1 completions via the snapshot sequence.
  */
 int am13e_app_adc_get_raw(AM13E_AdcRaw *out);
+/* Bounded atomic pending-reference copy, suitable for a masked motor
+ * transaction. It never reads an ADC-owned snapshot or calculates in ISR. */
+int am13e_app_adc_get_reference(AM13E_BemfReference *out);
