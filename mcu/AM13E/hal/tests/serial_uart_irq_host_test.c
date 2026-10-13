@@ -162,6 +162,7 @@ static void crsf(void)
 static void serial(void)
 {
     select_mode(2U);
+    assert(baud==SERIAL_BR);
     uint8_t p[]={5,0,0xd0,7,0};p[4]=crc8((char*)p,4);
     frame(p,sizeof p);assert(throt==2000);
     throt=0;p[4]^=1U;const unsigned before=feeds;
@@ -171,6 +172,47 @@ static void serial(void)
     p[0]=3;p[1]=0x80;p[2]=crc8((char*)p,2);
     tx_slots=200U;frame(p,3U);assert(wire_bytes==12U && crsf_tx.count==12U);
     assert(crc8((char*)wire,12)==0);interrupt(DL_UART_IIDX_EOT_DONE);
+}
+/* Exercise the production ISR/framer and original parser at every newly
+ * restored length. CRC corruption must not update throttle or watchdog. */
+static void long_frames(void)
+{
+    for(unsigned mode=6U;mode<=7U;++mode){
+        select_mode(mode);
+        for(unsigned channels=30U;channels<=32U;++channels){
+            uint8_t p[72]={0};
+            const unsigned offset=mode==6U?6U:3U;
+            const unsigned n=offset+channels*2U+2U;
+            cfg.input_ch1=(char)channels;cfg.input_ch2=1;
+            if(mode==6U){p[0]=0x3e;p[1]=1;p[2]=(uint8_t)n;
+                p[4]=0x31;p[5]=(uint8_t)(2U*channels);}
+            else {p[0]=0xa8;p[1]=1;p[2]=(uint8_t)channels;}
+            /* Both protocols encode channel pulse widths in eighth-us units,
+             * EXBUS little endian, SUMD big endian. Use the LAST channel. */
+            const unsigned i=offset+2U*(channels-1U);
+            p[i+(mode==6U?0U:1U)]=0x80U;
+            p[i+(mode==6U?1U:0U)]=0x3eU; /* 2000 us */
+            unsigned crc=mode==6U?crc16ccitt((char*)p,(int)n-2):
+                                   crc16xmodem((char*)p,(int)n-2);
+            p[n-2U]=(uint8_t)(mode==6U?crc:crc>>8);
+            p[n-1U]=(uint8_t)(mode==6U?crc>>8:crc);
+            unsigned before=feeds;throt=0;
+            frame(p,n);assert(throt==2000 && feeds==before+1U);
+            throt=0;p[n-1U]^=1U;before=feeds;
+            frame(p,n);assert(!throt && feeds==before);
+            p[n-1U]^=1U;
+            /* Truncation followed by idle must resynchronize on the next frame. */
+            frame(p,n-1U);serial_rx_tick+=16U;
+            /* EXBUS idle abort discards the byte that detects the gap. */
+            if(mode==6U)byte(p[0]);
+            frame(p,n);assert(throt==2000 && feeds==before+1U);
+            throt=0;before=feeds;
+            if(mode==6U) p[5]-=2U; /* Inconsistent internal length. */
+            else p[2]=33U; /* Outside selected 32-channel contract. */
+            frame(p,n);assert(!throt && feeds==before);
+            am13e_serial_frame_abort(&rx_state);
+        }
+    }
 }
 static void cli(void)
 {
@@ -269,7 +311,7 @@ static void cli_from_sbus(void)
 }
 int main(void)
 {
-    crsf();serial();cli();sbus2();cli_from_sbus();
+    crsf();serial();cli();sbus2();cli_from_sbus();long_frames();
     puts("PASS production UART/Core, TIMG4 static ownership and SBUS2 deadlines/mute/FIFO/EOT; CLI polarity/preemption");
     return 0;
 }

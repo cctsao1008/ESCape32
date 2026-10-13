@@ -51,7 +51,7 @@ bool am13e_serial_frame_byte(AM13E_SerialFrameRx *rx,uint8_t b,
         if(b!=0x20U)return false;
     } else if(rx->mode==7U&&rx->used==2U){
         /* Original SUMD length = 5 + channel_count*2. */
-        if(b>29U){
+        if(b>32U){
             am13e_serial_frame_abort(rx);
             return false;
         }
@@ -61,7 +61,7 @@ bool am13e_serial_frame_byte(AM13E_SerialFrameRx *rx,uint8_t b,
          * not require a fixed start address: idle-framed packets
          * must be synchronized by the board transport.
          */
-        if(b<8U||b>64U){
+        if(b<8U||b>72U){
             am13e_serial_frame_abort(rx);
             return false;
         }

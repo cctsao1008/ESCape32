@@ -80,7 +80,7 @@ static void exbus(void){
     assert(len==12U&&memcmp(out,packet,12U)==0);
     assert(!am13e_serial_frame_byte(&rx,0x3eU,out,sizeof out,&len));
     assert(!am13e_serial_frame_byte(&rx,1U,out,sizeof out,&len));
-    assert(!am13e_serial_frame_byte(&rx,65U,out,sizeof out,&len));
+    assert(!am13e_serial_frame_byte(&rx,73U,out,sizeof out,&len));
     assert(rx.used==0U&&rx.frame_errors==1U);
     /* A valid 8-byte telemetry request can be emitted without
      * enabling any unqualified physical TX route.
@@ -97,7 +97,7 @@ static void hott(void){
     assert(!am13e_serial_frame_byte(&rx,0U,out,sizeof out,&len));
     assert(!am13e_serial_frame_byte(&rx,0xa8U,out,sizeof out,&len));
     assert(!am13e_serial_frame_byte(&rx,1U,out,sizeof out,&len));
-    assert(!am13e_serial_frame_byte(&rx,30U,out,sizeof out,&len));
+    assert(!am13e_serial_frame_byte(&rx,33U,out,sizeof out,&len));
     assert(rx.used==0U&&rx.frame_errors==1U);
     const uint8_t packet[]={0xa8U,1U,2U,0x20U,0x40U,
                             0x30U,0x50U,0x00U,0x00U};

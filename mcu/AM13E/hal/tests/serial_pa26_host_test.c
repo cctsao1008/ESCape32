@@ -61,6 +61,9 @@ int main(void)
     cfg.input_mode=2;cfg.throt_min=1000;cfg.throt_mid=1500;cfg.throt_max=2000;
     assert(!am13e_app_serial_rx_init(5U)); /* Full-duplex TX rejected. */
     assert(am13e_app_serial_rx_init(2U));
+    const unsigned divisor=(800000000U/SERIAL_BR+1U)/2U;
+    assert(DL_UART_getIntegerBaudRateDivisor(RX_UC)==divisor/64U &&
+           DL_UART_getFractionalBaudRateDivisor(RX_UC)==divisor%64U);
     assert(DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PA26)==8U);
     uint8_t input[]={5,0,0xd0,7,0};input[4]=crc8((char*)input,4);
     for(unsigned i=0;i<5U;++i)rx_byte_native(input[i]);

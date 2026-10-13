@@ -647,12 +647,12 @@ int am13e_app_io_crsf_frame(const uint8_t *frame,unsigned length) {
            (unsigned)frame[1]+2U==length && io_core_frame(frame,length,crsffunc);
 }
 int am13e_app_io_exbus_frame(const uint8_t *frame,unsigned length) {
-    return cfg.input_mode==6 && frame && length>=8U && length<=64U &&
+    return cfg.input_mode==6 && frame && length>=8U && length<=72U &&
            frame[2]==length && (unsigned)frame[5]+8U==length &&
            io_core_frame(frame,length,exbusfunc);
 }
 int am13e_app_io_hott_frame(const uint8_t *frame,unsigned length) {
-    return cfg.input_mode==7 && frame && length>=5U && length<=64U &&
+    return cfg.input_mode==7 && frame && length>=5U && length<=69U &&
            (unsigned)frame[2]*2U+5U==length &&
            ((frame[1]&0x7fU)!=3U || frame[2]>=2U) &&
            io_core_frame(frame,length,hottfunc);

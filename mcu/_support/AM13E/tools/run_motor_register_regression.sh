@@ -73,7 +73,8 @@ cc -no-pie -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-int-to-pointer-
  -o "$out/command-pa26-test"
 "$out/command-pa26-test"
 
-cc -no-pie -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-variable -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections \
+for serial_baud in 460800 230400; do
+cc -DSERIAL_BR="$serial_baud" -no-pie -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-variable -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections \
  -include src/tests/AM13E/newlib_host.h "-DAM13E_TEST_TI_DMA_HEADER=\"$dl/dl_dma.h\"" -DAM13E -DAM13E_REF_IO_PLAN_V1=1 -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' \
   \
  "-DAM13E_TEST_TI_ECAP_HEADER=\"$dl/dl_ecap.h\"" "-DAM13E_TEST_TI_GPIO_HEADER=\"$dl/dl_gpio.h\"" "-DAM13E_TEST_TI_MCPWM_HEADER=\"$dl/dl_mcpwm.h\"" \
@@ -85,6 +86,8 @@ cc -no-pie -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-unused-paramete
  "$out/dl_timer.c" "$dl/dl_unicomm.c" "$dl/dl_unicommuart.c" \
  -o "$out/serial-pa26-test"
 "$out/serial-pa26-test"
+
+done
 
 # Actual Boot PA26 software-serial transport; SysTick/peer are host boundaries.
 cc -no-pie -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast \

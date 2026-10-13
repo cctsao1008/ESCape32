@@ -17,6 +17,7 @@
 #endif
 #ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
 #include "serial_frame_rx.h"
+#include "../../../src/defs.h"
 #include "../../../src/exbus_autobaud.h"
 #ifdef AM13E_BOARD_SERIAL_TX_CONFIGURED
 #include "serial_tx_queue.h"
@@ -53,6 +54,10 @@ _Static_assert(AM13E_BOARD_EXBUS_STABLE_DEVICE_ID!=0U &&
 #include <dl_gpio.h>
 #include <dl_unicommuart.h>
 #include <stdint.h>
+/* Binary Serial uses the original compile-time baud contract. Keep the
+ * selected baud in the SDK's nonzero, 16x divisor range. */
+_Static_assert(SERIAL_BR>0 && SERIAL_BR<=AM13E_BOARD_SERIAL_RX_BUSCLK_HZ/16U,
+               "SERIAL_BR requires a nonzero native 16x UART divisor");
 #ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
 #include <dl_timer.h>
 #include "command_reply.h"
@@ -692,7 +697,7 @@ bool am13e_app_serial_rx_init(unsigned mode)
     };
     DL_UART_init(RX_UC,&config);
     DL_UART_configBaudRate(RX_UC,AM13E_BOARD_SERIAL_RX_BUSCLK_HZ,
-                           mode==2U?460800U:
+                           mode==2U?SERIAL_BR:
                            mode==4U?100000U:
                            mode==5U?416666U:
                            mode==6U?125000U:115200U);
