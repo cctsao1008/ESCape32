@@ -56,8 +56,10 @@ _Static_assert(AM13E_BOARD_EXBUS_STABLE_DEVICE_ID!=0U &&
 #include <stdint.h>
 /* Binary Serial uses the original compile-time baud contract. Keep the
  * selected baud in the SDK's nonzero, 16x divisor range. */
-_Static_assert(SERIAL_BR>0 && SERIAL_BR<=AM13E_BOARD_SERIAL_RX_BUSCLK_HZ/16U,
-               "SERIAL_BR requires a nonzero native 16x UART divisor");
+_Static_assert(SERIAL_BR>0 && SERIAL_BR<=AM13E_BOARD_SERIAL_RX_BUSCLK_HZ/16U &&
+               (UINT64_C(4)*AM13E_BOARD_SERIAL_RX_BUSCLK_HZ+SERIAL_BR/2U)/
+                 (SERIAL_BR>0?SERIAL_BR:1U)<=UINT64_C(0x3fffff),
+               "SERIAL_BR requires a representable nonzero native 16x UART divisor");
 #ifdef AM13E_BOARD_SBUS2_TIMED_REPLY
 #include <dl_timer.h>
 #include "command_reply.h"
