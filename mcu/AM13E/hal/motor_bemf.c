@@ -52,6 +52,9 @@ void compctl(int x);
 
 static volatile uint32_t initialized,selected_code,armed,reference_ready;
 static volatile uint32_t pending_code,pending_interval;
+/* Native free-running timestamp epoch. Only an accepted crossing advances
+ * this reference; commutation, blanking and rejected edges do not. */
+static uint32_t crossing_epoch,crossing_epoch_valid;
 static volatile uint32_t captured_events,rejected_events,interval_us;
 /* 16 complete SysTick intervals form 1ms; retain the FULL ECAP tick
  * count instead of rounding to an integer MHz (ticks/us).
@@ -92,7 +95,7 @@ static void capture_stop(void)
 #endif
     DL_ECAP_disableTimeStampCapture(BEMF_ECAP);
     DL_ECAP_disableInterrupt(BEMF_ECAP,BEMF_FLAGS);
-    DL_ECAP_stopCounter(BEMF_ECAP);
+    if(!crossing_epoch_valid)DL_ECAP_stopCounter(BEMF_ECAP);
     DL_ECAP_clearInterrupt(BEMF_ECAP,BEMF_FLAGS);
     DL_ECAP_clearGlobalInterrupt(BEMF_ECAP);
     NVIC_ClearPendingIRQ(ECAP1_INT_IRQn);
@@ -105,11 +108,13 @@ void am13e_app_motor_bemf_abort(void)
     pending_code=pending_interval=0U;
     if(initialized) {
         capture_stop();
+        DL_ECAP_stopCounter(BEMF_ECAP);
 #ifdef AM13E_REF_IO_PLAN_V1
         sense_comparators_off();
 #endif
     }
     selected_code=0U;
+    crossing_epoch_valid=0U;
     interval_us=0U;
     if(initialized) {
 #if AM13E_MOTOR_OUTPUT_CONFIGURED
@@ -169,8 +174,8 @@ void am13e_app_motor_bemf_init(void)
     config.captureModeConfig.reArm=true;
     config.interruptsConfig.interruptSourceEnableMask=0U;
     DL_ECAP_init(BEMF_ECAP,&config);
-    /* Continuous rejected-edge capture MUST keep the commutation-
-     * referenced TSCTR; do not let CEVT1 reset the counter.
+    /* Continuous capture retains the accepted-crossing epoch. Do not let
+     * CEVT1 reset TSCTR, including when the Core rejects an early edge.
      */
     if (BEMF_ECAP->ECCTL1 & ECAP_ECCTL1_CTRRST1_MASK) bemf_fault();
     DL_ECAP_enableTimeStampCapture(BEMF_ECAP);
@@ -233,6 +238,10 @@ void compctl(int x)
     }
     capture_stop();
     selected_code=0U;
+    if(x==0) {
+        crossing_epoch_valid=0U;
+        DL_ECAP_stopCounter(BEMF_ECAP);
+    }
 #ifdef AM13E_REF_IO_PLAN_V1
     sense_comparators_off();
 #endif
@@ -299,7 +308,10 @@ void am13e_app_motor_bemf_interval_select(int ertm_us)
         CMPSS_LITE_Regs *cmp=CMPSS0;
         DL_CMPSSLITE_configFilterHigh(cmp,prescale,5U,3U);
         DL_CMPSSLITE_initFilterHigh(cmp);
-        DL_ECAP_resetCounters(BEMF_ECAP);
+        if(!crossing_epoch_valid) {
+            crossing_epoch=DL_ECAP_getTimeStampCounter(BEMF_ECAP);
+            crossing_epoch_valid=1U;
+        }
         DL_ECAP_enableTimeStampCapture(BEMF_ECAP);
         DL_ECAP_clearInterrupt(BEMF_ECAP,BEMF_FLAGS);
         DL_ECAP_clearGlobalInterrupt(BEMF_ECAP);
@@ -421,13 +433,21 @@ void ECAP1_IRQHandler(void)
     /* compctl()/rearm may clear an already-dispatched old IRQ. Preserve
      * the newly armed capture when that vector has no peripheral event. */
     if(!armed || flags==0U)return;
-    /* Counter overflow is a timeout. CAP1 data is not valid here. */
-    if(flags&DL_ECAP_ISR_SOURCE_CTROVF) {
+    /* A native 32-bit wrap is not an elapsed timeout. Unsigned differences
+     * remain valid across one wrap because the logical timeout is bounded
+     * well below the counter range. A wrap-only vector has no CAP1 edge. */
+    if(!crossing_epoch_valid)bemf_fault();
+    if((flags&DL_ECAP_ISR_SOURCE_CTROVF) &&
+       DL_ECAP_getTimeStampCounter(BEMF_ECAP)-crossing_epoch>=capture_timeout_ticks) {
         capture_stop();
+        crossing_epoch_valid=0U;
+        DL_ECAP_stopCounter(BEMF_ECAP);
         am13e_app_motor_timing_cancel();
         (void)am13e_app_motor_on_bemf_event(0,1);
         return;
     }
+    if((flags&DL_ECAP_ISR_SOURCE_CEVT1)==0U &&
+       flags==DL_ECAP_ISR_SOURCE_CTROVF)return;
 #ifdef SW_BLANKING
     if(blank_active && !(flags&~DL_ECAP_ISR_SOURCE_CEVT1))return; /* Masked capture vector. */
 #endif
@@ -437,9 +457,11 @@ void ECAP1_IRQHandler(void)
     const uint32_t ticks=DL_ECAP_getEventTimeStamp(BEMF_ECAP,DL_ECAP_EVENT_1);
     int capture_us=0;
     const AM13E_BemfSample sample=am13e_bemf_sample_plan(
-        ticks,capture_ticks_per_ms,capture_timeout_ticks,&capture_us);
+        ticks-crossing_epoch,capture_ticks_per_ms,capture_timeout_ticks,&capture_us);
     if (sample==AM13E_BEMF_SAMPLE_TIMEOUT) {
         capture_stop();
+        crossing_epoch_valid=0U;
+        DL_ECAP_stopCounter(BEMF_ECAP);
         am13e_app_motor_timing_cancel();
         (void)am13e_app_motor_on_bemf_event(0,1);
         return;
@@ -450,9 +472,10 @@ void ECAP1_IRQHandler(void)
      * continuously capturing until the shared policy accepts an edge.
      * Capture counter is NOT reset on a rejected edge.
      */
-    if(am13e_app_motor_on_bemf_event(capture_us,0))
+    if(am13e_app_motor_on_bemf_event(capture_us,0)) {
+        crossing_epoch=ticks;
         capture_stop();
-    else
+    } else
         ++rejected_events;
 }
 
@@ -495,13 +518,15 @@ void am13e_app_motor_bemf_tick(void)
         return;
     }
     if (!armed) return;
-    if (DL_ECAP_getTimeStampCounter(BEMF_ECAP) <
+    if (DL_ECAP_getTimeStampCounter(BEMF_ECAP)-crossing_epoch <
         capture_timeout_ticks) return;
     const uint32_t mask=__get_PRIMASK();
     __disable_irq();
-    if (armed && DL_ECAP_getTimeStampCounter(BEMF_ECAP) >=
+    if (armed && DL_ECAP_getTimeStampCounter(BEMF_ECAP)-crossing_epoch >=
                      capture_timeout_ticks) {
         capture_stop();
+        crossing_epoch_valid=0U;
+        DL_ECAP_stopCounter(BEMF_ECAP);
         am13e_app_motor_timing_cancel();
         (void)am13e_app_motor_on_bemf_event(0,1);
     }

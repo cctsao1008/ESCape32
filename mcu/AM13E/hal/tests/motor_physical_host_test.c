@@ -257,10 +257,18 @@ static void expect_sixstep(void)
 #endif
     }
 }
+static uint32_t capture_origin;
+void test_ecap_counter_started(ECAP_Regs *p,int was_running)
+{
+    if(!was_running)capture_origin=p->TSCTR;
+}
 static void capture(unsigned ticks)
 {
-    ECAP1->CAP1=ticks;ECAP1->ECFLG=DL_ECAP_ISR_SOURCE_CEVT1;
+    const unsigned enabled=ECAP1->ECEINT;
+    ECAP1->TSCTR=capture_origin+ticks;
+    ECAP1->CAP1=ECAP1->TSCTR;ECAP1->ECFLG=DL_ECAP_ISR_SOURCE_CEVT1;
     ECAP1_IRQHandler();
+    if(enabled && !ECAP1->ECEINT)capture_origin=ECAP1->CAP1;
 }
 static void zero(void)
 {
@@ -301,6 +309,68 @@ static void start(void)
     zero();assert(!gate_on());
     zero();assert(gate_on());
 }
+#ifndef HALL_MAP
+static void absolute_capture(uint32_t stamp,uint16_t extra)
+{
+    ECAP1->TSCTR=stamp;ECAP1->CAP1=stamp;
+    ECAP1->ECFLG=DL_ECAP_ISR_SOURCE_CEVT1|extra;
+    ECAP1_IRQHandler();
+}
+static void timing_epochs(void)
+{
+    am13e_app_motor_commutation_enable(0);
+    sine=prep=0;step=0;reverse=0;sync=fast=0;ival=3000;ertm=18000;
+    cfg.timing=16;cfg.damp=1;
+    uint32_t accepted=UINT32_C(0xfff00000);
+    ECAP1->TSCTR=accepted;
+    am13e_app_motor_pwm_apply(800,24,48,ertm,1,0,0,1);
+    nextstep();start();
+    /* Independently advancing hardware time; CAP1 is absolute, not a
+     * supplied decoded interval. The second crossing spans 32-bit wrap. */
+    static const unsigned intervals[]={3000,3000,2600,3400,3000};
+    static const int expected_ival[]={3000,3000,2900,3025,3018};
+    static const unsigned expected_delay[]={750,750,725,756,754};
+    for(unsigned n=0;n<5U;++n){
+#ifdef SW_BLANKING
+        MCPWM4->TBCTR=AM13E_BEMF_BLANK_TICKS;
+        MCPWM4->INTFLAG=DL_MCPWM_INT_ET_2;MCPWM4_IRQHandler();
+#endif
+        if(n==4U){
+            const int before=ival;
+            absolute_capture(accepted+100000U,0U);
+            absolute_capture(accepted+200000U,0U);
+            assert(ival==before); /* Neither rejected edge moves the epoch. */
+        }
+        const uint32_t next=accepted+intervals[n]*200U;
+        absolute_capture(next,next<accepted?DL_ECAP_ISR_SOURCE_CTROVF:0U);
+        assert(ival==expected_ival[n]);
+        assert(TIMG12->COUNTERREGS.LOAD==expected_delay[n]*100U-1U);
+        accepted=next;
+        /* Timer expiration, followed by independently delayed carrier ZERO.
+         * Commutation must not reset or stop the accepted-crossing clock. */
+        ECAP1->TSCTR=accepted+expected_delay[n]*200U;
+        *(volatile uint32_t *)(uintptr_t)&TIMG12->CPU_INT.MIS=DL_TIMER_INTERRUPT_ZERO_EVENT;
+        TIMG12_0_IRQHandler();
+        assert(ECAP1->TSCTR==accepted+expected_delay[n]*200U);
+        ECAP1->TSCTR+=1200U; /* 6us publication latency, not compensation. */
+        const uint32_t published=ECAP1->TSCTR;
+        zero();assert(ECAP1->TSCTR==published);expect_sixstep();
+        if(n==2U){reverse=1;step_publication();} /* Epoch survives reversal. */
+    }
+    ECAP1->TSCTR=accepted+AM13E_BEMF_REL17_TIMEOUT_US*200U;
+    am13e_app_motor_bemf_tick();assert(!sync && ival==10000);
+    am13e_app_motor_commutation_enable(0);
+    ECAP1->TSCTR=100U;step=0;reverse=0;ival=3000;ertm=18000;
+    nextstep();start();
+#ifdef SW_BLANKING
+    MCPWM4->TBCTR=AM13E_BEMF_BLANK_TICKS;
+    MCPWM4->INTFLAG=DL_MCPWM_INT_ET_2;MCPWM4_IRQHandler();
+#endif
+    absolute_capture(600100U,0U);assert(ival==3000);
+    am13e_app_motor_commutation_enable(0);
+    puts("PASS accepted-crossing epochs: speed changes, rejection, wrap, delayed ZERO, reversal, timeout and restart");
+}
+#endif
 #ifdef AM13E_FATAL_PATH_FIXTURE
 static void fatal_paths(int early)
 {
@@ -522,6 +592,9 @@ int main(void)
 #endif
 #ifdef HALL_MAP
     hall_runtime();assert(munmap(r,0x07000000)==0);return 0;
+#endif
+#ifndef HALL_MAP
+    timing_epochs();
 #endif
     cfg.damp=1;cfg.sine_power=8;ertm=6000;ival=3000;sync=6;step=0;reverse=0;
     am13e_app_motor_pwm_apply(800,24,48,ertm,1,0,0,1);
