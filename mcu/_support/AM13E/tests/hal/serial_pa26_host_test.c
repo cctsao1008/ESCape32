@@ -9,12 +9,12 @@
 #define resetcfg fixture_unused_resetcfg
 #define playmusic fixture_unused_playmusic
 #define resetcom fixture_unused_resetcom
-#include "../../../../src/util.c"
+#include "../../../../../src/util.c"
 #undef savecfg
 #undef resetcfg
 #undef playmusic
 #undef resetcom
-#include "../serial_uart_rx.c"
+#include "../../../../AM13E/hal/serial_uart_rx.c"
 #include "motor_power_stage.h"
 unsigned fixture_uart_rx_pending;
 uint32_t test_primask=1U;TestSCB test_scb;

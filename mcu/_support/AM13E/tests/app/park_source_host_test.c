@@ -1,6 +1,6 @@
 /* Include the actual Rel17 park() and state, not a copied state machine.
  * The native GPIO reader/writer are compiled alongside it. */
-#include "../../main.c"
+#include "../../../../../src/main.c"
 #include <assert.h>
 #include <setjmp.h>
 #include <stdio.h>

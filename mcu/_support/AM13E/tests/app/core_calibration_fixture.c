@@ -2,7 +2,7 @@
  * exercised is the original production calibirq(), including its actual math. */
 #define REL17_CALIBRATION_TEST_ADAPTER
 void am13e_app_servo_clock_trim(int direction);
-#include "../../io.c"
+#include "../../../../../src/io.c"
 #include "interfaces/servo_calibration.h"
 static int trim_action;
 void am13e_app_servo_clock_trim(int direction) {

@@ -3,8 +3,8 @@
 #include "common.h"
 #include <assert.h>
 #include <stdio.h>
-#include "../serial_uart_rx.c"
-#include "../command_reply.c"
+#include "../../../../AM13E/hal/serial_uart_rx.c"
+#include "../../../../AM13E/hal/command_reply.c"
 
 GPIO_Regs test_gpio[3];
 TestSCB test_scb;TestSysTick test_systick;

@@ -22,7 +22,7 @@ static uint32_t peer(GPIO_Regs *g,uint32_t mask)
     return bad_stop?0U:mask;
 }
 #define DL_GPIO_readPins peer
-#include "../mcu/AM13E/hal/io.c"
+#include "../../../../../boot/mcu/AM13E/hal/io.c"
 void DL_SYSTICK_init(uint32_t n){assert(n==0x1000000U);ticks=0;}
 void DL_SYSTICK_enable(void){}
 uint32_t DL_SYSTICK_getValue(void)

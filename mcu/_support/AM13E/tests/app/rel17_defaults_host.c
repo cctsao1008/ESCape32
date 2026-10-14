@@ -3,7 +3,7 @@
 #ifdef REL17_BEMF_POLICY_FIXTURE
 #include "interfaces/motor_bemf_policy.h"
 #endif
-#include "../../main.c"
+#include "../../../../../src/main.c"
 
 #ifdef REL17_BEMF_POLICY_FIXTURE
 void am13e_app_motor_fault_shutdown(void) { abort(); }

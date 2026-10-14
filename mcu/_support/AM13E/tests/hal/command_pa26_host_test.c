@@ -11,7 +11,7 @@
 #define resetcfg fixture_unused_resetcfg
 #define playmusic fixture_unused_playmusic
 #define resetcom fixture_unused_resetcom
-#include "../../../../src/util.c"
+#include "../../../../../src/util.c"
 #undef savecfg
 #undef resetcfg
 #undef playmusic
@@ -19,7 +19,7 @@
 #define am13e_app_io_dshot_packet fixture_dshot_packet
 #define am13e_app_io_servo_pulse fixture_servo_pulse
 #define am13e_pa26_rx_now fixture_capture_now
-#include "../command_capture.c"
+#include "../../../../AM13E/hal/command_capture.c"
 #undef am13e_pa26_rx_now
 #undef am13e_app_io_dshot_packet
 #undef am13e_app_io_servo_pulse
@@ -63,7 +63,7 @@ static void fixture_timer_start(GPTIMER_Regs *t)
 }
 #define DL_Timer_startCounter fixture_timer_start
 #define DL_Timer_initTimerMode fixture_timer_setup
-#include "../command_reply.c"
+#include "../../../../AM13E/hal/command_reply.c"
 #undef DL_Timer_initTimerMode
 #undef DL_Timer_startCounter
 uint32_t test_primask=1U;TestSCB test_scb;

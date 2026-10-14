@@ -1,6 +1,6 @@
 /* Actual source PendSV status/DShot LED commands -> native TI GPIO backend.
  * Only peripheral DriverLib/CMSIS, ADC/telemetry and fault reset are mocked. */
-#include "../../main.c"
+#include "../../../../../src/main.c"
 #include "io_backend.h"
 #include <dl_gpio.h>
 #include <assert.h>

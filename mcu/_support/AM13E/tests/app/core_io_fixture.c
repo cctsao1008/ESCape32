@@ -3,7 +3,7 @@
  * this file only supplies state and mocked hardware/command boundaries. */
 #include <stdbool.h>
 #define REL17_IO_TEST_OBSERVER
-#include "../../io.c"
+#include "../../../../../src/io.c"
 #include "ibus_receiver.h"
 #include "sbus_receiver.h"
 #include "crsf_receiver.h"

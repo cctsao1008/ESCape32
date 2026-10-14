@@ -3,17 +3,16 @@ project(AM13EFlashHostTests C)
 
 include(CTest)
 add_compile_definitions(AM13E IO_PA26)
-include_directories("${CMAKE_CURRENT_LIST_DIR}/../../src" "${CMAKE_CURRENT_LIST_DIR}/../../mcu/AM13E/hal")
-
-set(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../..")
+set(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../../../..")
+include_directories("${REPO_ROOT}/boot/src" "${REPO_ROOT}/boot/mcu/AM13E/hal")
 add_executable(am13e_flash_transaction_test
-    "${REPO_ROOT}/boot/tests/am13e_flash_transaction_test.c"
+    "${REPO_ROOT}/mcu/_support/AM13E/tests/boot/am13e_flash_transaction_test.c"
     "${REPO_ROOT}/boot/mcu/AM13E/hal/flash.c"
     "${REPO_ROOT}/boot/mcu/AM13E/hal/app_validity.c")
 target_compile_features(am13e_flash_transaction_test PRIVATE c_std_11)
 target_compile_definitions(am13e_flash_transaction_test PRIVATE AM13E_FLASH_TEST)
 target_include_directories(am13e_flash_transaction_test PRIVATE
-    "${REPO_ROOT}/boot/tests/am13e_mock"
+    "${REPO_ROOT}/mcu/_support/AM13E/tests/boot/am13e_mock"
     "${REPO_ROOT}/boot/mcu/AM13E" "${REPO_ROOT}/boot/mcu/AM13E/hal")
 target_compile_options(am13e_flash_transaction_test PRIVATE
     -O1 -g -Wall -Wextra -Werror)
@@ -28,7 +27,7 @@ add_test(NAME am13e_flash_transaction COMMAND am13e_flash_transaction_test)
 
 # Native Boot staging helpers (no Flash writer, no new protocol parser).
 add_executable(am13e_update_staging_test
-    "${REPO_ROOT}/boot/tests/am13e_update_staging_test.c"
+    "${REPO_ROOT}/mcu/_support/AM13E/tests/boot/am13e_update_staging_test.c"
     "${REPO_ROOT}/boot/mcu/AM13E/hal/update_staging.c")
 target_compile_features(am13e_update_staging_test PRIVATE c_std_11)
 target_include_directories(am13e_update_staging_test PRIVATE
@@ -41,21 +40,21 @@ add_test(NAME am13e_update_staging COMMAND am13e_update_staging_test)
 # exercises the SAME bounded eight-sector executor with a Host Flash
 # mock, including mid-update failure and post-program corruption.
 add_executable(am13e_update_commit_test
-    "${REPO_ROOT}/boot/tests/am13e_update_commit_test.c"
+    "${REPO_ROOT}/mcu/_support/AM13E/tests/boot/am13e_update_commit_test.c"
     "${REPO_ROOT}/boot/mcu/AM13E/hal/update_commit.c"
     "${REPO_ROOT}/boot/mcu/AM13E/hal/update_staging.c")
 target_compile_features(am13e_update_commit_test PRIVATE c_std_11)
 target_compile_definitions(am13e_update_commit_test PRIVATE
     AM13E_BOOT_COMMIT_HOST_TEST)
 target_include_directories(am13e_update_commit_test PRIVATE
-    "${REPO_ROOT}/boot/tests/am13e_mock"
+    "${REPO_ROOT}/mcu/_support/AM13E/tests/boot/am13e_mock"
     "${REPO_ROOT}/boot/mcu/AM13E" "${REPO_ROOT}/boot/mcu/AM13E/hal")
 target_compile_options(am13e_update_commit_test PRIVATE
     -O1 -g -Wall -Wextra -Werror)
 add_test(NAME am13e_update_commit COMMAND am13e_update_commit_test)
 
 add_executable(am13e_app_validity_test
-    "${REPO_ROOT}/boot/tests/am13e_app_validity_test.c"
+    "${REPO_ROOT}/mcu/_support/AM13E/tests/boot/am13e_app_validity_test.c"
     "${REPO_ROOT}/boot/mcu/AM13E/hal/app_validity.c")
 target_compile_features(am13e_app_validity_test PRIVATE c_std_11)
 target_include_directories(am13e_app_validity_test PRIVATE
@@ -91,11 +90,11 @@ if(AM13E_HOST_PACKED_IMAGE)
     # Stage D1: compile actual shared ESCape32 main.c / io.c framing,
     # real AM13E Flash-range and Flash-write paths, with mock PB14/DriverLib.
     add_executable(am13e_boot_protocol_test
-        "${REPO_ROOT}/boot/tests/am13e_protocol_host_test.c"
-        "${REPO_ROOT}/boot/tests/am13e_protocol_entry.c"
+        "${REPO_ROOT}/mcu/_support/AM13E/tests/boot/am13e_protocol_host_test.c"
+        "${REPO_ROOT}/mcu/_support/AM13E/tests/boot/am13e_protocol_entry.c"
         "${REPO_ROOT}/boot/src/io.c"
         "${REPO_ROOT}/boot/mcu/AM13E/hal/crc.c"
-        "${REPO_ROOT}/boot/tests/am13e_crcp_mock.c"
+        "${REPO_ROOT}/mcu/_support/AM13E/tests/boot/am13e_crcp_mock.c"
         "${REPO_ROOT}/boot/mcu/AM13E/hal/flash_range.c"
         "${REPO_ROOT}/boot/mcu/AM13E/hal/flash.c"
         "${REPO_ROOT}/boot/mcu/AM13E/hal/app_validity.c"
@@ -108,7 +107,7 @@ if(AM13E_HOST_PACKED_IMAGE)
     target_include_directories(am13e_boot_protocol_test PRIVATE
         "${REPO_ROOT}/boot/src"
         "${REPO_ROOT}/boot/mcu/AM13E" "${REPO_ROOT}/boot/mcu/AM13E/hal"
-        "${REPO_ROOT}/boot/tests/am13e_mock")
+        "${REPO_ROOT}/mcu/_support/AM13E/tests/boot/am13e_mock")
     # Force the platform's most error-prone signedness. The 0xff
     # 1-KiB count must decode correctly regardless of target ABI.
     target_compile_options(am13e_boot_protocol_test PRIVATE
@@ -127,7 +126,7 @@ if(AM13E_HOST_PACKED_IMAGE)
     set(AM13E_WINDOW1_IMAGE "${CMAKE_CURRENT_BINARY_DIR}/am13e-window1-packed.bin")
     add_test(NAME am13e_window1_image_fixture
         COMMAND "${Python3_EXECUTABLE}"
-            "${REPO_ROOT}/boot/tests/am13e_window1_image_fixture.py"
+            "${REPO_ROOT}/mcu/_support/AM13E/tests/boot/am13e_window1_image_fixture.py"
             "${AM13E_HOST_PACKED_IMAGE}" "${AM13E_WINDOW1_IMAGE}")
     set_tests_properties(am13e_window1_image_fixture PROPERTIES
         FIXTURES_SETUP am13e_window1_fixture)
@@ -141,7 +140,7 @@ if(AM13E_HOST_PACKED_IMAGE)
     set(AM13E_FULL_IMAGE "${CMAKE_CURRENT_BINARY_DIR}/am13e-full488-packed.bin")
     add_test(NAME am13e_full488_image_fixture
         COMMAND "${Python3_EXECUTABLE}"
-            "${REPO_ROOT}/boot/tests/am13e_window1_image_fixture.py"
+            "${REPO_ROOT}/mcu/_support/AM13E/tests/boot/am13e_window1_image_fixture.py"
             "${AM13E_HOST_PACKED_IMAGE}" "${AM13E_FULL_IMAGE}" --full)
     set_tests_properties(am13e_full488_image_fixture PROPERTIES
         FIXTURES_SETUP am13e_full488_fixture)
@@ -152,9 +151,9 @@ if(AM13E_HOST_PACKED_IMAGE)
     # Tiny-image READ padding is checked through the same production
     # parser executable; no second smoke build or duplicate 11-test run.
     add_test(NAME am13e_image_packer
-        COMMAND "${Python3_EXECUTABLE}" "${REPO_ROOT}/boot/tests/am13e_image_packer_test.py"
+        COMMAND "${Python3_EXECUTABLE}" "${REPO_ROOT}/mcu/_support/AM13E/tests/boot/am13e_image_packer_test.py"
             $<TARGET_FILE:am13e_boot_protocol_test>)
 else()
     add_test(NAME am13e_image_packer
-        COMMAND "${Python3_EXECUTABLE}" "${REPO_ROOT}/boot/tests/am13e_image_packer_test.py")
+        COMMAND "${Python3_EXECUTABLE}" "${REPO_ROOT}/mcu/_support/AM13E/tests/boot/am13e_image_packer_test.py")
 endif()

@@ -3,7 +3,7 @@
 #include <assert.h>
 #include <setjmp.h>
 #include <stdio.h>
-#include "../input_watchdog.c"
+#include "../../../../AM13E/hal/input_watchdog.c"
 uint32_t test_primask=1U;
 static unsigned powered,running,starts,restarts;
 static int behavior;

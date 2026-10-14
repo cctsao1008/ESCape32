@@ -8,8 +8,8 @@ if len(sys.argv)not in(3,4) or (len(sys.argv)==4 and sys.argv[3]!="--full"):
     raise SystemExit("usage: fixture.py REAL_FLAT OUTPUT [--full]")
 source=Path(sys.argv[1]).read_bytes()
 dest=Path(sys.argv[2])
-root=Path(__file__).resolve().parents[2]
-sys.path.insert(0,str(root/"boot/tools"))
+root=Path(__file__).resolve().parents[5]
+sys.path.insert(0,str(root/"mcu/_support/AM13E/tools"))
 from pack_am13e_rel17 import pack,verify
 target=(488 if len(sys.argv)==4 else 257)*1024
 if len(source)<8 or len(source)>=target:

@@ -8,8 +8,8 @@ import sys
 import tempfile
 import importlib.util
 
-ROOT=Path(__file__).resolve().parents[2]
-PACK=ROOT/"boot/tools/pack_am13e_rel17.py"
+ROOT=Path(__file__).resolve().parents[5]
+PACK=ROOT/"mcu/_support/AM13E/tools/pack_am13e_rel17.py"
 APP=0x6000
 MAX=488*1024
 def run(*args,success=True):

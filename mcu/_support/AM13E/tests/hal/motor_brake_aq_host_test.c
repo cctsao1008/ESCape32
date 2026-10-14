@@ -3,7 +3,7 @@
  * Host build: cc -std=c11 -O2 -Wall -Wextra -Werror -Wpedantic
  *   -Imcu/AM13E mcu/AM13E/hal/motor_phase_plan.c
  *   mcu/AM13E/hal/motor_aq_plan.c
- *   mcu/AM13E/hal/tests/motor_brake_aq_host_test.c -o /tmp/test_brake
+ *   mcu/_support/AM13E/tests/hal/motor_brake_aq_host_test.c -o /tmp/test_brake
  */
 #include "motor_phase_plan.h"
 #include "motor_aq_plan.h"

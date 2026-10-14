@@ -202,14 +202,14 @@ def main():
           "TMU_LVF_INT_IRQn" in src("boot/mcu/AM13E/hal/handoff.c"),
           "Boot handoff must release IO and clear only implemented IRQ state")
     check('"${REPO_ROOT}/boot/mcu/AM13E/hal/crc.c"' in
-          src("boot/tests/am13e_host/CMakeLists.txt") and
-          "uint32_t crc32(" not in src("boot/tests/am13e_protocol_host_test.c"),
+          src("mcu/_support/AM13E/tests/boot/am13e_host/CMakeLists.txt") and
+          "uint32_t crc32(" not in src("mcu/_support/AM13E/tests/boot/am13e_protocol_host_test.c"),
           "Boot protocol tests must exercise production CRC adapter")
     gate_impl=src("boot/mcu/AM13E/hal/app_validity.c")
     flash=src("boot/mcu/AM13E/hal/flash.c")
     build=src("CMakeLists.txt")
     platform=src("mcu/_support/AM13E/cmake/ti.cmake")
-    packer=src("boot/tools/pack_am13e_rel17.py")
+    packer=src("mcu/_support/AM13E/tools/pack_am13e_rel17.py")
     check("boot_am13e_app_validity(" in gate and
           "AM13E_BOOT_CFG_ID" in gate_impl and
           ".id = 0x32ea" in src("src/main.c"),

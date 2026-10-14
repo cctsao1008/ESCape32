@@ -10,7 +10,7 @@
 #include <assert.h>
 #include <setjmp.h>
 #include <stdio.h>
-#include "../../../../src/main.c"
+#include "../../../../../src/main.c"
 #include "motor_safety.h"
 #include "motor_output_runtime.h"
 #include "motor_power_stage.h"
@@ -30,7 +30,7 @@
 #include <dl_ecap.h>
 #include <dl_timer.h>
 #if defined(AM13E_FATAL_PATH_FIXTURE) || defined(AM13E_SC5_FIXTURE)
-#include "../analog_runtime.c"
+#include "../../../../AM13E/hal/analog_runtime.c"
 #endif
 #ifdef AM13E_SC5_FIXTURE
 void DL_Common_delayCycles(uint32_t cycles) { (void)cycles; }
@@ -99,16 +99,16 @@ static void sc5_adc(void)
  * SAME configured motor backend, not mocked shutdown functions. */
 #define initialized serial_fixture_initialized
 #define am13e_app_io_cli_line fixture_cli_result
-#include "../serial_uart_rx.c"
+#include "../../../../AM13E/hal/serial_uart_rx.c"
 #undef am13e_app_io_cli_line
 #undef initialized
 #define initialized aux_fixture_initialized
-#include "../aux_gpio.c"
+#include "../../../../AM13E/hal/aux_gpio.c"
 #undef initialized
 #define main fixture_returned_main
 #define am13e_rel17_app_main fixture_returning_core
 int fixture_returned_main(void);
-#include "../../config.c"
+#include "../../../../AM13E/config.c"
 #undef am13e_rel17_app_main
 #undef main
 void fixture_returning_core(void) {}

@@ -27,7 +27,7 @@ for flags in \
   '-DBEC_MAP=0xADE' \
   '-DBEC_MAP=0xB35 -DAM13E_BOARD_BEC_BITS=1 -DAM13E_BOARD_BEC1_GPIO=GPIO1 -DAM13E_BOARD_BEC1_MASK=1U -DAM13E_BOARD_BEC1_PINCM=32U' \
   '-DBEC_MAP=0xB35 -DAM13E_BOARD_BEC_BITS=2 -DAM13E_BOARD_BEC1_GPIO=GPIO1 -DAM13E_BOARD_BEC1_MASK=8192U -DAM13E_BOARD_BEC1_PINCM=45U -DAM13E_BOARD_BEC2_GPIO=GPIO1 -DAM13E_BOARD_BEC2_MASK=2U -DAM13E_BOARD_BEC2_PINCM=33U'; do
-  if cc -std=c11 -DAM13E -Isrc -Imcu/AM13E -Isrc/tests/AM13E/aux_mock \
+  if cc -std=c11 -DAM13E -Isrc -Imcu/AM13E -Imcu/_support/AM13E/tests/app/aux_mock \
     -fsyntax-only $flags mcu/AM13E/hal/aux_gpio.c >"$logs/led-negative.log" 2>&1; then
     echo 'FAIL invalid or missing LED capability accepted'; exit 1
   fi

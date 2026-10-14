@@ -1,6 +1,6 @@
 #pragma once
 /* Host register/IRQ boundaries only; never a board profile. */
-#include "../../../../../src/tests/AM13E/aux_mock/soc.h"
+#include "../../app/aux_mock/soc.h"
 extern uint32_t test_primask;
 #define __get_PRIMASK() test_primask
 #define __set_PRIMASK(x) (test_primask=(x))

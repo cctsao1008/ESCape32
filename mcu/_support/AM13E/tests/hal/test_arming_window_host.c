@@ -3,7 +3,7 @@
  * No peripheral or watchdog emulation; this checks only arithmetic
  * and API state transitions. For target compilation use ARM GCC.
  */
-#include "../motor_backend.h"
+#include "../../../../AM13E/hal/motor_backend.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>

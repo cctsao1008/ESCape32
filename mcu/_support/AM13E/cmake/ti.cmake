@@ -95,7 +95,7 @@ endfunction()
 
 function(am13e_pack_image elf bin hex)
     # Build metadata is evidence only; no manifest is added to the wire image.
-    set(packer "${PROJECT_SOURCE_DIR}/boot/tools/pack_am13e_rel17.py")
+    set(packer "${PROJECT_SOURCE_DIR}/mcu/_support/AM13E/tools/pack_am13e_rel17.py")
     set(raw "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${elf}.dir/image.raw.bin")
     add_custom_command(OUTPUT ${bin} ${hex}
         COMMAND arm-none-eabi-objcopy -O binary --gap-fill=0xff ${elf} "${raw}"

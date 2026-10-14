@@ -10,8 +10,6 @@ on:
       - 'boot/mcu/AM13E/**'
       - 'boot/CMakeLists.txt'
       - 'boot/src/**'
-      - 'boot/tests/**'
-      - 'boot/tools/**'
       - '.github/workflows/am13e-fw1-compile-link.yml'
   workflow_dispatch:
 
@@ -122,7 +120,7 @@ jobs:
             2>&1 | tee am13e-ci-logs/fw1-rel17-size.log
           arm-none-eabi-objdump -h am13e-ci-build/AM13E-rev17.3.elf \
             >am13e-ci-logs/fw1-rel17-sections.log
-          cmake -S boot/tests/am13e_host -B am13e-ci-rel17-host -G "Unix Makefiles" \
+          cmake -S mcu/_support/AM13E/tests/boot/am13e_host -B am13e-ci-rel17-host -G "Unix Makefiles" \
             -DAM13E_HOST_SANITIZERS=OFF \
             -DAM13E_HOST_PACKED_IMAGE="$(pwd)/am13e-ci-build/AM13E-rev17.3.bin" \
             >am13e-ci-logs/rel17-host-configure.log 2>&1
@@ -346,7 +344,7 @@ jobs:
             "$park -DERPM_PIN=1 -DAM13E_BOARD_ERPM_GPIO=GPIO1 -DAM13E_BOARD_ERPM_MASK=1U -DAM13E_BOARD_ERPM_PINCM=32U" \
             '-DERPM_PIN=1 -DAM13E_BOARD_ERPM_GPIO=GPIO1 -DAM13E_BOARD_ERPM_MASK=8192U -DAM13E_BOARD_ERPM_PINCM=45U' \
             '-DERPM_PIN=1 -DAM13E_BOARD_ERPM_GPIO=GPIO1 -DAM13E_BOARD_ERPM_MASK=8192U -DAM13E_BOARD_ERPM_PINCM=33U'; do
-            if cc -std=c11 -DAM13E -Imcu/AM13E -Isrc/tests/AM13E/aux_mock \
+            if cc -std=c11 -DAM13E -Imcu/AM13E -Imcu/_support/AM13E/tests/app/aux_mock \
               -fsyntax-only $flags mcu/AM13E/hal/aux_gpio.c \
               >am13e-ci-logs/aux-negative.log 2>&1; then
               echo 'FAIL invalid auxiliary GPIO selection accepted'; exit 1

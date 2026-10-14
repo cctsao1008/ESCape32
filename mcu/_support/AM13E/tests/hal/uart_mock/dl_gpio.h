@@ -1,5 +1,5 @@
 #pragma once
-#include "../../../../../src/tests/AM13E/aux_mock/dl_gpio.h"
+#include "../../app/aux_mock/dl_gpio.h"
 #define DL_GPIO_INVERSION_ENABLE 1U
 #define DL_GPIO_RESISTOR_NONE 0U
 extern unsigned test_pin_invert[96];

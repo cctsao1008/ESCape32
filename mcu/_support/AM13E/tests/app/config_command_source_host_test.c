@@ -2,7 +2,7 @@
  * Only physical cfg-commit, Flash operations, watchdog, TX-busy and audio
  * boundaries are mocked. Including util.c exposes its actual busy guard. */
 #include "newlib_host.h"
-#include "../../util.c"
+#include "../../../../../src/util.c"
 #include "io_backend.h"
 #include "command_reply.h"
 #include "command_decode.h"
@@ -11,7 +11,7 @@
 #include <stdio.h>
 #include <limits.h>
 #ifdef BEC_MAP
-#include "../../../mcu/AM13E/hal/aux_gpio.c" /* Actual production peripheral unit, not a model. */
+#include "../../../../AM13E/hal/aux_gpio.c" /* Actual production peripheral unit, not a model. */
 #include <setjmp.h>
 GPIO_Regs test_gpio[3];
 unsigned test_function[96],test_input[96],test_enable_calls,test_read_toggle;

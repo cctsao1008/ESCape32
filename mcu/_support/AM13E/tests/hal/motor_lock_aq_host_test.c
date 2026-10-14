@@ -5,7 +5,7 @@
  * Host:
  *   cc -std=c11 -O2 -Wall -Wextra -Werror -Wpedantic -Imcu/AM13E \
  *      mcu/AM13E/hal/motor_phase_plan.c mcu/AM13E/hal/motor_aq_plan.c \
- *      mcu/AM13E/hal/tests/motor_lock_aq_host_test.c -o /tmp/lock_aq
+ *      mcu/_support/AM13E/tests/hal/motor_lock_aq_host_test.c -o /tmp/lock_aq
  *   /tmp/lock_aq
  *
  * This validates the logic/AQ contract, NOT output non-overlap or driver

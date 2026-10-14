@@ -1,6 +1,6 @@
 /* Actual source laststep/commutation/BEMF functions + util resetcom and
  * native BEMF/phase planners. Physical PWM/comparator/timer/reset mocked. */
-#include "../../main.c"
+#include "../../../../../src/main.c"
 #include "motor_phase_plan.h"
 #include <assert.h>
 #include <setjmp.h>

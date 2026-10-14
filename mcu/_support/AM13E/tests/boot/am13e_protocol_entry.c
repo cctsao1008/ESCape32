@@ -5,6 +5,6 @@
  */
 #define write boot_am13e_flash_write
 #define am13e_rel17_boot_main boot_am13e_protocol_entry
-#include "../src/main.c"
+#include "../../../../../boot/src/main.c"
 #undef am13e_rel17_boot_main
 #undef write
