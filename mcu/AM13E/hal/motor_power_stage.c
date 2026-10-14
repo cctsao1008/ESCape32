@@ -82,7 +82,7 @@ int am13e_power_stage_inactive(void)
 }
 int am13e_power_stage_enable(void)
 {
-    if(!AM13E_OPTION1_OUTPUTS_QUALIFIED || !initialized || __get_PRIMASK()!=1U)return 0;
+    if(!initialized || __get_PRIMASK()!=1U)return 0;
 #if AM13E_BOARD_PB13_ACTIVE_LEVEL == 1
     DL_GPIO_setPins(AM13E_GATE_GPIO,GATE_EN_PIN);
 #else

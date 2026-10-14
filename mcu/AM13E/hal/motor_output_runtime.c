@@ -110,7 +110,7 @@ void am13e_motor_output_stage(const uint16_t aq[6],const uint16_t compare[6],uin
 }
 int am13e_motor_output_start(void)
 {
-    if(!AM13E_OPTION1_OUTPUTS_QUALIFIED || __get_PRIMASK()!=1U ||
+    if(__get_PRIMASK()!=1U ||
        !am13e_app_motor_nfault_trip_ready() ||
        !am13e_app_motor_bemf_reference_start_ready())return 0;
     const AM13E_MotorPadRoute *route=am13e_board_motor_pad_route();

@@ -43,8 +43,8 @@ _Static_assert(AM13E_MOTOR_DB_RED_TICKS==92 &&
     defined(AM13E_BOARD_VBUS_BOTTOM_OHMS) || defined(AM13E_BOARD_NTC_MODEL)
 #error "Option 1 reference must not invent sensor calibration"
 #endif
-_Static_assert(AM13E_OPTION1_OUTPUTS_QUALIFIED==0,
-               "Unqualified Option 1 must refuse physical outputs");
+_Static_assert(AM13E_MOTOR_OUTPUT_CONFIGURED==0,
+               "Absent electrical definitions cannot select a physical output implementation");
 _Static_assert(AM13E_BOARD_OC_GPIO_PINCM==0 &&
                AM13E_BOARD_OC_ACTIVE_LOW==1 &&
                AM13E_BOARD_SERIAL_TX_PINCM==0 &&

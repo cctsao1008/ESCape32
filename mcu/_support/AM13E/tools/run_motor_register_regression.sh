@@ -7,18 +7,16 @@ out=$(mktemp -d /tmp/am13e-motor-register.XXXXXX)
 trap 'rm -rf "$out"' EXIT
 python3 mcu/_support/AM13E/tools/prepare_sdk_sources.py --sdk-root "$sdk" --output "$out"
 # Synthetic electrical fixtures only; never a qualified board configuration.
-for fixture in high low full inverted blanking hall pwm_enable pwm_enable_full fatal unqualified sc5 sc5_model; do
-qualified=1; polarity=1; mask=0; fed=0; extra=(); extra_sources=()
+for fixture in high low full inverted blanking hall pwm_enable pwm_enable_full fatal sc5; do
+polarity=1; mask=0; fed=0; extra=(); extra_sources=()
 case "$fixture" in
-  sc5|sc5_model)
-    if [[ "$fixture" == sc5 ]]; then qualified=0; fi
+  sc5)
     extra=(-DAM13E_SC5_FIXTURE -include mcu/_support/AM13E/tests/hal/sc5_calibration_fixture.h
       -DAM13E_BOARD_ADC_FULLSCALE=4095 -DAM13E_BOARD_ADC_VREF_MV=2500
       -DAM13E_BOARD_NTC_SUPPLY_MV=3300 -DAM13E_BOARD_NTC_MODEL=3
       -DAM13E_BOARD_VBUS_TOP_OHMS=15000 -DAM13E_BOARD_VBUS_BOTTOM_OHMS=1000)
     extra_sources=(mcu/AM13E/hal/analog_sampling_backend.c
       mcu/AM13E/hal/analog_calibration_plan.c "$sdk/source/driverlib/am13e230x/dl_adc.c") ;;
-  unqualified) qualified=0 ;;
   low) polarity=0; mask=63 ;;
   full) extra=(-DFULL_DUTY) ;;
   inverted) mask=21; extra=(-DINVERTED_HIGH) ;;
@@ -53,7 +51,7 @@ hw="$sdk/source/device/am13e230x/include/hw"
 dl="$sdk/source/driverlib/am13e230x"
 cc "${extra[@]}" -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections \
  -DAM13E_BOARD_MCU_PART=23019 -DAM13E_BOARD_PACKAGE=1 -DAM13E -DAM13E_REF_IO_PLAN_V1=1 -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' \
- -DAM13E_OC_U_DAC_CODE=2048 -DAM13E_OC_V_DAC_CODE=2048 -DAM13E_OC_W_DAC_CODE=2048 -DAM13E_OC_U_INVERT=0 -DAM13E_OC_V_INVERT=0 -DAM13E_OC_W_INVERT=0 -DAM13E_OPTION1_OUTPUTS_QUALIFIED="$qualified" -DAM13E_MOTOR_GATE_ACTIVE_LEVEL="$polarity" -DAM13E_MOTOR_PAD_INVERT_MASK="$mask" -DAM13E_MOTOR_OUTPUT_RED_TICKS=120 -DAM13E_MOTOR_OUTPUT_FED_TICKS="$fed" -DAM13E_MOTOR_MIN_DEAD_TICKS=100 -DAM13E_MOTOR_NFAULT_ACTIVE_LOW=1 -DAM13E_MOTOR_GATE_RESET_INACTIVE=1 \
+ -DAM13E_OC_U_DAC_CODE=2048 -DAM13E_OC_V_DAC_CODE=2048 -DAM13E_OC_W_DAC_CODE=2048 -DAM13E_OC_U_INVERT=0 -DAM13E_OC_V_INVERT=0 -DAM13E_OC_W_INVERT=0 -DAM13E_MOTOR_GATE_ACTIVE_LEVEL="$polarity" -DAM13E_MOTOR_PAD_INVERT_MASK="$mask" -DAM13E_MOTOR_OUTPUT_RED_TICKS=120 -DAM13E_MOTOR_OUTPUT_FED_TICKS="$fed" -DAM13E_MOTOR_MIN_DEAD_TICKS=100 -DAM13E_MOTOR_NFAULT_ACTIVE_LOW=1 -DAM13E_MOTOR_GATE_RESET_INACTIVE=1 \
  "-DAM13E_TEST_TI_ECAP_HEADER=\"$dl/dl_ecap.h\"" "-DAM13E_TEST_TI_GPIO_HEADER=\"$dl/dl_gpio.h\"" "-DAM13E_TEST_TI_MCPWM_HEADER=\"$dl/dl_mcpwm.h\"" \
  "-DAM13E_TEST_TI_EQEP_HEADER=\"$dl/dl_eqep.h\"" \
  "-DAM13E_TEST_TI_UART_HEADER=\"$dl/dl_unicommuart.h\"" \
@@ -68,6 +66,21 @@ cc "${extra[@]}" -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-int-to-po
  -o "$out/motor-physical-test"
 "$out/motor-physical-test"
 done
+
+# A complete physical output implementation requires real asynchronous
+# overcurrent contracts; an approval declaration is neither needed nor enough.
+if cc -fsyntax-only -std=c11 -DAM13E -DCLK=200000000 \
+    -DAM13E_MOTOR_GATE_ACTIVE_LEVEL=1 -DAM13E_MOTOR_PAD_INVERT_MASK=0 \
+    -DAM13E_MOTOR_OUTPUT_RED_TICKS=120 -DAM13E_MOTOR_OUTPUT_FED_TICKS=0 \
+    -DAM13E_MOTOR_MIN_DEAD_TICKS=100 -DAM13E_MOTOR_NFAULT_ACTIVE_LOW=1 \
+    -DAM13E_MOTOR_GATE_RESET_INACTIVE=1 -Wno-int-to-pointer-cast \
+    -Isrc -Imcu/AM13E -Imcu/AM13E/hal \
+    -Imcu/_support/AM13E/tests/hal/register_mock -I"$hw" -I"$dl" \
+    mcu/AM13E/hal/motor_fault_route.c >"$out/missing-oc.log" 2>&1; then
+  echo "FAIL: physical outputs accepted missing OC contracts" >&2; exit 1
+fi
+grep -q 'Configured Option 1 outputs require explicit overcurrent contracts' "$out/missing-oc.log"
+echo "PASS: rejected configured physical outputs missing native OC contracts"
 
 # Native SC5 ADC reference/package contracts must be explicit and valid.
 for contract in missing_mode invalid_mode qfn_internal; do

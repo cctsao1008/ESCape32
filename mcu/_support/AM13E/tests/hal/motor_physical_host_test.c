@@ -14,6 +14,7 @@
 #include "motor_safety.h"
 #include "motor_output_runtime.h"
 #include "motor_power_stage.h"
+#include "motor_fault_route.h"
 #include "board_motor_output_provider.h"
 #include "motor_bemf.h"
 #include "motor_event_timer.h"
@@ -425,13 +426,11 @@ static void sc5_no_sample(void)
             nextstep();
             assert(!am13e_app_motor_bemf_reference_start_ready());
             zero();
-#if AM13E_OPTION1_OUTPUTS_QUALIFIED
             assert(!"missing sample accepted");
-#endif
         }
         AM13E_BemfReferenceStatus status;am13e_app_motor_bemf_reference_status(&status);
         assert(!status.calculated && !status.published && !status.capture_synchronized && !gate_on());
-        assert(watchdog_arms==before+AM13E_OPTION1_OUTPUTS_QUALIFIED);
+        assert(watchdog_arms==before+1U);
         _exit(0);
     }
     int status;assert(waitpid(child,&status,0)==child && WIFEXITED(status) && WEXITSTATUS(status)==0);
@@ -441,20 +440,15 @@ static void sc5_publication(void)
 {
     AM13E_BemfReferenceStatus status;
     assert(!am13e_app_motor_bemf_reference_set(2048U));
-#if AM13E_OPTION1_OUTPUTS_QUALIFIED
-    /* Synthetic qualification declaration in this host fixture ONLY.
-     * Native timebase calibration still requires sixteen full intervals. */
+    /* Native timebase calibration requires sixteen full intervals. */
     for(unsigned n=0;n<17U;++n){ECAP1->TSCTR+=12500U;am13e_app_motor_bemf_tick();}
-#endif
     cfg.damp=1;sine=prep=0;step=0;reverse=0;sync=0;ival=3000;ertm=18000;
     am13e_app_motor_pwm_apply(800,24,48,ertm,1,0,0,1);
     nextstep();am13e_app_motor_commutation_commit();
     am13e_app_motor_bemf_reference_status(&status);
     assert(status.configured && status.calculated && !status.published);
     assert(status.expected_code==775U && CMPSS0->DACHVALS==775U);
-#if AM13E_OPTION1_OUTPUTS_QUALIFIED
     am13e_app_motor_commutation_enable(1);assert(!gate_on());
-#endif
     defer_dach_load=1U;zero();
     am13e_app_motor_bemf_reference_status(&status);
     assert(!status.published && !status.capture_synchronized);
@@ -462,18 +456,13 @@ static void sc5_publication(void)
     defer_dach_load=0U;zero();
     am13e_app_motor_bemf_reference_status(&status);
     assert(status.published);
-#if AM13E_OPTION1_OUTPUTS_QUALIFIED
     assert(status.capture_synchronized && gate_on());
     /* No raw/background update is authorized while capture is armed. */
     const uint16_t shadow=CMPSS0->DACHVALS;
     assert(!am13e_app_motor_bemf_reference_set(1234U) && CMPSS0->DACHVALS==shadow);
     adctrig();assert(CMPSS0->DACHVALS==shadow);
-#else
-    assert(!status.capture_synchronized);
-    assert(!(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK) && !gate_on());
-#endif
-    /* Shadow-to-active must match every floating phase and edge without
-     * granting the unqualified fixture analog capture authorization. */
+    /* Shadow-to-active must match every floating phase and edge,
+     * preserving the active image/capture association. */
     static const unsigned high[6]={2,0,0,1,1,2},low[6]={1,1,2,2,0,0};
     static const unsigned codes[3]={775U,620U,495U};
     for(unsigned direction=0;direction<2U;++direction){
@@ -485,13 +474,7 @@ static void sc5_publication(void)
             assert((SYSCTL->SOCLOCK.CMPHPMXSEL&SYSCTL_CMPHPMXSEL_CMP0HPMXSEL_MASK)==floating);
             assert((ECAP1->ECCTL1&ECAP_ECCTL1_CAP1POL_MASK)==
                    (((step^reverse)&1)?DL_ECAP_EVENT_RISING_EDGE:DL_ECAP_EVENT_FALLING_EDGE));
-#if AM13E_OPTION1_OUTPUTS_QUALIFIED
             assert(status.capture_synchronized);
-#else
-            const int before=ival;
-            ECAP1->CAP1=123U;ECAP1->ECFLG=DL_ECAP_ISR_SOURCE_CEVT1;ECAP1_IRQHandler();
-            assert(ival==before && !status.capture_synchronized);
-#endif
         }
     }
     /* A later image replaces the pending association, not just the code. */
@@ -499,7 +482,6 @@ static void sc5_publication(void)
     const unsigned floating=3U-high[step-1]-low[step-1];
     defer_dach_load=0U;zero();am13e_app_motor_bemf_reference_status(&status);
     assert(status.published && status.expected_code==codes[floating]);
-#if AM13E_OPTION1_OUTPUTS_QUALIFIED
     /* Accepted N -> delayed commutation -> accepted N+1. DAC publication
      * neither resets the free-running epoch nor acts as a crossing. */
     ival=3000;sync=0;ertm=18000;
@@ -511,14 +493,11 @@ static void sc5_publication(void)
     capture(600000U);assert(ival==3000);
     /* Rearm a fresh image for active-state fault injection. */
     nextstep();zero();
-#endif
     sc5_failures();
-#if AM13E_OPTION1_OUTPUTS_QUALIFIED
     am13e_app_motor_commutation_enable(0);assert(!gate_on());
     nextstep();am13e_app_motor_commutation_commit();
     am13e_app_motor_commutation_enable(1);zero();zero();assert(gate_on());
     am13e_app_motor_commutation_enable(0);
-#endif
     nextstep();am13e_app_motor_bemf_abort();zero();
     am13e_app_motor_bemf_reference_status(&status);
     assert(!status.published && !am13e_app_motor_bemf_publication_pending());
@@ -557,6 +536,77 @@ static void start(void)
     assert(!MCPWM4->PWM1_AQSFRC && !MCPWM4->PWM2_AQSFRC && !MCPWM4->PWM3_AQSFRC);
     zero();assert(!gate_on());
     zero();assert(gate_on());
+}
+/* These cases run before any BEMF seed/acquisition. Original audio and
+ * stationary braking have no floating-phase crossing to measure. */
+static void no_bemf_output_lifecycle(void)
+{
+    for(volatile unsigned mode=0U;mode<3U;++mode){
+        pid_t child=fork();assert(child>=0);
+        if(child==0){
+            if(setjmp(fault_return))assert(!"non-sensing output lifecycle faulted");
+            assert(!gate_on() && am13e_app_motor_inactive_preflight_ok());
+            assert(!am13e_app_motor_bemf_reference_ready());
+            for(unsigned restart=0U;restart<2U;++restart){
+                if(mode<2U){
+                    resetcom();am13e_app_motor_audio_begin((int)mode+1);
+                    am13e_app_motor_audio_period(2000U);
+                    am13e_app_motor_audio_compare(400U,700U);
+                }else{
+                    cfg.damp=1;cfg.throt_ztc=0;lock=0;sine=prep=0;step=2;
+                    laststep();
+                    am13e_app_motor_pwm_apply(300,24,48,0,1,0,0,0);
+                    am13e_app_motor_brake_counter_update(0,0,0,0,300);
+                }
+                assert(!gate_on());zero();assert(!gate_on());zero();
+                assert(gate_on());
+                assert(am13e_mcu_motor_pads_pwm_matches(
+                    am13e_board_motor_pad_route(),AM13E_MOTOR_PAD_INVERT_MASK));
+                assert(!am13e_app_motor_bemf_reference_ready());
+                if(mode<2U)am13e_app_motor_audio_end();
+                else am13e_app_motor_brake_counter_update(0,0,0,0,0);
+                assert(!gate_on() && am13e_app_motor_inactive_preflight_ok());
+            }
+            _exit(0);
+        }
+        int status;assert(waitpid(child,&status,0)==child && WIFEXITED(status) && WEXITSTATUS(status)==0);
+    }
+    puts("PASS production music/PCM/Rel17 brake start-stop-restart without BEMF or approval declaration");
+}
+static void sensing_reference_required(void)
+{
+    const pid_t child=fork();assert(child>=0);
+    if(child==0){
+        const unsigned before=watchdog_arms;
+        if(!setjmp(fault_return)){
+            cfg.damp=1;sine=prep=0;step=0;reverse=0;ertm=18000;
+            am13e_app_motor_pwm_apply(800,24,48,ertm,1,0,0,1);
+            nextstep();am13e_app_motor_commutation_commit();
+            assert(!am13e_app_motor_bemf_reference_start_ready());
+            am13e_app_motor_commutation_enable(1);
+            assert(!"sensorless start accepted missing BEMF reference");
+        }
+        assert(!gate_on() && watchdog_arms==before+1U);
+        assert(am13e_mcu_motor_pads_disconnected(am13e_board_motor_pad_route()));
+        assert((MCPWM4->TBCTL&MCPWM_TBCTL_CTRMODE_MASK)==DL_MCPWM_COUNTER_MODE_STOP_FREEZE);
+        _exit(0);
+    }
+    int status;assert(waitpid(child,&status,0)==child && WIFEXITED(status) && WEXITSTATUS(status)==0);
+    puts("PASS production sensorless start still rejects missing BEMF reference and shuts down");
+}
+static void protection_required(void)
+{
+    const uint32_t mask=test_primask;test_primask=1U;
+    assert(am13e_app_motor_nfault_trip_ready());
+    const uint32_t selection=PWMXBAR->PWM_XBAR_GXSEL[DL_XBAR_TRIP3].PWMXBARG0SEL;
+    PWMXBAR->PWM_XBAR_GXSEL[DL_XBAR_TRIP3].PWMXBARG0SEL=0U;
+    assert(!am13e_app_motor_nfault_trip_ready());
+    assert(!am13e_motor_output_start() && !gate_on());
+    assert(am13e_mcu_motor_pads_disconnected(am13e_board_motor_pad_route()));
+    PWMXBAR->PWM_XBAR_GXSEL[DL_XBAR_TRIP3].PWMXBARG0SEL=selection;
+    assert(am13e_app_motor_nfault_trip_ready());
+    test_primask=mask;
+    puts("PASS native overcurrent protection required without an approval declaration");
 }
 static void calibration_tick(void)
 {
@@ -871,12 +921,16 @@ int main(void)
            (DL_MCPWM_TZ_SIGNAL_OST2|DL_MCPWM_TZ_SIGNAL_OST3));
     CMPSS0->DACLVALS=333U; /* Stale unused low-DAC state from a prior owner. */
     am13e_app_motor_bemf_init();
+    assert(!gate_on() && am13e_app_motor_inactive_preflight_ok());
+    no_bemf_output_lifecycle();
+    sensing_reference_required();
+    protection_required();
 #ifdef AM13E_SC5_FIXTURE
     sc5_no_sample();sc5_adc();sc5_blackout();sc5_publication();assert(munmap(r,0x07000000)==0);return 0;
 #endif
     assert(CMPSS0->DACLVALS==0U);
     assert(!am13e_app_motor_bemf_reference_ready());
-    assert(!am13e_motor_output_start() && !gate_on());
+    assert(!gate_on() && am13e_app_motor_inactive_preflight_ok());
     assert(!am13e_app_motor_bemf_reference_set(4096U));
     assert(!am13e_app_motor_bemf_reference_set(0U));
     assert(am13e_app_motor_bemf_reference_set(2048U));
@@ -903,7 +957,7 @@ int main(void)
         }
     }
     compctl(0);
-#if AM13E_OPTION1_OUTPUTS_QUALIFIED && !defined(HALL_MAP)
+#if !defined(HALL_MAP)
     /* Real laststep() stages a lock image, then disables sensing. A later
      * ZERO must not resurrect that cancelled comparator association. */
     for(unsigned hold=0U;hold<=2U;++hold){
@@ -914,12 +968,6 @@ int main(void)
         zero();assert(!(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK));
     }
     lock=0;
-#endif
-#if !AM13E_OPTION1_OUTPUTS_QUALIFIED
-    assert(!am13e_motor_output_start() && !am13e_power_stage_enable());
-    assert(am13e_app_motor_inactive_preflight_ok() && !gate_on());
-    puts("PASS unqualified Option 1 refuses PWM pad connection and Gate Enable");
-    assert(munmap(r,0x07000000)==0);return 0;
 #endif
 #ifdef HALL_MAP
     hall_runtime();assert(munmap(r,0x07000000)==0);return 0;

@@ -51,8 +51,10 @@ int am13e_app_motor_nfault_trip_ready(void)
        DL_GPIO_getPeripheralFunctionBits(IOMUX_PINCM_PA22)!=IOMUX_PA22_GPIO22 ||
        (((AM13E_NFAULT_GPIO->DIN31_0&AM13E_NFAULT_MASK)!=0U)==(AM13E_MOTOR_NFAULT_ACTIVE_LOW==0)))return 0;
 #endif
-    return (!AM13E_OPTION1_OUTPUTS_QUALIFIED || am13e_app_motor_oc_trip_ready()) &&
-           hardware_trip_installed &&
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+    if(!am13e_app_motor_oc_trip_ready())return 0;
+#endif
+    return hardware_trip_installed &&
            am13e_mcu_fault_trip_ready(&reference_nfault_route);
 }
 
@@ -71,7 +73,7 @@ void am13e_app_motor_nfault_trip_init(void)
 
 /* Native asynchronous phase-OC route. Raw DACH codes and amplifier/output
  * polarity are explicit board contracts, not invented current thresholds.
- * Missing contracts leave this route disabled and prevent authorization. */
+ * Missing contracts cannot supply the required asynchronous protection. */
 #include <dl_cmpss_lite.h>
 #include <dl_sysctl.h>
 #if defined(AM13E_OC_U_DAC_CODE) || defined(AM13E_OC_V_DAC_CODE) || \
@@ -93,8 +95,8 @@ _Static_assert(AM13E_OC_U_DAC_CODE>0 && AM13E_OC_U_DAC_CODE<=4095 &&
 #else
 #define OC_CONFIGURED 0
 #endif
-#if AM13E_OPTION1_OUTPUTS_QUALIFIED && !OC_CONFIGURED
-#error "Qualified Option 1 requires explicit overcurrent contracts"
+#if AM13E_MOTOR_OUTPUT_CONFIGURED && !OC_CONFIGURED
+#error "Configured Option 1 outputs require explicit overcurrent contracts"
 #endif
 _Static_assert(DL_XBAR_PWM_CMPSS1_CTRIPH==2U && DL_XBAR_PWM_CMPSS2_CTRIPH==4U &&
                DL_XBAR_PWM_CMPSS3_CTRIPH==6U && DL_XBAR_TRIP3==2U &&

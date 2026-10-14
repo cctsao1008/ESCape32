@@ -277,7 +277,8 @@ int am13e_app_motor_bemf_reference_start_ready(void)
     return initialized && reference_calculated &&
            am13e_app_adc_reference_fresh(&staged_reference);
 #else
-    return am13e_app_motor_bemf_reference_ready();
+    /* Audio/brake/coast do not select or consume a BEMF reference. */
+    return initialized && ((!selected_code && !pending_code) || reference_ready);
 #endif
 }
 int am13e_app_motor_bemf_reference_gate_ready(void)
@@ -285,7 +286,7 @@ int am13e_app_motor_bemf_reference_gate_ready(void)
 #ifdef AM13E_BOARD_SC5_CALIBRATION
     return (!selected_code && !pending_code) || am13e_app_motor_bemf_reference_ready();
 #else
-    return am13e_app_motor_bemf_reference_ready();
+    return initialized && ((!selected_code && !pending_code) || reference_ready);
 #endif
 }
 void am13e_app_motor_bemf_reference_status(AM13E_BemfReferenceStatus *out)
@@ -398,9 +399,8 @@ void am13e_app_motor_bemf_interval_select(int ertm_us)
     }
     rejected_events=0U;
 #ifdef AM13E_BOARD_SC5_CALIBRATION
-    /* Digital publication is not analog qualification. The selected
-     * production Reference cannot rearm a newly tracked analog path. */
-    if(!AM13E_OPTION1_OUTPUTS_QUALIFIED || !am13e_app_motor_bemf_reference_ready()){
+    /* Capture requires the associated fresh native DAC publication. */
+    if(!am13e_app_motor_bemf_reference_ready()){
         __set_PRIMASK(primask);return;
     }
 #endif
@@ -466,12 +466,7 @@ int am13e_app_motor_bemf_carrier_zero(void)
 #endif
 #ifdef AM13E_BOARD_SC5_CALIBRATION
     if(!reference_route_matches())bemf_fault();
-    if(!reference_calculated) {
-        if(AM13E_OPTION1_OUTPUTS_QUALIFIED)bemf_fault();
-        pending_code=pending_interval=0U;
-        DL_MCPWM_disableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
-        return 1;
-    }
+    if(!reference_calculated)bemf_fault();
     if(!am13e_app_adc_reference_fresh(&staged_reference))bemf_fault();
     /* No busy wait and no assumption that the independent DAC load has
      * occurred merely because Global Load completed. Remain quarantined
