@@ -28,6 +28,7 @@
 #include "motor_safety.h"
 #include "command_reply.h"
 #include "command_capture.h"
+#include "analog_runtime.h"
 #include <dl_flash.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -75,10 +76,12 @@ static int erase_2k(uint32_t addr,void *ctx)
     const uint32_t ps=__get_PRIMASK();
     __disable_irq();
     const unsigned capture=am13e_pa26_blackout_begin();
+    am13e_app_adc_blackout_invalidate();
     int ok=committing && flash_ready() &&
            capture &&
            DL_Flash_eraseSector(addr)==DL_FLASH_SUCCESS;
     if(capture)am13e_pa26_blackout_end(capture);
+    am13e_app_adc_blackout_invalidate();
     __set_PRIMASK(ps);
     return ok;
 }
@@ -90,11 +93,13 @@ static int program_16(uint32_t addr,const uint32_t data[4],void *ctx)
     const uint32_t ps=__get_PRIMASK();
     __disable_irq();
     const unsigned capture=am13e_pa26_blackout_begin();
+    am13e_app_adc_blackout_invalidate();
     int ok=committing && flash_ready() &&
            capture &&
            DL_Flash_program(addr,(uint8_t*)(uintptr_t)data,16U)==
              DL_FLASH_SUCCESS;
     if(capture)am13e_pa26_blackout_end(capture);
+    am13e_app_adc_blackout_invalidate();
     __set_PRIMASK(ps);
     return ok;
 }

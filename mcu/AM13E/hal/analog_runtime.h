@@ -32,3 +32,7 @@ int am13e_app_adc_get_raw(AM13E_AdcRaw *out);
 /* Bounded atomic pending-reference copy, suitable for a masked motor
  * transaction. It never reads an ADC-owned snapshot or calculates in ISR. */
 int am13e_app_adc_get_reference(AM13E_BemfReference *out);
+/* Call with PRIMASK set before/after operations that can coalesce SysTick.
+ * Old acquisitions (including pending ADC IRQs) must not cross this boundary. */
+void am13e_app_adc_blackout_invalidate(void);
+int am13e_app_adc_reference_fresh(const AM13E_BemfReference *ref);

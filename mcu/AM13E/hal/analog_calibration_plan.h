@@ -44,6 +44,7 @@ typedef struct {
 typedef struct {
     uint16_t code[3];
     uint32_t sample,acquisition_tick,completion_tick,max_age_ticks;
+    uint32_t blackout_epoch; /* Native lifecycle provenance, not elapsed ticks. */
 } AM13E_BemfReference;
 int am13e_bemf_reference_convert(const AM13E_BemfCalibration *cal,
                                 uint16_t raw,uint16_t code[3]);

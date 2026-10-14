@@ -262,7 +262,7 @@ int am13e_app_motor_bemf_reference_ready(void)
     AM13E_BemfReference latest;
     return initialized && reference_published &&
            am13e_app_adc_get_reference(&latest) && reference_route_matches() &&
-           am13e_bemf_reference_fresh(&staged_reference,tick) &&
+           am13e_app_adc_reference_fresh(&staged_reference) &&
            DL_CMPSSLITE_getDACValueHigh(CMPSS0)==expected_dach;
 #else
     return initialized && reference_ready;
@@ -275,7 +275,7 @@ int am13e_app_motor_bemf_reference_start_ready(void)
      * sync. The second startup ZERO still verifies active publication. */
     if(!selected_code && !pending_code)return 1; /* Core brake/audio/coast does not use BEMF. */
     return initialized && reference_calculated &&
-           am13e_bemf_reference_fresh(&staged_reference,tick);
+           am13e_app_adc_reference_fresh(&staged_reference);
 #else
     return am13e_app_motor_bemf_reference_ready();
 #endif
@@ -295,7 +295,7 @@ void am13e_app_motor_bemf_reference_status(AM13E_BemfReferenceStatus *out)
     *out=(AM13E_BemfReferenceStatus){0};
 #ifdef AM13E_BOARD_SC5_CALIBRATION
     out->configured=initialized && reference_route_matches();
-    out->calculated=reference_calculated && am13e_bemf_reference_fresh(&staged_reference,tick);
+    out->calculated=reference_calculated && am13e_app_adc_reference_fresh(&staged_reference);
     out->published=am13e_app_motor_bemf_reference_ready();
     out->capture_synchronized=out->published && armed;
     out->expected_code=expected_dach;out->sample=staged_reference.sample;
@@ -472,7 +472,7 @@ int am13e_app_motor_bemf_carrier_zero(void)
         DL_MCPWM_disableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
         return 1;
     }
-    if(!am13e_bemf_reference_fresh(&staged_reference,tick))bemf_fault();
+    if(!am13e_app_adc_reference_fresh(&staged_reference))bemf_fault();
     /* No busy wait and no assumption that the independent DAC load has
      * occurred merely because Global Load completed. Remain quarantined
      * until a subsequent native event, bounded by the explicit sample age. */
@@ -620,7 +620,7 @@ void am13e_app_motor_bemf_tick(void)
     if(reference_calculated && (selected_code || pending_code)) {
         AM13E_BemfReference latest;
         if(!am13e_app_adc_get_reference(&latest) ||
-           !am13e_bemf_reference_fresh(&staged_reference,tick) || !reference_route_matches() ||
+           !am13e_app_adc_reference_fresh(&staged_reference) || !reference_route_matches() ||
            (reference_published && DL_CMPSSLITE_getDACValueHigh(CMPSS0)!=expected_dach))bemf_fault();
     }
 #endif

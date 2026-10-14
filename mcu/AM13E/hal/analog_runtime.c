@@ -57,6 +57,8 @@ static volatile uint32_t adc_have_sample;
 static uint32_t acquisition_tick;
 static volatile AM13E_BemfReference reference_latest;
 static volatile uint32_t reference_valid;
+static volatile uint32_t blackout_epoch;
+static volatile uint32_t discard_inflight;
 #ifdef AM13E_BOARD_SC5_CALIBRATION
 #if !defined(AM13E_BOARD_ADC_REFERENCE_MODE) || !defined(AM13E_BOARD_ADC_PACKAGE_QFN48)
 #error "SC5 requires explicit native ADC reference mode and package contract"
@@ -78,6 +80,18 @@ static void adc_fail_closed(void)
 {
     am13e_app_motor_fault_shutdown();
     am13e_app_motor_fault_reset();
+}
+void am13e_app_adc_blackout_invalidate(void)
+{
+    if(__get_PRIMASK()!=1U)adc_fail_closed();
+    ++blackout_epoch;
+    reference_valid=0U;adc_have_sample=0U;
+    if(adc_inflight)discard_inflight=1U;
+}
+int am13e_app_adc_reference_fresh(const AM13E_BemfReference *ref)
+{
+    return ref && ref->blackout_epoch==blackout_epoch &&
+           am13e_bemf_reference_fresh(ref,tick);
 }
 
 /* Reference ADC0 ISR and Rel17 housekeeping adapter; MCU sequencer
@@ -133,6 +147,7 @@ void adctrig(void)
         (uint32_t)(tick-reference_latest.acquisition_tick)>reference_latest.max_age_ticks)) {
         ref.sample=raw.sample_count;ref.acquisition_tick=raw.acquisition_tick;
         ref.completion_tick=raw.completion_tick;ref.max_age_ticks=reference_cal.max_age_ticks;
+        ref.blackout_epoch=blackout_epoch;
         const int valid=am13e_bemf_reference_fresh(&ref,tick) &&
               am13e_bemf_reference_convert(&reference_cal,raw.vbus,ref.code);
         const uint32_t mask=__get_PRIMASK();__disable_irq();
@@ -202,6 +217,10 @@ static void adc_complete(unsigned instance,ADC_Regs *adc,ADC_RESULT_Regs *result
     DL_ADC_clearInterruptStatus(adc,AM13E_ADC_IRQ);
     completed|=bit;
     if(completed!=7U)return;
+    if(discard_inflight) {
+        discard_inflight=0U;adc_inflight=0U;
+        return; /* Drain/ack all old ADC owners without publishing their data. */
+    }
     ++adc_sample_seq;
     adc_latest.current_v=pending[0][0];adc_latest.phase_a=pending[0][1];
     adc_latest.ibus=pending[0][2];adc_latest.current_w=pending[1][0];
@@ -262,5 +281,5 @@ int am13e_app_adc_get_reference(AM13E_BemfReference *out)
     const int valid=reference_valid!=0U;
     if(valid)*out=reference_latest;
     __set_PRIMASK(mask);
-    return valid && am13e_bemf_reference_fresh(out,tick);
+    return valid && am13e_app_adc_reference_fresh(out);
 }

@@ -34,6 +34,34 @@
 #endif
 #ifdef AM13E_SC5_FIXTURE
 void DL_Common_delayCycles(uint32_t cycles) { (void)cycles; }
+static void sc5_blackout(void)
+{
+    AM13E_BemfReference old,fresh;AM13E_AdcRaw raw;
+    assert(am13e_app_adc_get_reference(&old));
+    const uint32_t count=adc_latest.sample_count;
+    const uint32_t saved=tick;
+    test_primask=1U;
+    am13e_app_adc_blackout_invalidate();
+    ECAP1->TSCTR+=4000000U; /* 20 ms, not 320 delivered SysTicks. */
+    tick=saved+1U;
+    am13e_app_adc_blackout_invalidate();
+    assert(!am13e_app_adc_get_raw(&raw));
+    assert(!am13e_app_adc_get_reference(&fresh));
+    assert(!am13e_app_adc_reference_fresh(&old));
+    /* Old pending conversion completions must acknowledge their owners
+     * without publishing a new sample or feeding original sensing policy. */
+    ADC1_INT1_IRQHandler();ADC0_INT1_IRQHandler();ADC2_INT1_IRQHandler();
+    assert(adc_latest.sample_count==count && !am13e_app_adc_get_raw(&raw));
+    adctrig();
+    assert(!am13e_app_adc_get_reference(&fresh));
+    ++tick;ADC0_INT1_IRQHandler();ADC2_INT1_IRQHandler();ADC1_INT1_IRQHandler();
+    adctrig();
+    assert(am13e_app_adc_get_reference(&fresh));
+    assert(fresh.sample==count+1U && fresh.acquisition_tick==saved+1U);
+    assert(fresh.blackout_epoch!=old.blackout_epoch &&
+           !am13e_app_adc_reference_fresh(&old));
+    puts("PASS SC5 blackout: invalid raw/staged reference, late completion discard, post-boundary reacquisition");
+}
 static void sc5_adc(void)
 {
     test_primask=1U;am13e_app_adc_init();
@@ -347,7 +375,7 @@ static void sc5_failures(void)
 {
     /* Fork copies the real active HAL state. Each failure uses the actual
      * fatal shutdown/reset path; latched state cannot contaminate siblings. */
-    for(volatile unsigned failure=0;failure<7U;++failure){
+    for(volatile unsigned failure=0;failure<8U;++failure){
         const pid_t child=fork();assert(child>=0);
         if(child==0){
             const unsigned before=watchdog_arms;
@@ -365,6 +393,10 @@ static void sc5_failures(void)
                 case 5: nextstep();am13e_app_motor_fault_shutdown();am13e_app_motor_fault_reset();break;
                 case 6:
                     nextstep();defer_dach_load=1U;zero();tick+=33U;break;
+                case 7:
+                    test_primask=1U;am13e_app_adc_blackout_invalidate();
+                    ECAP1->TSCTR+=4000000U;++tick;
+                    break; /* Collapsed serviced ticks cannot preserve authorization. */
                 }
                 am13e_app_motor_bemf_tick();assert(!"reference failure did not shut down");
             }
@@ -840,7 +872,7 @@ int main(void)
     CMPSS0->DACLVALS=333U; /* Stale unused low-DAC state from a prior owner. */
     am13e_app_motor_bemf_init();
 #ifdef AM13E_SC5_FIXTURE
-    sc5_no_sample();sc5_adc();sc5_publication();assert(munmap(r,0x07000000)==0);return 0;
+    sc5_no_sample();sc5_adc();sc5_blackout();sc5_publication();assert(munmap(r,0x07000000)==0);return 0;
 #endif
     assert(CMPSS0->DACLVALS==0U);
     assert(!am13e_app_motor_bemf_reference_ready());
