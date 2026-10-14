@@ -36,6 +36,7 @@ static unsigned consumed;
 static uint32_t start_edge,last_edge,capture_pairs,capture_overruns,late_capture_groups;
 static uint32_t invalid_capture_groups,max_capture_age_ticks,unexpected_gpio1_irqs;
 static uint8_t inverted_rx,capture_desynced;
+static uint32_t observation_stamp;
 static void input_fail_closed(void)
 { __disable_irq();hard_fault_handler();for(;;){__NOP();} }
 
@@ -96,12 +97,34 @@ void am13e_pb14_resume_rx(void)
     DL_Timer_setCaptureCompareCtl(RX_TIMER,DL_TIMER_CC_MODE_COMPARE,DL_TIMER_CC_CCOND_NOCAPTURE,DL_TIMER_CC_1_INDEX);
     DL_Timer_setCounterValueAfterEnable(RX_TIMER,DL_TIMER_COUNT_AFTER_EN_ZERO);
     DL_Timer_setTimerCount(RX_TIMER,0U);epoch=0U;
+    observation_stamp=0U;
     am13e_pb14_decoder_abort(&decoder);
     dma_arm();
     DL_Timer_clearInterruptStatus(RX_TIMER,UINT32_MAX);
     DL_Timer_enableInterrupt(RX_TIMER,DL_TIMER_INTERRUPT_ZERO_EVENT);
     DL_Timer_enableEvent(RX_TIMER,DL_TIMER_GEN_EVENT1,RX_EVENTS);
     capture_desynced=0U;suspended=0U;DL_Timer_startCounter(RX_TIMER);
+}
+unsigned am13e_pa26_blackout_begin(void)
+{
+    if(__get_PRIMASK()!=1U)input_fail_closed();
+    if(!initialized || service_owns_input)return 1U;
+    if(am13e_pb14_bidir_tx_busy() || suspended)return 0U;
+    am13e_pa26_rx_suspend();
+    am13e_pb14_decoder_abort(&decoder);
+    return 2U;
+}
+void am13e_pa26_blackout_end(unsigned token)
+{
+    if(__get_PRIMASK()!=1U || token<1U || token>2U)input_fail_closed();
+    if(token==2U)am13e_pb14_resume_rx();
+}
+static void capture_quarantine(void)
+{
+    DL_Timer_disableEvent(RX_TIMER,DL_TIMER_GEN_EVENT1,UINT32_MAX);
+    DL_DMA_disableChannel(IOTIM_DMA,RX_CH);
+    ++late_capture_groups;capture_desynced=1U;
+    am13e_pb14_decoder_abort(&decoder);
 }
 void initio(void)
 {
@@ -136,6 +159,19 @@ static void drain_captured(void)
     if(available<consumed)input_fail_closed();
     __DMB();
     const uint32_t now=am13e_pa26_rx_now();
+    /* DMA stores only low 16 bits, not an overflow epoch. A prefix
+     * surviving an unserviced wrap cannot be dated uniquely. The ZERO
+     * owner quarantines such prefixes BEFORE clearing its sticky flag.
+     * Also reject a full-cycle service gap even with an extended epoch.
+     * Never fabricate recent edges by reducing an ambiguous age modulo
+     * 65536. Quiet-line recovery rearms the existing SINGLE buffer.
+     */
+    if(available>consumed &&
+       (now-observation_stamp>=0x10000U ||
+        DL_Timer_getRawInterruptStatus(RX_TIMER,DL_TIMER_INTERRUPT_ZERO_EVENT))) {
+        capture_quarantine();return;
+    }
+    observation_stamp=now;
     if(available==IOTIM_CAPTURE_SIZE && (DL_Timer_getCaptureCompareValue(RX_TIMER,IOTIM_CAPTURE_CHANNEL)&0xffffU)!=(edges[IOTIM_CAPTURE_SIZE-1U]&0xffffU)){
         ++capture_overruns;capture_desynced=1U;am13e_pb14_decoder_abort(&decoder);return;
     }
@@ -200,7 +236,11 @@ void am13e_pa26_rx_timer_irq(void)
 {
     const uint32_t flags=DL_Timer_getEnabledInterruptStatus(RX_TIMER,DL_TIMER_INTERRUPT_ZERO_EVENT);
     if(!flags || suspended)return;
+    if(!capture_desynced &&
+       IOTIM_CAPTURE_SIZE-DL_DMA_getTransferSize(IOTIM_DMA,RX_CH)>consumed)
+        capture_quarantine();
     DL_Timer_clearInterruptStatus(RX_TIMER,flags);epoch+=0x10000U;
+    observation_stamp=epoch+(DL_Timer_getTimerCount(RX_TIMER)&0xffffU);
 }
 void am13e_app_pb14_systick(void)
 {

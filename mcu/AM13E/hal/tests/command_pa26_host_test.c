@@ -139,6 +139,57 @@ static void frame(unsigned period,uint16_t x,int partial)
         t+=period;
     }
 }
+static void delayed_capture(void)
+{
+    for(unsigned mode=0U;mode<4U;++mode) {
+        inverted_rx=mode&1U;am13e_pb14_resume_rx();
+        am13e_pb14_decoder_reset(&decoder,RX_HZ,inverted_rx);
+        decoder.rx_mode=AM13E_PB14_RX_DSHOT;decoder.dshot_rate=1U;
+        const uint16_t x=packet(512U,inverted_rx);
+        uint32_t t=10000U;
+        for(unsigned i=0U;i<16U;++i) {
+            edges[2U*i]=t;
+            edges[2U*i+1U]=t+((x&(1U<<(15U-i)))?125U:62U);
+            t+=167U;
+        }
+        TIMG4->COUNTERREGS.CC_01[0]=edges[31];
+        DL_DMA_setTransferSize(DMA0,2U,0U);
+        *(volatile uint32_t *)(uintptr_t)&GPIO0->DIN31_0=inverted_rx?COMMAND_PIN:0U;
+        const unsigned before=feeds;const int throttle=throt;
+        const uint32_t now=edges[31]+(mode&1U?262144U:2000000U);
+        epoch=mode<2U?now&0xffff0000U:0U;
+        TIMG4->COUNTERREGS.CTR=now&0xffffU;
+        *(volatile uint32_t *)(uintptr_t)&TIMG4->CPU_INT.RIS=mode<2U?0U:DL_TIMER_INTERRUPT_ZERO_EVENT;
+        if(mode==3U) {
+            /* ZERO vector runs first: reject before its W1C acknowledges
+             * the only hardware evidence of a possibly multi-wrap gap. */
+            *(volatile uint32_t *)(uintptr_t)&TIMG4->CPU_INT.MIS=DL_TIMER_INTERRUPT_ZERO_EVENT;
+            am13e_pa26_rx_timer_irq();
+        } else drain();
+        assert(feeds==before && throt==throttle && state==TX_IDLE);
+        assert(capture_desynced && !DL_DMA_isChannelEnabled(DMA0,2U));
+        *(volatile uint32_t *)(uintptr_t)&TIMG4->CPU_INT.RIS=0U;
+        *(volatile uint32_t *)(uintptr_t)&TIMG4->CPU_INT.MIS=0U;
+    }
+    test_primask=1U;
+    am13e_pb14_resume_rx();
+    const unsigned token=am13e_pa26_blackout_begin();assert(token==2U);
+    assert(suspended && !DL_DMA_isChannelEnabled(DMA0,2U));
+    /* Autonomous hardware time can wrap arbitrarily while Flash polls.
+     * No RX data survive; end establishes a new hardware/software epoch. */
+    TIMG4->COUNTERREGS.CTR=43210U;
+    am13e_pa26_blackout_end(token);
+    assert(!suspended && epoch==0U && consumed==0U &&
+           DL_DMA_getTransferSize(DMA0,2U)==32U);
+    test_primask=0U;time_now=0U;
+    am13e_pb14_decoder_reset(&decoder,RX_HZ,inverted_rx);
+    decoder.rx_mode=AM13E_PB14_RX_DSHOT;decoder.dshot_rate=1U;
+    const unsigned before=feeds;frame(167U,packet(512U,inverted_rx),1);
+    assert(feeds==before+1U); /* Fresh post-blackout frame still works. */
+    /* Restore the existing TX timeout path if this inverted reply owns TX. */
+    for(unsigned i=0;i<17U;++i)am13e_app_pb14_systick();
+    puts("PASS stale capture: extended/missed-wrap epochs, either IRQ order, no throttle/watchdog/reply, blackout restart");
+}
 int main(void)
 {
     assert(mmap((void*)0x40000000,0x07000000,PROT_READ|PROT_WRITE,
@@ -264,5 +315,6 @@ int main(void)
     frame(167U,packet(512,1),1);assert(state==TX_DELAY);
     for(unsigned i=0;i<17U;++i)am13e_app_pb14_systick();
     assert(state==TX_IDLE && !suspended && (GPIO0->DOE31_0&COMMAND_PIN)==0U);
+    delayed_capture();
     puts("PASS production PA26 TIMG4 capture/DMA -> original io.c DShot300/600/1200 CRC/throttle; wraps/Servo/Oneshot; BiDShot ownership/pinmux/stale IRQ");
 }

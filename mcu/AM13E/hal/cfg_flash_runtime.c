@@ -27,6 +27,7 @@
 #include "motor_backend.h"
 #include "motor_safety.h"
 #include "command_reply.h"
+#include "command_capture.h"
 #include <dl_flash.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -55,11 +56,10 @@ static int flash_ready(void)
     const uintptr_t ram_end=(uintptr_t)__ramfunct_end__;
     return ram_start>=RAM_C_START && ram_end>ram_start &&
            ram_end<=RAM_C_END && am13e_app_motor_inactive_preflight_ok();
-    /* PB14 TX is checked once BEFORE reserving the transaction.
-     * A later valid DShot command can schedule a TX between individual
-     * ECC writes. It must not spontaneously abort a partly-erased FW1
-     * config merely because that independent peripheral became busy.
-     * Hardware Flash command execution itself still masks CPU IRQs.
+    /* RX may run between ECC commands. Each command reserves an idle
+     * capture owner separately: never mask through an active BiDShot
+     * waveform. A contended command reports failure; as with interrupted
+     * erase/program, this transaction cannot promise atomic persistence.
      */
 }
 
@@ -74,8 +74,11 @@ static int erase_2k(uint32_t addr,void *ctx)
        return 0;
     const uint32_t ps=__get_PRIMASK();
     __disable_irq();
+    const unsigned capture=am13e_pa26_blackout_begin();
     int ok=committing && flash_ready() &&
+           capture &&
            DL_Flash_eraseSector(addr)==DL_FLASH_SUCCESS;
+    if(capture)am13e_pa26_blackout_end(capture);
     __set_PRIMASK(ps);
     return ok;
 }
@@ -86,9 +89,12 @@ static int program_16(uint32_t addr,const uint32_t data[4],void *ctx)
        return 0;
     const uint32_t ps=__get_PRIMASK();
     __disable_irq();
+    const unsigned capture=am13e_pa26_blackout_begin();
     int ok=committing && flash_ready() &&
+           capture &&
            DL_Flash_program(addr,(uint8_t*)(uintptr_t)data,16U)==
              DL_FLASH_SUCCESS;
+    if(capture)am13e_pa26_blackout_end(capture);
     __set_PRIMASK(ps);
     return ok;
 }

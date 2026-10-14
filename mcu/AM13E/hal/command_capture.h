@@ -13,6 +13,10 @@ void am13e_pb14_resume_rx(void);
 void am13e_app_pb14_systick(void); /* 16 kHz clock reference & timeout */
 uint32_t am13e_pa26_rx_now(void);
 void am13e_pa26_rx_suspend(void);
+/* Masked Flash command boundary: 0=busy, 1=no capture owner, 2=paused RX.
+ * Resume only a token returned by begin; serial ownership is untouched. */
+unsigned am13e_pa26_blackout_begin(void);
+void am13e_pa26_blackout_end(unsigned token);
 void am13e_pa26_rx_timer_irq(void);
 void am13e_pa26_rx_dma_irq(void);
 /* Masked-IRQ, idle-only handover from undecided capture to service CLI. */
@@ -21,7 +25,7 @@ bool am13e_app_pb14_service_takeover(void);
 typedef struct {
     uint32_t capture_pairs;
     uint32_t capture_overruns; /* observed capture/DMA backlog */
-    uint32_t late_capture_groups; /* reserved historical diagnostic */
+    uint32_t late_capture_groups; /* ambiguous timestamp prefixes quarantined */
     uint32_t max_capture_age_ticks; /* observed hardware timestamp age */
     uint32_t invalid_capture_groups; /* physical ordering/width rejected */
     uint32_t good_pwm;
