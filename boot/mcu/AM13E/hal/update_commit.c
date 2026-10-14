@@ -12,7 +12,7 @@
  * No new image format, checksum or transport command is introduced.
  */
 #include "update_commit.h"
-#include "../../../src/am13e/update_staging.h"
+#include "update_staging.h"
 #include <dl_flash.h>
 #include <stdint.h>
 #ifndef AM13E_BOOT_COMMIT_HOST_TEST

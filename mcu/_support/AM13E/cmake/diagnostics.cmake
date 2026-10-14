@@ -4,7 +4,7 @@
 # It is NOT a runnable firmware or a motor-output qualification gate.
 add_library(AM13E_PORTABLE_LOGIC OBJECT EXCLUDE_FROM_ALL
     "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/analog_calibration_plan.c"
-    "${PROJECT_SOURCE_DIR}/src/serial/bidir_codec.c"
+    "${PROJECT_SOURCE_DIR}/mcu/AM13E/serial/bidir_codec.c"
     "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/bidir_timing.c"
     "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/fault_trip_route_plan.c"
     "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/motor_phase_plan.c"

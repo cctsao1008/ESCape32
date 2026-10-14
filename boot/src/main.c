@@ -28,7 +28,7 @@
 #if defined(AM13E)
 #define CMD_WINDOW 6 /* Rev1.6: Config-prefix stream, 492 logical 1KiB blocks */
 #include "../../mcu/AM13E/hal/flash_partition.h"
-#include "am13e/update_staging.h"
+#include "../mcu/AM13E/hal/update_staging.h"
 #include "update_commit.h"
 #endif
 

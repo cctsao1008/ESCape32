@@ -63,7 +63,7 @@ def main():
     protection=boot.split("case CMD_SETWRP:")[1].split("default:")[0]
     # Original Rel17 reception restored, but no Bank0 Boot Flash commit.
     am13e_update=update.split("#if defined(AM13E)",1)[1].split("#else",1)[0]
-    stage=src("boot/src/am13e/update_staging.c")
+    stage=src("boot/mcu/AM13E/hal/update_staging.c")
     check("boot_am13e_stage_begin();" in am13e_update and
           "recvdata((char *)dst)" in am13e_update and
           "boot_am13e_stage_accept(" in am13e_update and
@@ -76,7 +76,7 @@ def main():
           "write(" not in am13e_update and
           "DL_Flash_eraseSector(" not in stage and
           "DL_Flash_program(" not in stage and
-          "boot/src/am13e/update_staging.c" in
+          "boot/mcu/AM13E/hal/update_staging.c" in
           src("boot/mcu/AM13E/config.cmake") and
           "sendval(RES_ERROR);" in protection,
           "Bounded SRAM staging/Bank0 Flash exclusion changed")
@@ -201,7 +201,7 @@ def main():
           "boot_am13e_release_io();" in src("boot/mcu/AM13E/hal/handoff.c") and
           "TMU_LVF_INT_IRQn" in src("boot/mcu/AM13E/hal/handoff.c"),
           "Boot handoff must release IO and clear only implemented IRQ state")
-    check('"${REPO_ROOT}/boot/src/util.c"' in
+    check('"${REPO_ROOT}/boot/mcu/AM13E/hal/crc.c"' in
           src("boot/tests/am13e_host/CMakeLists.txt") and
           "uint32_t crc32(" not in src("boot/tests/am13e_protocol_host_test.c"),
           "Boot protocol tests must exercise production CRC adapter")

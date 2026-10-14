@@ -35,7 +35,7 @@ def check_current_contract():
     tracked = subprocess.check_output(["git", "-C", str(ROOT), "ls-files", "-z"])
     actual={p.split("/", 1)[0] for p in tracked.decode().split("\0") if p}
     if actual!=allowed:raise RuntimeError("Repository root drift: "+str(actual^allowed))
-    for directory,names in [("mcu/AM13E",{"config.c","config.h","config.cmake","config.ld","preset.c","hal"}),
+    for directory,names in [("mcu/AM13E",{"config.c","config.h","config.cmake","config.ld","preset.c","hal","serial","newlib_syscalls.c","newlib_syscalls.h"}),
                             ("boot/mcu/AM13E",{"config.c","config.h","config.cmake","config.ld","hal"})]:
         if {p.name for p in (ROOT/directory).iterdir()}!=names:
             raise RuntimeError("Native root drift: "+directory)

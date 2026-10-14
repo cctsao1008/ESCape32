@@ -1,7 +1,7 @@
 /*
  * Stage D1: wire-level ESCape32 command framing through the real
  * boot/src/main.c dispatcher, boot/src/io.c framing helpers,
- * boot/src/am13e/flash_range.c and production flash.c state machine.
+ * boot/mcu/AM13E/hal/flash_range.c and production flash.c state machine.
  *
  * The receive/send transport and Flash controller are MOCKS, not PB14 hardware.
  * Host CRC is a software model of CRC-32/ISO-HDLC, not TI CRCP qualification.

@@ -73,7 +73,7 @@ endif()
 
 function(am13e_configure_target am13e_binary)
     target_include_directories(${am13e_binary} PRIVATE
-        "${PROJECT_SOURCE_DIR}/src/runtime" "${PROJECT_SOURCE_DIR}/src/serial"
+        "${PROJECT_SOURCE_DIR}/mcu/AM13E" "${PROJECT_SOURCE_DIR}/mcu/AM13E/serial"
         "${CMAKE_CURRENT_SOURCE_DIR}/mcu/AM13E/hal")
     if(NOT CMAKE_CURRENT_SOURCE_DIR STREQUAL "${PROJECT_SOURCE_DIR}/boot")
         am13e_configure_reference_board(${am13e_binary})

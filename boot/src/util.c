@@ -17,32 +17,6 @@
 
 #include "common.h"
 
-#if defined(AM13E)
-#include "device.h"
-#include <dl_crcp.h>
-
-/* The ESCape32 boot protocol uses a reflected CRC-32 with all-one seed
- * and final inversion. CRCP peripheral initialization is explicit here;
- * low-level clock/power availability belongs to the AM13E boot init.
- * CRCP result equivalence still requires native/on-target verification.
- */
-uint32_t crc32(const char *buf, int len) {
-    if (!buf || len < 0 || (len & 3)) return 0;
-    DL_CRCP_enablePower(CRC);
-    DL_CRCP_init(CRC, DL_CRCP_POLYNOMIAL_SIZE_32,
-                 DL_CRCP_BIT_REVERSED,
-                 DL_CRCP_INPUT_ENDIANESS_LITTLE_ENDIAN,
-                 DL_CRCP_OUTPUT_BYTESWAP_DISABLED);
-    DL_CRCP_setPolynomial(CRC, UINT32_C(0x04c11db7));
-    DL_CRCP_setSeed32(CRC, UINT32_C(0xffffffff));
-    for (int i = 0; i < len; ++i)
-        DL_CRCP_feedData8(CRC, (uint8_t)buf[i]);
-    return ~DL_CRCP_getResult32(CRC);
-}
-/* Flash programming, protection and reset remain backend-owned.
- * No fabricated Flash operations or write-protection defaults.
- */
-#else
 #ifndef FLASH_CR_STRT
 #define FLASH_CR_STRT FLASH_CR_START
 #endif
@@ -140,5 +114,3 @@ void setwrp(int type) { // 0 - off, 1 - bootloader, 2 - full
 #endif
 	for (;;); // Never return
 }
-
-#endif /* AM13E */

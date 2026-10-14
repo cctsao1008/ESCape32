@@ -41,7 +41,7 @@
       "label": "PA26 GCR/NRZI BiDShot reply, 30us final-edge turnaround",
       "sources": [
         "mcu/AM13E/hal/command_reply.c",
-        "src/serial/bidir_codec.c",
+        "mcu/AM13E/serial/bidir_codec.c",
         "mcu/AM13E/hal/bidir_timing.c"
       ],
       "host_tests": [
@@ -201,7 +201,7 @@
       "id": "uart_ibus_sbus_crsf_receive",
       "label": "Original iBUS/SBUS/CRSF RX via conditional TI UNICOMM IRQ/FIFO (Synthetic Full ARM Link; physical pending)",
       "sources": [
-        "src/serial/serial_frame_rx.c",
+        "mcu/AM13E/serial/serial_frame_rx.c",
         "mcu/AM13E/hal/serial_uart_rx.c",
         "src/io.c",
         "src/io.c",
@@ -238,7 +238,7 @@
       "label": "Rel17 EXBUS mode6 CRC/channel, 125/250k n=10 adaptive baud, seven-description/38B board-ID reply and conditional two-wire TX, actual half-duplex unqualified",
       "sources": [
         "src/io.c",
-        "src/serial/serial_frame_rx.c",
+        "mcu/AM13E/serial/serial_frame_rx.c",
         "mcu/AM13E/hal/serial_uart_rx.c",
         "src/io.c",
         "src/io.c",
@@ -257,7 +257,7 @@
       "label": "Original Rel17 HoTT/SUMDv1/v3 mode=7 crc16xmodem/channel mapping on board-selected UART RX (idle/timing pending)",
       "sources": [
         "src/io.c",
-        "src/serial/serial_frame_rx.c",
+        "mcu/AM13E/serial/serial_frame_rx.c",
         "mcu/AM13E/hal/serial_uart_rx.c",
         "src/io.c"
       ],
@@ -271,7 +271,7 @@
       "label": "Rel17 Serial input_mode=2 460800 baud CRC8 command/reply and original throttle/brake policy, conditional UART (hardware pending)",
       "sources": [
         "mcu/AM13E/hal/serial_uart_rx.c",
-        "src/serial/serial_frame_rx.c",
+        "mcu/AM13E/serial/serial_frame_rx.c",
         "src/io.c",
         "src/io.c"
       ],
@@ -286,7 +286,7 @@
       "sources": [
         "src/telem.c",
         "mcu/AM13E/hal/telem_backend.c",
-        "src/serial/telem_frame_rx.c",
+        "mcu/AM13E/serial/telem_frame_rx.c",
         "mcu/AM13E/hal/telem_tx_progress.c",
         "mcu/AM13E/hal/serial_tx_queue.c"
       ],

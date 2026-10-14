@@ -5,7 +5,7 @@
 */
 #include "common.h"
 #include <stdint.h>
-#include "../../../mcu/AM13E/hal/flash_partition.h"
+#include "../../../../mcu/AM13E/hal/flash_partition.h"
 
 #ifdef AM13E_FLASH_TEST
 /* Host test-only: use the same mapped Flash bounds as flash.c. */

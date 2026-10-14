@@ -2,7 +2,7 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
-#include "../../../mcu/AM13E/hal/flash_partition.h"
+#include "../../../../mcu/AM13E/hal/flash_partition.h"
 #define AM13E_BOOT_STAGE_BYTES (AM13E_FLASH_BOOT_END-AM13E_FLASH_BOOT_BASE)
 #define AM13E_BOOT_STAGE_BLOCK_BYTES AM13E_FLASH_LOGICAL_BLOCK
 #define AM13E_BOOT_STAGE_BLOCKS (AM13E_BOOT_STAGE_BYTES/AM13E_BOOT_STAGE_BLOCK_BYTES)

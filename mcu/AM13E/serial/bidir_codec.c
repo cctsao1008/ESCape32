@@ -1,4 +1,4 @@
-#include "../bidir_codec.h"
+#include "../../../src/bidir_codec.h"
 #include <stddef.h>
 
 void am13e_bidir_encode_frame(uint16_t frame,

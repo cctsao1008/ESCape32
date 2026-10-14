@@ -42,7 +42,7 @@ case "$fixture" in
       -DAM13E_BOARD_SERIAL_TX_CONFIGURED=1 -DAM13E_BOARD_SERIAL_TX_PINCM=26
       -DAM13E_BOARD_SERIAL_TX_PIN_FUNCTION=9 -DAM13E_BOARD_SERIAL_TX_TWO_WIRE=0
       -DAM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED=1)
-    extra_sources=(src/io.c src/serial/serial_frame_rx.c src/serial/cli_line_rx.c
+    extra_sources=(src/io.c mcu/AM13E/serial/serial_frame_rx.c mcu/AM13E/serial/cli_line_rx.c
       mcu/AM13E/hal/serial_tx_queue.c mcu/AM13E/hal/crsf_deferred_command.c
       mcu/AM13E/hal/analog_sampling_backend.c mcu/AM13E/hal/analog_calibration_plan.c
       "$sdk/source/driverlib/am13e230x/dl_adc.c"
@@ -57,7 +57,7 @@ cc "${extra[@]}" -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-int-to-po
  "-DAM13E_TEST_TI_ECAP_HEADER=\"$dl/dl_ecap.h\"" "-DAM13E_TEST_TI_GPIO_HEADER=\"$dl/dl_gpio.h\"" "-DAM13E_TEST_TI_MCPWM_HEADER=\"$dl/dl_mcpwm.h\"" \
  "-DAM13E_TEST_TI_EQEP_HEADER=\"$dl/dl_eqep.h\"" \
  "-DAM13E_TEST_TI_UART_HEADER=\"$dl/dl_unicommuart.h\"" \
- -Isrc -Isrc/serial -Isrc/runtime -Imcu/AM13E -Imcu/AM13E/hal -Imcu/AM13E/hal/tests/register_mock -I"$hw" -I"$dl" \
+ -Isrc -Imcu/AM13E/serial -Imcu/AM13E -Imcu/AM13E -Imcu/AM13E/hal -Imcu/AM13E/hal/tests/register_mock -I"$hw" -I"$dl" \
  mcu/AM13E/hal/tests/motor_physical_host_test.c src/util.c \
  mcu/AM13E/hal/motor_hall.c \
  mcu/AM13E/hal/motor_audio.c mcu/AM13E/hal/motor_audio_plan.c mcu/AM13E/hal/motor_safety.c mcu/AM13E/hal/motor_output_runtime.c mcu/AM13E/hal/motor_output_backend.c mcu/AM13E/hal/board_motor_output_reference.c mcu/AM13E/hal/motor_power_stage.c mcu/AM13E/hal/motor_output_route_plan.c \
@@ -80,7 +80,7 @@ for contract in missing_mode invalid_mode qfn_internal; do
   esac
   if cc -fsyntax-only -std=c11 -DAM13E -DCLK=200000000 '-DTARGET_NAME="Host"' \
       -DAM13E_REF_IO_PLAN_V1=1 "${ref_flags[@]}" -Wno-int-to-pointer-cast \
-      -Isrc -Isrc/serial -Isrc/runtime -Imcu/AM13E -Imcu/AM13E/hal \
+      -Isrc -Imcu/AM13E/serial -Imcu/AM13E -Imcu/AM13E -Imcu/AM13E/hal \
       -Imcu/AM13E/hal/tests/register_mock -I"$hw" -I"$dl" \
       mcu/AM13E/hal/analog_runtime.c >"$out/$contract.log" 2>&1; then
     echo "FAIL: invalid SC5 ADC contract compiled: $contract" >&2; exit 1
@@ -95,9 +95,9 @@ cc -no-pie -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-int-to-pointer-
   \
  "-DAM13E_TEST_TI_ECAP_HEADER=\"$dl/dl_ecap.h\"" "-DAM13E_TEST_TI_GPIO_HEADER=\"$dl/dl_gpio.h\"" "-DAM13E_TEST_TI_MCPWM_HEADER=\"$dl/dl_mcpwm.h\"" \
  "-DAM13E_TEST_TI_EQEP_HEADER=\"$dl/dl_eqep.h\"" \
- -Isrc -Isrc/serial -Isrc/runtime -Imcu/AM13E -Imcu/AM13E/hal -Imcu/AM13E/hal/tests/register_mock -I"$hw" -I"$dl" \
+ -Isrc -Imcu/AM13E/serial -Imcu/AM13E -Imcu/AM13E -Imcu/AM13E/hal -Imcu/AM13E/hal/tests/register_mock -I"$hw" -I"$dl" \
  mcu/AM13E/hal/tests/command_pa26_host_test.c src/io.c src/tests/AM13E/rel17_defaults_host.c \
- mcu/AM13E/hal/command_decode.c mcu/AM13E/hal/bidir_timing.c src/serial/bidir_codec.c \
+ mcu/AM13E/hal/command_decode.c mcu/AM13E/hal/bidir_timing.c mcu/AM13E/serial/bidir_codec.c \
  "$out/dl_timer.c" \
  -o "$out/command-pa26-test"
 "$out/command-pa26-test"
@@ -109,9 +109,9 @@ cc -DAM13E_BOARD_DEBUG_UART_BAUD=115200 -DSERIAL_BR="$serial_baud" -no-pie -D_GN
  "-DAM13E_TEST_TI_ECAP_HEADER=\"$dl/dl_ecap.h\"" "-DAM13E_TEST_TI_GPIO_HEADER=\"$dl/dl_gpio.h\"" "-DAM13E_TEST_TI_MCPWM_HEADER=\"$dl/dl_mcpwm.h\"" \
  "-DAM13E_TEST_TI_EQEP_HEADER=\"$dl/dl_eqep.h\"" \
  "-DAM13E_TEST_TI_UART_HEADER=\"$dl/dl_unicommuart.h\"" -DAM13E_BOARD_SERIAL_RX_CONFIGURED=1 -DAM13E_BOARD_SERIAL_RX_UC_INDEX=0 -DAM13E_BOARD_SERIAL_RX_PINCM=26 -DAM13E_BOARD_SERIAL_RX_PIN_FUNCTION=8 -DAM13E_BOARD_SERIAL_RX_BUSCLK_HZ=100000000 -DAM13E_BOARD_SERIAL_SBUS_PIN_INVERT=1 -DAM13E_BOARD_SERIAL_TX_CONFIGURED=1 -DAM13E_BOARD_SERIAL_TX_PINCM=26 -DAM13E_BOARD_SERIAL_TX_PIN_FUNCTION=9 -DAM13E_BOARD_SERIAL_TX_TWO_WIRE=0 -DAM13E_BOARD_SBUS2_TIMED_REPLY=1 -DAM13E_BOARD_SBUS2_TX_PIN_INVERT=1 \
- -Isrc -Isrc/serial -Isrc/runtime -Imcu/AM13E -Imcu/AM13E/hal -Imcu/AM13E/hal/tests/register_mock -I"$hw" -I"$dl" \
+ -Isrc -Imcu/AM13E/serial -Imcu/AM13E -Imcu/AM13E -Imcu/AM13E/hal -Imcu/AM13E/hal/tests/register_mock -I"$hw" -I"$dl" \
  mcu/AM13E/hal/tests/serial_pa26_host_test.c mcu/AM13E/hal/motor_power_stage.c src/io.c src/tests/AM13E/rel17_defaults_host.c \
- src/serial/serial_frame_rx.c mcu/AM13E/hal/serial_tx_queue.c mcu/AM13E/hal/crsf_deferred_command.c mcu/AM13E/hal/bidir_timing.c src/serial/bidir_codec.c \
+ mcu/AM13E/serial/serial_frame_rx.c mcu/AM13E/hal/serial_tx_queue.c mcu/AM13E/hal/crsf_deferred_command.c mcu/AM13E/hal/bidir_timing.c mcu/AM13E/serial/bidir_codec.c \
  "$out/dl_timer.c" "$dl/dl_unicomm.c" "$dl/dl_unicommuart.c" \
  -o "$out/serial-pa26-test"
 "$out/serial-pa26-test"
@@ -126,9 +126,9 @@ for invalid_baud in 0 1 6250001; do
  "-DAM13E_TEST_TI_ECAP_HEADER=\"$dl/dl_ecap.h\"" "-DAM13E_TEST_TI_GPIO_HEADER=\"$dl/dl_gpio.h\"" "-DAM13E_TEST_TI_MCPWM_HEADER=\"$dl/dl_mcpwm.h\"" \
  "-DAM13E_TEST_TI_EQEP_HEADER=\"$dl/dl_eqep.h\"" \
  "-DAM13E_TEST_TI_UART_HEADER=\"$dl/dl_unicommuart.h\"" -DAM13E_BOARD_SERIAL_RX_CONFIGURED=1 -DAM13E_BOARD_SERIAL_RX_UC_INDEX=0 -DAM13E_BOARD_SERIAL_RX_PINCM=26 -DAM13E_BOARD_SERIAL_RX_PIN_FUNCTION=8 -DAM13E_BOARD_SERIAL_RX_BUSCLK_HZ=100000000 -DAM13E_BOARD_SERIAL_SBUS_PIN_INVERT=1 -DAM13E_BOARD_SERIAL_TX_CONFIGURED=1 -DAM13E_BOARD_SERIAL_TX_PINCM=26 -DAM13E_BOARD_SERIAL_TX_PIN_FUNCTION=9 -DAM13E_BOARD_SERIAL_TX_TWO_WIRE=0 -DAM13E_BOARD_SBUS2_TIMED_REPLY=1 -DAM13E_BOARD_SBUS2_TX_PIN_INVERT=1 \
- -Isrc -Isrc/serial -Isrc/runtime -Imcu/AM13E -Imcu/AM13E/hal -Imcu/AM13E/hal/tests/register_mock -I"$hw" -I"$dl" \
+ -Isrc -Imcu/AM13E/serial -Imcu/AM13E -Imcu/AM13E -Imcu/AM13E/hal -Imcu/AM13E/hal/tests/register_mock -I"$hw" -I"$dl" \
  mcu/AM13E/hal/tests/serial_pa26_host_test.c mcu/AM13E/hal/motor_power_stage.c src/io.c src/tests/AM13E/rel17_defaults_host.c \
- src/serial/serial_frame_rx.c mcu/AM13E/hal/serial_tx_queue.c mcu/AM13E/hal/crsf_deferred_command.c mcu/AM13E/hal/bidir_timing.c src/serial/bidir_codec.c \
+ mcu/AM13E/serial/serial_frame_rx.c mcu/AM13E/hal/serial_tx_queue.c mcu/AM13E/hal/crsf_deferred_command.c mcu/AM13E/hal/bidir_timing.c mcu/AM13E/serial/bidir_codec.c \
  "$out/dl_timer.c" "$dl/dl_unicomm.c" "$dl/dl_unicommuart.c" \
   >"$out/baud-$invalid_baud.log" 2>&1; then
     echo "FAIL: unsupported SERIAL_BR accepted: $invalid_baud" >&2; exit 1
