@@ -52,7 +52,7 @@ esac
 hw="$sdk/source/device/am13e230x/include/hw"
 dl="$sdk/source/driverlib/am13e230x"
 cc "${extra[@]}" -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections \
- -DAM13E -DAM13E_REF_IO_PLAN_V1=1 -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' \
+ -DAM13E_BOARD_MCU_PART=23019 -DAM13E_BOARD_PACKAGE=1 -DAM13E -DAM13E_REF_IO_PLAN_V1=1 -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' \
  -DAM13E_OC_U_DAC_CODE=2048 -DAM13E_OC_V_DAC_CODE=2048 -DAM13E_OC_W_DAC_CODE=2048 -DAM13E_OC_U_INVERT=0 -DAM13E_OC_V_INVERT=0 -DAM13E_OC_W_INVERT=0 -DAM13E_OPTION1_OUTPUTS_QUALIFIED="$qualified" -DAM13E_MOTOR_GATE_ACTIVE_LEVEL="$polarity" -DAM13E_MOTOR_PAD_INVERT_MASK="$mask" -DAM13E_MOTOR_OUTPUT_RED_TICKS=120 -DAM13E_MOTOR_OUTPUT_FED_TICKS="$fed" -DAM13E_MOTOR_MIN_DEAD_TICKS=100 -DAM13E_MOTOR_NFAULT_ACTIVE_LOW=1 -DAM13E_MOTOR_GATE_RESET_INACTIVE=1 \
  "-DAM13E_TEST_TI_ECAP_HEADER=\"$dl/dl_ecap.h\"" "-DAM13E_TEST_TI_GPIO_HEADER=\"$dl/dl_gpio.h\"" "-DAM13E_TEST_TI_MCPWM_HEADER=\"$dl/dl_mcpwm.h\"" \
  "-DAM13E_TEST_TI_EQEP_HEADER=\"$dl/dl_eqep.h\"" \
@@ -91,7 +91,7 @@ done
 
 # Exercise the native PA26 capture/DMA/reply path and original io.c policy.
 cc -no-pie -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections \
- -include mcu/_support/AM13E/tests/app/newlib_host.h "-DAM13E_TEST_TI_DMA_HEADER=\"$dl/dl_dma.h\"" -DAM13E -DAM13E_REF_IO_PLAN_V1=1 -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' \
+ -include mcu/_support/AM13E/tests/app/newlib_host.h "-DAM13E_TEST_TI_DMA_HEADER=\"$dl/dl_dma.h\"" -DAM13E_BOARD_MCU_PART=23019 -DAM13E_BOARD_PACKAGE=1 -DAM13E -DAM13E_REF_IO_PLAN_V1=1 -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' \
   \
  "-DAM13E_TEST_TI_ECAP_HEADER=\"$dl/dl_ecap.h\"" "-DAM13E_TEST_TI_GPIO_HEADER=\"$dl/dl_gpio.h\"" "-DAM13E_TEST_TI_MCPWM_HEADER=\"$dl/dl_mcpwm.h\"" \
  "-DAM13E_TEST_TI_EQEP_HEADER=\"$dl/dl_eqep.h\"" \
@@ -104,7 +104,7 @@ cc -no-pie -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-int-to-pointer-
 
 for serial_baud in 460800 230400; do
 cc -DAM13E_BOARD_DEBUG_UART_BAUD=115200 -DSERIAL_BR="$serial_baud" -no-pie -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-variable -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections \
- -include mcu/_support/AM13E/tests/app/newlib_host.h "-DAM13E_TEST_TI_DMA_HEADER=\"$dl/dl_dma.h\"" -DAM13E -DAM13E_REF_IO_PLAN_V1=1 -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' \
+ -include mcu/_support/AM13E/tests/app/newlib_host.h "-DAM13E_TEST_TI_DMA_HEADER=\"$dl/dl_dma.h\"" -DAM13E_BOARD_MCU_PART=23019 -DAM13E_BOARD_PACKAGE=1 -DAM13E -DAM13E_REF_IO_PLAN_V1=1 -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' \
   \
  "-DAM13E_TEST_TI_ECAP_HEADER=\"$dl/dl_ecap.h\"" "-DAM13E_TEST_TI_GPIO_HEADER=\"$dl/dl_gpio.h\"" "-DAM13E_TEST_TI_MCPWM_HEADER=\"$dl/dl_mcpwm.h\"" \
  "-DAM13E_TEST_TI_EQEP_HEADER=\"$dl/dl_eqep.h\"" \
@@ -121,7 +121,7 @@ done
 # The 16x path must reject zero, overflowing IBRD and zero-IBRD baud rates.
 for invalid_baud in 0 1 6250001; do
   if cc -DSERIAL_BR="$invalid_baud" -fsyntax-only -no-pie -D_GNU_SOURCE -std=c11 -O1 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-variable -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections \
- -include mcu/_support/AM13E/tests/app/newlib_host.h "-DAM13E_TEST_TI_DMA_HEADER=\"$dl/dl_dma.h\"" -DAM13E -DAM13E_REF_IO_PLAN_V1=1 -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' \
+ -include mcu/_support/AM13E/tests/app/newlib_host.h "-DAM13E_TEST_TI_DMA_HEADER=\"$dl/dl_dma.h\"" -DAM13E_BOARD_MCU_PART=23019 -DAM13E_BOARD_PACKAGE=1 -DAM13E -DAM13E_REF_IO_PLAN_V1=1 -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' \
   \
  "-DAM13E_TEST_TI_ECAP_HEADER=\"$dl/dl_ecap.h\"" "-DAM13E_TEST_TI_GPIO_HEADER=\"$dl/dl_gpio.h\"" "-DAM13E_TEST_TI_MCPWM_HEADER=\"$dl/dl_mcpwm.h\"" \
  "-DAM13E_TEST_TI_EQEP_HEADER=\"$dl/dl_eqep.h\"" \

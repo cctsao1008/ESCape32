@@ -264,7 +264,7 @@ jobs:
             }
           arm-none-eabi-nm am13e-ci-telem/AM13E-rev17.3.elf \
             >am13e-ci-logs/telem-symbols.txt
-          grep -Eq ' [Tt] UC1_IRQHandler$' am13e-ci-logs/telem-symbols.txt
+          grep -Eq ' [Tt] UC3_IRQHandler$' am13e-ci-logs/telem-symbols.txt
           grep -Eq ' [Tt] am13e_telem_hw_init$' am13e-ci-logs/telem-symbols.txt
           grep -Eq ' [Tt] am13e_telem_on_rx_frame$' am13e-ci-logs/telem-symbols.txt
           grep -Eq ' [Tt] am13e_telem_hw_tx_start$' am13e-ci-logs/telem-symbols.txt

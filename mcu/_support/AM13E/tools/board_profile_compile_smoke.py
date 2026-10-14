@@ -19,7 +19,7 @@ commands=json.loads((build/"compile_commands.json").read_text())
 
 targets={"motor_safety.c","motor_power_stage.c","motor_runtime_irq.c",
          "analog_runtime.c","main.c","util.c","fault_input.c",
-         "irq_vectors.c","serial_uart_rx.c","motor_fault_route.c"}
+         "irq_vectors.c","serial_uart_rx.c","telem_backend.c","motor_fault_route.c"}
 observed={}
 
 def syntax_check(obj,flags,should_pass=True,expected_error=None):
@@ -36,7 +36,7 @@ def syntax_check(obj,flags,should_pass=True,expected_error=None):
         if word=="-c":
             continue
         stripped.append(word)
-    run=subprocess.run(stripped+flags+["-Werror","-fsyntax-only"],
+    run=subprocess.run(stripped+["-DAM13E_BOARD_MCU_PART=23019", "-DAM13E_BOARD_PACKAGE=1"]+flags+["-Werror","-fsyntax-only"],
                        cwd=obj["directory"],capture_output=True,text=True,
                        check=False)
     if bool(run.returncode==0)!=should_pass or (
@@ -100,12 +100,11 @@ syntax_check(observed["analog_runtime.c"],
              False,"Analog receiver conflicts")
 print("PASS: conditional Analog input_mode=1 ADC0 SOC3 build and board pin guards")
 
-# Explicit hardware routing requirements; the positive profile is a
-# synthetic compile fixture, not an actual valid UC-to-pin assignment.
+# SDK-backed PA26/PA27 UC0, LQFP64_G. Silicon-valid, PCB unqualified.
 uart=["-DAM13E_BOARD_SERIAL_RX_CONFIGURED=1",
       "-DAM13E_BOARD_SERIAL_RX_UC_INDEX=0",
-      "-DAM13E_BOARD_SERIAL_RX_PINCM=50",
-      "-DAM13E_BOARD_SERIAL_RX_PIN_FUNCTION=2",
+      "-DAM13E_BOARD_SERIAL_RX_PINCM=26",
+      "-DAM13E_BOARD_SERIAL_RX_PIN_FUNCTION=8",
       "-DAM13E_BOARD_SERIAL_RX_BUSCLK_HZ=100000000",
       "-DAM13E_BOARD_SERIAL_SBUS_PIN_INVERT=1"]
 syntax_check(observed["serial_uart_rx.c"],uart)
@@ -144,10 +143,10 @@ syntax_check(observed["motor_fault_route.c"],
 print("PASS: Option 1 overcurrent completeness/code/polarity compile guards")
 
 
-# TX-positive case remains a COMPILE-ONLY synthetic fixture.
+# TX-positive case uses a silicon-valid two-pad route; not PCB qualification.
 tx=uart+["-DAM13E_BOARD_SERIAL_TX_CONFIGURED=1",
-         "-DAM13E_BOARD_SERIAL_TX_PINCM=51",
-         "-DAM13E_BOARD_SERIAL_TX_PIN_FUNCTION=2",
+         "-DAM13E_BOARD_SERIAL_TX_PINCM=27",
+         "-DAM13E_BOARD_SERIAL_TX_PIN_FUNCTION=9",
          "-DAM13E_BOARD_SERIAL_TX_TWO_WIRE=1"]
 syntax_check(observed["serial_uart_rx.c"],tx)
 syntax_check(observed["serial_uart_rx.c"],
@@ -155,7 +154,7 @@ syntax_check(observed["serial_uart_rx.c"],
              False,"UART TX requires explicit TX")
 syntax_check(observed["serial_uart_rx.c"],
              [x for x in tx if not x.startswith("-DAM13E_BOARD_SERIAL_TX_PINCM")] +
-             ["-DAM13E_BOARD_SERIAL_TX_PINCM=50"],
+             ["-DAM13E_BOARD_SERIAL_TX_PINCM=26"],
              False,"CRSF TX must own a distinct")
 print("PASS: optional CRSF TX IRQ/EOT board route and fail-closed contract")
 # Real device functions, compile-only routing checks; waveform needs hardware.
@@ -173,6 +172,92 @@ for uc,rxpf,txpf in [(0,8,9),(3,11,10)]:
             "-DAM13E_BOARD_SERIAL_TX_PIN_FUNCTION=2"],False,"Single-wire command UART requires actual")
 print("PASS: PA26 UC0/UC3 native single-pad route and wrong-function rejection")
 
+
+# P2: exercise the actual production consumers with official SDK headers.
+def replace_define(flags,name,value):
+    return [x for x in flags if not x.startswith("-D"+name+"=")] + ["-D"+name+"="+str(value)]
+for name,value,error in [
+    ("AM13E_BOARD_SERIAL_RX_UC_INDEX",1,"Unsupported native UART RX tuple"),
+    ("AM13E_BOARD_SERIAL_RX_PIN_FUNCTION",9,"Unsupported native UART RX tuple"),
+    ("AM13E_BOARD_SERIAL_RX_PIN_FUNCTION",2,"Unsupported native UART RX tuple"),
+    ("AM13E_BOARD_SERIAL_RX_PINCM",107,"UART RX pin unavailable")]:
+    syntax_check(observed["serial_uart_rx.c"],replace_define(uart,name,value),False,error)
+syntax_check(observed["serial_uart_rx.c"],uart+["-UAM13E_BOARD_PACKAGE"],False,
+             "Native UART requires explicit")
+syntax_check(observed["serial_uart_rx.c"],uart+["-UAM13E_BOARD_PACKAGE","-DAM13E_BOARD_PACKAGE=99"],False,
+             "Unsupported native UART device/package")
+syntax_check(observed["serial_uart_rx.c"],uart+["-UAM13E_BOARD_MCU_PART","-DAM13E_BOARD_MCU_PART=23018"],False,
+             "Unsupported native UART device/package")
+syntax_check(observed["serial_uart_rx.c"],tx+["-UAM13E_BOARD_PACKAGE","-DAM13E_BOARD_PACKAGE=2"],False,
+             "UART TX pin unavailable") # PA27 is not bonded on 64H.
+syntax_check(observed["serial_uart_rx.c"],replace_define(tx,"AM13E_BOARD_SERIAL_TX_PIN_FUNCTION",8),False,
+             "Unsupported native UART TX tuple")
+syntax_check(observed["serial_uart_rx.c"],replace_define(tx,"AM13E_BOARD_SERIAL_TX_TWO_WIRE",0),False,
+             "Single-wire command UART requires actual")
+reserved=replace_define(uart,"AM13E_BOARD_SERIAL_RX_UC_INDEX",1)
+reserved=replace_define(reserved,"AM13E_BOARD_SERIAL_RX_PINCM",9)
+reserved=replace_define(reserved,"AM13E_BOARD_SERIAL_RX_PIN_FUNCTION",5)
+syntax_check(observed["serial_uart_rx.c"],reserved,False,"Native serial RX pin conflicts")
+syntax_check(observed["serial_uart_rx.c"],replace_define(tx,"AM13E_BOARD_SERIAL_TX_PIN_FUNCTION",10),False,
+             "Unsupported native UART TX tuple") # UC3 TX AF cannot serve UC0.
+reserved_tx=replace_define(tx,"AM13E_BOARD_SERIAL_RX_UC_INDEX",3)
+reserved_tx=replace_define(reserved_tx,"AM13E_BOARD_SERIAL_RX_PINCM",42)
+reserved_tx=replace_define(reserved_tx,"AM13E_BOARD_SERIAL_RX_PIN_FUNCTION",7)
+reserved_tx=replace_define(reserved_tx,"AM13E_BOARD_SERIAL_TX_PINCM",26)
+reserved_tx=replace_define(reserved_tx,"AM13E_BOARD_SERIAL_TX_PIN_FUNCTION",10)
+syntax_check(observed["serial_uart_rx.c"],reserved_tx,False,"Native serial TX pin conflicts")
+for package in range(1,5):
+    for uc,pf in [(0,8),(3,11)]:
+        valid=replace_define(uart,"AM13E_BOARD_SERIAL_RX_UC_INDEX",uc)
+        valid=replace_define(valid,"AM13E_BOARD_SERIAL_RX_PIN_FUNCTION",pf)
+        syntax_check(observed["serial_uart_rx.c"],valid+["-UAM13E_BOARD_PACKAGE",f"-DAM13E_BOARD_PACKAGE={package}"])
+for package in (1,2):
+    for uc,rxpf,txpf in [(0,8,9),(3,6,7)]:
+        pb18=replace_define(uart,"AM13E_BOARD_SERIAL_RX_UC_INDEX",uc)
+        pb18=replace_define(pb18,"AM13E_BOARD_SERIAL_RX_PINCM",50)
+        pb18=replace_define(pb18,"AM13E_BOARD_SERIAL_RX_PIN_FUNCTION",rxpf)
+        syntax_check(observed["serial_uart_rx.c"],pb18+["-UAM13E_BOARD_PACKAGE",f"-DAM13E_BOARD_PACKAGE={package}"])
+        pair=replace_define(tx,"AM13E_BOARD_SERIAL_RX_UC_INDEX",uc)
+        pair=replace_define(pair,"AM13E_BOARD_SERIAL_RX_PIN_FUNCTION",8 if uc==0 else 11)
+        pair=replace_define(pair,"AM13E_BOARD_SERIAL_TX_PINCM",50)
+        pair=replace_define(pair,"AM13E_BOARD_SERIAL_TX_PIN_FUNCTION",txpf)
+        syntax_check(observed["serial_uart_rx.c"],pair+["-UAM13E_BOARD_PACKAGE",f"-DAM13E_BOARD_PACKAGE={package}"])
+not_uart=replace_define(uart,"AM13E_BOARD_SERIAL_RX_PINCM",50)
+not_uart=replace_define(not_uart,"AM13E_BOARD_SERIAL_RX_PIN_FUNCTION",13) # EPI0_S31
+syntax_check(observed["serial_uart_rx.c"],not_uart,False,"Unsupported native UART RX tuple")
+tel=["-DAM13E_BOARD_TELEM_UART_CONFIGURED=1","-DAM13E_BOARD_TELEM_UC_INDEX=3",
+     "-DAM13E_BOARD_TELEM_RX_PINCM=42","-DAM13E_BOARD_TELEM_TX_PINCM=43",
+     "-DAM13E_BOARD_TELEM_RX_PIN_FUNCTION=7","-DAM13E_BOARD_TELEM_TX_PIN_FUNCTION=13",
+     "-DAM13E_BOARD_TELEM_BUSCLK_HZ=100000000","-DAM13E_BOARD_TELEM_TWO_WIRE=1"]
+for package in range(1,4):
+    syntax_check(observed["telem_backend.c"],tel+["-UAM13E_BOARD_PACKAGE",f"-DAM13E_BOARD_PACKAGE={package}"])
+syntax_check(observed["telem_backend.c"],tel+["-UAM13E_BOARD_PACKAGE","-DAM13E_BOARD_PACKAGE=4"],False,
+             "Telemetry UART pin unavailable")
+invalid=replace_define(tel,"AM13E_BOARD_TELEM_UC_INDEX",1)
+invalid=replace_define(invalid,"AM13E_BOARD_TELEM_RX_PINCM",50)
+invalid=replace_define(invalid,"AM13E_BOARD_TELEM_TX_PINCM",51)
+invalid=replace_define(invalid,"AM13E_BOARD_TELEM_RX_PIN_FUNCTION",2)
+invalid=replace_define(invalid,"AM13E_BOARD_TELEM_TX_PIN_FUNCTION",2)
+syntax_check(observed["telem_backend.c"],invalid,False,"Unsupported telemetry UART tuple")
+for field,value in [("AM13E_BOARD_TELEM_UC_INDEX",0),
+                    ("AM13E_BOARD_TELEM_RX_PIN_FUNCTION",10),
+                    ("AM13E_BOARD_TELEM_TX_PIN_FUNCTION",8)]:
+    syntax_check(observed["telem_backend.c"],replace_define(tel,field,value),False,"Unsupported telemetry UART tuple")
+syntax_check(observed["telem_backend.c"],tel+["-DAM13E_BOARD_SERIAL_RX_CONFIGURED=1",
+    "-DAM13E_BOARD_SERIAL_RX_UC_INDEX=3","-DAM13E_BOARD_SERIAL_RX_PINCM=26"],False,
+    "Serial input and telemetry require different")
+overlap=replace_define(tel,"AM13E_BOARD_TELEM_RX_PINCM",50)
+overlap=replace_define(overlap,"AM13E_BOARD_TELEM_RX_PIN_FUNCTION",6)
+syntax_check(observed["telem_backend.c"],overlap+["-DAM13E_BOARD_SERIAL_RX_CONFIGURED=1",
+    "-DAM13E_BOARD_SERIAL_RX_UC_INDEX=0","-DAM13E_BOARD_SERIAL_RX_PINCM=50"],False,
+    "Serial input and telemetry require different")
+command=replace_define(tel,"AM13E_BOARD_TELEM_UC_INDEX",0)
+command=replace_define(command,"AM13E_BOARD_TELEM_RX_PINCM",26)
+command=replace_define(command,"AM13E_BOARD_TELEM_RX_PIN_FUNCTION",8)
+command=replace_define(command,"AM13E_BOARD_TELEM_TX_PINCM",27)
+command=replace_define(command,"AM13E_BOARD_TELEM_TX_PIN_FUNCTION",9)
+syntax_check(observed["telem_backend.c"],command,False,"Telemetry cannot claim")
+print("PASS P2 official SDK UART roles, instances, packages, original invalid tuple, topology and resource overlap")
 
 # Verify the preprocessed default firmware, rather than banning the
 # configured production implementation from the same source file.

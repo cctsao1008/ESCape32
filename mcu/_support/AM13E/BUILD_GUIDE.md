@@ -125,3 +125,5 @@ dependencies. board_pin_ownership.h supplies compile-time predicates, not
 a runtime allocator. Changing the PA26/TIMG4/CC0/DMA2 tuple to unsupported
 values fails compilation. SDK capability and electrical-profile checks
 remain separate from pin ownership.
+
+Optional UART profiles must explicitly declare AM13E_BOARD_MCU_PART=23019 and AM13E_BOARD_PACKAGE (1=LQFP64_G, 2=LQFP64_H, 3=LQFP48, 4=QFN48). Native UART consumers validate reviewed SDK RX/TX tuples, package bonding and existing pin ownership at compile time. PA27 is unavailable on LQFP64_H; PB10/PB11 are unavailable on QFN48. Silicon-valid test routes do not establish PCB connectivity or electrical qualification; unreviewed routes are rejected.

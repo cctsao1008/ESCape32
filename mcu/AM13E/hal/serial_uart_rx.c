@@ -83,8 +83,12 @@ _Static_assert((AM13E_BOARD_SERIAL_TX_TWO_WIRE==1 || AM13E_BOARD_SERIAL_TX_TWO_W
     !defined(AM13E_BOARD_SERIAL_SBUS_PIN_INVERT)
 #error "Board UART RX requires dedicated UC, RX pin/function, verified BUSCLK"
 #endif
-/* PF is a six-bit SDK field; functions9/11/13 exist on this silicon.
- * This validates encoding only. The board must still prove the UC/pad route. */
+#include "uart_route.h"
+_Static_assert(AM13E_UART_BONDED(AM13E_BOARD_SERIAL_RX_PINCM),
+    "UART RX pin unavailable on selected package");
+_Static_assert(AM13E_UART_RX_ROUTE(AM13E_BOARD_SERIAL_RX_UC_INDEX,
+    AM13E_BOARD_SERIAL_RX_PINCM,AM13E_BOARD_SERIAL_RX_PIN_FUNCTION),
+    "Unsupported native UART RX tuple");
 _Static_assert(AM13E_BOARD_SERIAL_RX_PINCM>0U &&
                AM13E_BOARD_SERIAL_RX_PINCM<107U &&
                AM13E_BOARD_SERIAL_RX_PIN_FUNCTION>0U &&
@@ -123,6 +127,18 @@ _Static_assert(AM13E_BOARD_SERIAL_RX_PINCM!=IOMUX_PINCM_PB14 &&
     !defined(AM13E_BOARD_SERIAL_TX_TWO_WIRE)
 #error "UART TX requires explicit TX pin function and board topology"
 #endif
+_Static_assert(AM13E_UART_BONDED(AM13E_BOARD_SERIAL_TX_PINCM),
+    "UART TX pin unavailable on selected package");
+_Static_assert(AM13E_UART_TX_ROUTE(AM13E_BOARD_SERIAL_RX_UC_INDEX,
+    AM13E_BOARD_SERIAL_TX_PINCM,AM13E_BOARD_SERIAL_TX_PIN_FUNCTION),
+    "Unsupported native UART TX tuple");
+_Static_assert((AM13E_BOARD_SERIAL_TX_PINCM==IO_PINCM && AM13E_BOARD_SERIAL_TX_TWO_WIRE==0) ||
+    (AM13E_PIN_AVAILABLE(AM13E_BOARD_SERIAL_TX_PINCM) &&
+     !AM13E_PIN_TELEM(AM13E_BOARD_SERIAL_TX_PINCM) &&
+     !AM13E_PIN_HALL(AM13E_BOARD_SERIAL_TX_PINCM) &&
+     !AM13E_PIN_ANALOG(AM13E_BOARD_SERIAL_TX_PINCM) &&
+     !AM13E_PIN_AUX(AM13E_BOARD_SERIAL_TX_PINCM)),
+    "Native serial TX pin conflicts with board-reserved IO");
 #ifdef PA26_SINGLE_WIRE
 _Static_assert(AM13E_BOARD_SERIAL_RX_PINCM==26U && AM13E_BOARD_SERIAL_TX_PINCM==26U &&
     ((AM13E_BOARD_SERIAL_RX_UC_INDEX==0 && AM13E_BOARD_SERIAL_RX_PIN_FUNCTION==8 && AM13E_BOARD_SERIAL_TX_PIN_FUNCTION==9) ||
@@ -975,6 +991,7 @@ enum { AM13E_REFERENCE_SERIAL_RX_DISABLED = 0 };
 /* Option 1 UC1 debug/service transport. Separate fixed pads and FIFO
  * ownership; no receiver parser, command mode or blocking logging loop. */
 #ifdef AM13E_BOARD_DEBUG_UART_BAUD
+#include "uart_route.h"
 #include "../config.h"
 #include "clock_backend.h"
 #include <soc.h>
@@ -984,6 +1001,10 @@ enum { AM13E_REFERENCE_SERIAL_RX_DISABLED = 0 };
     (defined(AM13E_BOARD_TELEM_UC_INDEX) && AM13E_BOARD_TELEM_UC_INDEX==1)
 #error "Option 1 debug UC1 cannot share receiver/telemetry ownership"
 #endif
+_Static_assert(AM13E_UART_BONDED(AM13E_DEBUG_TX_PINCM) && AM13E_UART_BONDED(AM13E_DEBUG_RX_PINCM) &&
+    AM13E_UART_TX_ROUTE(1,AM13E_DEBUG_TX_PINCM,IOMUX_PA0_UC1_TX_SDA_PICO) &&
+    AM13E_UART_RX_ROUTE(1,AM13E_DEBUG_RX_PINCM,IOMUX_PA9_UC1_RX_SCL_SCLK),
+    "Invalid Option 1 debug UART package/route");
 _Static_assert(IOMUX_PA0_UC1_TX_SDA_PICO==9U && IOMUX_PA9_UC1_RX_SCL_SCLK==5U,
                "Option 1 UC1 pad functions changed");
 _Static_assert(AM13E_BOARD_DEBUG_UART_BAUD>0 &&

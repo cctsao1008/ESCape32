@@ -30,8 +30,15 @@
     !defined(AM13E_BOARD_TELEM_TWO_WIRE)
 #error "Telemetry UNICOMM needs reviewed independent RX/TX pads, UC and bus clock"
 #endif
-/* SDK PF encoding admits documented UART routes above function7;
- * legality of the selected UC/pad still belongs to board qualification. */
+#include "uart_route.h"
+_Static_assert(AM13E_UART_BONDED(AM13E_BOARD_TELEM_RX_PINCM) &&
+    AM13E_UART_BONDED(AM13E_BOARD_TELEM_TX_PINCM),
+    "Telemetry UART pin unavailable on selected package");
+_Static_assert(AM13E_UART_RX_ROUTE(AM13E_BOARD_TELEM_UC_INDEX,
+    AM13E_BOARD_TELEM_RX_PINCM,AM13E_BOARD_TELEM_RX_PIN_FUNCTION) &&
+    AM13E_UART_TX_ROUTE(AM13E_BOARD_TELEM_UC_INDEX,
+    AM13E_BOARD_TELEM_TX_PINCM,AM13E_BOARD_TELEM_TX_PIN_FUNCTION),
+    "Unsupported telemetry UART tuple");
 _Static_assert(AM13E_BOARD_TELEM_TWO_WIRE==1U &&
                AM13E_BOARD_TELEM_RX_PINCM>0U &&
                AM13E_BOARD_TELEM_RX_PINCM<107U &&

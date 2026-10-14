@@ -19,6 +19,10 @@ run_test () {
     esac
   fi
   case "$name" in
+    serial_uart_irq)
+      set -- "-DAM13E_TEST_TI_PINMAP_HEADER=\"${AM13E_SDK_ROOT:?}/source/device/am13e230x/include/hw/hw_pinmap.h\"" -DAM13E_BOARD_MCU_PART=23019 -DAM13E_BOARD_PACKAGE=1 "$@" ;;
+  esac
+  case "$name" in
     exbus_autobaud|cli_entry|ibus_receiver|sbus_receiver|sbus2_reply|crsf_receiver|exbus_receiver|exbus_telemetry_reply|hott_receiver|crsf_command_reply|serial_command)
       set -- -DAM13E -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Imcu/_support/AM13E/tests/app/aux_mock "$@" src/util.c mcu/_support/AM13E/tests/app/rel17_defaults_host.c mcu/_support/AM13E/tests/app/core_io_fixture.c ;;
   esac
@@ -55,7 +59,7 @@ run_test crsf_command_reply mcu/_support/AM13E/tests/app/crsf_command_reply_host
 run_test crsf_deferred_command mcu/AM13E/hal/crsf_deferred_command.c mcu/_support/AM13E/tests/hal/crsf_deferred_command_host_test.c
 run_test serial_tx_queue mcu/AM13E/hal/serial_tx_queue.c mcu/_support/AM13E/tests/hal/serial_tx_queue_host_test.c
 run_test input_watchdog -DAM13E -Imcu/_support/AM13E/tests/hal/uart_mock mcu/_support/AM13E/tests/hal/input_watchdog_host_test.c
-run_test serial_uart_irq -DAM13E_BOARD_SBUS2_TIMED_REPLY=1 -DAM13E_BOARD_SBUS2_TX_PIN_INVERT=1 -DAM13E -DAM13E_REF_IO_PLAN_V1=1 -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' -DAM13E_BOARD_SERIAL_RX_CONFIGURED=1 -DAM13E_BOARD_SERIAL_RX_UC_INDEX=0 -DAM13E_BOARD_SERIAL_RX_PINCM=50 -DAM13E_BOARD_SERIAL_RX_PIN_FUNCTION=13 -DAM13E_BOARD_SERIAL_RX_BUSCLK_HZ=100000000 -DAM13E_BOARD_SERIAL_SBUS_PIN_INVERT=1 -DAM13E_BOARD_SERIAL_TX_CONFIGURED=1 -DAM13E_BOARD_SERIAL_TX_PINCM=51 -DAM13E_BOARD_SERIAL_TX_PIN_FUNCTION=13 -DAM13E_BOARD_SERIAL_TX_TWO_WIRE=1 -DAM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED=1 -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections -Imcu/_support/AM13E/tests/hal/uart_mock mcu/_support/AM13E/tests/hal/serial_uart_irq_host_test.c src/io.c src/util.c mcu/_support/AM13E/tests/app/rel17_defaults_host.c mcu/AM13E/serial/serial_frame_rx.c mcu/AM13E/serial/cli_line_rx.c mcu/AM13E/hal/serial_tx_queue.c mcu/AM13E/hal/crsf_deferred_command.c mcu/AM13E/hal/bidir_timing.c mcu/AM13E/serial/bidir_codec.c
+run_test serial_uart_irq -DAM13E_BOARD_SBUS2_TIMED_REPLY=1 -DAM13E_BOARD_SBUS2_TX_PIN_INVERT=1 -DAM13E -DAM13E_REF_IO_PLAN_V1=1 -DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' -DAM13E_BOARD_SERIAL_RX_CONFIGURED=1 -DAM13E_BOARD_SERIAL_RX_UC_INDEX=0 -DAM13E_BOARD_SERIAL_RX_PINCM=26 -DAM13E_BOARD_SERIAL_RX_PIN_FUNCTION=8 -DAM13E_BOARD_SERIAL_RX_BUSCLK_HZ=100000000 -DAM13E_BOARD_SERIAL_SBUS_PIN_INVERT=1 -DAM13E_BOARD_SERIAL_TX_CONFIGURED=1 -DAM13E_BOARD_SERIAL_TX_PINCM=27 -DAM13E_BOARD_SERIAL_TX_PIN_FUNCTION=9 -DAM13E_BOARD_SERIAL_TX_TWO_WIRE=1 -DAM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED=1 -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections -Imcu/_support/AM13E/tests/hal/uart_mock mcu/_support/AM13E/tests/hal/serial_uart_irq_host_test.c src/io.c src/util.c mcu/_support/AM13E/tests/app/rel17_defaults_host.c mcu/AM13E/serial/serial_frame_rx.c mcu/AM13E/serial/cli_line_rx.c mcu/AM13E/hal/serial_tx_queue.c mcu/AM13E/hal/crsf_deferred_command.c mcu/AM13E/hal/bidir_timing.c mcu/AM13E/serial/bidir_codec.c
 run_test serial_frames mcu/AM13E/serial/serial_frame_rx.c mcu/_support/AM13E/tests/app/serial_frame_rx_host_test.c
 run_test serial_command mcu/_support/AM13E/tests/app/serial_command_host_test.c
 run_test cli_line_rx mcu/AM13E/serial/cli_line_rx.c mcu/_support/AM13E/tests/app/cli_line_rx_host_test.c

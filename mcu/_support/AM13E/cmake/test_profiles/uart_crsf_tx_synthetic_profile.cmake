@@ -1,16 +1,18 @@
-# Synthetic ARM build/link fixture only, NOT a valid physical
-# UNICOMM/pin mapping, a qualified bus topology or flashable image.
+# Silicon-valid PA26 RX / PA27 TX UC0, LQFP64_G, ARM fixture only.
+# PCB connectivity and electrical bus topology remain unqualified.
 # Explicit separate RXD/TXD physical contract is mandatory for TX.
 set(AM13E_BOARD_BOARD_DEFINITIONS
+    AM13E_BOARD_MCU_PART=23019
+    AM13E_BOARD_PACKAGE=1 # LQFP64_G, silicon-valid fixture; PCB unqualified
     AM13E_BOARD_SERIAL_RX_CONFIGURED=1
     AM13E_BOARD_SERIAL_RX_UC_INDEX=0
-    AM13E_BOARD_SERIAL_RX_PINCM=50
-    AM13E_BOARD_SERIAL_RX_PIN_FUNCTION=2
+    AM13E_BOARD_SERIAL_RX_PINCM=26
+    AM13E_BOARD_SERIAL_RX_PIN_FUNCTION=8
     AM13E_BOARD_SERIAL_RX_BUSCLK_HZ=100000000
     AM13E_BOARD_SERIAL_SBUS_PIN_INVERT=1
     AM13E_BOARD_SERIAL_TX_CONFIGURED=1
-    AM13E_BOARD_SERIAL_TX_PINCM=51
-    AM13E_BOARD_SERIAL_TX_PIN_FUNCTION=2
+    AM13E_BOARD_SERIAL_TX_PINCM=27
+    AM13E_BOARD_SERIAL_TX_PIN_FUNCTION=9
     AM13E_BOARD_SERIAL_TX_TWO_WIRE=1
     # Synthetic ARM compiler branch only; never asserts physical entry.
     AM13E_BOARD_SERIAL_CLI_ENTRY_CONFIGURED=1)
