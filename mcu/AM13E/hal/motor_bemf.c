@@ -71,6 +71,7 @@ static volatile uint32_t captured_events,rejected_events,interval_us;
  */
 static volatile uint32_t capture_ticks_per_ms, capture_timeout_ticks;
 static volatile uint32_t calibration_ticks,calibration_start;
+static uint32_t calibration_start_after,calibration_phase;
 static volatile uint32_t calibration_done;
 static volatile uint32_t calibration_halted;
 static void bemf_fault(void)
@@ -639,16 +640,37 @@ void am13e_app_motor_bemf_tick(void)
              * Audio owns MCPWM/TIMG12, not ECAP1. */
             DL_ECAP_startCounter(BEMF_ECAP);
             calibration_start=DL_ECAP_getTimeStampCounter(BEMF_ECAP);
+            calibration_phase=SysTick->VAL;
+            calibration_start_after=DL_ECAP_getTimeStampCounter(BEMF_ECAP);
+            if(SysTick->LOAD+1U!=AM13E_APP_MCLK_HZ/AM13E_APP_SYSTICK_HZ)
+                bemf_fault();
             calibration_ticks=1U;
             return;
         }
         if (++calibration_ticks == BEMF_CALIB_SYSTICKS+1U) {
-            const uint32_t elapsed=DL_ECAP_getTimeStampCounter(BEMF_ECAP)-
-                                   calibration_start;
-            /* Complete 1ms reference. 8.192ms/32.768ms conversions
-             * below retain noninteger ECAP MHz rates without drift.
+            const uint32_t before=DL_ECAP_getTimeStampCounter(BEMF_ECAP);
+            const uint32_t phase=SysTick->VAL;
+            const uint32_t after=DL_ECAP_getTimeStampCounter(BEMF_ECAP);
+            const uint32_t elapsed=AM13E_APP_MCLK_HZ/1000U;
+            /* Complete 1ms reference under the selected 200MHz MCLK
+             * contract; endpoint phase must not bias the conversion.
              */
-            if (elapsed < 10000U || elapsed > 200000U) bemf_fault();
+            /* ECAP TSCTR and SysTick both count MCLK. Bracket each
+             * SysTick phase read with ECAP reads: endpoint ISR latency
+             * is a phase difference, not a changed timer frequency.
+             * A missed interval, stopped counter or inconsistent clock
+             * cannot satisfy this bracket. Restart a FULL window while
+             * capture stays unqualified; never accept a shortened one.
+             */
+            const uint32_t expected=elapsed+calibration_phase-phase;
+            if(phase>SysTick->LOAD || calibration_phase>SysTick->LOAD ||
+               calibration_start_after-calibration_start>=SysTick->LOAD+1U ||
+               after-before>=SysTick->LOAD+1U ||
+               expected<before-calibration_start_after ||
+               expected>after-calibration_start) {
+                calibration_ticks=0U;
+                return;
+            }
             const uint64_t timeout=((uint64_t)BEMF_TIMEOUT_US*elapsed+
                                    UINT64_C(999))/UINT64_C(1000);
             if (timeout==0U || timeout>UINT32_MAX) bemf_fault();

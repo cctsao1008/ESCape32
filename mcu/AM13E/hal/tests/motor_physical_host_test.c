@@ -97,6 +97,7 @@ void am13e_app_service_reset(void) { assert(0); }
 #endif
 uint32_t test_primask=1U;
 TestSCB test_scb;
+TestSysTick test_systick={.LOAD=12499U,.VAL=12000U};
 static unsigned enabled[80],priority[80],watchdog_arms;
 static jmp_buf fault_return;
 #ifdef AM13E_SC5_FIXTURE
@@ -536,11 +537,12 @@ static void calibration_lifecycle(void)
     /* Fork preserves the same real initialized production state while each
      * case begins before calibration. No production reset/test hook. */
     static const unsigned entry_ticks[]={0U,1U,8U,16U};
-    for(volatile unsigned mode=0U;mode<6U;++mode){
+    for(volatile unsigned mode=0U;mode<10U;++mode){
         pid_t child=fork();assert(child>=0);
         if(child==0){
             if(setjmp(fault_return))assert(!"unexpected calibration fault");
             const unsigned early=mode<4U?entry_ticks[mode]:0U;
+            if(mode==9U)ECAP1->TSCTR=UINT32_MAX-10000U;
             for(unsigned i=0;i<early;++i){calibration_tick();}
             if(mode<4U){
                 resetcom();
@@ -560,7 +562,20 @@ static void calibration_lifecycle(void)
             /* First tick establishes the fresh origin; sixteen COMPLETE
              * intervals establish 200MHz. A shortened estimate would fail
              * the actual Core interval/advance checks below. */
-            for(unsigned i=0;i<17U;++i){calibration_tick();}
+            for(unsigned i=0;i<17U;++i){
+                if(i==16U && (mode==6U || mode==7U)) {
+                    const unsigned latency=mode==6U?1U:5000U;
+                    ECAP1->TSCTR+=latency;
+                    SysTick->VAL-=latency; /* Independently advancing MCLK domains. */
+                }
+                if(i==8U && mode==8U)ECAP1->TSCTR+=12500U; /* Lost SysTick delivery. */
+                calibration_tick();
+            }
+            if(mode==8U) {
+                /* An inconsistent window must restart, not establish a
+                 * shortened/skewed estimate or latch a motor fault. */
+                for(unsigned i=0;i<17U;++i)calibration_tick();
+            }
             test_primask=1U;compctl(1);
             am13e_app_motor_bemf_interval_select(18000);
             const uint32_t epoch=ECAP1->TSCTR;
@@ -587,7 +602,7 @@ static void calibration_lifecycle(void)
         int status;assert(waitpid(child,&status,0)==child);
         assert(WIFEXITED(status) && WEXITSTATUS(status)==0);
     }
-    puts("PASS calibration: early audio/reset cancellation, fresh 16-interval restart, uninterrupted window and latched fault stop");
+    puts("PASS calibration: endpoint phase jitter, missed interval restart, early audio/reset cancellation, full window and latched fault stop");
 }
 #ifndef HALL_MAP
 static void absolute_capture(uint32_t stamp,uint16_t extra)
