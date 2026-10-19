@@ -23,6 +23,7 @@
 #include "fault_input.h" /* PB15 nFAULT input supervision */
 #include <soc.h>
 #include <dl_mcpwm.h>
+#include <dl_sysctl.h>
 #include <dl_gpio.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -355,6 +356,16 @@ void am13e_app_motor_init(void)
     drag_brake_aq_staged = 0U;
     lock_brake_aq_staged = 0U;
     disconnect_pwm_pads();
+    /* TI SDK DL_MCPWM_init() only programs registers: it does not
+     * enable SYSCTL.PWREN_MCPERIPH[PWM4].  Power must be enabled
+     * before the first TBCTL RMW (DL_MCPWM_setEmulationMode).
+     * This does NOT start TBCLK, connect GPIO pads, or enable PB13. */
+    DL_SYSCTL_enablePower(DL_SYSCTL_PWREN_PWM4);
+    if (!DL_SYSCTL_isPowerEnabled(DL_SYSCTL_PWREN_PWM4)) {
+        /* Leave the bridge disconnected; do not touch an unpowered
+         * MCPWM peripheral through the usual motor-fault path. */
+        for (;;) { __NOP(); }
+    }
     DL_MCPWM_disableTBCLK();
 
     DL_MCPWM_Config config;
