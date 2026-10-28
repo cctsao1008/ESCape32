@@ -469,11 +469,15 @@ static void laststep(void) {
  * not a field-certified change or a waiver of the Rel17 BEMF filter.
  * Production and all original/pinned ELFs leave this undefined.
  * Explicit opt-in allows evaluation of the first actual early CAP1:
- * ival=4ms => early-edge threshold=2ms; no forged captures.
- * Keep timeout/desync safety reset at the historical 10ms / 5ms.
+ * Based on controlled pinned-ELF QEMU A/B: ival=3000us and an
+ * accelerating early-capture window of ival/4, instead of ival/2.
+ * Leave all physical capture/blanking hardware, PWM, gate, OC and
+ * timeout/reset values unchanged. This diagnostic-only filter accepts
+ * more early events, so switching noise immunity is UNQUALIFIED.
+ * Never enable on hardware without independent phase/noise validation.
  */
 #if defined(AM13E) && defined(AM13E_SIM_ONLY_EXPERIMENTAL_EARLY_BEMF)
-#define AM13E_FIRST_BEMF_INTERVAL_US 4000
+#define AM13E_FIRST_BEMF_INTERVAL_US 3000
 #else
 #define AM13E_FIRST_BEMF_INTERVAL_US 10000
 #endif
@@ -503,7 +507,12 @@ static int bemf_zero_cross_delay(int capture_ticks) {
         return 0;
     }
 #endif
+#if defined(AM13E) && defined(AM13E_SIM_ONLY_EXPERIMENTAL_EARLY_BEMF)
+    /* EXPERIMENT ONLY; keep the original hardware CAP1 blanking/IRQ. */
+    if (capture_ticks < (ival >> 2)) return 0;
+#else
     if (capture_ticks < ival >> 1) return 0;
+#endif
     int u = ival * 3;
     fast = (capture_ticks < u >> 2 || capture_ticks > u >> 1) && ertm < 2000;
     ival = (capture_ticks + u) >> 2;
