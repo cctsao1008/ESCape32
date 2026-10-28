@@ -460,6 +460,24 @@ static void laststep(void) {
  * Hardware-specific IRQ acknowledgement, timer scheduling and
  * PWM/commutation output state remain with their respective MCU ports.
  */
+/* E62 SIM_ONLY EXPERIMENT ONLY. Default Rel17 starts with a 10ms
+ * interval and rejects CAP1 edges before ival/2 (5ms). A 24V/KV147
+ * unloaded motor can cross the actual selected phase in ~2.8ms,
+ * while the rotor overshoots a held power pair before 5ms.
+ *
+ * This is an intentionally separate exploratory firmware *variant*,
+ * not a field-certified change or a waiver of the Rel17 BEMF filter.
+ * Production and all original/pinned ELFs leave this undefined.
+ * Explicit opt-in allows evaluation of the first actual early CAP1:
+ * ival=4ms => early-edge threshold=2ms; no forged captures.
+ * Keep timeout/desync safety reset at the historical 10ms / 5ms.
+ */
+#if defined(AM13E) && defined(AM13E_SIM_ONLY_EXPERIMENTAL_EARLY_BEMF)
+#define AM13E_FIRST_BEMF_INTERVAL_US 4000
+#else
+#define AM13E_FIRST_BEMF_INTERVAL_US 10000
+#endif
+
 static void bemf_timeout_reset(void) {
     sync = 0;
     fast = 0;
@@ -1024,7 +1042,7 @@ void main(void) {
 			prep = 0;
 			sync = 0;
 			fast = 0;
-			ival = 10000 << MOTOR_TIME_SHIFT;
+			ival = AM13E_FIRST_BEMF_INTERVAL_US << MOTOR_TIME_SHIFT;
 			nextstep();
 			__enable_irq();
 			initpid(&bpid, 10000 << MOTOR_TIME_SHIFT);
@@ -1143,7 +1161,7 @@ void main(void) {
 			}
 			__disable_irq();
 			step = oldstep;
-			ival = 10000 << MOTOR_TIME_SHIFT;
+			ival = AM13E_FIRST_BEMF_INTERVAL_US << MOTOR_TIME_SHIFT;
 			ertm = 100000000;
 			nextstep();
 #if defined(AM13E)
