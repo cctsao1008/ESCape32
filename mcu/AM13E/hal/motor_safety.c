@@ -654,8 +654,27 @@ static const DL_MCPWM_COUNTER_COMPARE_MODULE runtime_compare_modules[6]={
     DL_MCPWM_COUNTER_COMPARE_3A, DL_MCPWM_COUNTER_COMPARE_3B
 };
 
+/* QEMU-only safety diagnostics; never disables any motor protection.
+ * Stores the precise return PC at the moment the existing fail-closed
+ * runtime_fault() is invoked, before shutdown/fault_latched change state.
+ * This symbol has no GPIO/IRQ/PWM side effects and is never used to
+ * grant motor authorization. Unset in normal firmware builds.
+ */
+#if defined(AM13E_E62_SIM_ONLY_MOTOR_FAULT_DIAG)
+__attribute__((used)) volatile uintptr_t e62_sim_runtime_fault_caller_pc;
+__attribute__((used)) volatile uint32_t e62_sim_runtime_fault_prestate;
+__attribute__((noinline))
+#endif
 static void runtime_fault(void)
 {
+#if defined(AM13E_E62_SIM_ONLY_MOTOR_FAULT_DIAG)
+    e62_sim_runtime_fault_caller_pc=(uintptr_t)__builtin_return_address(0);
+    e62_sim_runtime_fault_prestate=
+        ((audio_owner&3U)<<3U) |
+        ((safety_initialized&1U)<<2U) |
+        ((fault_latched&1U)<<1U) |
+        (motor_timebase_running&1U);
+#endif
     am13e_app_motor_fault_shutdown();
     am13e_app_motor_fault_reset();
 }
