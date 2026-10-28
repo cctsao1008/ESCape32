@@ -4,6 +4,9 @@ on:
     branches: [e62-sim-early-bemf-startup-20261028]
     paths:
       - 'src/main.c'
+      - 'mcu/AM13E/hal/motor_output_configuration.h'
+      - 'mcu/_support/AM13E/cmake/test_profiles/e62_sim_only_motor_output.cmake'
+      - 'mcu/_support/AM13E/cmake/test_profiles/e62_sim_only_early_bemf.cmake'
       - '.github/workflows/e62-sim-fast-bemf-build.yml'
   workflow_dispatch:
 
@@ -37,7 +40,14 @@ jobs:
           from pathlib import Path
           s=Path("src/main.c").read_text()
           assert "defined(AM13E_SIM_ONLY_EXPERIMENTAL_EARLY_BEMF)" in s
-          assert "#define AM13E_FIRST_BEMF_INTERVAL_US 4000" in s
+          assert "#define AM13E_FIRST_BEMF_INTERVAL_US 3000" in s
+          assert "if (capture_ticks < (ival >> 2)) return 0;" in s
+          board=Path("mcu/_support/AM13E/cmake/test_profiles/e62_sim_only_motor_output.cmake").read_text()
+          header=Path("mcu/AM13E/hal/motor_output_configuration.h").read_text()
+          assert "AM13E_E62_REQUIRE_MOTOR_OUTPUT=1" in board
+          assert "AM13E_MOTOR_OUTPUT_CONFIGURED != 1" in header
+          candidate=Path("mcu/_support/AM13E/cmake/test_profiles/e62_sim_only_early_bemf.cmake").read_text()
+          assert "AM13E_SIM_ONLY_EXPERIMENTAL_EARLY_BEMF=1" in candidate
           assert "#define AM13E_FIRST_BEMF_INTERVAL_US 10000" in s
           assert "ival = 10000 << MOTOR_TIME_SHIFT;" in s
           assert s.count("ival = AM13E_FIRST_BEMF_INTERVAL_US << MOTOR_TIME_SHIFT;")==2
@@ -49,7 +59,8 @@ jobs:
         run: |
           set -euo pipefail
           cmake -S . -B .build/e62-base -G "Unix Makefiles" \
-            -DESCAPE32_BUILD_AM13E=ON -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk
+            -DESCAPE32_BUILD_AM13E=ON -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            -DAM13E_BOARD_BOARD_PROFILE_FILE="$PWD/mcu/_support/AM13E/cmake/test_profiles/e62_sim_only_motor_output.cmake"
           cmake --build .build/e62-base --target AM13E-rev17.3.elf -j 2
           sha256sum .build/e62-base/AM13E-rev17.3.elf > artifacts/e62-default-source-elf.sha256
       - name: Strict ARM build explicit experimental early BEMF capture
@@ -58,7 +69,7 @@ jobs:
           set -euo pipefail
           cmake -S . -B .build/e62-experiment -G "Unix Makefiles" \
             -DESCAPE32_BUILD_AM13E=ON -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
-            -DCMAKE_C_FLAGS="-DAM13E_SIM_ONLY_EXPERIMENTAL_EARLY_BEMF=1"
+            -DAM13E_BOARD_BOARD_PROFILE_FILE="$PWD/mcu/_support/AM13E/cmake/test_profiles/e62_sim_only_early_bemf.cmake"
           cmake --build .build/e62-experiment --target AM13E-rev17.3.elf -j 2
           sha256sum .build/e62-experiment/AM13E-rev17.3.elf > artifacts/e62-early-bemf-elf.sha256
           base=$(cut -d' ' -f1 artifacts/e62-default-source-elf.sha256)
