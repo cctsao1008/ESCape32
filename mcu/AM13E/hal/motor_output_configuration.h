@@ -88,3 +88,14 @@ _Static_assert(
 #else
 #define AM13E_MOTOR_OUTPUT_CONFIGURED 0
 #endif
+
+/* E62 motor-test build contract. A SIM_ONLY test selecting this option must
+ * never compile the electrically inactive Reference output path. We do NOT
+ * force the macro to 1: that would skip the complete gate, dead-time,
+ * nFAULT, and three-phase OC board definition requirements.
+ * The build must instead provide those definitions or fail CLOSED.
+ */
+#if defined(AM13E_E62_REQUIRE_MOTOR_OUTPUT) && AM13E_MOTOR_OUTPUT_CONFIGURED != 1
+#error "E62 motor test requires AM13E_MOTOR_OUTPUT_CONFIGURED=1 and complete board electrical configuration"
+#endif
+
