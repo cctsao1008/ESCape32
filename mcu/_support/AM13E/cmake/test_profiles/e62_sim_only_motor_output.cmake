@@ -1,0 +1,20 @@
+# E62: SIM_ONLY QEMU board fixture, NOT a physical board / flash profile.
+# Both default-policy and experimental-policy builds MUST compile
+# AM13E_MOTOR_OUTPUT_CONFIGURED=1, or fail closed at compile-time.
+# Raw CMPSS DAC values are NOT motor current calibration or qualified trips.
+set(AM13E_BOARD_BOARD_DEFINITIONS
+    AM13E_E62_REQUIRE_MOTOR_OUTPUT=1
+    AM13E_MOTOR_GATE_ACTIVE_LEVEL=1
+    AM13E_MOTOR_PAD_INVERT_MASK=0
+    AM13E_MOTOR_OUTPUT_RED_TICKS=92
+    AM13E_MOTOR_OUTPUT_FED_TICKS=0
+    AM13E_MOTOR_MIN_DEAD_TICKS=15
+    AM13E_MOTOR_NFAULT_ACTIVE_LOW=1
+    AM13E_MOTOR_GATE_RESET_INACTIVE=1
+    AM13E_OC_U_DAC_CODE=2048
+    AM13E_OC_V_DAC_CODE=2048
+    AM13E_OC_W_DAC_CODE=2048
+    AM13E_OC_U_INVERT=0
+    AM13E_OC_V_INVERT=0
+    AM13E_OC_W_INVERT=0
+)
