@@ -1,0 +1,77 @@
+name: E62 SIM_ONLY Early BEMF Capture Candidate (NOT Original Rel17)
+on:
+  push:
+    branches: [e62-sim-early-bemf-startup-20261028]
+    paths:
+      - 'src/main.c'
+      - '.github/workflows/e62-sim-fast-bemf-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  separately-identify-and-build-early-capture-candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: ARM toolchain
+        uses: carlosperate/arm-none-eabi-gcc-action@v1
+      - name: Pinned TI AM13E SDK and baseline source provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --quiet --depth 1 https://github.com/TexasInstruments/am13e2x_sdk.git /tmp/am13e-ti-sdk
+          git -C /tmp/am13e-ti-sdk fetch --quiet --depth 1 origin b872469ceef18de5e39a1d3acb0821ec158b44c7
+          git -C /tmp/am13e-ti-sdk checkout --quiet --detach b872469ceef18de5e39a1d3acb0821ec158b44c7
+          arm-none-eabi-gcc --version | head -1
+          test -f /tmp/am13e-ti-sdk/source/driverlib/am13e230x/dl_flash.h
+          mkdir -p artifacts
+          git rev-parse HEAD > artifacts/experimental_source_sha.txt
+      - name: Check guarded code and immutable timeout behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path("src/main.c").read_text()
+          assert "defined(AM13E_SIM_ONLY_EXPERIMENTAL_EARLY_BEMF)" in s
+          assert "#define AM13E_FIRST_BEMF_INTERVAL_US 4000" in s
+          assert "#define AM13E_FIRST_BEMF_INTERVAL_US 10000" in s
+          assert "ival = 10000 << MOTOR_TIME_SHIFT;" in s
+          assert s.count("ival = AM13E_FIRST_BEMF_INTERVAL_US << MOTOR_TIME_SHIFT;")==2
+          assert "if (capture_ticks < ival >> 1) return 0;" in s
+          print("PASS_GUARDED_STARTUP_INITIALIZATION_NO_REL17_TIMEOUT_WAIVER")
+          PY
+      - name: Strict build unchanged-flag baseline (historical comparison only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B .build/e62-base -G "Unix Makefiles" \
+            -DESCAPE32_BUILD_AM13E=ON -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk
+          cmake --build .build/e62-base --target AM13E-rev17.3.elf -j 2
+          sha256sum .build/e62-base/AM13E-rev17.3.elf > artifacts/e62-default-source-elf.sha256
+      - name: Strict ARM build explicit experimental early BEMF capture
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B .build/e62-experiment -G "Unix Makefiles" \
+            -DESCAPE32_BUILD_AM13E=ON -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            -DCMAKE_C_FLAGS="-DAM13E_SIM_ONLY_EXPERIMENTAL_EARLY_BEMF=1"
+          cmake --build .build/e62-experiment --target AM13E-rev17.3.elf -j 2
+          sha256sum .build/e62-experiment/AM13E-rev17.3.elf > artifacts/e62-early-bemf-elf.sha256
+          base=$(cut -d' ' -f1 artifacts/e62-default-source-elf.sha256)
+          altered=$(cut -d' ' -f1 artifacts/e62-early-bemf-elf.sha256)
+          test "$base" != "$altered"
+          echo "EXPERIMENTAL_NOT_ORIGINAL_ELF=YES"
+          echo "NO_NATIVE_QEMU_ORIGINAL_GUEST_P1_QUALIFICATION=YES"
+          cp .build/e62-experiment/AM13E-rev17.3.elf artifacts/e62-early-bemf-EXPERIMENTAL-NOT-ORIGINAL.elf
+      - name: Preserve build evidence as experimental artifact only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e62-sim-only-early-bemf-experimental-build-not-qualified
+          path: artifacts/e62-*
+          if-no-files-found: warn
+          retention-days: 14
