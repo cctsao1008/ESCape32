@@ -32,6 +32,12 @@ typedef struct {
     uint32_t sample_id;
     uint32_t acquisition_tick;
     uint32_t completion_tick;
+    /* Explicit passive sampling contract, supplied by real HW owner.
+     * Never infer these booleans from the QEMU/model BEMF code values.
+     */
+    uint8_t coherent_three_phase_scan;
+    uint8_t six_outputs_inactive;
+    uint8_t trip_latch_clear;
 } AM13E_WindmillSample;
 
 typedef struct {
