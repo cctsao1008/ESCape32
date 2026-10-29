@@ -476,6 +476,13 @@ static void laststep(void) {
  * more early events, so switching noise immunity is UNQUALIFIED.
  * Never enable on hardware without independent phase/noise validation.
  */
+#if defined(AM13E_SIM_ONLY_EXPERIMENTAL_COLD_RESTART) && \
+    (!defined(AM13E_SIM_ONLY_BEMF_STABLE_FILTER) || \
+     !defined(AM13E_SIM_ONLY_EXPERIMENTAL_EARLY_BEMF) || \
+     !defined(AM13E_E62_REQUIRE_MOTOR_OUTPUT))
+#error "Cold-sector restart must be confined to explicit E62 SIM_ONLY, stable-filter and source-owned motor-output fixture"
+#endif
+
 #if defined(AM13E) && defined(AM13E_SIM_ONLY_EXPERIMENTAL_EARLY_BEMF)
 #define AM13E_FIRST_BEMF_INTERVAL_US 3000
 #else
@@ -1169,8 +1176,17 @@ void main(void) {
 				goto tick;
 			}
 			__disable_irq();
-			step = oldstep;
-			ival = AM13E_FIRST_BEMF_INTERVAL_US << MOTOR_TIME_SHIFT;
+#if defined(AM13E) && defined(AM13E_SIM_ONLY_EXPERIMENTAL_COLD_RESTART)
+            /* E62 SIM_ONLY controlled restart-angle hypothesis test.
+             * Keep first start unchanged (oldstep is zero); after coast,
+             * discard the previous electrical sector and begin from 1.
+             * Not safe as a product assumption: actual rotor angle is
+             * NOT measured or inferred. Never enable on real hardware. */
+            step = 0;
+#else
+            step = oldstep;
+#endif
+            ival = AM13E_FIRST_BEMF_INTERVAL_US << MOTOR_TIME_SHIFT;
 			ertm = 100000000;
 			nextstep();
 #if defined(AM13E)
