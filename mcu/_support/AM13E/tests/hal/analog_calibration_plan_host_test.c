@@ -61,11 +61,41 @@ static void sc5_conversion(void)
     c.phase_num[0]=0U;assert(!am13e_bemf_reference_convert(&c,2048U,code));
     c.phase_num[0]=1U;c.adc_span_uv=UINT32_MAX;c.adc_offset_code=INT32_MIN;
     assert(!am13e_bemf_reference_convert(&c,2048U,code));
-    AM13E_BemfReference ref={.acquisition_tick=UINT32_MAX-10U,.max_age_ticks=32U};
+    /* Real ADC epochs require a unique sample identity and a completed
+     * conversion (acquisition <= completion <= now), including tick wrap.
+     * 32-bit wrap is accepted only when every elapsed interval is
+     * bounded by the board-specified freshness deadline.
+     */
+    AM13E_BemfReference ref={
+        .sample=1U,.acquisition_tick=UINT32_MAX-10U,
+        .completion_tick=UINT32_MAX-7U,.max_age_ticks=32U};
     assert(am13e_bemf_reference_fresh(&ref,5U));
     assert(!am13e_bemf_reference_fresh(&ref,23U));
-    ref.max_age_ticks=0;assert(!am13e_bemf_reference_fresh(&ref,0U));
+    assert(!am13e_bemf_reference_fresh(NULL,5U));
+    ref.sample=0U;assert(!am13e_bemf_reference_fresh(&ref,5U));
+    ref.sample=1U;
+    ref.max_age_ticks=0U;assert(!am13e_bemf_reference_fresh(&ref,5U));
+    ref.max_age_ticks=UINT32_MAX;
+    assert(!am13e_bemf_reference_fresh(&ref,5U));
+    ref.max_age_ticks=32U;
+    ref.completion_tick=7U; /* Complete after present time (future). */
+    assert(!am13e_bemf_reference_fresh(&ref,5U));
+    ref.completion_tick=UINT32_MAX-20U; /* Complete BEFORE start. */
+    assert(!am13e_bemf_reference_fresh(&ref,5U));
+    ref.completion_tick=UINT32_MAX-7U;
+    assert(am13e_bemf_reference_fresh(&ref,5U));
+    /* A completed but very old scan is not fresh. */
+    ref.acquisition_tick=100U;
+    ref.completion_tick=101U;
+    assert(!am13e_bemf_reference_fresh(&ref,150U));
+    /* The exact end of the allowed age is accepted; +1 is rejected. */
+    ref.acquisition_tick=100U;ref.completion_tick=101U;
+    assert(am13e_bemf_reference_fresh(&ref,132U));
+    assert(!am13e_bemf_reference_fresh(&ref,133U));
+    ref.completion_tick=133U; /* Scan exceeded bound even at completion. */
+    assert(!am13e_bemf_reference_fresh(&ref,133U));
     puts("PASS SC5 unequal dividers/references, gain/offset, rounding, endpoints, overflow and age wrap");
+    puts("PASS SC5 reference sample identity, complete-epoch ordering, future timestamps, bounded tick wrap");
 }
 int main(void)
 {
