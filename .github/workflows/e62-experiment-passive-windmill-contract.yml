@@ -1,0 +1,54 @@
+name: E62 EXPERIMENT Passive Windmill Observer Contract (NEVER Motor Rearm)
+
+on:
+  push:
+    branches: [experiment/e62-bemf-stable-filter-20261029]
+    paths:
+      - 'mcu/AM13E/hal/motor_windmill_observer_plan.h'
+      - 'mcu/AM13E/hal/motor_windmill_observer_plan.c'
+      - 'mcu/_support/AM13E/tests/hal/motor_windmill_observer_plan_host_test.c'
+      - '.github/workflows/e62-experiment-passive-windmill-contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guest-side-passive-no-rearm-host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile standalone pure-C phase/ADC acquisition contract with all warnings fatal
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/windmill
+          cc -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Imcu/AM13E/hal \
+            mcu/AM13E/hal/motor_windmill_observer_plan.c \
+            mcu/_support/AM13E/tests/hal/motor_windmill_observer_plan_host_test.c \
+            -o artifacts/windmill/contract-host
+          artifacts/windmill/contract-host | tee artifacts/windmill/optimized.log
+      - name: Repeat all positive/negative cases with UndefinedBehaviorSanitizer
+        shell: bash
+        run: |
+          set -euo pipefail
+          cc -std=c11 -O1 -g -Wall -Wextra -Wpedantic -Werror \
+            -fsanitize=undefined -fno-sanitize-recover=all \
+            -Imcu/AM13E/hal \
+            mcu/AM13E/hal/motor_windmill_observer_plan.c \
+            mcu/_support/AM13E/tests/hal/motor_windmill_observer_plan_host_test.c \
+            -o artifacts/windmill/contract-ubsan
+          UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+            artifacts/windmill/contract-ubsan | tee artifacts/windmill/ubsan.log
+          echo 'EXPERIMENTAL_CANDIDATE_ONLY_NOT_FIRMWARE_ADOPTED_NOT_BOARD_QUALIFIED' \
+            > artifacts/windmill/scope.txt
+      - name: Retain auditable no-rearm negative proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e62-windmill-passive-contract-C-UBSAN-no-rearm-NOT-HARDWARE
+          path: artifacts/windmill/*.log
+          retention-days: 21
+          if-no-files-found: warn
