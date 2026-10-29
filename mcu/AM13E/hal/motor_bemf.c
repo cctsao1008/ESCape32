@@ -49,6 +49,24 @@ static uint32_t reference_calculated,reference_published;
  */
 #define BEMF_TIMEOUT_US AM13E_BEMF_REL17_TIMEOUT_US
 #define BEMF_CALIB_SYSTICKS 16U /* 1ms at 16kHz */
+#if defined(AM13E_SIM_ONLY_BEMF_STABLE_FILTER) && !defined(AM13E_SIM_ONLY_EXPERIMENTAL_EARLY_BEMF)
+#error "SIM_ONLY stable filter requires the separately qualified early-BEMF experiment"
+#endif
+/* SIM_ONLY noise-immunity experiment; neither calibration nor production
+ * hardware setting. The QEMU analog robustness source drives independently
+ * clocked 2us switching transients through the existing CMPSS0 path.
+ * On 200 MHz MCLK, 20 qualifying samples * (31+1) cycles = 3.2us.
+ * TI DriverLib permits 24-bit prescale, 1..64 window and a majority
+ * threshold > window/2. The existing default (0,5,3) stays untouched.
+ * No CAP1 is faked; delayed/absent genuine edges may FAIL P1. */
+#ifdef AM13E_SIM_ONLY_BEMF_STABLE_FILTER
+#define E62_BEMF_FILTER_PRESCALE 31U
+#define E62_BEMF_FILTER_WINDOW 25U
+#define E62_BEMF_FILTER_THRESHOLD 20U
+#else
+#define E62_BEMF_FILTER_WINDOW 5U
+#define E62_BEMF_FILTER_THRESHOLD 3U
+#endif
 #define BEMF_FLAGS (DL_ECAP_ISR_SOURCE_CEVT1 | DL_ECAP_ISR_SOURCE_CEVT2 | \
                     DL_ECAP_ISR_SOURCE_CEVT3 | DL_ECAP_ISR_SOURCE_CEVT4 | \
                     DL_ECAP_ISR_SOURCE_CTROVF)
@@ -182,7 +200,12 @@ static void configure_bemf_cmp(void)
     DL_CMPSSLITE_setDACValueLow(CMPSS0,0U); /* TRM: unused low DAC must not limit DACH. */
     DL_CMPSSLITE_setDACValueHigh(CMPSS0,0U);
     DL_CMPSSLITE_configFilterInputHigh(CMPSS0,DL_CMPSSLITE_FILTIN_COMPOUT);
+    #ifdef AM13E_SIM_ONLY_BEMF_STABLE_FILTER
+    DL_CMPSSLITE_configFilterHigh(CMPSS0,E62_BEMF_FILTER_PRESCALE,
+        E62_BEMF_FILTER_WINDOW,E62_BEMF_FILTER_THRESHOLD);
+#else
     DL_CMPSSLITE_configFilterHigh(CMPSS0,0U,5U,3U);
+#endif
     DL_CMPSSLITE_initFilterHigh(CMPSS0);
     DL_CMPSSLITE_configOutputsHigh(CMPSS0,
          DL_CMPSSLITE_TRIP_FILTER|DL_CMPSSLITE_TRIPOUT_FILTER);
@@ -411,7 +434,15 @@ void am13e_app_motor_bemf_interval_select(int ertm_us)
         const uint32_t prescale=ertm_us<100?0U:ertm_us<200?1U:
               ertm_us<1000?3U:ertm_us<2000?7U:15U;
         CMPSS_LITE_Regs *cmp=CMPSS0;
+        #ifdef AM13E_SIM_ONLY_BEMF_STABLE_FILTER
+        /* Fixed >2us hardware comparator qualification; only this
+         * one experimental policy changes. The captured timestamp is
+         * still produced by hardware ECAP1, not by the Host. */
+        DL_CMPSSLITE_configFilterHigh(cmp,E62_BEMF_FILTER_PRESCALE,
+            E62_BEMF_FILTER_WINDOW,E62_BEMF_FILTER_THRESHOLD);
+#else
         DL_CMPSSLITE_configFilterHigh(cmp,prescale,5U,3U);
+#endif
         DL_CMPSSLITE_initFilterHigh(cmp);
         if(!crossing_epoch_valid) {
             crossing_epoch=DL_ECAP_getTimeStampCounter(BEMF_ECAP);
