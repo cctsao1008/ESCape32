@@ -4,6 +4,9 @@
 # Raw CMPSS DAC values are NOT motor current calibration or qualified trips.
 set(AM13E_BOARD_BOARD_DEFINITIONS
     AM13E_E62_REQUIRE_MOTOR_OUTPUT=1
+    # Only QEMU's 1.65 V BEMF zero line on a 3.3 V/4095 ADC scale:
+    # round(4095*1.65/3.3)=2048. Not a real PCB/DAC calibration.
+    AM13E_BEMF_INITIAL_DAC_CODE=2048
     AM13E_E62_SIM_ONLY_MOTOR_FAULT_DIAG=1
     AM13E_MOTOR_GATE_ACTIVE_LEVEL=1
     AM13E_MOTOR_PAD_INVERT_MASK=0
