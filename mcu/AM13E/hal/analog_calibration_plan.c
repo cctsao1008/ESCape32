@@ -15,8 +15,22 @@ static int rounded_ratio(uint64_t n,uint64_t d,uint64_t *out)
 }
 int am13e_bemf_reference_fresh(const AM13E_BemfReference *ref,uint32_t now)
 {
-    return ref && ref->max_age_ticks && ref->max_age_ticks<=INT32_MAX &&
-           (uint32_t)(now-ref->acquisition_tick)<=ref->max_age_ticks;
+    /* A reference is not publishable until a complete, uniquely counted
+     * ADC epoch has arrived. All three timestamps belong to native
+     * monotonic SysTick; uint32 deltas preserve legitimate clock wrap.
+     * A stale scan, an unfinished scan and a future-dated completion
+     * must all fail closed, even if acquisition_tick is recent.
+     *
+     * No guessed ADC/DAC board transfer function is introduced here.
+     */
+    if(!ref || !ref->sample || !ref->max_age_ticks ||
+       ref->max_age_ticks>INT32_MAX)return 0;
+    const uint32_t elapsed=(uint32_t)(now-ref->acquisition_tick);
+    const uint32_t scan=(uint32_t)(ref->completion_tick-ref->acquisition_tick);
+    const uint32_t since_complete=(uint32_t)(now-ref->completion_tick);
+    return scan<=ref->max_age_ticks &&
+           since_complete<=ref->max_age_ticks &&
+           elapsed<=ref->max_age_ticks;
 }
 int am13e_bemf_reference_convert(const AM13E_BemfCalibration *c,
                                 uint16_t raw,uint16_t code[3])
