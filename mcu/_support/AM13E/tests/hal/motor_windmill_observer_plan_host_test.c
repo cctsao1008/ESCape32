@@ -6,7 +6,8 @@
 
 static const AM13E_WindmillContract valid={
     .max_sample_age_ticks=50U,.max_adc_scan_ticks=4U,
-    .max_sample_gap_ticks=20U,.min_adjacent_phase_delta_codes=3U,
+    .max_sample_gap_ticks=20U,.max_sector_hold_ticks=30U,
+    .min_adjacent_phase_delta_codes=3U,
     .min_consistent_transitions=3U,
     .board_phase_route_verified=1U,.board_adc_reference_verified=1U,
     .board_sample_clock_verified=1U
@@ -103,6 +104,23 @@ static void reject_bad_epochs(void)
     assert(am13e_windmill_observe(&o,&c,&s,5U)==AM13E_WINDMILL_COLLECT);
     puts("PASS E62 acquisition/completion chronology, identity/gap, stale and wraparound gates");
 }
+static void reject_stale_static_rank(void)
+{
+    /* Even a perfect full-amplitude 3phase CODE is not proof that the
+     * rotor is still moving. No fresh rank transition => reject.
+     */
+    AM13E_WindmillObserver o={0};
+    for(unsigned i=0;i<5U;i++){
+        AM13E_WindmillSample s=sample(0,1U+i,100U+10U*i);
+        const AM13E_WindmillVerdict v=am13e_windmill_observe(
+            &o,&valid,&s,s.completion_tick);
+        assert(v==(i==4U?AM13E_WINDMILL_REJECT:AM13E_WINDMILL_COLLECT));
+    }
+    AM13E_WindmillSample s=sample(1,6U,150U);
+    assert(am13e_windmill_observe(&o,&valid,&s,150U)==AM13E_WINDMILL_REJECT);
+    assert(am13e_windmill_motor_rearm_permitted(&o)==0);
+    puts("PASS E62 reject static phase candidate beyond bounded rank hold");
+}
 static void reject_unverified_board(void)
 {
     AM13E_WindmillObserver o={0};
@@ -141,6 +159,7 @@ int main(void)
     good_sequence();
     reject_bad_samples();
     reject_bad_epochs();
+    reject_stale_static_rank();
     reject_unverified_board();
     return 0;
 }
