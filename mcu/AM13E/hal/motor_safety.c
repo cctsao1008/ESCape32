@@ -663,7 +663,12 @@ static const DL_MCPWM_COUNTER_COMPARE_MODULE runtime_compare_modules[6]={
 #if defined(AM13E_E62_SIM_ONLY_MOTOR_FAULT_DIAG)
 __attribute__((used)) volatile uintptr_t e62_sim_runtime_fault_caller_pc;
 __attribute__((used)) volatile uint32_t e62_sim_runtime_fault_prestate;
+__attribute__((used)) volatile uint32_t e62_sim_runtime_fault_reason;
+#define E62_SIM_FAULT_REASON(code) (e62_sim_runtime_fault_reason=(code))
 __attribute__((noinline))
+#endif
+#if !defined(AM13E_E62_SIM_ONLY_MOTOR_FAULT_DIAG)
+#define E62_SIM_FAULT_REASON(code) ((void)0)
 #endif
 static void runtime_fault(void)
 {
@@ -1069,11 +1074,11 @@ void am13e_app_motor_commutation_commit(void)
  * by the original laststep/setduty hooks, not replaced by permanent Hi-Z. */
 void am13e_app_motor_commutation_enable(int enable)
 {
-    if (audio_owner) runtime_fault();
+    if (audio_owner) { E62_SIM_FAULT_REASON(1U); runtime_fault(); }
     const uint32_t irqmask=__get_PRIMASK();
     __disable_irq();
     if (!safety_initialized || fault_latched ||
-        (enable != 0 && enable != 1)) runtime_fault();
+        (enable != 0 && enable != 1)) { E62_SIM_FAULT_REASON(2U); runtime_fault(); }
     owner_move(enable?AM13E_OWNER_EVENT_MOTOR_START:
                       AM13E_OWNER_EVENT_MOTOR_STOP);
     if (enable == 0) {
@@ -1087,19 +1092,20 @@ void am13e_app_motor_commutation_enable(int enable)
         ++motor_timebase_stops;
         if (!pwm_registers_inactive() || !pwm_pads_disconnected() ||
             (SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
-            runtime_fault();
+            { E62_SIM_FAULT_REASON(3U); runtime_fault(); }
     } else {
         /* Core requested motor or active brake operation. The unconfigured
          * Reference stays isolated; an electrical board build attaches PWM. */
-        if (!pwm_io_for_runtime())
-            runtime_fault();
+        if (!pwm_io_for_runtime()) {
+            E62_SIM_FAULT_REASON(4U); runtime_fault();
+        }
         if (!motor_timebase_running) {
             if (!pwm_registers_inactive() ||
                 (SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
-                runtime_fault();
+                { E62_SIM_FAULT_REASON(5U); runtime_fault(); }
 #if AM13E_MOTOR_OUTPUT_CONFIGURED
             output_commit_shadow();
-            if(!am13e_motor_output_start())runtime_fault();
+            if(!am13e_motor_output_start()){ E62_SIM_FAULT_REASON(6U); runtime_fault(); }
 #endif
             DL_MCPWM_setTimeBaseCounter(MOTOR_PWM,0U);
             DL_MCPWM_setTimeBaseCounterMode(MOTOR_PWM,
@@ -1108,13 +1114,13 @@ void am13e_app_motor_commutation_enable(int enable)
             if ((MOTOR_PWM->TBCTL & MCPWM_TBCTL_CTRMODE_MASK) !=
                    (uint32_t)DL_MCPWM_COUNTER_MODE_UP ||
                 !(SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
-                runtime_fault();
+                { E62_SIM_FAULT_REASON(7U); runtime_fault(); }
             motor_timebase_running=1U;
             ++motor_timebase_starts;
         } else if ((MOTOR_PWM->TBCTL & MCPWM_TBCTL_CTRMODE_MASK) !=
                      (uint32_t)DL_MCPWM_COUNTER_MODE_UP ||
                    !(SYSCTL->SOCLOCK.PERCLKCR & SYSCTL_PERCLKCR_TBCLKSYNC_MASK))
-            runtime_fault();
+            { E62_SIM_FAULT_REASON(8U); runtime_fault(); }
         /* Carrier startup ISR handles the configured driver's enable. */
     }
     motor_transaction_end(irqmask);
