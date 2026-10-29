@@ -17,7 +17,9 @@ static AM13E_WindmillSample sample(unsigned rank,uint32_t id,uint32_t end)
         {0,1,2},{0,2,1},{2,0,1},{2,1,0},{1,2,0},{1,0,2}
     };
     AM13E_WindmillSample s={
-        .sample_id=id,.acquisition_tick=end-2U,.completion_tick=end
+        .sample_id=id,.acquisition_tick=end-2U,.completion_tick=end,
+        .coherent_three_phase_scan=1U,
+        .six_outputs_inactive=1U,.trip_latch_clear=1U
     };
     s.phase[order[rank][0]]=2100U;
     s.phase[order[rank][1]]=2048U;
@@ -115,6 +117,17 @@ static void reject_unverified_board(void)
     c=valid;c.board_sample_clock_verified=0U;
     assert(am13e_windmill_observe(&o,&c,&s,100U)==AM13E_WINDMILL_REJECT);
     am13e_windmill_observer_reset(&o);
+    c=valid;
+    s.six_outputs_inactive=0U; /* cannot sniff while driving */
+    assert(am13e_windmill_observe(&o,&c,&s,100U)==AM13E_WINDMILL_REJECT);
+    am13e_windmill_observer_reset(&o);
+    s=sample(0,1U,100U);s.coherent_three_phase_scan=0U;
+    assert(am13e_windmill_observe(&o,&c,&s,100U)==AM13E_WINDMILL_REJECT);
+    am13e_windmill_observer_reset(&o);
+    s=sample(0,1U,100U);s.trip_latch_clear=0U;
+    assert(am13e_windmill_observe(&o,&c,&s,100U)==AM13E_WINDMILL_REJECT);
+    am13e_windmill_observer_reset(&o);
+    s=sample(0,1U,100U);
     c=valid;c.max_sample_age_ticks=UINT32_MAX;
     assert(am13e_windmill_observe(&o,&c,&s,100U)==AM13E_WINDMILL_REJECT);
     am13e_windmill_observer_reset(&o);
