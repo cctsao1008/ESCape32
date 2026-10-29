@@ -17,6 +17,16 @@ static const DL_MCPWM_COUNTER_COMPARE_MODULE compares[6]={
     DL_MCPWM_COUNTER_COMPARE_1A,DL_MCPWM_COUNTER_COMPARE_1B,DL_MCPWM_COUNTER_COMPARE_2A,
     DL_MCPWM_COUNTER_COMPARE_2B,DL_MCPWM_COUNTER_COMPARE_3A,DL_MCPWM_COUNTER_COMPARE_3B};
 static volatile unsigned start_zero_events;
+/* SIM_ONLY forensic marker: records why the EXISTING non-authorizing
+ * motor_output_start() returned 0. This does not alter the OC, nFAULT,
+ * comparator, MCPWM or gate acceptance criteria. Never use for release.
+ */
+#if defined(AM13E_E62_SIM_ONLY_MOTOR_FAULT_DIAG)
+__attribute__((used)) volatile uint32_t e62_sim_motor_output_start_reject;
+#define E62_OUTPUT_START_REJECT(n) (e62_sim_motor_output_start_reject=(n))
+#else
+#define E62_OUTPUT_START_REJECT(n) ((void)0)
+#endif
 static void output_fault(void)
 { am13e_app_motor_fault_shutdown();am13e_app_motor_fault_reset(); }
 void am13e_motor_output_update_begin(void)
@@ -110,9 +120,11 @@ void am13e_motor_output_stage(const uint16_t aq[6],const uint16_t compare[6],uin
 }
 int am13e_motor_output_start(void)
 {
-    if(__get_PRIMASK()!=1U ||
-       !am13e_app_motor_nfault_trip_ready() ||
-       !am13e_app_motor_bemf_reference_start_ready())return 0;
+    if(__get_PRIMASK()!=1U) { E62_OUTPUT_START_REJECT(1U); return 0; }
+    if(!am13e_app_motor_nfault_trip_ready())
+        { E62_OUTPUT_START_REJECT(2U); return 0; }
+    if(!am13e_app_motor_bemf_reference_start_ready())
+        { E62_OUTPUT_START_REJECT(3U); return 0; }
     const AM13E_MotorPadRoute *route=am13e_board_motor_pad_route();
     am13e_power_stage_force_off();
     /* Clear retained AQ latches while the external driver is disabled.
@@ -122,9 +134,12 @@ int am13e_motor_output_start(void)
         DL_MCPWM_forceActionQualifierSWAction(MOTOR_PWM,outputs[i]);
         DL_MCPWM_setActionQualifierSWAction(MOTOR_PWM,outputs[i],DL_MCPWM_AQ_SW_FORCE_DISABLED);
     }
-    if(!am13e_mcu_motor_pads_connect_pwm(route,AM13E_MOTOR_PAD_INVERT_MASK) ||
-       !am13e_mcu_motor_pads_pwm_matches(route,AM13E_MOTOR_PAD_INVERT_MASK) ||
-       !am13e_app_motor_nfault_trip_ready())return 0;
+    if(!am13e_mcu_motor_pads_connect_pwm(route,AM13E_MOTOR_PAD_INVERT_MASK))
+        { E62_OUTPUT_START_REJECT(4U); return 0; }
+    if(!am13e_mcu_motor_pads_pwm_matches(route,AM13E_MOTOR_PAD_INVERT_MASK))
+        { E62_OUTPUT_START_REJECT(5U); return 0; }
+    if(!am13e_app_motor_nfault_trip_ready())
+        { E62_OUTPUT_START_REJECT(6U); return 0; }
     /* Start the external driver only after one complete carrier cycle.
      * This drains retained DB state without busy-waiting under PRIMASK.
      * Core has already requested operation; this is peripheral startup,
@@ -138,7 +153,8 @@ int am13e_motor_output_start(void)
     DL_MCPWM_forceInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
     __DSB();
     DL_MCPWM_clearInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
-    if(DL_MCPWM_getEventTriggerEventCount(MOTOR_PWM,DL_MCPWM_ET_1)!=0U)return 0;
+    if(DL_MCPWM_getEventTriggerEventCount(MOTOR_PWM,DL_MCPWM_ET_1)!=0U)
+        { E62_OUTPUT_START_REJECT(7U); return 0; }
     start_zero_events=2U;
     DL_MCPWM_setEventTriggerSource(MOTOR_PWM,DL_MCPWM_ET_1,DL_MCPWM_EVT_TBCTR_ZERO);
     DL_MCPWM_setEventTriggerEventPrescale(MOTOR_PWM,DL_MCPWM_ET_1,1U);
