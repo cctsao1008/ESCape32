@@ -1,0 +1,48 @@
+name: E62 EXPERIMENT Full Portable Host Regression after SC5 Epoch Guard
+
+on:
+  push:
+    branches: [experiment/e62-bemf-stable-filter-20261029]
+    paths:
+      - 'mcu/AM13E/hal/analog_calibration_plan.c'
+      - 'mcu/_support/AM13E/tests/hal/analog_calibration_plan_host_test.c'
+      - '.github/workflows/e62-experiment-sc5-full-host-regressions.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-native-regressions:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pin the same TI SDK used by the existing full host suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --quiet --depth 1 https://github.com/TexasInstruments/am13e2x_sdk.git /tmp/am13e-ti-sdk
+          git -C /tmp/am13e-ti-sdk fetch --quiet --depth 1 origin b872469ceef18de5e39a1d3acb0821ec158b44c7
+          git -C /tmp/am13e-ti-sdk checkout --quiet --detach b872469ceef18de5e39a1d3acb0821ec158b44c7
+          test "$(git -C /tmp/am13e-ti-sdk rev-parse HEAD)" = b872469ceef18de5e39a1d3acb0821ec158b44c7
+      - name: Run the unmodified full AM13E portable host regression suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/sc5-full-host
+          AM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            bash mcu/_support/AM13E/tools/run_host_regressions.sh full \
+            2>&1 | tee artifacts/sc5-full-host/full-host.log
+          printf 'source_commit=%s\nsdk_commit=%s\nqualification=HOST_ONLY_NOT_BOARD\n' \
+            "$(git rev-parse HEAD)" \
+            "$(git -C /tmp/am13e-ti-sdk rev-parse HEAD)" \
+            | tee artifacts/sc5-full-host/provenance.txt
+      - name: Keep all portable regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e62-experimental-sc5-full-portable-host-not-silicon
+          path: artifacts/sc5-full-host/**
+          if-no-files-found: warn
+          retention-days: 21
