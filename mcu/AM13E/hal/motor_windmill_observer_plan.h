@@ -20,6 +20,7 @@ typedef struct {
     uint32_t max_sample_age_ticks;
     uint32_t max_adc_scan_ticks;
     uint32_t max_sample_gap_ticks;
+    uint32_t max_sector_hold_ticks; /* stale ranked phase is not motion */
     uint16_t min_adjacent_phase_delta_codes;
     uint8_t min_consistent_transitions; /* at least 3, no guessed confidence */
     uint8_t board_phase_route_verified;
@@ -43,6 +44,7 @@ typedef struct {
 typedef struct {
     uint32_t last_sample_id;
     uint32_t last_completion_tick;
+    uint32_t last_rank_change_tick;
     uint8_t previous_sector;
     int8_t direction; /* +1/-1 six-rank transitions; not rotor direction */
     uint8_t transitions;
