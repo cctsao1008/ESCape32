@@ -431,8 +431,10 @@ void am13e_app_motor_bemf_interval_select(int ertm_us)
         if (!calibration_done || capture_ticks_per_ms == 0U ||
             capture_timeout_ticks == 0U) bemf_fault();
 #ifdef AM13E_REF_IO_PLAN_V1
+#ifndef AM13E_SIM_ONLY_BEMF_STABLE_FILTER
         const uint32_t prescale=ertm_us<100?0U:ertm_us<200?1U:
               ertm_us<1000?3U:ertm_us<2000?7U:15U;
+#endif
         CMPSS_LITE_Regs *cmp=CMPSS0;
         #ifdef AM13E_SIM_ONLY_BEMF_STABLE_FILTER
         /* Fixed >2us hardware comparator qualification; only this
