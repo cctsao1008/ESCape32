@@ -1,0 +1,57 @@
+name: E62 EXPERIMENT SC5 Reference Epoch Host Gates (NOT Board Qualified)
+
+on:
+  push:
+    branches: [experiment/e62-bemf-stable-filter-20261029]
+    paths:
+      - 'mcu/AM13E/hal/analog_calibration_plan.c'
+      - 'mcu/AM13E/hal/analog_calibration_plan.h'
+      - 'mcu/_support/AM13E/tests/hal/analog_calibration_plan_host_test.c'
+      - '.github/workflows/e62-experiment-sc5-reference-epoch-gates.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sc5-epoch-host-gates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pure-C native SC5 calibration plus fail-closed freshness tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/sc5-host-gates
+          cc --version | head -1 | tee artifacts/sc5-host-gates/compiler.txt
+          cc -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Imcu/AM13E/hal \
+            mcu/AM13E/hal/analog_calibration_plan.c \
+            mcu/_support/AM13E/tests/hal/analog_calibration_plan_host_test.c \
+            -o artifacts/sc5-host-gates/sc5-calibration-host
+          artifacts/sc5-host-gates/sc5-calibration-host \
+            | tee artifacts/sc5-host-gates/optimized-host.log
+      - name: Repeat SC5 test with undefined-behavior sanitizer
+        shell: bash
+        run: |
+          set -euo pipefail
+          cc -std=c11 -O1 -g -Wall -Wextra -Wpedantic -Werror \
+            -fsanitize=undefined -fno-sanitize-recover=all \
+            -Imcu/AM13E/hal \
+            mcu/AM13E/hal/analog_calibration_plan.c \
+            mcu/_support/AM13E/tests/hal/analog_calibration_plan_host_test.c \
+            -o artifacts/sc5-host-gates/sc5-calibration-ubsan
+          UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+            artifacts/sc5-host-gates/sc5-calibration-ubsan \
+            | tee artifacts/sc5-host-gates/ubsan-host.log
+      - name: Retain auditable pure-C negative-test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e62-sc5-calibration-epoch-negative-host-SIM-ONLY
+          path: |
+            artifacts/sc5-host-gates/*.log
+            artifacts/sc5-host-gates/compiler.txt
+          if-no-files-found: warn
+          retention-days: 21
