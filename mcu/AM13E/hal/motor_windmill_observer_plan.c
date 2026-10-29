@@ -53,7 +53,10 @@ AM13E_WindmillVerdict am13e_windmill_observe(
 {
     if(!o)return AM13E_WINDMILL_REJECT;
     if(o->rejected)return AM13E_WINDMILL_REJECT;
-    if(!contract_valid(c) || !s || !s->sample_id)goto reject;
+    if(!contract_valid(c) || !s || !s->sample_id ||
+       s->coherent_three_phase_scan!=1U ||
+       s->six_outputs_inactive!=1U ||
+       s->trip_latch_clear!=1U)goto reject;
     /* All timestamps are the same monotonic wrapping uint32 clock.
      * All modular elapsed intervals must be independently bounded;
      * a future, out-of-order or incomplete conversion fails closed.
