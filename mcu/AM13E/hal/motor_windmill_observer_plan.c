@@ -13,6 +13,8 @@ static int contract_valid(const AM13E_WindmillContract *c)
         c->max_sample_age_ticks>0U &&
         c->max_adc_scan_ticks>0U &&
         c->max_sample_gap_ticks>0U &&
+        c->max_sector_hold_ticks>0U &&
+        c->max_sector_hold_ticks<=INT32_MAX &&
         c->max_sample_age_ticks<=INT32_MAX &&
         c->max_adc_scan_ticks<=c->max_sample_age_ticks &&
         c->max_sample_gap_ticks<=INT32_MAX &&
@@ -73,13 +75,18 @@ AM13E_WindmillVerdict am13e_windmill_observe(
     }
     const int sector=rank_sector(s->phase,c->min_adjacent_phase_delta_codes);
     if(sector<0)goto reject;
+    if(o->seen_first &&
+       (uint32_t)(s->completion_tick-o->last_rank_change_tick)>
+          c->max_sector_hold_ticks)goto reject;
     if(o->seen_first && sector!=(int)o->previous_sector) {
         const int delta=(sector-(int)o->previous_sector+6)%6;
         const int8_t sign=(delta==1)?1:(delta==5)?-1:0;
         if(sign==0 || (o->direction && sign!=o->direction))goto reject;
         o->direction=sign;
+        o->last_rank_change_tick=s->completion_tick;
         if(o->transitions<UINT8_MAX)++o->transitions;
     }
+    if(!o->seen_first)o->last_rank_change_tick=s->completion_tick;
     o->last_sample_id=s->sample_id;
     o->last_completion_tick=s->completion_tick;
     o->previous_sector=(uint8_t)sector;
