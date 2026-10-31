@@ -485,6 +485,25 @@ static int bemf_zero_cross_delay(int capture_ticks) {
         return 0;
     }
 #endif
+#if defined(AM13E)
+    /* E62 Issue #5: isolated SIM_ONLY firmware candidate built FROM the
+     * exact Original Guest source commit b0204670 and exact G13B3L board
+     * fixture. Original Rel17.3 ELF and its independent P1 are frozen.
+     *
+     * In the observed EC87 24V no-prop model, the first geometric
+     * crossing arrives at 2.5ms and legacy startup ival=10000us rejects
+     * all captures <5ms. Accept this bounded early-start candidate edge
+     * to test whether first-sector dwell is the cause of reversal.
+     * No injected rotor angle, fabricated comparator or forced PWM.
+     * This 1.2..4.5ms window is NOT a hardware calibrated safe setting.
+     */
+    if(sync==0 && ival==(10000 << MOTOR_TIME_SHIFT) &&
+       capture_ticks>=1200 && capture_ticks<=4500) {
+        ival=capture_ticks;
+        fast=0;
+        return max((capture_ticks*(32-cfg.timing))>>6,1);
+    }
+#endif
     if (capture_ticks < ival >> 1) return 0;
     int u = ival * 3;
     fast = (capture_ticks < u >> 2 || capture_ticks > u >> 1) && ertm < 2000;
