@@ -66,7 +66,14 @@ const Cfg cfgdata = {
 	.duty_max = DUTY_MAX,       // Maximum duty cycle (%) [1..100]
 	.duty_spup = DUTY_SPUP,     // Maximum duty cycle during spin-up (%) [1..100]
 	.duty_ramp = DUTY_RAMP,     // Maximum duty cycle ramp (kERPM) [0..100]
+#if defined(AM13E)
+    /* E62 isolated candidate fixture: match Original G13B3L Cfg
+     * DUTY_RATE=100 (10.0%/ms) to keep startup A/B fair.
+     * The am13e-port-v2 branch and its production defaults remain intact. */
+    .duty_rate = 100,
+#else
 	.duty_rate = DUTY_RATE,     // Duty cycle slew rate (0.1%/ms) [1..100]
+#endif
 	.duty_drag = DUTY_DRAG,     // Drag brake power (%) [0..100]
 	.duty_lock = DUTY_LOCK,     // Active drag brake (0 - off, 1 - soft, 2 - hard)
 	.throt_mode = THROT_MODE,   // Throttle mode (0 - forward, 1 - forward/reverse, 2 - forward/brake/reverse, 3 - forward/brake)
