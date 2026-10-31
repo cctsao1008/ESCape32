@@ -589,7 +589,24 @@ int am13e_app_motor_on_bemf_event(int capture_us, int timeout) {
     capture_us *= 2;
 #endif
     int delay_us = bemf_zero_cross_delay(capture_us);
-    if (!delay_us) return 0; /* Ignore early capture; keep ECAP1 armed. */
+    if (!delay_us) {
+#ifdef E62_SIM_ONLY_EARLY_CAP_SAFE_ABORT
+        /* NONPRODUCTION ISSUE #5 SAFETY CANDIDATE, NOT Rel17 policy:
+         * A real early CAP1 can precede rotor torque reversal in the
+         * uncalibrated 24V KV210 plant. Rather than continue energizing a
+         * potentially stale six-step pair, fail CLOSED immediately.
+         *
+         * This *deliberately sacrifices startup/re-acquisition* and is
+         * strictly a safe-rejection gate. It does not infer rotor angle,
+         * inject fake CAP1, relax P1, or authorize re-arm. The existing
+         * fault path disables MCPWM, timer, ECAP1 and gate/pads before
+         * reset. QEMU simulation only; do not flash this candidate.
+         */
+        am13e_app_motor_fault_shutdown();
+        am13e_app_motor_fault_reset();
+#endif
+        return 0; /* Original Rel17 path: reject edge; ECAP stays armed. */
+    }
     am13e_app_motor_bemf_commutation_delay_us(motor_native_us(delay_us));
     if (sync < 6) ++sync;
     return 1;
