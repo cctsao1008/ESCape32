@@ -485,6 +485,28 @@ static int bemf_zero_cross_delay(int capture_ticks) {
         return 0;
     }
 #endif
+#if defined(AM13E)
+    /* E62 ISSUE #5 EXPERIMENTAL CANDIDATE ONLY, NON-ORIGINAL Rel17.
+     * The first valid comparator edge arrives at 1.9-2.6ms, while
+     * legacy initialized ival=10000us discards any capture <5000us.
+     * On this isolated experiment branch only, accept exactly the
+     * first startup capture in a bounded 1.2..4.5ms observation window.
+     * Use time since first energization as a conservative phase proxy
+     * for a candidate short 30deg delay rather than mixing the legacy
+     * 10000us seed into the initial commutation estimate.
+     *
+     * This IS NOT proof of electrical-angle observability; do not
+     * flash on real hardware. Strict Original Rel17 baseline unaffected.
+     * A late edge after mechanical speed reversal is still NOT accepted
+     * by this first-capture condition.
+     */
+    if(sync==0 && ival==(10000 << MOTOR_TIME_SHIFT) &&
+       capture_ticks>=1200 && capture_ticks<=4500) {
+        ival=capture_ticks;
+        fast=0;
+        return max((capture_ticks*(32-cfg.timing))>>6,1);
+    }
+#endif
     if (capture_ticks < ival >> 1) return 0;
     int u = ival * 3;
     fast = (capture_ticks < u >> 2 || capture_ticks > u >> 1) && ertm < 2000;
