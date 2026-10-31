@@ -1,0 +1,123 @@
+name: E62 Issue5 Early-CAP Fail-Closed Source-Built Candidate
+on:
+  push:
+    branches: [experiment/e62-issue5-early-cap-safe-abort-20261031]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-and-run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: carlosperate/arm-none-eabi-gcc-action@v1
+      - name: Pin SDK
+        run: |
+          set -euo pipefail
+          git clone --quiet --depth 1 https://github.com/TexasInstruments/am13e2x_sdk.git /tmp/am13e-ti-sdk
+          git -C /tmp/am13e-ti-sdk fetch --quiet --depth 1 origin b872469ceef18de5e39a1d3acb0821ec158b44c7
+          git -C /tmp/am13e-ti-sdk checkout --quiet --detach b872469ceef18de5e39a1d3acb0821ec158b44c7
+          test -f /tmp/am13e-ti-sdk/source/driverlib/am13e230x/dl_flash.h
+      - name: Build baseline default OFF and opt-in safety candidate with same SDK
+        run: |
+          set -euo pipefail
+          cmake -S . -B build-default -G "Unix Makefiles" \
+            -DESCAPE32_BUILD_AM13E=ON -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            -DESCAPE32_E62_SIM_ONLY_EARLY_CAP_SAFE_ABORT=OFF \
+            -DAM13E_BOOT_LINKER_SCRIPT="$PWD/boot/mcu/AM13E/config.ld"
+          cmake --build build-default --target AM13E -j 2
+          cmake -S . -B build-candidate -G "Unix Makefiles" \
+            -DESCAPE32_BUILD_AM13E=ON -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            -DESCAPE32_E62_SIM_ONLY_EARLY_CAP_SAFE_ABORT=ON \
+            -DAM13E_BOOT_LINKER_SCRIPT="$PWD/boot/mcu/AM13E/config.ld"
+          cmake --build build-candidate --target AM13E -j 2
+          mkdir -p candidate-artifacts
+          cp build-default/AM13E-rev17.3.elf candidate-artifacts/default-OFF.elf
+          cp build-candidate/AM13E-rev17.3.elf candidate-artifacts/candidate-early-CAP.elf
+          sha256sum candidate-artifacts/*.elf | tee candidate-artifacts/sha256.txt
+          if cmp -s candidate-artifacts/default-OFF.elf candidate-artifacts/candidate-early-CAP.elf; then
+            echo "CANDIDATE_MUST_DIFFER_FROM_DEFAULT_OFF"; exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          repository: cctsao1008/escape32-qemu
+          ref: 8ab1e5580b462cb9cb669ecc641e4948f15f8fec
+          path: qemu-plant
+      - name: Verify immutable Original baseline and build matching QEMU
+        run: |
+          set -euo pipefail
+          cd qemu-plant
+          echo '05563b6931b58aaba1df5105313c36c9de2d5797a0a3b190c86777c5773f13c0  baseline/e62-g13b3/firmware/AM13E-rev17.3.elf' | sha256sum -c -
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            libglib2.0-dev libpixman-1-dev libfdt-dev pkg-config meson ninja-build binutils-arm-none-eabi
+          git submodule update --init --depth 1 qemu
+          ./build.sh
+      - name: Actual motor source-owned DShot on non-original candidate
+        run: |
+          set -euo pipefail
+          mkdir -p qemu-plant/artifacts/issue5-early-candidate
+          cp candidate-artifacts/candidate-early-CAP.elf qemu-plant/artifacts/issue5-early-candidate/candidate.elf
+          cd qemu-plant
+          root=artifacts/issue5-early-candidate/source
+          sha=$(sha256sum artifacts/issue5-early-candidate/candidate.elf | awk '{print $1}')
+          if [[ "$sha" == 05563b6931b58aaba1df5105313c36c9de2d5797a0a3b190c86777c5773f13c0 ]]; then
+            echo "CANDIDATE_SHA_CANNOT_BE_ORIGINAL"; exit 1
+          fi
+          echo "$sha" > "$root-sha256.txt"
+          python3 tools/sim_motor_cfg.py --sim-only-opt-in \
+            --elf artifacts/issue5-early-candidate/candidate.elf \
+            --motor-profile ecx87-kv210 \
+            --output "$root-g13b3-cfg-flash.bin"
+          set +e
+          python3 tests/e62_autonomous_native_motor_probe.py \
+            --qemu .build/qemu-src/build/qemu-system-arm \
+            --elf artifacts/issue5-early-candidate/candidate.elf \
+            --experimental-candidate-sha256 "$sha" \
+            --sim-mcpwm-root-clock-hz 200000000 \
+            --sim-bemf-waveform historical_sine \
+            --sim-motor-profile ecx87-kv210 --sim-native-adc-bemf \
+            --cfg-flash "$root-g13b3-cfg-flash.bin" \
+            --scenario scenarios/e62-experimental-two-demand-coast-short300.json \
+            --wall-timeout-s 600 --artifact "$root.json"
+          result=$?
+          set -e
+          echo "CANDIDATE_PROBE_EXIT=$result" | tee "$root-exit.txt"
+          if [[ ! -f "$root.p0.events.log" || ! -f "$root.json" ]]; then
+            echo "CANDIDATE_GUEST_SOURCE_MISSING"; exit 1
+          fi
+          python3 - "$root.p0.events.log" "$root-candidate-verdict.json" <<'PY'
+          import json,sys
+          from pathlib import Path
+          from tools.native_p0_strict import parse_events
+          ev=parse_events(Path(sys.argv[1]).read_text().splitlines())
+          dshot=[e for e in ev if e["kind"]=="DSHOT"]
+          caps=[e for e in ev if e["kind"]=="CAP1"]
+          pairs=[e for e in ev if e["kind"]=="PWM_PAIR"]
+          rotor=[e for e in ev if e["kind"]=="ROTOR"]
+          demand=next((e["vns"] for e in dshot if e["data"][1]==1 and e["data"][2]>0),None)
+          cap=next((e["vns"] for e in caps if demand is not None and e["vns"]>=demand),None)
+          after=[e for e in pairs if cap is not None and e["vns"]>cap]
+          first=[e for e in rotor if demand is not None and demand<=e["vns"]<=demand+25_000_000]
+          result={
+            "candidate_is_not_original_p1":True,
+            "qualified_reacquisition":False,
+            "candidate_first_capture_ms":round((cap-demand)/1e6,4) if cap else None,
+            "candidate_pwm_pair_changes_after_first_capture":len(after),
+            "candidate_min_25ms_rpm":min((e["data"][0]/1000 for e in first),default=None),
+            "source_dshot_frames":len(dshot)
+          }
+          Path(sys.argv[2]).write_text(json.dumps(result,indent=2)+"\n")
+          print("CANDIDATE_RESULT",json.dumps(result))
+          PY
+      - name: Archive candidate build and source even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e62-issue5-early-cap-candidate-NONPRODUCTION
+          path: |
+            candidate-artifacts/**
+            qemu-plant/artifacts/issue5-early-candidate/**
+          retention-days: 30
+          if-no-files-found: warn
