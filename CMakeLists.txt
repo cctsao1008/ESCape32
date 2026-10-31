@@ -52,6 +52,9 @@ function(add_target name mcu)
     if(mcu STREQUAL "AM13E" AND ESCAPE32_E62_SIM_ONLY_EARLY_CAP_SAFE_ABORT)
         target_compile_definitions(${elf} PRIVATE E62_SIM_ONLY_EARLY_CAP_SAFE_ABORT=1)
     endif()
+    if(mcu STREQUAL "AM13E" AND ESCAPE32_E62_SIM_ONLY_G13B3_CFG)
+        target_compile_definitions(${elf} PRIVATE DUTY_RATE=100)
+    endif()
 	if(mcu STREQUAL "AM13E")
 		am13e_configure_target(${elf})
 		target_link_options(${elf} PRIVATE -T${linker_scripts} ${opts} ${link_opts}
@@ -82,6 +85,9 @@ if(AM13E_SDK_ROOT)
     set(am13e_default ON)
 endif()
 option(ESCAPE32_BUILD_AM13E "Build the native AM13E Application and Boot" ${am13e_default})
+option(ESCAPE32_E62_SIM_ONLY_G13B3_CFG
+  "SIM_ONLY source-profile Cfg match: DUTY_RATE=100 from pinned Original ELF; OFF normally"
+  OFF)
 option(ESCAPE32_E62_SIM_ONLY_EARLY_CAP_SAFE_ABORT
   "NONPRODUCTION E62 Issue #5: shutdown rather than continue after early BEMF capture; default OFF"
   OFF)
