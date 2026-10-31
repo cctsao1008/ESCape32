@@ -486,19 +486,22 @@ static int bemf_zero_cross_delay(int capture_ticks) {
     }
 #endif
 #if defined(AM13E)
-    /* E62 Issue #5: isolated SIM_ONLY firmware candidate built FROM the
-     * exact Original Guest source commit b0204670 and exact G13B3L board
-     * fixture. Original Rel17.3 ELF and its independent P1 are frozen.
+    /* E62 Issue #5, second NON-ORIGINAL isolated startup candidate.
+     * Exact G13B3L Original build source+board fixture; never hardware.
      *
-     * In the observed EC87 24V no-prop model, the first geometric
-     * crossing arrives at 2.5ms and legacy startup ival=10000us rejects
-     * all captures <5ms. Accept this bounded early-start candidate edge
-     * to test whether first-sector dwell is the cause of reversal.
-     * No injected rotor angle, fabricated comparator or forced PWM.
-     * This 1.2..4.5ms window is NOT a hardware calibrated safe setting.
+     * Real QEMU source shows the FIRST, SECOND and THIRD geometric CAP1
+     * (2.5, 1.26, 1.13ms) accepted after candidate entry; the FOURTH
+     * geometrically valid 0.88ms CAP1 was rejected by the legacy
+     * smoothed ival/2 threshold, causing another uncommutated sector
+     * and mechanical torque reversal. While sync<6 (startup), use the
+     * actual comparator interval for the 30-degree delay and adapt ival
+     * directly instead of delaying on a 3/4 stale historical estimate.
+     *
+     * The 400..4500us candidate range is source-observed simulation
+     * hypothesis, not safety-qualified analog glitch blanking. When
+     * synched (sync>=6), the unchanged original policy applies.
      */
-    if(sync==0 && ival==(10000 << MOTOR_TIME_SHIFT) &&
-       capture_ticks>=1200 && capture_ticks<=4500) {
+    if(sync<6 && capture_ticks>=400 && capture_ticks<=4500) {
         ival=capture_ticks;
         fast=0;
         return max((capture_ticks*(32-cfg.timing))>>6,1);
