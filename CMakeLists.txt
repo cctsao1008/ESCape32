@@ -49,6 +49,9 @@ function(add_target name mcu)
 	target_include_directories(${elf} PRIVATE src mcu/${mcu})
 	target_compile_options(${elf} PRIVATE ${opts})
 	target_compile_definitions(${elf} PRIVATE ${mcu} ${name} ${defs} TARGET_NAME="${name}" ${ARGN})
+    if(mcu STREQUAL "AM13E" AND ESCAPE32_E62_SIM_ONLY_EARLY_CAP_SAFE_ABORT)
+        target_compile_definitions(${elf} PRIVATE E62_SIM_ONLY_EARLY_CAP_SAFE_ABORT=1)
+    endif()
 	if(mcu STREQUAL "AM13E")
 		am13e_configure_target(${elf})
 		target_link_options(${elf} PRIVATE -T${linker_scripts} ${opts} ${link_opts}
@@ -79,6 +82,12 @@ if(AM13E_SDK_ROOT)
     set(am13e_default ON)
 endif()
 option(ESCAPE32_BUILD_AM13E "Build the native AM13E Application and Boot" ${am13e_default})
+option(ESCAPE32_E62_SIM_ONLY_EARLY_CAP_SAFE_ABORT
+  "NONPRODUCTION E62 Issue #5: shutdown rather than continue after early BEMF capture; default OFF"
+  OFF)
+if(ESCAPE32_E62_SIM_ONLY_EARLY_CAP_SAFE_ABORT AND NOT ESCAPE32_BUILD_AM13E)
+  message(FATAL_ERROR "E62 early-CAP safety candidate requires AM13E target")
+endif()
 
 add_subdirectory(boot)
 
