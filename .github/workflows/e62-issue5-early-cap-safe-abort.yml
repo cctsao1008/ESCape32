@@ -24,11 +24,13 @@ jobs:
           set -euo pipefail
           cmake -S . -B build-default -G "Unix Makefiles" \
             -DESCAPE32_BUILD_AM13E=ON -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            -DESCAPE32_E62_SIM_ONLY_G13B3_CFG=ON \
             -DESCAPE32_E62_SIM_ONLY_EARLY_CAP_SAFE_ABORT=OFF \
             -DAM13E_BOOT_LINKER_SCRIPT="$PWD/boot/mcu/AM13E/config.ld"
           cmake --build build-default --target AM13E -j 2
           cmake -S . -B build-candidate -G "Unix Makefiles" \
             -DESCAPE32_BUILD_AM13E=ON -DAM13E_SDK_ROOT=/tmp/am13e-ti-sdk \
+            -DESCAPE32_E62_SIM_ONLY_G13B3_CFG=ON \
             -DESCAPE32_E62_SIM_ONLY_EARLY_CAP_SAFE_ABORT=ON \
             -DAM13E_BOOT_LINKER_SCRIPT="$PWD/boot/mcu/AM13E/config.ld"
           cmake --build build-candidate --target AM13E -j 2
