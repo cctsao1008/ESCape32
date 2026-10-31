@@ -117,6 +117,93 @@ jobs:
           Path(sys.argv[2]).write_text(json.dumps(result,indent=2)+"\n")
           print("CANDIDATE_RESULT",json.dumps(result))
           PY
+      - name: Independent pinned Original ELF control with same 24V plant and DShot
+        run: |
+          set -euo pipefail
+          cd qemu-plant
+          root=artifacts/issue5-early-candidate/original-control
+          python3 tools/sim_motor_cfg.py --sim-only-opt-in \
+            --elf baseline/e62-g13b3/firmware/AM13E-rev17.3.elf \
+            --motor-profile ecx87-kv210 --output "$root-g13b3-cfg-flash.bin"
+          python3 tests/e62_autonomous_native_motor_probe.py \
+            --qemu .build/qemu-src/build/qemu-system-arm \
+            --elf baseline/e62-g13b3/firmware/AM13E-rev17.3.elf \
+            --sim-mcpwm-root-clock-hz 200000000 \
+            --sim-bemf-waveform historical_sine \
+            --sim-motor-profile ecx87-kv210 --sim-native-adc-bemf \
+            --cfg-flash "$root-g13b3-cfg-flash.bin" \
+            --scenario scenarios/e62-experimental-two-demand-coast-short300.json \
+            --wall-timeout-s 600 --artifact "$root.json"
+          set +e
+          python3 tools/native_p1_qualification.py \
+            --scenario scenarios/e62-experimental-two-demand-coast-short300.json \
+            --evidence "$root.json" --events "$root.p0.events.log" \
+            --output "$root-strict-original-p1.json"
+          p1_code=$?
+          set -e
+          echo "UNALTERED_ORIGINAL_P1_EXIT=$p1_code" | tee "$root-original-p1-exit.txt"
+          python3 - "$root-strict-original-p1.json" <<'PY'
+          import json,sys
+          d=json.load(open(sys.argv[1]))
+          assert not d["qualified"] and "STARTUP_SIGNIFICANT_DIRECTION_REVERSAL" in d["unwaived_observability_failures"]
+          print("PASS_SOURCE_ORIGINAL_COUNTEREXAMPLE_PRESERVED")
+          PY
+      - name: Strict source comparison requires REAL CAP1, canceled T12 and stopped PWM
+        run: |
+          set -euo pipefail
+          cd qemu-plant
+          python3 - <<'PY'
+          import json,hashlib
+          from pathlib import Path
+          from tools.native_p0_strict import parse_events
+          root=Path("artifacts/issue5-early-candidate")
+          elf=root/"candidate.elf"
+          d=json.loads((root/"source.json").read_text())
+          c=parse_events((root/"source.p0.events.log").read_text().splitlines())
+          b=parse_events((root/"original-control.p0.events.log").read_text().splitlines())
+          def get(e,k):return [x for x in e if x["kind"]==k]
+          assert d.get("experimental_candidate_not_original") is True
+          assert d.get("candidate_elf_sha256")==hashlib.sha256(elf.read_bytes()).hexdigest()
+          assert d.get("autonomous_dshot",{}).get("sent")==5100
+          assert len(get(c,"DSHOT"))==len(get(b,"DSHOT"))==5100
+          def interval(ev):
+            demand=next(x["vns"] for x in get(ev,"DSHOT") if x["data"][1]==1 and x["data"][2]>0)
+            cap=next(x["vns"] for x in get(ev,"CAP1") if x["vns"]>=demand)
+            first_pair=next(x for x in get(ev,"PWM_PAIR") if x["vns"]>demand)
+            return demand,cap,first_pair
+          demand,cap,pair=interval(c)
+          b_demand,b_cap,b_pair=interval(b)
+          assert pair["data"][:3]==(8,24,15)
+          assert 2_000_000<=cap-demand<=4_000_000
+          assert pair["vns"]<cap
+          assert any(x["vns"]==cap for x in get(c,"CMP_FILTER"))
+          assert any(0<=x["vns"]-cap<=2_000 for x in get(c,"T12_STOP"))
+          assert any(0<=x["vns"]-cap<=2_000 for x in get(c,"PWM_TBCTL"))
+          assert not any(cap<x["vns"]<demand+25_000_000 for x in get(c,"PWM_PAIR"))
+          assert not any(cap<x["vns"]<demand+25_000_000 for x in get(c,"T12_LOAD"))
+          cand_rpm=[x["data"][0]/1000 for x in get(c,"ROTOR") if demand<=x["vns"]<demand+25_000_000]
+          orig_rpm=[x["data"][0]/1000 for x in get(b,"ROTOR") if b_demand<=x["vns"]<b_demand+25_000_000]
+          assert cand_rpm and orig_rpm
+          assert min(cand_rpm)>-50
+          assert min(orig_rpm)<-50
+          assert any(b_cap<x["vns"]<b_demand+25_000_000 for x in get(b,"PWM_PAIR"))
+          result={
+            "scope":"SIM_ONLY_SOURCE_BUILT_NONPRODUCTION_REJECTION_ONLY",
+            "candidate_guest_sha256":d["candidate_elf_sha256"],
+            "candidate_first_cap_after_dshot_ms":round((cap-demand)/1e6,6),
+            "candidate_t12_stop_after_cap_ns":min(x["vns"]-cap for x in get(c,"T12_STOP") if x["vns"]>=cap),
+            "candidate_mcpwm_stop_after_cap_ns":min(x["vns"]-cap for x in get(c,"PWM_TBCTL") if x["vns"]>=cap),
+            "candidate_first25_min_rpm":min(cand_rpm),
+            "original_first25_min_rpm":min(orig_rpm),
+            "candidate_safe_rejection_gate_pass":True,
+            "original_p1_pass":False,
+            "candidate_startup_pass":False,
+            "candidate_reacquisition_pass":False,
+            "issue5_closed":False
+          }
+          (root/"comparative-source-verdict.json").write_text(json.dumps(result,indent=2)+"\n")
+          print("PASS_CANDIDATE_SOURCE_SAFE_REJECT_NOT_REACQUISITION",json.dumps(result))
+          PY
       - name: Archive candidate build and source even on failure
         if: always()
         uses: actions/upload-artifact@v4
