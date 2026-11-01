@@ -571,6 +571,35 @@ void tim3_isr(void) { // Any change on Hall sensor inputs
 #endif /* HALL_MAP */
 
 #if defined(AM13E)
+/* Issue #5 SIM_ONLY diagnostic: record decisions without changing the
+ * Rel17 BEMF acceptance rule or any PWM/IRQ/timer programming.
+ * Read a snapshot only with the CPU halted, or copy the ring with
+ * interrupts masked. seq increments AFTER each complete record.
+ * This is a bounded history; sequence numbers expose overwrites. */
+#define AM13E_BEMF_DIAG_DEPTH 64U
+typedef struct {
+    uint32_t tick_at_event;
+    int32_t capture_us;
+    int32_t ival_before;
+    int32_t delay_us;
+    uint32_t sync_before;
+    uint32_t decision; /* 1 accepted; 2 early reject; 3 timeout */
+} AM13EBemfDecision;
+__attribute__((used)) volatile AM13EBemfDecision am13e_bemf_diag_ring[AM13E_BEMF_DIAG_DEPTH];
+__attribute__((used)) volatile uint32_t am13e_bemf_diag_seq;
+static void am13e_bemf_diag_record(int capture, int prior_ival,
+                                   int delay, unsigned prior_sync,
+                                   unsigned decision) {
+    volatile AM13EBemfDecision *d =
+        &am13e_bemf_diag_ring[am13e_bemf_diag_seq % AM13E_BEMF_DIAG_DEPTH];
+    d->tick_at_event = tick;
+    d->capture_us = capture;
+    d->ival_before = prior_ival;
+    d->delay_us = delay;
+    d->sync_before = prior_sync;
+    d->decision = decision;
+    ++am13e_bemf_diag_seq;
+}
 /* Physical commutation IRQ must acknowledge the device event first. */
 void am13e_app_motor_on_commutation_event(void) {
     nextstep();
@@ -581,6 +610,7 @@ void am13e_app_motor_on_commutation_event(void) {
  */
 int am13e_app_motor_on_bemf_event(int capture_us, int timeout) {
     if (timeout) {
+        am13e_bemf_diag_record(0, ival, 0, (unsigned char)sync, 3U);
         bemf_timeout_reset();
         return 1;
     }
@@ -588,7 +618,11 @@ int am13e_app_motor_on_bemf_event(int capture_us, int timeout) {
     if (capture_us < 0 || capture_us > INT_MAX / 2) hard_fault_handler();
     capture_us *= 2;
 #endif
+    const int prior_ival = ival;
+    const unsigned prior_sync = (unsigned char)sync;
     int delay_us = bemf_zero_cross_delay(capture_us);
+    am13e_bemf_diag_record(capture_us, prior_ival, delay_us, prior_sync,
+                           delay_us ? 1U : 2U);
     if (!delay_us) return 0; /* Ignore early capture; keep ECAP1 armed. */
     am13e_app_motor_bemf_commutation_delay_us(motor_native_us(delay_us));
     if (sync < 6) ++sync;
