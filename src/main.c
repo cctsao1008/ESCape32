@@ -587,6 +587,10 @@ typedef struct {
 } AM13EBemfDecision;
 __attribute__((used)) volatile AM13EBemfDecision am13e_bemf_diag_ring[AM13E_BEMF_DIAG_DEPTH];
 __attribute__((used)) volatile uint32_t am13e_bemf_diag_seq;
+/* Preserve the FIRST 64 BEMF decisions independently of the rolling ring.
+ * Critical early-startup events must survive a long 47V source run.
+ * After 64 entries this array is never written again. */
+__attribute__((used)) volatile AM13EBemfDecision am13e_bemf_diag_first[AM13E_BEMF_DIAG_DEPTH];
 static void am13e_bemf_diag_record(int capture, int prior_ival,
                                    int delay, unsigned prior_sync,
                                    unsigned decision) {
@@ -598,6 +602,16 @@ static void am13e_bemf_diag_record(int capture, int prior_ival,
     d->delay_us = delay;
     d->sync_before = prior_sync;
     d->decision = decision;
+    if (am13e_bemf_diag_seq < AM13E_BEMF_DIAG_DEPTH) {
+        volatile AM13EBemfDecision *first =
+            &am13e_bemf_diag_first[am13e_bemf_diag_seq];
+        first->tick_at_event = tick;
+        first->capture_us = capture;
+        first->ival_before = prior_ival;
+        first->delay_us = delay;
+        first->sync_before = prior_sync;
+        first->decision = decision;
+    }
     ++am13e_bemf_diag_seq;
 }
 /* Physical commutation IRQ must acknowledge the device event first. */
