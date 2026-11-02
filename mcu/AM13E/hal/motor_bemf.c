@@ -183,7 +183,10 @@ static void configure_bemf_cmp(void)
     DL_CMPSSLITE_setDACValueHigh(CMPSS0,0U);
     DL_CMPSSLITE_configFilterInputHigh(CMPSS0,DL_CMPSSLITE_FILTIN_COMPOUT);
     DL_CMPSSLITE_configFilterHigh(CMPSS0,0U,5U,3U);
-    DL_CMPSSLITE_initFilterHigh(CMPSS0);
+    /* TI TRM 22.4.1 requires FILINIT only after the comparator is
+     * enabled. The module stays disabled here until a floating phase is
+     * selected, so defer filter seeding to compctl().
+     */
     DL_CMPSSLITE_configOutputsHigh(CMPSS0,
          DL_CMPSSLITE_TRIP_FILTER|DL_CMPSSLITE_TRIPOUT_FILTER);
     reference_ready=0U; /* Zero is an inactive value, not a Vdc/2 calibration. */
@@ -244,7 +247,9 @@ int am13e_app_motor_bemf_reference_set(uint16_t code)
        code==0U || code>4095U)return 0;
     DL_CMPSSLITE_disableModule(CMPSS0);
     DL_CMPSSLITE_setDACValueHigh(CMPSS0,code);
-    DL_CMPSSLITE_initFilterHigh(CMPSS0);
+    /* Do not FILINIT a disabled comparator. compctl() seeds the filter
+     * from the selected live phase after enabling CMPSS0.
+     */
     DL_ECAP_clearInterrupt(BEMF_ECAP,BEMF_FLAGS);
     DL_ECAP_clearGlobalInterrupt(BEMF_ECAP);
     NVIC_ClearPendingIRQ(ECAP1_INT_IRQn);
@@ -351,7 +356,6 @@ void compctl(int x)
 #else
         const unsigned phase=(unsigned)x&3U;
         DL_SYSCTL_setCompartorHPMux(DL_SYSCTL_CMPSS0_MUX,phase_hp(phase));
-        DL_CMPSSLITE_initFilterHigh(CMPSS0);
         const DL_ECAP_INPUT input=DL_ECAP_INPUT_CMPSS0_CTRIPH;
         DL_ECAP_selectECAPInput(BEMF_ECAP,input);
         if ((BEMF_ECAP->ECCTL0 & ECAP_ECCTL0_INPUTSEL_MASK) !=
@@ -361,7 +365,16 @@ void compctl(int x)
              /* G431 captures rising(reference > phase), optionally inverted.
               * Native CMPSS is phase > DACH: reverse that edge relation. */
              (x&4)?DL_ECAP_EVENT_RISING_EDGE:DL_ECAP_EVENT_FALLING_EDGE);
-        if(reference_ready)DL_CMPSSLITE_enableModule(CMPSS0);
+        if(reference_ready) {
+            /* TI TRM 22.4.1 / DriverLib sequence:
+             * enable comparator before FILINIT so the FIFO is seeded from
+             * the selected live comparator input, not the disabled-state 0.
+             * Capture is still stopped here, so enabling cannot publish a
+             * transition before the filter has been re-seeded.
+             */
+            DL_CMPSSLITE_enableModule(CMPSS0);
+            DL_CMPSSLITE_initFilterHigh(CMPSS0);
+        }
         selected_code=(uint32_t)x;
 #endif
     }
