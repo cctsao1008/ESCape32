@@ -486,9 +486,10 @@ static int bemf_zero_cross_delay(int capture_ticks) {
     }
 #endif
 #if defined(AM13E)
-    /* Experiment only: exact candidate v2 initial capture policy,
-     * isolated from production am13e-port-v2, no hardware permission. */
-    if(sync<6 && capture_ticks>=400 && capture_ticks<=4500) {
+    /* E62 #5 hypothesis-only A/B: 350us vs pinned Candidate-v2 400us.
+     * NOT a qualified noise/blanking floor; do NOT merge/flash.
+     * Retain the same 4500us ceiling and all other control paths. */
+    if(sync<6 && capture_ticks>=350 && capture_ticks<=4500) {
         ival=capture_ticks;
         fast=0;
         return max((capture_ticks*(32-cfg.timing))>>6,1);
