@@ -24,15 +24,21 @@ static volatile uint32_t blank_required,blank_active;
 #include <dl_sysctl.h>
 #include <dl_gpio.h>
 #include <stdint.h>
+
+/* BEMF reference is a board/hardware input, not a build-mode shortcut.
+ * Never auto-seed CMPSS from a compile-time "ideal" code. Simulation and
+ * silicon must exercise the same runtime/reference-provider contract.
+ */
+#ifdef AM13E_BEMF_INITIAL_DAC_CODE
+#error "AM13E_BEMF_INITIAL_DAC_CODE is unsupported; provide a board-calibrated runtime BEMF reference"
+#endif
+
 #ifdef AM13E_BOARD_SC5_CALIBRATION
 #include "analog_runtime.h"
 extern volatile uint32_t tick;
 static AM13E_BemfReference staged_reference;
 static uint16_t expected_dach;
 static uint32_t reference_calculated,reference_published;
-#ifdef AM13E_BEMF_INITIAL_DAC_CODE
-#error "Dynamic SC5 requires an acquired calibrated sample, not a raw initial DACH seed"
-#endif
 #endif
 
 #define BEMF_ECAP BEMF_CAPTURE
@@ -228,9 +234,6 @@ void am13e_app_motor_bemf_init(void)
     configure_bemf_cmp();
 #endif
     initialized=1U;
-#ifdef AM13E_BEMF_INITIAL_DAC_CODE
-    if(!am13e_app_motor_bemf_reference_set(AM13E_BEMF_INITIAL_DAC_CODE))bemf_fault();
-#endif
     NVIC_SetPriority(ECAP1_INT_IRQn,0U);
     NVIC_ClearPendingIRQ(ECAP1_INT_IRQn);
     NVIC_EnableIRQ(ECAP1_INT_IRQn);
