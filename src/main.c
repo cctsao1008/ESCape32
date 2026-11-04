@@ -333,6 +333,16 @@ static void nextstep(void) {
 	if (ival > 1000 << MOTOR_TIME_SHIFT) {
 		val = 1000 << MOTOR_TIME_SHIFT;
 		cnt = 0;
+#if defined(AM13E)
+	} else if (sync < 6) {
+		/* During AM13E BEMF acquisition, ival can converge rapidly from the
+		 * startup anchor. Re-baseline the legacy six-commutation desync
+		 * detector until synchronization is established; retain the original
+		 * Rel17 guard unchanged once sync reaches 6.
+		 */
+		val = ival;
+		cnt = 0;
+#endif
 	} else if (++cnt == 6) {
 		if (abs(val - ival) > ival >> 1) { // Probably desync
 			sync = 0;
