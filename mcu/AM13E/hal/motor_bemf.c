@@ -131,6 +131,7 @@ static void reference_observe(unsigned event)
 static void bemf_fault(void)
 {
     am13e_app_motor_fault_shutdown();
+    if(initialized)reference_observe(11U); /* passive post-shutdown state */
     am13e_app_motor_fault_reset();
     for(;;) __NOP();
 }
