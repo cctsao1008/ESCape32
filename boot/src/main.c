@@ -193,6 +193,7 @@ void main(void) {
 			}
 			case CMD_SETWRP: // Set write protection
 #if defined(AM13E)
+                {
 				const int requested=recvval();
 				if(requested<0)goto done;
 				/* Three original Rel17 selectors; default setwrp returns. */
@@ -202,6 +203,7 @@ void main(void) {
 				/* No fake success before a verified reset. */
 				sendval(RES_ERROR);
 				break;
+                }
 #else
 				switch (recvval()) {
 					case 0x33: // Off
