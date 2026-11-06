@@ -30,6 +30,12 @@ extern volatile uint32_t tick;
 static AM13E_BemfReference staged_reference;
 static uint16_t expected_dach;
 static uint32_t reference_calculated,reference_published;
+#ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
+#ifndef AM13E_SIM_ONLY_BOARD_PROFILE
+#error "Experimental equivalent refresh requires an explicit SIM_ONLY profile"
+#endif
+static uint32_t reference_refresh_pending,reference_resume_capture;
+#endif
 #ifdef AM13E_BEMF_INITIAL_DAC_CODE
 #error "Dynamic SC5 requires an acquired calibrated sample, not a raw initial DACH seed"
 #endif
@@ -160,6 +166,9 @@ void am13e_app_motor_bemf_abort(void)
     pending_code=pending_interval=0U;
 #ifdef AM13E_BOARD_SC5_CALIBRATION
     reference_calculated=reference_published=reference_ready=0U;
+#ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
+    reference_refresh_pending=reference_resume_capture=0U;
+#endif
 #endif
     if(initialized) {
         capture_stop();
@@ -366,6 +375,9 @@ void compctl(int x)
         pending_code=pending_interval=0U;
 #ifdef AM13E_BOARD_SC5_CALIBRATION
         reference_calculated=reference_published=reference_ready=0U;
+#ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
+    reference_refresh_pending=reference_resume_capture=0U;
+#endif
 #endif
 #if AM13E_MOTOR_OUTPUT_CONFIGURED
         if(!am13e_motor_output_start_pending())
@@ -484,6 +496,9 @@ void am13e_app_motor_bemf_stage(unsigned code)
     pending_interval=0U;
 #ifdef AM13E_BOARD_SC5_CALIBRATION
     reference_calculated=reference_published=reference_ready=0U;
+#ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
+    reference_refresh_pending=reference_resume_capture=0U;
+#endif
     if(!reference_route_matches())bemf_fault();
     if(am13e_app_adc_get_reference(&staged_reference)) {
         expected_dach=staged_reference.code[(code&3U)-1U];
@@ -493,9 +508,91 @@ void am13e_app_motor_bemf_stage(unsigned code)
     reference_observe(1U); /* stage: absent sample is visible, not defaulted */
 #endif
 }
-int am13e_app_motor_bemf_publication_pending(void) { return pending_code!=0U; }
+int am13e_app_motor_bemf_publication_pending(void) {
+    return pending_code!=0U
+#ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
+        || reference_refresh_pending
+#endif
+        ;
+}
+
+#ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
+void am13e_app_motor_bemf_reference_service(void)
+{
+    const uint32_t mask=__get_PRIMASK();__disable_irq();
+    AM13E_BemfReference latest;
+    /* A new commutation may have staged the previous housekeeping sample.
+     * Replace only its unpublished association, never its phase/code. */
+    if(initialized && !calibration_halted && pending_code && reference_calculated &&
+       !reference_published && reference_route_matches() &&
+       am13e_app_adc_get_reference(&latest) &&
+       am13e_app_adc_reference_fresh(&staged_reference) &&
+       latest.blackout_epoch==staged_reference.blackout_epoch &&
+       latest.sample!=staged_reference.sample &&
+       latest.code[(pending_code&3U)-1U]==expected_dach) {
+        staged_reference=latest;
+        reference_observe(7U);
+    }
+    if(initialized && !calibration_halted && !reference_refresh_pending &&
+       !pending_code && selected_code && reference_published &&
+       reference_route_matches() && am13e_app_adc_get_reference(&latest) &&
+       am13e_app_adc_reference_fresh(&staged_reference) &&
+       latest.blackout_epoch==staged_reference.blackout_epoch &&
+       latest.sample!=staged_reference.sample &&
+       latest.code[(selected_code&3U)-1U]==expected_dach &&
+       DL_CMPSSLITE_getDACValueHigh(CMPSS0)==expected_dach) {
+        reference_resume_capture=armed;
+        capture_stop(); /* Quarantine while publication association is pending. */
+        staged_reference=latest;
+        reference_ready=reference_published=0U;
+        reference_refresh_pending=1U;
+        DL_MCPWM_setEventTriggerSource(MOTOR_PWM,DL_MCPWM_ET_1,DL_MCPWM_EVT_TBCTR_ZERO);
+        DL_MCPWM_setEventTriggerEventPrescale(MOTOR_PWM,DL_MCPWM_ET_1,1U);
+        DL_MCPWM_enableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
+    }
+    __set_PRIMASK(mask);
+}
+#endif
+
 int am13e_app_motor_bemf_carrier_zero(void)
 {
+#if defined(AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH) && defined(AM13E_BOARD_SC5_CALIBRATION)
+    /* Experimental acquisition liveness only: no DAC change, no capture
+     * reset, no accepted-crossing epoch or TIMG12 modification. */
+    if(reference_refresh_pending) {
+        if(!reference_route_matches() || !am13e_app_adc_reference_fresh(&staged_reference) ||
+           DL_CMPSSLITE_getDACValueHigh(CMPSS0)!=expected_dach)bemf_fault();
+        reference_refresh_pending=0U;
+        reference_ready=reference_published=1U;
+        if(reference_resume_capture) {
+            /* Existing comparator/filter continues; do not reset its output
+             * or the accepted-crossing epoch during a same-code refresh. */
+            DL_ECAP_enableTimeStampCapture(BEMF_ECAP);
+            DL_ECAP_clearInterrupt(BEMF_ECAP,BEMF_FLAGS);
+            DL_ECAP_clearGlobalInterrupt(BEMF_ECAP);
+            NVIC_ClearPendingIRQ(ECAP1_INT_IRQn);
+            DL_ECAP_enableInterrupt(BEMF_ECAP,DL_ECAP_ISR_SOURCE_CEVT1|DL_ECAP_ISR_SOURCE_CTROVF);
+            armed=1U;
+#ifdef SW_BLANKING
+            blank_required=(interval_us>=2000);
+            if(blank_required)DL_MCPWM_enableInterrupt(MOTOR_PWM,BLANK_EVENTS);
+            am13e_app_motor_bemf_pwm_event();
+#endif
+            DL_ECAP_startCounter(BEMF_ECAP);
+        }
+        reference_resume_capture=0U;
+        reference_observe(6U);
+        if(
+#ifdef SW_BLANKING
+           !am13e_app_motor_bemf_blanking_enabled() &&
+#endif
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+           !am13e_motor_output_start_pending() &&
+#endif
+           1)DL_MCPWM_disableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
+        return 1;
+    }
+#endif
     if(!pending_code || !pending_interval)return 0;
 #if AM13E_MOTOR_OUTPUT_CONFIGURED
     /* An old queued ZERO may precede the newly armed global-load latch.
@@ -656,6 +753,9 @@ void am13e_app_motor_bemf_tick(void)
 #ifdef AM13E_BOARD_SC5_CALIBRATION
     if(reference_calculated && (selected_code || pending_code)) {
         AM13E_BemfReference latest;
+#ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
+        am13e_app_motor_bemf_reference_service();
+#endif
         if(!am13e_app_adc_get_reference(&latest) ||
            !am13e_app_adc_reference_fresh(&staged_reference) || !reference_route_matches() ||
            (reference_published && DL_CMPSSLITE_getDACValueHigh(CMPSS0)!=expected_dach)){

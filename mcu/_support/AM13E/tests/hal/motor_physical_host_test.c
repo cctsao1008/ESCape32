@@ -448,6 +448,19 @@ static void sc5_publication(void)
     am13e_app_motor_bemf_reference_status(&status);
     assert(status.configured && status.calculated && !status.published);
     assert(status.expected_code==775U && CMPSS0->DACHVALS==775U);
+#ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
+    {const pid_t child=fork();assert(child>=0);
+     if(child==0){
+        const unsigned sample=status.sample;const uint16_t shadow=CMPSS0->DACHVALS;
+        ++tick;ADC0_INT1_IRQHandler();ADC1_INT1_IRQHandler();ADC2_INT1_IRQHandler();adctrig();
+        am13e_app_motor_bemf_reference_status(&status);
+        assert(status.sample!=sample && status.calculated && !status.published && !status.capture_synchronized);
+        assert(CMPSS0->DACHVALS==shadow && am13e_app_motor_bemf_publication_pending());
+        _exit(0);
+     }
+     int result;assert(waitpid(child,&result,0)==child && WIFEXITED(result) && WEXITSTATUS(result)==0);
+     puts("PASS experimental unpublished same-phase association refresh, no premature publication");}
+#endif
     am13e_app_motor_commutation_enable(1);assert(!gate_on());
     defer_dach_load=1U;zero();
     am13e_app_motor_bemf_reference_status(&status);
@@ -457,6 +470,34 @@ static void sc5_publication(void)
     am13e_app_motor_bemf_reference_status(&status);
     assert(status.published);
     assert(status.capture_synchronized && gate_on());
+#ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
+    /* Child isolates added ADC housekeeping from the existing negative matrix. */
+    {const pid_t child=fork();assert(child>=0);
+     if(child==0){
+        const unsigned sample=status.sample;
+        const uint32_t ts=ECAP1->TSCTR,cap=ECAP1->CAP1,load=TIMG12->COUNTERREGS.LOAD;
+        const uint16_t dac=CMPSS0->DACHVALS;
+        ++tick;ADC0_INT1_IRQHandler();ADC1_INT1_IRQHandler();ADC2_INT1_IRQHandler();adctrig();
+        am13e_app_motor_bemf_tick();
+        am13e_app_motor_bemf_reference_status(&status);assert(status.sample!=sample && !status.published && !status.capture_synchronized);
+        zero();am13e_app_motor_bemf_reference_status(&status);
+        assert(status.sample!=sample && status.published && status.capture_synchronized);
+        assert(CMPSS0->DACHVALS==dac && DL_CMPSSLITE_getDACValueHigh(CMPSS0)==dac);
+        assert(ECAP1->TSCTR==ts && ECAP1->CAP1==cap && TIMG12->COUNTERREGS.LOAD==load);
+        /* Accepted edge waiting for delayed commutation must stay disarmed. */
+        ival=3000;sync=0;ertm=18000;capture(600000U);
+        am13e_app_motor_bemf_reference_status(&status);assert(!status.capture_synchronized);
+        const unsigned accepted_sample=status.sample;
+        const uint32_t accepted_cap=ECAP1->CAP1,accepted_load=TIMG12->COUNTERREGS.LOAD;
+        ++tick;ADC0_INT1_IRQHandler();ADC1_INT1_IRQHandler();ADC2_INT1_IRQHandler();adctrig();
+        zero();am13e_app_motor_bemf_reference_status(&status);
+        assert(status.sample!=accepted_sample && status.published && !status.capture_synchronized);
+        assert(ECAP1->CAP1==accepted_cap && TIMG12->COUNTERREGS.LOAD==accepted_load);
+        _exit(0);
+     }
+     int result;assert(waitpid(child,&result,0)==child && WIFEXITED(result) && WEXITSTATUS(result)==0);
+     puts("PASS experimental same-code sample refresh only at ZERO, capture quarantine with unchanged DAC/counter/timer");}
+#endif
     /* No raw/background update is authorized while capture is armed. */
     const uint16_t shadow=CMPSS0->DACHVALS;
     assert(!am13e_app_motor_bemf_reference_set(1234U) && CMPSS0->DACHVALS==shadow);

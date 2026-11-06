@@ -38,3 +38,7 @@ void ECAP1_IRQHandler(void);
 void am13e_app_motor_bemf_pwm_event(void);
 int am13e_app_motor_bemf_blanking_enabled(void);
 #endif
+
+#ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
+void am13e_app_motor_bemf_reference_service(void);
+#endif

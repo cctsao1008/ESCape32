@@ -7,6 +7,9 @@
 #include "analog_calibration_plan.h"
 #include "analog_sampling_backend.h"
 #include "analog_reference.h"
+#ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
+#include "motor_bemf.h"
+#endif
 #include "board_configuration.h"
 #include "motor_backend.h"
 #ifdef ANALOG_CHAN
@@ -154,6 +157,9 @@ void adctrig(void)
         reference_valid=0U;
         if(valid){reference_latest=ref;reference_valid=1U;}
         __set_PRIMASK(mask);
+#ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
+        if(valid)am13e_app_motor_bemf_reference_service();
+#endif
     }
 #endif
     if(adc_inflight || DL_ADC_isBusy(ADC0) || DL_ADC_isBusy(ADC1) || DL_ADC_isBusy(ADC2)){
