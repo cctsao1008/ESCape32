@@ -436,6 +436,68 @@ static void sc5_no_sample(void)
     int status;assert(waitpid(child,&status,0)==child && WIFEXITED(status) && WEXITSTATUS(status)==0);
     puts("PASS SC5 no initial sample cannot authorize capture or motor start");
 }
+#ifdef AM13E_EXPERIMENTAL_SC5_CHANGED_REFRESH
+static void sc5_changed_handover_cases(void)
+{
+    for(volatile unsigned mode=0;mode<10U;++mode){
+        const pid_t child=fork();assert(child>=0);
+        if(child==0){
+            AM13E_BemfReference old,latest;AM13E_BemfReferenceStatus status;
+            assert(am13e_app_adc_get_reference(&old));
+            if(mode==8U){ival=3000;sync=0;ertm=18000;capture(600000U);}
+            const uint32_t cap=ECAP1->CAP1,load=TIMG12->COUNTERREGS.LOAD;
+            volatile uint16_t *bus=(volatile uint16_t *)((uintptr_t)ADC1RESULT+ADC_ADCRESULT0+DL_ADCRESULT_STEP);
+            *bus=(uint16_t)(*bus-96U); /* UNIT stimulus, both code directions tested. */
+            ++tick;ADC0_INT1_IRQHandler();ADC1_INT1_IRQHandler();ADC2_INT1_IRQHandler();adctrig();
+            assert(am13e_app_adc_get_reference(&latest));
+            assert(am13e_app_motor_bemf_publication_pending());
+            assert(!(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK));
+            if(mode==8U){
+                zero();for(unsigned n=0;n<AM13E_EXPERIMENTAL_SC5_SETTLE_ZEROS;++n)zero();
+                am13e_app_motor_bemf_reference_status(&status);
+                assert(status.published && !status.capture_synchronized);
+                assert(!(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK));
+                assert(ECAP1->CAP1==cap && TIMG12->COUNTERREGS.LOAD==load);_exit(0);
+            }
+            if(mode==9U){
+                nextstep();am13e_app_motor_commutation_commit();defer_dach_load=1U;zero();
+                am13e_app_motor_bemf_reference_status(&status);
+                assert(!status.published && !status.capture_synchronized);
+                am13e_app_motor_bemf_stop();assert(!am13e_app_motor_bemf_publication_pending());_exit(0);
+            }
+            const unsigned before=watchdog_arms;
+            if(setjmp(fault_return)==0){
+                switch(mode){
+                case 0:
+                    defer_dach_load=1U;zero();
+                    for(unsigned n=0;n<=old.max_age_ticks+1U;++n){
+                        ++tick;ADC0_INT1_IRQHandler();ADC1_INT1_IRQHandler();ADC2_INT1_IRQHandler();adctrig();
+                        assert(am13e_app_adc_get_reference(&latest));
+                        am13e_app_motor_bemf_tick();
+                    }
+                    break;
+                case 1:
+                    *bus=0U;++tick;ADC0_INT1_IRQHandler();ADC1_INT1_IRQHandler();ADC2_INT1_IRQHandler();adctrig();zero();break;
+                case 2:
+                    defer_dach_load=1U;*(volatile uint16_t *)(uintptr_t)&CMPSS0->DACHVALA=1U;zero();break;
+                case 3:
+                    *bus=(uint16_t)(*bus-96U);++tick;ADC0_INT1_IRQHandler();ADC1_INT1_IRQHandler();ADC2_INT1_IRQHandler();adctrig();zero();break;
+                case 4:am13e_app_adc_blackout_invalidate();zero();break;
+                case 5:SYSCTL->SOCLOCK.CMPHPMXSEL^=1U;zero();break;
+                case 6:ECAP1->ECCTL0^=1U;zero();break;
+                case 7:ECAP1->ECCTL1^=1U;zero();break;
+                }
+                assert(!"changed-code failure did not shut down");
+            }
+            assert(watchdog_arms==before+1U && !gate_on());
+            assert(!(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK));
+            assert(!am13e_app_motor_bemf_publication_pending());_exit(0);
+        }
+        int status;assert(waitpid(child,&status,0)==child && WIFEXITED(status) && WEXITSTATUS(status)==0);
+    }
+    puts("PASS UNIT changed-code delayed/stale/invalid/changed-again/epoch/mux/input/polarity rejection; accepted timer and phase cancellation preserved");
+}
+#endif
 static void sc5_publication(void)
 {
     AM13E_BemfReferenceStatus status;
@@ -522,10 +584,29 @@ static void sc5_publication(void)
         if(setjmp(fault_return)==0){am13e_app_motor_bemf_tick();assert(!"changed-code reference unexpectedly remained live");}
         assert(watchdog_arms==before+1U && !gate_on());
         puts("PASS UNIT baseline changed-code consumer stalls despite fresh producer, then fails closed");fflush(stdout);
+#else
+        const uint32_t counter=ECAP1->TSCTR,cap=ECAP1->CAP1,load=TIMG12->COUNTERREGS.LOAD;
+        am13e_app_motor_bemf_reference_status(&status);
+        assert(status.sample==latest.sample && status.expected_code==latest.code[0]);
+        assert(!status.published && !status.capture_synchronized && status.active_code==active);
+        assert(CMPSS0->DACHVALS==latest.code[0]);
+        defer_dach_load=1U;zero();zero();
+        am13e_app_motor_bemf_reference_status(&status);assert(!status.published && !status.capture_synchronized);
+        defer_dach_load=0U;zero();
+        for(unsigned n=1;n<AM13E_EXPERIMENTAL_SC5_SETTLE_ZEROS;++n){
+            zero();am13e_app_motor_bemf_reference_status(&status);assert(!status.published && !status.capture_synchronized);
+        }
+        zero();am13e_app_motor_bemf_reference_status(&status);
+        assert(status.published && status.capture_synchronized && status.active_code==latest.code[0]);
+        assert(ECAP1->TSCTR==counter && ECAP1->CAP1==cap && TIMG12->COUNTERREGS.LOAD==load);
+        puts("PASS UNIT changed-code load + explicit settling, no CAP1/counter/TIMG12 reset");fflush(stdout);
 #endif
         _exit(0);
      }
      int result;assert(waitpid(child,&result,0)==child && WIFEXITED(result) && WEXITSTATUS(result)==0);}
+#endif
+#ifdef AM13E_EXPERIMENTAL_SC5_CHANGED_REFRESH
+    sc5_changed_handover_cases();
 #endif
     /* No raw/background update is authorized while capture is armed. */
     const uint16_t shadow=CMPSS0->DACHVALS;
