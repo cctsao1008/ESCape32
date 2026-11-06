@@ -36,7 +36,7 @@ The final full run reports 4881 valid-frame feeds, throttle/step zero at end and
 Use ARM GNU 14.2.1 20241119 and official SDK `b872469ceef18de5e39a1d3acb0821ec158b44c7`. Set `E62_QEMU_ROOT` to the escape32-qemu checkout containing the virtual fixture. Example from the firmware repository:
 
 ```sh
-cmake -S . -B ../escape32-qemu/.build/mission-fw-sc5-refresh \
+cmake -S . -B ../escape32-qemu/.build/mission-fw-sc5-refresh -DESCAPE32_BUILD_AM13E=ON \
   -DAM13E_SDK_ROOT=/tmp/e62-issues/sdk \
   -DE62_QEMU_ROOT=/workspace/escape32-qemu \
   -DAM13E_BOARD_BOARD_PROFILE_FILE="$PWD/mcu/_support/AM13E/cmake/test_profiles/e62_sc5_equivalent_refresh.cmake" \
@@ -66,3 +66,5 @@ Official SDK register regressions cover all six floating-phase/polarity mappings
 - The latest accepted crossing/commutation cadence remains inconsistent with stable motor rotation. Issue #5 is independently FAILED, not resolved by this correction.
 - Physical transfer calibration, settling and actual route/polarity confirmation need traceable board measurements. SIM_ONLY results do not approve hardware.
 - Original Rel17.3 remains unchanged. Review is required before promotion; no automatic merge or issue closure.
+
+Committed-candidate replay: source `bb02e4c`, no-reference-journal ELF SHA256 `1452b4ec1575615662d2f9e9e793cbd15fb3e6a381d32bce2fc79fdfff54e1ab`; `fixed-no-journal-pinned.json` independently reproduces 132 captures / 131 serviced commutations / 3155 valid-frame feeds. The source guard added before that build affects diagnostics eligibility, not the freshness limit. The earlier full 5100-frame cohort predates that guard and remains a separate exact ELF identity.
