@@ -498,6 +498,35 @@ static void sc5_publication(void)
      int result;assert(waitpid(child,&result,0)==child && WIFEXITED(result) && WEXITSTATUS(result)==0);
      puts("PASS experimental same-code sample refresh only at ZERO, capture quarantine with unchanged DAC/counter/timer");}
 #endif
+#ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
+    /* New reference codes are a separate acquisition contract. This child
+     * demonstrates the published equivalent-only experiment's limitation. */
+    {const pid_t child=fork();assert(child>=0);
+     if(child==0){
+        AM13E_BemfReference previous,latest;
+        assert(am13e_app_adc_get_reference(&previous));
+        am13e_app_motor_bemf_reference_status(&status);
+        const unsigned sample=status.sample;const uint16_t active=status.active_code;
+        volatile uint16_t *bus=(volatile uint16_t *)((uintptr_t)ADC1RESULT+ADC_ADCRESULT0+DL_ADCRESULT_STEP);
+        *bus=(uint16_t)(*bus+96U); /* UNIT ADC stimulus, not production calibration. */
+        ++tick;ADC0_INT1_IRQHandler();ADC1_INT1_IRQHandler();ADC2_INT1_IRQHandler();adctrig();
+        assert(am13e_app_adc_get_reference(&latest));
+        assert(latest.sample!=sample && latest.code[0]!=active);
+#ifndef AM13E_EXPERIMENTAL_SC5_CHANGED_REFRESH
+        am13e_app_motor_bemf_reference_status(&status);
+        assert(status.sample==sample && status.active_code==active && status.published && status.capture_synchronized);
+        tick=previous.acquisition_tick+previous.max_age_ticks+1U;
+        ADC0_INT1_IRQHandler();ADC1_INT1_IRQHandler();ADC2_INT1_IRQHandler();adctrig();
+        assert(am13e_app_adc_get_reference(&latest));
+        const unsigned before=watchdog_arms;
+        if(setjmp(fault_return)==0){am13e_app_motor_bemf_tick();assert(!"changed-code reference unexpectedly remained live");}
+        assert(watchdog_arms==before+1U && !gate_on());
+        puts("PASS UNIT baseline changed-code consumer stalls despite fresh producer, then fails closed");fflush(stdout);
+#endif
+        _exit(0);
+     }
+     int result;assert(waitpid(child,&result,0)==child && WIFEXITED(result) && WEXITSTATUS(result)==0);}
+#endif
     /* No raw/background update is authorized while capture is armed. */
     const uint16_t shadow=CMPSS0->DACHVALS;
     assert(!am13e_app_motor_bemf_reference_set(1234U) && CMPSS0->DACHVALS==shadow);
