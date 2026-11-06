@@ -7,8 +7,10 @@ mkdir -p "$BUILD"
 "$CC" -std=c11 -O1 -g -Wall -Wextra -Werror \
   -fsanitize=address,undefined -fno-omit-frame-pointer \
   -DAM13E_FLASH_TEST \
+  -I"$ROOT/boot/mcu/AM13E/hal" \
   -I"$ROOT/mcu/_support/AM13E/tests/boot/am13e_mock" \
   "$ROOT/mcu/_support/AM13E/tests/boot/am13e_flash_transaction_test.c" \
   "$ROOT/boot/mcu/AM13E/hal/flash.c" \
+  "$ROOT/boot/mcu/AM13E/hal/app_validity.c" \
   -o "$BUILD/am13e_flash_transaction_test"
 "$BUILD/am13e_flash_transaction_test"
