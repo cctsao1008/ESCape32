@@ -74,6 +74,43 @@ static volatile uint32_t calibration_ticks,calibration_start;
 static uint32_t calibration_start_after,calibration_phase;
 static volatile uint32_t calibration_done;
 static volatile uint32_t calibration_halted;
+
+#ifdef AM13E_REFERENCE_DIAGNOSTICS
+#if !defined(AM13E_BOARD_SC5_CALIBRATION) || !defined(AM13E_SIM_ONLY_BOARD_PROFILE)
+#error "Reference diagnostics require an explicit SIM_ONLY dynamic SC5 profile"
+#endif
+/* Passive bounded evidence, never consumed by control policy. Commit sequence
+ * last; retain first events and a circular tail. Native clocks only. */
+volatile uint32_t am13e_reference_diag_seq;
+volatile uint32_t am13e_reference_diag_first[64][20];
+volatile uint32_t am13e_reference_diag_ring[256][20];
+static void reference_observe(unsigned event)
+{
+    const uint32_t mask=__get_PRIMASK();__disable_irq();
+    AM13E_BemfReference latest={0};
+    const unsigned valid=(unsigned)am13e_app_adc_get_reference(&latest);
+    const uint32_t n=am13e_reference_diag_seq+1U;
+    const uint32_t v[20]={n,event,tick,DL_ECAP_getTimeStampCounter(BEMF_ECAP),
+        selected_code,pending_code,expected_dach,DL_CMPSSLITE_getDACValueHigh(CMPSS0),
+        reference_calculated,reference_published,reference_ready,armed,
+        staged_reference.sample,staged_reference.acquisition_tick,
+        staged_reference.completion_tick,staged_reference.max_age_ticks,
+        staged_reference.blackout_epoch,
+        (uint32_t)am13e_app_adc_reference_fresh(&staged_reference),valid,latest.sample};
+    for(unsigned i=1;i<20U;++i){
+        am13e_reference_diag_ring[(n-1U)%256U][i]=v[i];
+        if(n<=64U)am13e_reference_diag_first[n-1U][i]=v[i];
+    }
+    __DMB();
+    am13e_reference_diag_ring[(n-1U)%256U][0]=n;
+    if(n<=64U)am13e_reference_diag_first[n-1U][0]=n;
+    __DMB();am13e_reference_diag_seq=n;
+    __set_PRIMASK(mask);
+}
+#else
+#define reference_observe(event) ((void)0)
+#endif
+
 static void bemf_fault(void)
 {
     am13e_app_motor_fault_shutdown();
@@ -453,6 +490,7 @@ void am13e_app_motor_bemf_stage(unsigned code)
         DL_CMPSSLITE_setDACValueHigh(CMPSS0,expected_dach);
         reference_calculated=1U;
     }
+    reference_observe(1U); /* stage: absent sample is visible, not defaulted */
 #endif
 }
 int am13e_app_motor_bemf_publication_pending(void) { return pending_code!=0U; }
@@ -471,8 +509,11 @@ int am13e_app_motor_bemf_carrier_zero(void)
     /* No busy wait and no assumption that the independent DAC load has
      * occurred merely because Global Load completed. Remain quarantined
      * until a subsequent native event, bounded by the explicit sample age. */
-    if(DL_CMPSSLITE_getDACValueHigh(CMPSS0)!=expected_dach)return 1;
+    if(DL_CMPSSLITE_getDACValueHigh(CMPSS0)!=expected_dach){
+        reference_observe(2U);return 1;
+    }
     reference_ready=reference_published=1U;
+    reference_observe(3U);
 #endif
     const uint32_t mask=__get_PRIMASK();
     __disable_irq();
@@ -480,6 +521,7 @@ int am13e_app_motor_bemf_carrier_zero(void)
     pending_code=pending_interval=0U;
     compctl((int)code);
     am13e_app_motor_bemf_interval_select((int)interval);
+    reference_observe(4U); /* publication and actual capture arm are separate */
     if(!am13e_app_motor_bemf_publication_pending()
 #ifdef SW_BLANKING
        && !am13e_app_motor_bemf_blanking_enabled()
@@ -616,7 +658,9 @@ void am13e_app_motor_bemf_tick(void)
         AM13E_BemfReference latest;
         if(!am13e_app_adc_get_reference(&latest) ||
            !am13e_app_adc_reference_fresh(&staged_reference) || !reference_route_matches() ||
-           (reference_published && DL_CMPSSLITE_getDACValueHigh(CMPSS0)!=expected_dach))bemf_fault();
+           (reference_published && DL_CMPSSLITE_getDACValueHigh(CMPSS0)!=expected_dach)){
+            reference_observe(5U);bemf_fault();
+        }
     }
 #endif
     /* Tick0..16 uses a real 1ms SysTick reference. No UART or MCU pin
