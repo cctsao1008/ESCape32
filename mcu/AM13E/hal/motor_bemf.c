@@ -41,6 +41,17 @@ static uint32_t reference_refresh_pending,reference_resume_capture;
 #endif
 #endif
 
+#ifdef AM13E_EXPERIMENTAL_SC5_CHANGED_REFRESH
+#if !defined(AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH) || !defined(AM13E_BOARD_SC5_CALIBRATION) || !defined(AM13E_SIM_ONLY_BOARD_PROFILE) || !defined(AM13E_EXPERIMENTAL_SC5_SETTLE_ZEROS)
+#error "Changed-code handover requires explicit SIM_ONLY SC5 refresh/settling contract"
+#endif
+#if AM13E_EXPERIMENTAL_SC5_SETTLE_ZEROS < 1 || AM13E_EXPERIMENTAL_SC5_SETTLE_ZEROS > 16
+#error "Experimental settling must be bounded in native carrier ZERO intervals"
+#endif
+static uint32_t reference_changed,reference_changed_loaded,reference_settle_remaining;
+static uint16_t reference_previous_dach;
+#endif
+
 #define BEMF_ECAP BEMF_CAPTURE
 /* ECAP1 clock can differ from MCPWM/TIMG12 BUSCLK. It is measured
  * against the verified 16 kHz SysTick before any BEMF capture arms.
@@ -168,6 +179,9 @@ void am13e_app_motor_bemf_abort(void)
     reference_calculated=reference_published=reference_ready=0U;
 #ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
     reference_refresh_pending=reference_resume_capture=0U;
+#ifdef AM13E_EXPERIMENTAL_SC5_CHANGED_REFRESH
+    reference_changed=reference_changed_loaded=reference_settle_remaining=0U;
+#endif
 #endif
 #endif
     if(initialized) {
@@ -377,6 +391,9 @@ void compctl(int x)
         reference_calculated=reference_published=reference_ready=0U;
 #ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
     reference_refresh_pending=reference_resume_capture=0U;
+#ifdef AM13E_EXPERIMENTAL_SC5_CHANGED_REFRESH
+    reference_changed=reference_changed_loaded=reference_settle_remaining=0U;
+#endif
 #endif
 #endif
 #if AM13E_MOTOR_OUTPUT_CONFIGURED
@@ -498,6 +515,9 @@ void am13e_app_motor_bemf_stage(unsigned code)
     reference_calculated=reference_published=reference_ready=0U;
 #ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
     reference_refresh_pending=reference_resume_capture=0U;
+#ifdef AM13E_EXPERIMENTAL_SC5_CHANGED_REFRESH
+    reference_changed=reference_changed_loaded=reference_settle_remaining=0U;
+#endif
 #endif
     if(!reference_route_matches())bemf_fault();
     if(am13e_app_adc_get_reference(&staged_reference)) {
@@ -539,11 +559,22 @@ void am13e_app_motor_bemf_reference_service(void)
        am13e_app_adc_reference_fresh(&staged_reference) &&
        latest.blackout_epoch==staged_reference.blackout_epoch &&
        latest.sample!=staged_reference.sample &&
+#ifndef AM13E_EXPERIMENTAL_SC5_CHANGED_REFRESH
        latest.code[(selected_code&3U)-1U]==expected_dach &&
+#endif
        DL_CMPSSLITE_getDACValueHigh(CMPSS0)==expected_dach) {
         reference_resume_capture=armed;
         capture_stop(); /* Quarantine while publication association is pending. */
         staged_reference=latest;
+#ifdef AM13E_EXPERIMENTAL_SC5_CHANGED_REFRESH
+        reference_previous_dach=expected_dach;
+        reference_changed=latest.code[(selected_code&3U)-1U]!=expected_dach;
+        reference_changed_loaded=reference_settle_remaining=0U;
+        if(reference_changed){
+            expected_dach=latest.code[(selected_code&3U)-1U];
+            DL_CMPSSLITE_setDACValueHigh(CMPSS0,expected_dach);
+        }
+#endif
         reference_ready=reference_published=0U;
         reference_refresh_pending=1U;
         DL_MCPWM_setEventTriggerSource(MOTOR_PWM,DL_MCPWM_ET_1,DL_MCPWM_EVT_TBCTR_ZERO);
@@ -557,11 +588,35 @@ void am13e_app_motor_bemf_reference_service(void)
 int am13e_app_motor_bemf_carrier_zero(void)
 {
 #if defined(AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH) && defined(AM13E_BOARD_SC5_CALIBRATION)
-    /* Experimental acquisition liveness only: no DAC change, no capture
-     * reset, no accepted-crossing epoch or TIMG12 modification. */
+    /* Acquisition association only. An optional changed-code handover
+     * loads DAC at native ZERO; accepted-crossing/TIMG12 epochs persist. */
     if(reference_refresh_pending) {
-        if(!reference_route_matches() || !am13e_app_adc_reference_fresh(&staged_reference) ||
-           DL_CMPSSLITE_getDACValueHigh(CMPSS0)!=expected_dach)bemf_fault();
+        if(!reference_route_matches() || !am13e_app_adc_reference_fresh(&staged_reference))bemf_fault();
+#ifdef AM13E_EXPERIMENTAL_SC5_CHANGED_REFRESH
+        AM13E_BemfReference latest;
+        if(!selected_code || !am13e_app_adc_get_reference(&latest) ||
+           latest.blackout_epoch!=staged_reference.blackout_epoch ||
+           latest.code[(selected_code&3U)-1U]!=expected_dach ||
+           (SYSCTL->SOCLOCK.CMPHPMXSEL&SYSCTL_CMPHPMXSEL_CMP0HPMXSEL_MASK)!=(uint32_t)phase_hp(selected_code&3U) ||
+           (BEMF_ECAP->ECCTL0&ECAP_ECCTL0_INPUTSEL_MASK)!=(uint32_t)DL_ECAP_INPUT_CMPSS0_CTRIPH ||
+           (BEMF_ECAP->ECCTL1&1U)!=(uint32_t)((selected_code&4U)?DL_ECAP_EVENT_RISING_EDGE:DL_ECAP_EVENT_FALLING_EDGE))bemf_fault();
+        if(reference_changed){
+            const uint16_t active=DL_CMPSSLITE_getDACValueHigh(CMPSS0);
+            if(active!=expected_dach){
+                if(reference_changed_loaded || active!=reference_previous_dach)bemf_fault();
+                reference_observe(2U);return 1; /* Original sample age bounds the wait. */
+            }
+            if(!reference_changed_loaded){
+                DL_CMPSSLITE_initFilterHigh(CMPSS0); /* CAP1 remains disabled. */
+                reference_changed_loaded=1U;
+                reference_settle_remaining=AM13E_EXPERIMENTAL_SC5_SETTLE_ZEROS;
+                return 1;
+            }
+            if(--reference_settle_remaining)return 1;
+            reference_changed=reference_changed_loaded=0U;
+        }
+#endif
+        if(DL_CMPSSLITE_getDACValueHigh(CMPSS0)!=expected_dach)bemf_fault();
         reference_refresh_pending=0U;
         reference_ready=reference_published=1U;
         if(reference_resume_capture) {
