@@ -44,3 +44,5 @@ The separate `escape32-qemu` branch `experiment/e62-sc5-changed-regression` pins
 - New code arriving during a pending handover fails closed. A general tracking/cancellation policy needs independent requirements and tests.
 - Startup/restart and offset robustness remain independent motor gates. Preserving capture counters or compiling the code is not a motor PASS.
 - Review before any promotion. No automatic merge, production change or issue closure.
+
+The separate no-journal14-case integration matrix has now completed. All native probes complete source input, but **all strict verdicts remain FAIL**. Nominal smoke/ramp100 and16:0 steps include source DShot clock violations; startup reversal remains widespread; gentle0:16 is incomplete at the unchanged parser budget;16:20 ramp500 has only the retained Original identity rejection. No register PASS is used to override these failures. Detailed exact commands and per-case results are published on `escape32-qemu` branch `experiment/e62-sc5-changed-regression`. The constant-VBUS test still does not establish changed-code path coverage in actual source-clocked motor operation.
