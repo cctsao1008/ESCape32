@@ -7,7 +7,7 @@ out=$(mktemp -d /tmp/am13e-motor-register.XXXXXX)
 trap 'rm -rf "$out"' EXIT
 python3 mcu/_support/AM13E/tools/prepare_sdk_sources.py --sdk-root "$sdk" --output "$out"
 # Synthetic electrical fixtures only; never a qualified board configuration.
-for fixture in high low full inverted blanking hall pwm_enable pwm_enable_full fatal sc5; do
+for fixture in ${E62_MOTOR_REGISTER_FIXTURES:-high low full inverted blanking hall pwm_enable pwm_enable_full fatal sc5}; do
 polarity=1; mask=0; fed=0; extra=(); extra_sources=()
 case "$fixture" in
   sc5)
@@ -81,6 +81,8 @@ if cc -fsyntax-only -std=c11 -DAM13E -DCLK=200000000 \
 fi
 grep -q 'Configured Option 1 outputs require explicit overcurrent contracts' "$out/missing-oc.log"
 echo "PASS: rejected configured physical outputs missing native OC contracts"
+
+if [ "${E62_MOTOR_REGISTER_FIXTURES:-}" = sc5 ]; then exit 0; fi
 
 # Native SC5 ADC reference/package contracts must be explicit and valid.
 for contract in missing_mode invalid_mode qfn_internal; do

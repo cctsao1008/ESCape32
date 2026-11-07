@@ -706,11 +706,16 @@ int am13e_app_motor_on_bemf_event(int capture_us, int timeout) {
         am13e_restart_seed_diag[4]=(uint32_t)period;
         const int usable=period>0 && bemf_inputs_valid(period,period,cfg.timing);
         am13e_restart_seed_diag[5]=usable?1U:2U;
+#ifdef AM13E_SIM_ONLY_RESTART_RATE_OBSERVE_ONLY
+        am13e_restart_seed_diag[5]=3U;
+        delay_us=bemf_zero_cross_delay(capture_us);
+#else
         if(!usable) {
             hard_fault_handler();return 0;
         }
         ival=period;fast=0;
         delay_us=max((ival-(ival*cfg.timing>>5))>>1,1);
+#endif
         restart_seed_pending=0U;
     }else
 #endif
