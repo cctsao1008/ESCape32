@@ -170,9 +170,27 @@ static void coast_acquisition_test(void)
     puts("PASS_NEW actual-Core acquired sector, real first/second capture timing, no oldstep overwrite, refusal/timeout without timer");
 }
 #endif
+#ifdef AM13E_SIM_ONLY_COAST_PHASE_ACQUIRE
+static void coast_invalid_capture_test(void)
+{
+    const int values[]={0,-1,INT_MAX};
+    for(unsigned i=0;i<3U;++i){
+        clear_trace();scheduled=shutdowns=0;coast_acquiring=1U;coast_capture_stage=0U;cfg.timing=16;
+        if(!setjmp(fault_return)){(void)am13e_app_motor_on_bemf_event(values[i],0);assert(0);}
+        assert(!scheduled && !strcmp(trace,"OX"));
+    }
+    clear_trace();scheduled=shutdowns=0;coast_acquiring=1U;coast_capture_stage=1U;cfg.timing=33;
+    if(!setjmp(fault_return)){(void)am13e_app_motor_on_bemf_event(1000,0);assert(0);}
+    assert(!scheduled && !strcmp(trace,"OX"));
+    puts("PASS_NEW acquired first/second capture zero/negative/overflow/invalid timing stops before programming a timer");
+}
+#endif
 int main(void)
 {
     memcpy(&cfg,&cfgdata,sizeof cfg);cfg.damp=1;cfg.throt_ztc=0;
+#ifdef AM13E_SIM_ONLY_COAST_PHASE_ACQUIRE
+    if(getenv("E62_COAST_NEW_NEGATIVES_ONLY")){coast_invalid_capture_test();return 0;}
+#endif
     stop(0U,0,0);stop(1U,0,359);
     stop(0U,1,0);stop(1U,2,359);
     clear_trace();test_primask=0;step=0;sync=0;sine=0;prep=0;reverse=0;ertm=3000;ival=2000;
