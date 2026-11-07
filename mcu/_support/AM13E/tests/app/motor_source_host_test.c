@@ -12,6 +12,10 @@ static char trace[64];
 static unsigned trace_length,stopping,scheduled,shutdowns;
 static int scheduled_delay,selected_comparator,filter_ertm,held_step;
 static jmp_buf fault_return;
+#ifdef AM13E_SIM_ONLY_RESTART_PHASE_RATE
+static int observed_restart_period;
+int am13e_app_restart_sector_period(int rev){(void)rev;return observed_restart_period;}
+#endif
 static AM13E_SixstepPlan phase;
 static void event(char value)
 {
@@ -84,6 +88,9 @@ static void bemf(void)
 #ifdef AM13E_SIM_ONLY_FIRST_EDGE_QUARTER
 static void first_edge_experiment(void)
 {
+#ifdef AM13E_SIM_ONLY_RESTART_PHASE_RATE
+    restart_seed_pending=0U;
+#endif
     clear_trace();scheduled=0U;sync=0;fast=0;ival=10000;ertm=100000000;cfg.timing=16;
     assert(!am13e_app_motor_on_bemf_event(2499,0));
     assert(ival==10000 && sync==0 && scheduled==0U);
@@ -142,6 +149,27 @@ static void first_edge_experiment(void)
 #endif
 }
 #endif
+#ifdef AM13E_SIM_ONLY_RESTART_PHASE_RATE
+static void restart_rate_seed(void)
+{
+    clear_trace();scheduled=0;sync=0;fast=0;ival=10000;ertm=100000000;cfg.timing=16;
+    oldstep=4;step=5;restart_seed_pending=1U;observed_restart_period=1300;
+    assert(!am13e_app_motor_on_bemf_event(2499,0));
+    assert(restart_seed_pending && !scheduled);
+    assert(am13e_app_motor_on_bemf_event(4700,0));
+    assert(ival==1300 && scheduled_delay==325 && sync==1 && !restart_seed_pending);
+    assert(am13e_restart_seed_diag[1]==4 && am13e_restart_seed_diag[2]==5 && am13e_restart_seed_diag[5]==1);
+    clear_trace();scheduled=0;sync=0;ival=10000;restart_seed_pending=0U;
+    assert(am13e_app_motor_on_bemf_event(4700,0));assert(ival==9400 && scheduled_delay==2350);
+    const int invalid[]={0,-1,INT_MAX};
+    for(unsigned i=0;i<3;++i){
+        clear_trace();scheduled=shutdowns=0;sync=0;ival=10000;restart_seed_pending=1U;observed_restart_period=invalid[i];
+        if(!setjmp(fault_return)){(void)am13e_app_motor_on_bemf_event(4700,0);assert(0);}
+        assert(!strcmp(trace,"OX") && !scheduled && !sync && am13e_restart_seed_diag[5]==2U);
+    }
+    puts("PASS_NEW actual-Core restart seed, unchanged cold path, early capture, no timer on refusal/invalid seed");
+}
+#endif
 int main(void)
 {
     memcpy(&cfg,&cfgdata,sizeof cfg);cfg.damp=1;cfg.throt_ztc=0;
@@ -159,6 +187,9 @@ int main(void)
     bemf();
 #ifdef AM13E_SIM_ONLY_FIRST_EDGE_QUARTER
     first_edge_experiment();
+#endif
+#ifdef AM13E_SIM_ONLY_RESTART_PHASE_RATE
+    restart_rate_seed();
 #endif
     puts("PASS production motor laststep IRQ preservation, drag/lock, desync and BEMF fault/timeout policy");
     return 0;

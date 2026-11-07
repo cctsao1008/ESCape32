@@ -40,3 +40,7 @@ int am13e_app_adc_get_reference(AM13E_BemfReference *out);
  * Old acquisitions (including pending ADC IRQs) must not cross this boundary. */
 void am13e_app_adc_blackout_invalidate(void);
 int am13e_app_adc_reference_fresh(const AM13E_BemfReference *ref);
+
+#ifdef AM13E_SIM_ONLY_RESTART_PHASE_RATE
+int am13e_app_restart_sector_period(int reverse);
+#endif

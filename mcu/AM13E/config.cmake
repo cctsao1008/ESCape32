@@ -1,6 +1,7 @@
 include("${PROJECT_SOURCE_DIR}/mcu/_support/AM13E/cmake/ti.cmake")
 # Native Rev1.6 Application source selection and selected Reference board options.
         set(am13e_sources
+            "${PROJECT_SOURCE_DIR}/mcu/AM13E/hal/restart_phase_rate.c"
             "${PROJECT_SOURCE_DIR}/src/main.c"
             "${PROJECT_SOURCE_DIR}/mcu/AM13E/config.c"
             "${PROJECT_SOURCE_DIR}/src/io.c"

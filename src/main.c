@@ -115,6 +115,15 @@ uint32_t tick;
 #endif
 
 static int oldstep, step, sine, ival, cutback;
+#ifdef AM13E_SIM_ONLY_RESTART_PHASE_RATE
+#if !defined(AM13E_SIM_ONLY_BOARD_PROFILE) || !defined(AM13E_SIM_ONLY_ACQUISITION_DIRECT_INTERVAL)
+#error "Restart rate seed requires isolated SIM_ONLY H8 profile"
+#endif
+static unsigned restart_seed_pending;
+/* Passive retained candidate decision: tick,oldstep,step,capture,period,result.
+ * result1=seed applied,2=refused. A refusal never means reacquisition. */
+volatile uint32_t am13e_restart_seed_diag[6];
+#endif
 static char prep, sync, fast, lock, ready, reverse;
 /* Keep the original LED status state only when a target can use it.
  * The generic AM13E target specifies neither LED_MAP nor LED_STAT.
@@ -443,6 +452,9 @@ static void laststep(void) {
 	TIM1_EGR = TIM_EGR_UG | TIM_EGR_COMG;
 #endif
 	compctl(0);
+#ifdef AM13E_SIM_ONLY_RESTART_PHASE_RATE
+    if(step>0 && step<=6)restart_seed_pending=1U;
+#endif
 	oldstep = step;
 	step = 0;
 #if defined(AM13E)
@@ -683,7 +695,26 @@ int am13e_app_motor_on_bemf_event(int capture_us, int timeout) {
 #endif
     const int prior_ival = ival;
     const unsigned prior_sync = (unsigned char)sync;
-    int delay_us = bemf_zero_cross_delay(capture_us);
+    int delay_us;
+#ifdef AM13E_SIM_ONLY_RESTART_PHASE_RATE
+    if(restart_seed_pending && sync==0 && capture_us>=bemf_ignore_before(ival)) {
+        const int period=am13e_app_restart_sector_period(reverse);
+        am13e_restart_seed_diag[0]=tick;
+        am13e_restart_seed_diag[1]=(uint32_t)oldstep;
+        am13e_restart_seed_diag[2]=(uint32_t)step;
+        am13e_restart_seed_diag[3]=(uint32_t)capture_us;
+        am13e_restart_seed_diag[4]=(uint32_t)period;
+        const int usable=period>0 && bemf_inputs_valid(period,period,cfg.timing);
+        am13e_restart_seed_diag[5]=usable?1U:2U;
+        if(!usable) {
+            hard_fault_handler();return 0;
+        }
+        ival=period;fast=0;
+        delay_us=max((ival-(ival*cfg.timing>>5))>>1,1);
+        restart_seed_pending=0U;
+    }else
+#endif
+    delay_us = bemf_zero_cross_delay(capture_us);
     am13e_bemf_diag_record(capture_us, prior_ival, delay_us, prior_sync,
                            delay_us ? 1U : 2U);
     if (!delay_us) return 0; /* Ignore early capture; keep ECAP1 armed. */
