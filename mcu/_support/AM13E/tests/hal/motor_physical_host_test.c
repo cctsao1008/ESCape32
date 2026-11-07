@@ -95,6 +95,36 @@ static void sc5_adc(void)
     puts("PASS SC5 actual ADC reference, coherent freshness, busy skips and sequence/time wrap");
 }
 #endif
+#if defined(AM13E_SC5_FIXTURE) && defined(AM13E_EXPERIMENTAL_SC5_PROMPT_PRODUCER)
+static void sc5_prompt_producer_cases(void)
+{
+    for(volatile unsigned mode=0;mode<3U;++mode){
+        const pid_t child=fork();assert(child>=0);
+        if(child==0){
+            AM13E_BemfReference old,ref;AM13E_AdcRaw raw;
+            assert(am13e_app_adc_get_reference(&old) && adc_inflight);
+            ++tick;ADC0_INT1_IRQHandler();am13e_app_adc_reference_service();
+            assert(am13e_app_adc_get_reference(&ref) && ref.sample==old.sample);
+            if(mode==1U)*(volatile uint16_t *)((uintptr_t)ADC1RESULT+ADC_ADCRESULT0+DL_ADCRESULT_STEP)=0U;
+            ADC1_INT1_IRQHandler();am13e_app_adc_reference_service();
+            assert(am13e_app_adc_get_reference(&ref) && ref.sample==old.sample);
+            ADC2_INT1_IRQHandler();assert(!adc_inflight);
+            assert(am13e_app_adc_get_raw(&raw) && raw.sample_count!=old.sample);
+            am13e_app_adc_reference_service();assert(!adc_inflight); /* no new ADC request */
+            if(mode==1U){assert(!am13e_app_adc_get_reference(&ref));_exit(0);}
+            assert(am13e_app_adc_get_reference(&ref) && ref.sample==raw.sample_count);
+            assert(ref.acquisition_tick==raw.acquisition_tick && ref.completion_tick==raw.completion_tick);
+            am13e_app_adc_reference_service();assert(!adc_inflight);
+            assert(am13e_app_adc_get_reference(&ref) && ref.sample==raw.sample_count);
+            if(mode==0U){tick+=33U;am13e_app_adc_reference_service();assert(!am13e_app_adc_get_reference(&ref));}
+            if(mode==2U){am13e_app_adc_blackout_invalidate();am13e_app_adc_reference_service();assert(!am13e_app_adc_get_reference(&ref));}
+            _exit(0);
+        }
+        int result;assert(waitpid(child,&result,0)==child && WIFEXITED(result) && WEXITSTATUS(result)==0);
+    }
+    puts("PASS UNIT prompt producer: partial epochs not published, complete identity/timestamps preserved, no extra ADC request, invalid/stale/blackout rejection");
+}
+#endif
 #ifdef AM13E_FATAL_PATH_FIXTURE
 /* Run fatal branches from the actual ADC/UART/auxiliary units against the
  * SAME configured motor backend, not mocked shutdown functions. */
@@ -1077,7 +1107,11 @@ int main(void)
     sensing_reference_required();
     protection_required();
 #ifdef AM13E_SC5_FIXTURE
-    sc5_no_sample();sc5_adc();sc5_blackout();sc5_publication();assert(munmap(r,0x07000000)==0);return 0;
+    sc5_no_sample();sc5_adc();
+#ifdef AM13E_EXPERIMENTAL_SC5_PROMPT_PRODUCER
+    sc5_prompt_producer_cases();
+#endif
+    sc5_blackout();sc5_publication();assert(munmap(r,0x07000000)==0);return 0;
 #endif
     assert(CMPSS0->DACLVALS==0U);
     assert(!am13e_app_motor_bemf_reference_ready());

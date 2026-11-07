@@ -19,6 +19,10 @@ typedef struct {
 
 /* Rel17's original main/housekeeping owns scheduling. */
 void am13e_app_adc_init(void);
+#ifdef AM13E_EXPERIMENTAL_SC5_PROMPT_PRODUCER
+/* Existing 16kHz PendSV worker; no new ADC request or interrupt. */
+void am13e_app_adc_reference_service(void);
+#endif
 /* The Rel17 adctrig() declaration belongs to src/common.h. */
 /* Strong TI CMSIS ADC interrupt handlers (also declared for -Wmissing-prototypes). */
 void ADC0_INT1_IRQHandler(void);
