@@ -35,10 +35,18 @@ static uint32_t reference_calculated,reference_published;
 #error "Experimental equivalent refresh requires an explicit SIM_ONLY profile"
 #endif
 static uint32_t reference_refresh_pending,reference_resume_capture;
+#ifdef AM13E_EXPERIMENTAL_SC5_CONTINUOUS_EQUIVALENT
+static AM13E_BemfReference reference_next;
+static uint32_t reference_refresh_continuous;
+#endif
 #endif
 #ifdef AM13E_BEMF_INITIAL_DAC_CODE
 #error "Dynamic SC5 requires an acquired calibrated sample, not a raw initial DACH seed"
 #endif
+#endif
+
+#if defined(AM13E_EXPERIMENTAL_SC5_CONTINUOUS_EQUIVALENT) && (!defined(AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH) || !defined(AM13E_BOARD_SC5_CALIBRATION) || !defined(AM13E_SIM_ONLY_BOARD_PROFILE))
+#error "Continuous equivalent association requires explicit SIM_ONLY SC5 refresh contract"
 #endif
 
 #ifdef AM13E_EXPERIMENTAL_SC5_CHANGED_REFRESH
@@ -155,6 +163,9 @@ static void capture_stop(void)
 #if AM13E_MOTOR_OUTPUT_CONFIGURED
     if(!am13e_motor_output_start_pending())
 #endif
+#ifdef AM13E_EXPERIMENTAL_SC5_CONTINUOUS_EQUIVALENT
+    if(!(reference_refresh_pending && reference_refresh_continuous))
+#endif
         events|=DL_MCPWM_INT_ET_1;
     DL_MCPWM_disableInterrupt(MOTOR_PWM,events);
     DL_MCPWM_clearInterrupt(MOTOR_PWM,events);
@@ -180,6 +191,9 @@ void am13e_app_motor_bemf_abort(void)
     reference_calculated=reference_published=reference_ready=0U;
 #ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
     reference_refresh_pending=reference_resume_capture=0U;
+#ifdef AM13E_EXPERIMENTAL_SC5_CONTINUOUS_EQUIVALENT
+    reference_refresh_continuous=0U;
+#endif
 #ifdef AM13E_EXPERIMENTAL_SC5_CHANGED_REFRESH
     reference_changed=reference_changed_loaded=reference_settle_remaining=0U;
 #endif
@@ -392,6 +406,9 @@ void compctl(int x)
         reference_calculated=reference_published=reference_ready=0U;
 #ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
     reference_refresh_pending=reference_resume_capture=0U;
+#ifdef AM13E_EXPERIMENTAL_SC5_CONTINUOUS_EQUIVALENT
+    reference_refresh_continuous=0U;
+#endif
 #ifdef AM13E_EXPERIMENTAL_SC5_CHANGED_REFRESH
     reference_changed=reference_changed_loaded=reference_settle_remaining=0U;
 #endif
@@ -516,6 +533,9 @@ void am13e_app_motor_bemf_stage(unsigned code)
     reference_calculated=reference_published=reference_ready=0U;
 #ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
     reference_refresh_pending=reference_resume_capture=0U;
+#ifdef AM13E_EXPERIMENTAL_SC5_CONTINUOUS_EQUIVALENT
+    reference_refresh_continuous=0U;
+#endif
 #ifdef AM13E_EXPERIMENTAL_SC5_CHANGED_REFRESH
     reference_changed=reference_changed_loaded=reference_settle_remaining=0U;
 #endif
@@ -536,6 +556,28 @@ int am13e_app_motor_bemf_publication_pending(void) {
 #endif
         ;
 }
+
+#ifdef AM13E_EXPERIMENTAL_SC5_CONTINUOUS_EQUIVALENT
+static int reference_capture_coherent(void)
+{
+    AM13E_BemfReference latest;
+    if(!initialized || calibration_halted || !selected_code || selected_code>7U ||
+       !(selected_code&3U) || pending_code || !reference_calculated ||
+       !reference_published || !reference_ready || !reference_route_matches() ||
+       !am13e_app_adc_reference_fresh(&staged_reference) ||
+       !am13e_app_adc_get_reference(&latest) ||
+       latest.blackout_epoch!=staged_reference.blackout_epoch ||
+       DL_CMPSSLITE_getDACValueHigh(CMPSS0)!=expected_dach ||
+       (SYSCTL->SOCLOCK.CMPHPMXSEL&SYSCTL_CMPHPMXSEL_CMP0HPMXSEL_MASK)!=(uint32_t)phase_hp(selected_code&3U) ||
+       (BEMF_ECAP->ECCTL0&ECAP_ECCTL0_INPUTSEL_MASK)!=(uint32_t)DL_ECAP_INPUT_CMPSS0_CTRIPH ||
+       (BEMF_ECAP->ECCTL1&1U)!=(uint32_t)((selected_code&4U)?DL_ECAP_EVENT_RISING_EDGE:DL_ECAP_EVENT_FALLING_EDGE))return 0;
+    return !(reference_refresh_pending && reference_refresh_continuous) ||
+        (am13e_app_adc_reference_fresh(&reference_next) &&
+         reference_next.blackout_epoch==staged_reference.blackout_epoch &&
+         reference_next.code[(selected_code&3U)-1U]==expected_dach &&
+         latest.code[(selected_code&3U)-1U]==expected_dach);
+}
+#endif
 
 #ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
 void am13e_app_motor_bemf_reference_service(void)
@@ -564,6 +606,21 @@ void am13e_app_motor_bemf_reference_service(void)
        latest.code[(selected_code&3U)-1U]==expected_dach &&
 #endif
        DL_CMPSSLITE_getDACValueHigh(CMPSS0)==expected_dach) {
+#ifdef AM13E_EXPERIMENTAL_SC5_CONTINUOUS_EQUIVALENT
+        if(latest.code[(selected_code&3U)-1U]==expected_dach) {
+            /* The old association is still fresh and exactly matches the
+             * active analog value. Keep its real capture path untouched;
+             * commit only the new coherent identity at native ZERO. */
+            reference_next=latest;
+            reference_refresh_pending=reference_refresh_continuous=1U;
+            reference_resume_capture=0U;
+            if(!reference_capture_coherent()){reference_observe(5U);bemf_fault();}
+            DL_MCPWM_setEventTriggerSource(MOTOR_PWM,DL_MCPWM_ET_1,DL_MCPWM_EVT_TBCTR_ZERO);
+            DL_MCPWM_setEventTriggerEventPrescale(MOTOR_PWM,DL_MCPWM_ET_1,1U);
+            DL_MCPWM_enableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
+            __set_PRIMASK(mask);return;
+        }
+#endif
         reference_resume_capture=armed;
         capture_stop(); /* Quarantine while publication association is pending. */
         staged_reference=latest;
@@ -595,6 +652,25 @@ int am13e_app_motor_bemf_carrier_zero(void)
     /* Acquisition association only. An optional changed-code handover
      * loads DAC at native ZERO; accepted-crossing/TIMG12 epochs persist. */
     if(reference_refresh_pending) {
+#ifdef AM13E_EXPERIMENTAL_SC5_CONTINUOUS_EQUIVALENT
+        if(reference_refresh_continuous) {
+            if(!reference_capture_coherent()){reference_observe(5U);bemf_fault();}
+            staged_reference=reference_next;
+            reference_refresh_pending=reference_refresh_continuous=0U;
+            /* In particular: do not ACK a latched edge, start a stopped
+             * capture, reset its epoch, or replace its commutation timer. */
+            reference_observe(6U);
+            if(
+#ifdef SW_BLANKING
+               !am13e_app_motor_bemf_blanking_enabled() &&
+#endif
+#if AM13E_MOTOR_OUTPUT_CONFIGURED
+               !am13e_motor_output_start_pending() &&
+#endif
+               1)DL_MCPWM_disableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
+            return 1;
+        }
+#endif
         if(!reference_route_matches() || !am13e_app_adc_reference_fresh(&staged_reference))bemf_fault();
 #ifdef AM13E_EXPERIMENTAL_SC5_CHANGED_REFRESH
         AM13E_BemfReference latest;
@@ -756,6 +832,11 @@ void ECAP1_IRQHandler(void)
     /* compctl()/rearm may clear an already-dispatched old IRQ. Preserve
      * the newly armed capture when that vector has no peripheral event. */
     if(!armed || flags==0U)return;
+#ifdef AM13E_EXPERIMENTAL_SC5_CONTINUOUS_EQUIVALENT
+    /* A pending same-code association never authorizes an invalid live
+     * reference/route. Check again at the actual use, before Core policy. */
+    if(!reference_capture_coherent()){reference_observe(5U);bemf_fault();}
+#endif
     /* A native 32-bit wrap is not an elapsed timeout. Unsigned differences
      * remain valid across one wrap because the logical timeout is bounded
      * well below the counter range. A wrap-only vector has no CAP1 edge. */
