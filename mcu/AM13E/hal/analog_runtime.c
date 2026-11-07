@@ -314,14 +314,15 @@ void am13e_app_coast_observer_reset(void){am13e_coast_phase_reset();}
 int am13e_app_coast_select(int reverse,uint32_t info[6])
 {
     AM13E_CoastPhase observed;
+    AM13E_BemfReference reference;
+    const int have_reference=am13e_app_adc_get_reference(&reference);
     const int chosen=am13e_coast_phase_select(tick,blackout_epoch,reverse,
-                                              reference_latest.code,&observed);
+                                              have_reference?reference.code:0,&observed);
     info[0]=observed.pattern;info[1]=(uint32_t)observed.direction;
     info[2]=observed.transitions;info[3]=observed.stable;
     info[4]=observed.sample;info[5]=observed.tick;
-    if(!reference_valid || !am13e_app_adc_reference_fresh(&reference_latest) ||
-       reference_latest.sample!=observed.sample ||
-       reference_latest.blackout_epoch!=observed.epoch)return 0;
+    if(!have_reference || !am13e_app_adc_reference_fresh(&reference) ||
+       reference.sample!=observed.sample || reference.blackout_epoch!=observed.epoch)return 0;
     return chosen;
 }
 #endif
