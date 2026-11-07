@@ -498,6 +498,100 @@ static void sc5_changed_handover_cases(void)
     puts("PASS UNIT changed-code delayed/stale/invalid/changed-again/epoch/mux/input/polarity rejection; accepted timer and phase cancellation preserved");
 }
 #endif
+#ifdef AM13E_EXPERIMENTAL_SC5_CONTINUOUS_EQUIVALENT
+/* UNIT register fixtures, never native motor evidence. Same-DAC capture
+ * must remain available; all invalid association paths still shut down. */
+static void sc5_continuous_equivalent_cases(void)
+{
+    for(volatile unsigned mode=0;mode<13U;++mode){
+        const pid_t child=fork();assert(child>=0);
+        if(child==0){
+            AM13E_BemfReferenceStatus before,status;
+            am13e_app_motor_bemf_reference_status(&before);
+            const uint32_t counter=ECAP1->TSCTR,cap=ECAP1->CAP1,load=TIMG12->COUNTERREGS.LOAD;
+            ++tick;ADC0_INT1_IRQHandler();ADC1_INT1_IRQHandler();ADC2_INT1_IRQHandler();adctrig();
+            am13e_app_motor_bemf_reference_status(&status);
+            assert(status.sample==before.sample && status.published && status.capture_synchronized);
+            assert(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK);
+            assert(ECAP1->ECEINT&DL_ECAP_ISR_SOURCE_CEVT1);
+            assert(am13e_app_motor_bemf_publication_pending());
+            if(mode==0U){
+                /* A real timestamp already latched but ISR not serviced.
+                 * ZERO association must neither clear nor replace it. */
+                ECAP1->TSCTR=capture_origin+600000U;ECAP1->CAP1=ECAP1->TSCTR;
+                ECAP1->ECFLG=DL_ECAP_ISR_SOURCE_CEVT1;
+                const uint32_t latched=ECAP1->CAP1;
+                zero();assert(ECAP1->ECFLG&DL_ECAP_ISR_SOURCE_CEVT1);
+                assert(ECAP1->CAP1==latched && TIMG12->COUNTERREGS.LOAD==load);
+                ival=3000;sync=0;ertm=18000;ECAP1_IRQHandler();
+                assert(TIMG12->COUNTERREGS.LOAD==750U*100U-1U);
+                _exit(0);
+            }
+            if(mode==1U){
+                ival=3000;sync=0;ertm=18000;capture(600000U);
+                const uint32_t accepted=ECAP1->CAP1,scheduled=TIMG12->COUNTERREGS.LOAD;
+                zero();am13e_app_motor_bemf_reference_status(&status);
+                assert(status.sample!=before.sample && status.published && !status.capture_synchronized);
+                assert(!(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK));
+                assert(ECAP1->CAP1==accepted && TIMG12->COUNTERREGS.LOAD==scheduled);_exit(0);
+            }
+            if(mode==2U){
+                nextstep();zero();am13e_app_motor_bemf_reference_status(&status);
+                AM13E_BemfReference latest;assert(am13e_app_adc_get_reference(&latest));
+                const unsigned phase=SYSCTL->SOCLOCK.CMPHPMXSEL&SYSCTL_CMPHPMXSEL_CMP0HPMXSEL_MASK;
+                assert(phase<3U && status.expected_code==latest.code[phase] && status.published);_exit(0);
+            }
+            if(mode==3U){
+                am13e_app_motor_bemf_abort();zero();am13e_app_motor_bemf_reference_status(&status);
+                assert(!status.published && !status.capture_synchronized && !am13e_app_motor_bemf_publication_pending());_exit(0);
+            }
+            if(mode==12U){
+                ++tick;ADC0_INT1_IRQHandler();ADC1_INT1_IRQHandler();ADC2_INT1_IRQHandler();adctrig();
+                zero();am13e_app_motor_bemf_reference_status(&status);
+                assert(status.sample!=before.sample && status.published && status.capture_synchronized);
+                assert(ECAP1->TSCTR==counter && ECAP1->CAP1==cap && TIMG12->COUNTERREGS.LOAD==load);_exit(0);
+            }
+            const unsigned resets=watchdog_arms;
+            if(setjmp(fault_return)==0){
+                switch(mode){
+                case 4:tick+=33U;break;
+                case 5:reference_valid=0U;break;
+                case 6:am13e_app_adc_blackout_invalidate();break;
+                case 7:SYSCTL->SOCLOCK.CMPHPMXSEL^=1U;break;
+                case 8:ECAP1->ECCTL0^=1U;break;
+                case 9:ECAP1->ECCTL1^=1U;break;
+                case 10:defer_dach_load=1U;*(volatile uint16_t *)(uintptr_t)&CMPSS0->DACHVALA^=1U;break;
+                case 11:{const unsigned phase=SYSCTL->SOCLOCK.CMPHPMXSEL&SYSCTL_CMPHPMXSEL_CMP0HPMXSEL_MASK;reference_latest.code[phase]^=1U;break;}
+                }
+                zero();fprintf(stderr,"continuous negative mode=%u\n",(unsigned)mode);assert(!"invalid equivalent association did not fail closed");
+            }
+            assert(watchdog_arms==resets+1U && !gate_on());
+            assert(!(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK));
+            assert(!am13e_app_motor_bemf_publication_pending());_exit(0);
+        }
+        int result;assert(waitpid(child,&result,0)==child && WIFEXITED(result) && WEXITSTATUS(result)==0);
+    }
+    for(volatile unsigned mode=0;mode<3U;++mode){
+        const pid_t child=fork();assert(child>=0);
+        if(child==0){
+            ++tick;ADC0_INT1_IRQHandler();ADC1_INT1_IRQHandler();ADC2_INT1_IRQHandler();adctrig();
+            const uint32_t load=TIMG12->COUNTERREGS.LOAD;
+            const unsigned resets=watchdog_arms;
+            if(setjmp(fault_return)==0){
+                if(mode==0U)reference_valid=0U;
+                if(mode==1U)tick+=33U;
+                if(mode==2U)SYSCTL->SOCLOCK.CMPHPMXSEL^=1U;
+                capture(600000U);assert(!"invalid live association reached Core capture policy");
+            }
+            assert(watchdog_arms==resets+1U && !gate_on());
+            assert(TIMG12->COUNTERREGS.LOAD==load);
+            assert(!(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK));_exit(0);
+        }
+        int result;assert(waitpid(child,&result,0)==child && WIFEXITED(result) && WEXITSTATUS(result)==0);
+    }
+    puts("PASS UNIT continuous equivalent association: latched/accepted CAP1 and timer, cancellation, stale/invalid/epoch/phase/polarity/input/active mismatch and invalid-before-CAP negatives");
+}
+#endif
 static void sc5_publication(void)
 {
     AM13E_BemfReferenceStatus status;
@@ -541,7 +635,13 @@ static void sc5_publication(void)
         const uint16_t dac=CMPSS0->DACHVALS;
         ++tick;ADC0_INT1_IRQHandler();ADC1_INT1_IRQHandler();ADC2_INT1_IRQHandler();adctrig();
         am13e_app_motor_bemf_tick();
-        am13e_app_motor_bemf_reference_status(&status);assert(status.sample!=sample && !status.published && !status.capture_synchronized);
+        am13e_app_motor_bemf_reference_status(&status);
+#ifdef AM13E_EXPERIMENTAL_SC5_CONTINUOUS_EQUIVALENT
+        assert(status.sample==sample && status.published && status.capture_synchronized);
+        assert(ECAP1->ECCTL1&ECAP_ECCTL1_CAPLDEN_MASK);
+#else
+        assert(status.sample!=sample && !status.published && !status.capture_synchronized);
+#endif
         zero();am13e_app_motor_bemf_reference_status(&status);
         assert(status.sample!=sample && status.published && status.capture_synchronized);
         assert(CMPSS0->DACHVALS==dac && DL_CMPSSLITE_getDACValueHigh(CMPSS0)==dac);
@@ -558,7 +658,11 @@ static void sc5_publication(void)
         _exit(0);
      }
      int result;assert(waitpid(child,&result,0)==child && WIFEXITED(result) && WEXITSTATUS(result)==0);
+#ifdef AM13E_EXPERIMENTAL_SC5_CONTINUOUS_EQUIVALENT
+     puts("PASS UNIT same-code association at ZERO with continuous valid capture and unchanged DAC/counter/timer");}
+#else
      puts("PASS experimental same-code sample refresh only at ZERO, capture quarantine with unchanged DAC/counter/timer");}
+#endif
 #endif
 #ifdef AM13E_EXPERIMENTAL_SC5_EQUIVALENT_REFRESH
     /* New reference codes are a separate acquisition contract. This child
@@ -607,6 +711,9 @@ static void sc5_publication(void)
 #endif
 #ifdef AM13E_EXPERIMENTAL_SC5_CHANGED_REFRESH
     sc5_changed_handover_cases();
+#endif
+#ifdef AM13E_EXPERIMENTAL_SC5_CONTINUOUS_EQUIVALENT
+    sc5_continuous_equivalent_cases();
 #endif
     /* No raw/background update is authorized while capture is armed. */
     const uint16_t shadow=CMPSS0->DACHVALS;
