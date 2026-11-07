@@ -477,7 +477,15 @@ static void bemf_timeout_reset(void) {
 #if defined(AM13E_SIM_ONLY_FIRST_EDGE_QUARTER) && !defined(AM13E_SIM_ONLY_BOARD_PROFILE)
 #error "First-edge policy experiment requires explicit SIM_ONLY profile"
 #endif
+#if defined(AM13E_SIM_ONLY_ACQUISITION_QUARTER) && !defined(AM13E_SIM_ONLY_FIRST_EDGE_SEED)
+#error "Acquisition-window experiment requires the isolated first-edge seed experiment"
+#endif
 static int bemf_ignore_before(int interval) {
+#ifdef AM13E_SIM_ONLY_ACQUISITION_QUARTER
+    /* H6: observed spatial crossings during acceleration can precede
+     * the old filtered half-window. Restore it after six accepted edges. */
+    if(sync<6)return interval>>2;
+#endif
 #ifdef AM13E_SIM_ONLY_FIRST_EDGE_QUARTER
     /* Hypothesis only: vary first unsynchronized crossing acceptance,
      * keeping all subsequent acceptance and delay/filter arithmetic. */

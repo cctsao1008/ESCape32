@@ -86,13 +86,29 @@ static void first_edge_experiment(void)
 #else
     assert(ival==8195 && sync==1 && scheduled_delay==2049 && scheduled==1U);
 #endif
-    const int prior=ival,limit=ival>>1;
+    const int prior=ival;
+#ifdef AM13E_SIM_ONLY_ACQUISITION_QUARTER
+    const int limit=ival>>2;
+#else
+    const int limit=ival>>1;
+#endif
     /* Acceptance of one early edge is not permission to relax steady-state
      * filtering. No state/timer change for the next half-window rejection. */
     assert(!am13e_app_motor_on_bemf_event(limit-1,0));
     assert(ival==prior && sync==1 && scheduled==1U);
     assert(am13e_app_motor_on_bemf_event(limit,0));
     assert(sync==2 && scheduled==2U);
+#ifdef AM13E_SIM_ONLY_ACQUISITION_QUARTER
+    sync=5;ival=3000;
+    const unsigned count=scheduled;
+    assert(!am13e_app_motor_on_bemf_event(749,0));
+    assert(sync==5 && ival==3000 && scheduled==count);
+    assert(am13e_app_motor_on_bemf_event(750,0));
+    assert(sync==6 && ival==2437 && scheduled==count+1U);
+    assert(bemf_ignore_before(ival)==1218);
+    assert(!am13e_app_motor_on_bemf_event(1217,0));
+    assert(sync==6 && ival==2437 && scheduled==count+1U);
+#endif
     assert(am13e_app_motor_on_bemf_event(0,1));
     assert(sync==0 && ival==10000 && bemf_ignore_before(ival)==2500);
     assert(!bemf_inputs_valid(10000,-1,16));
