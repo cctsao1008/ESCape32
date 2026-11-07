@@ -155,7 +155,7 @@ static void publish_reference_from_raw(void)
         const int valid=am13e_bemf_reference_fresh(&ref,tick) &&
               am13e_bemf_reference_convert(&reference_cal,raw.vbus,ref.code);
         #ifdef AM13E_SIM_ONLY_RESTART_PHASE_RATE
-        if(valid)am13e_restart_rate_update(&raw,blackout_epoch);
+        if(valid && am13e_app_restart_rate_needed())am13e_restart_rate_update(&raw,blackout_epoch);
         else am13e_restart_rate_invalidate();
 #endif
         const uint32_t mask=__get_PRIMASK();__disable_irq();

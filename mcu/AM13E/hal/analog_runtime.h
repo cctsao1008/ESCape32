@@ -43,4 +43,5 @@ int am13e_app_adc_reference_fresh(const AM13E_BemfReference *ref);
 
 #ifdef AM13E_SIM_ONLY_RESTART_PHASE_RATE
 int am13e_app_restart_sector_period(int reverse);
+int am13e_app_restart_rate_needed(void);
 #endif

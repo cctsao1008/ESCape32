@@ -152,6 +152,14 @@ static void first_edge_experiment(void)
 #ifdef AM13E_SIM_ONLY_RESTART_PHASE_RATE
 static void restart_rate_seed(void)
 {
+#ifdef AM13E_SIM_ONLY_RESTART_RATE_OBSERVE_ONLY
+    clear_trace();scheduled=0;sync=0;ival=10000;cfg.timing=16;restart_seed_pending=1U;observed_restart_period=0;
+    assert(am13e_app_restart_rate_needed());
+    assert(am13e_app_motor_on_bemf_event(4700,0));
+    assert(ival==9400 && scheduled_delay==2350 && am13e_restart_seed_diag[5]==3U);
+    assert(!am13e_app_restart_rate_needed());
+    puts("PASS_NEW actual-Core observe-only retains H8 seed even without apparent direction evidence");
+#else
     clear_trace();scheduled=0;sync=0;fast=0;ival=10000;ertm=100000000;cfg.timing=16;
     oldstep=4;step=5;restart_seed_pending=1U;observed_restart_period=1300;
     assert(!am13e_app_motor_on_bemf_event(2499,0));
@@ -167,7 +175,9 @@ static void restart_rate_seed(void)
         if(!setjmp(fault_return)){(void)am13e_app_motor_on_bemf_event(4700,0);assert(0);}
         assert(!strcmp(trace,"OX") && !scheduled && !sync && am13e_restart_seed_diag[5]==2U);
     }
+    assert(am13e_app_restart_rate_needed()); /* retained after refusal */
     puts("PASS_NEW actual-Core restart seed, unchanged cold path, early capture, no timer on refusal/invalid seed");
+#endif
 }
 #endif
 int main(void)

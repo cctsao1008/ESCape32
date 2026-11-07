@@ -119,7 +119,8 @@ static int oldstep, step, sine, ival, cutback;
 #if !defined(AM13E_SIM_ONLY_BOARD_PROFILE) || !defined(AM13E_SIM_ONLY_ACQUISITION_DIRECT_INTERVAL)
 #error "Restart rate seed requires isolated SIM_ONLY H8 profile"
 #endif
-static unsigned restart_seed_pending;
+static volatile unsigned restart_seed_pending;
+int am13e_app_restart_rate_needed(void){return restart_seed_pending!=0U;}
 /* Passive retained candidate decision: tick,oldstep,step,capture,period,result.
  * result1=seed applied,2=refused. A refusal never means reacquisition. */
 volatile uint32_t am13e_restart_seed_diag[6];
