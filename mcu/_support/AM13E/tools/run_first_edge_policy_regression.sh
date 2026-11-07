@@ -19,3 +19,12 @@ if cc "${flags[@]}" -DAM13E_SIM_ONLY_FIRST_EDGE_QUARTER=1 "${sources[@]}" -o "$o
 fi
 rg -q 'First-edge policy experiment requires explicit SIM_ONLY profile' "$out/guard.log"
 echo 'PASS default + experimental actual-Core safety/overflow/timeout/boundary regression, production guard'
+if cc "${flags[@]}" -DAM13E_SIM_ONLY_BOARD_PROFILE=1 -DAM13E_SIM_ONLY_ACQUISITION_QUARTER=1 "${sources[@]}" -o "$out/missing-seed" >"$out/seed-guard.log" 2>&1; then
+    echo 'FAIL: acquisition variant compiled without prerequisite seed experiment'; exit 1
+fi
+rg -q 'Acquisition-window experiment requires the isolated first-edge seed experiment' "$out/seed-guard.log"
+if cc "${flags[@]}" -DAM13E_SIM_ONLY_BOARD_PROFILE=1 -DAM13E_SIM_ONLY_FIRST_EDGE_SEED=1 "${sources[@]}" -o "$out/missing-first-edge" >"$out/first-edge-guard.log" 2>&1; then
+    echo 'FAIL: seed variant compiled without prerequisite acceptance experiment'; exit 1
+fi
+rg -q 'First-edge seed experiment requires the isolated first-edge acceptance experiment' "$out/first-edge-guard.log"
+echo 'PASS experimental policy prerequisite guards'
