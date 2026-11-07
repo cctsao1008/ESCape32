@@ -55,4 +55,6 @@ int am13e_coast_phase_select(uint32_t now,uint32_t epoch,int reverse,const uint1
     if(level==(unsigned)!!(cc&4U))return 0;
     return (int)step;
 }
+#else
+typedef int coast_phase_plan_not_selected;
 #endif
