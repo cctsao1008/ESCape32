@@ -74,6 +74,27 @@ static void bemf(void)
     if(!setjmp(fault_return)){(void)am13e_app_motor_on_bemf_event(1000,0);assert(0);}
     assert(!strcmp(trace,"OX") && scheduled==before && sync==4 && fast==1);
 }
+#ifdef AM13E_SIM_ONLY_FIRST_EDGE_QUARTER
+static void first_edge_experiment(void)
+{
+    clear_trace();scheduled=0U;sync=0;fast=0;ival=10000;ertm=100000000;cfg.timing=16;
+    assert(!am13e_app_motor_on_bemf_event(2499,0));
+    assert(ival==10000 && sync==0 && scheduled==0U);
+    assert(am13e_app_motor_on_bemf_event(2782,0));
+    assert(ival==8195 && sync==1 && scheduled_delay==2049 && scheduled==1U);
+    /* Acceptance of one early edge is not permission to relax steady-state
+     * filtering. No state/timer change for the next half-window rejection. */
+    assert(!am13e_app_motor_on_bemf_event(4096,0));
+    assert(ival==8195 && sync==1 && scheduled==1U);
+    assert(am13e_app_motor_on_bemf_event(4097,0));
+    assert(sync==2 && scheduled==2U);
+    assert(am13e_app_motor_on_bemf_event(0,1));
+    assert(sync==0 && ival==10000 && bemf_ignore_before(ival)==2500);
+    assert(!bemf_inputs_valid(10000,-1,16));
+    assert(!bemf_inputs_valid(10000,2782,33));
+    assert(!bemf_inputs_valid(INT_MAX/4,INT_MAX/16,32));
+}
+#endif
 int main(void)
 {
     memcpy(&cfg,&cfgdata,sizeof cfg);cfg.damp=1;cfg.throt_ztc=0;
@@ -89,6 +110,9 @@ int main(void)
     for(unsigned n=0U;n<6U;++n){clear_trace();am13e_app_motor_on_commutation_event();}
     assert(!sync && !fast && ival==5000 && ertm==100000000);
     bemf();
+#ifdef AM13E_SIM_ONLY_FIRST_EDGE_QUARTER
+    first_edge_experiment();
+#endif
     puts("PASS production motor laststep IRQ preservation, drag/lock, desync and BEMF fault/timeout policy");
     return 0;
 }

@@ -471,9 +471,20 @@ static void bemf_timeout_reset(void) {
  * Return zero for an early/spurious capture; do not change state.
  */
 #if defined(AM13E)
+#if defined(AM13E_SIM_ONLY_FIRST_EDGE_QUARTER) && !defined(AM13E_SIM_ONLY_BOARD_PROFILE)
+#error "First-edge policy experiment requires explicit SIM_ONLY profile"
+#endif
+static int bemf_ignore_before(int interval) {
+#ifdef AM13E_SIM_ONLY_FIRST_EDGE_QUARTER
+    /* Hypothesis only: vary first unsynchronized crossing acceptance,
+     * keeping all subsequent acceptance and delay/filter arithmetic. */
+    if(sync==0)return interval>>2;
+#endif
+    return interval>>1;
+}
 static int bemf_inputs_valid(int interval,int capture,int timing) {
     if(interval<=0 || capture<0 || interval>INT_MAX/3 || timing<0 || timing>32)return 0;
-    if(capture<(interval>>1))return 1;
+    if(capture<bemf_ignore_before(interval))return 1;
     const int u=interval*3;
     return capture<=INT_MAX-u && ((capture+u)>>2)<=INT_MAX/32;
 }
@@ -485,7 +496,11 @@ static int bemf_zero_cross_delay(int capture_ticks) {
         return 0;
     }
 #endif
+#if defined(AM13E)
+    if (capture_ticks < bemf_ignore_before(ival)) return 0;
+#else
     if (capture_ticks < ival >> 1) return 0;
+#endif
     int u = ival * 3;
     fast = (capture_ticks < u >> 2 || capture_ticks > u >> 1) && ertm < 2000;
     ival = (capture_ticks + u) >> 2;
