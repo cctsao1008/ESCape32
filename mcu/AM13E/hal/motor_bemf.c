@@ -131,6 +131,7 @@ static void reference_observe(unsigned event)
 static void bemf_fault(void)
 {
     am13e_app_motor_fault_shutdown();
+    if(initialized)reference_observe(11U); /* passive post-shutdown state */
     am13e_app_motor_fault_reset();
     for(;;) __NOP();
 }
@@ -577,6 +578,9 @@ void am13e_app_motor_bemf_reference_service(void)
 #endif
         reference_ready=reference_published=0U;
         reference_refresh_pending=1U;
+#ifdef AM13E_EXPERIMENTAL_SC5_CHANGED_REFRESH
+        if(reference_changed)reference_observe(8U); /* passive request identity */
+#endif
         DL_MCPWM_setEventTriggerSource(MOTOR_PWM,DL_MCPWM_ET_1,DL_MCPWM_EVT_TBCTR_ZERO);
         DL_MCPWM_setEventTriggerEventPrescale(MOTOR_PWM,DL_MCPWM_ET_1,1U);
         DL_MCPWM_enableInterrupt(MOTOR_PWM,DL_MCPWM_INT_ET_1);
@@ -610,6 +614,7 @@ int am13e_app_motor_bemf_carrier_zero(void)
                 DL_CMPSSLITE_initFilterHigh(CMPSS0); /* CAP1 remains disabled. */
                 reference_changed_loaded=1U;
                 reference_settle_remaining=AM13E_EXPERIMENTAL_SC5_SETTLE_ZEROS;
+                reference_observe(9U); /* active load, still quarantined */
                 return 1;
             }
             if(--reference_settle_remaining)return 1;
