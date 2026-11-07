@@ -12,6 +12,11 @@ static char trace[64];
 static unsigned trace_length,stopping,scheduled,shutdowns;
 static int scheduled_delay,selected_comparator,filter_ertm,held_step;
 static jmp_buf fault_return;
+#ifdef AM13E_SIM_ONLY_COAST_PHASE_ACQUIRE
+static int selected_coast_step;
+void am13e_app_coast_observer_reset(void){}
+int am13e_app_coast_select(int rev,uint32_t info[6]){(void)rev;for(unsigned i=0;i<6;++i)info[i]=0;return selected_coast_step;}
+#endif
 static AM13E_SixstepPlan phase;
 static void event(char value)
 {
@@ -84,6 +89,9 @@ static void bemf(void)
 #ifdef AM13E_SIM_ONLY_FIRST_EDGE_QUARTER
 static void first_edge_experiment(void)
 {
+#ifdef AM13E_SIM_ONLY_COAST_PHASE_ACQUIRE
+    coast_acquiring=0U;
+#endif
     clear_trace();scheduled=0U;sync=0;fast=0;ival=10000;ertm=100000000;cfg.timing=16;
     assert(!am13e_app_motor_on_bemf_event(2499,0));
     assert(ival==10000 && sync==0 && scheduled==0U);
@@ -142,9 +150,47 @@ static void first_edge_experiment(void)
 #endif
 }
 #endif
+#ifdef AM13E_SIM_ONLY_COAST_PHASE_ACQUIRE
+static void coast_acquisition_test(void)
+{
+    clear_trace();scheduled=shutdowns=0;oldstep=4;step=0;coast_pending=1;reverse=0;selected_coast_step=6;
+    coast_prepare_start();assert(oldstep==4 && !coast_pending && step==5);
+    ival=10000;sine=prep=0;sync=0;cfg.timing=16;nextstep();assert(step==6);
+    assert(phase.phase[2]==AM13E_PHASE_POSITIVE_PWM && phase.phase[0]==AM13E_PHASE_NEGATIVE_SINK);
+    clear_trace();scheduled=0;
+    assert(am13e_app_motor_on_bemf_event(300,0));assert(scheduled_delay==1 && sync==1 && ival==10000 && coast_acquiring);
+    assert(am13e_app_motor_on_bemf_event(900,0));assert(ival==900 && scheduled_delay==225 && sync==2 && !coast_acquiring);
+    assert(am13e_coast_acquire_diag[10]==300 && am13e_coast_acquire_diag[11]==900);
+    clear_trace();scheduled=shutdowns=0;step=0;coast_pending=1;selected_coast_step=0;
+    if(!setjmp(fault_return)){coast_prepare_start();assert(0);}
+    assert(!scheduled && !strcmp(trace,"OX") && am13e_coast_acquire_diag[9]==2);
+    clear_trace();scheduled=shutdowns=0;coast_acquiring=1;coast_capture_stage=0;
+    if(!setjmp(fault_return)){(void)am13e_app_motor_on_bemf_event(0,1);assert(0);}
+    assert(!scheduled && !strcmp(trace,"OX") && am13e_coast_acquire_diag[9]==6);
+    puts("PASS_NEW actual-Core acquired sector, real first/second capture timing, no oldstep overwrite, refusal/timeout without timer");
+}
+#endif
+#ifdef AM13E_SIM_ONLY_COAST_PHASE_ACQUIRE
+static void coast_invalid_capture_test(void)
+{
+    const int values[]={0,-1,INT_MAX};
+    for(volatile unsigned i=0;i<3U;++i){
+        clear_trace();scheduled=shutdowns=0;coast_acquiring=1U;coast_capture_stage=0U;cfg.timing=16;
+        if(!setjmp(fault_return)){(void)am13e_app_motor_on_bemf_event(values[i],0);assert(0);}
+        assert(!scheduled && !strcmp(trace,"OX"));
+    }
+    clear_trace();scheduled=shutdowns=0;coast_acquiring=1U;coast_capture_stage=1U;cfg.timing=33;
+    if(!setjmp(fault_return)){(void)am13e_app_motor_on_bemf_event(1000,0);assert(0);}
+    assert(!scheduled && !strcmp(trace,"OX"));
+    puts("PASS_NEW acquired first/second capture zero/negative/overflow/invalid timing stops before programming a timer");
+}
+#endif
 int main(void)
 {
     memcpy(&cfg,&cfgdata,sizeof cfg);cfg.damp=1;cfg.throt_ztc=0;
+#ifdef AM13E_SIM_ONLY_COAST_PHASE_ACQUIRE
+    if(getenv("E62_COAST_NEW_NEGATIVES_ONLY")){coast_invalid_capture_test();return 0;}
+#endif
     stop(0U,0,0);stop(1U,0,359);
     stop(0U,1,0);stop(1U,2,359);
     clear_trace();test_primask=0;step=0;sync=0;sine=0;prep=0;reverse=0;ertm=3000;ival=2000;
@@ -159,6 +205,9 @@ int main(void)
     bemf();
 #ifdef AM13E_SIM_ONLY_FIRST_EDGE_QUARTER
     first_edge_experiment();
+#endif
+#ifdef AM13E_SIM_ONLY_COAST_PHASE_ACQUIRE
+    coast_acquisition_test();
 #endif
     puts("PASS production motor laststep IRQ preservation, drag/lock, desync and BEMF fault/timeout policy");
     return 0;
