@@ -116,6 +116,35 @@ uint32_t tick;
 
 static int oldstep, step, sine, ival, cutback;
 static char prep, sync, fast, lock, ready, reverse;
+#ifdef AM13E_SIM_ONLY_COAST_PHASE_ACQUIRE
+#if !defined(AM13E_SIM_ONLY_BOARD_PROFILE) || !defined(AM13E_SIM_ONLY_ACQUISITION_DIRECT_INTERVAL)
+#error "Coast acquisition requires isolated SIM_ONLY H8 configuration"
+#endif
+static volatile unsigned coast_pending,coast_acquiring,coast_capture_stage;
+volatile uint32_t am13e_coast_acquire_diag[12];
+int am13e_app_coast_observing(void){return coast_pending && !step;}
+static void coast_prepare_start(void)
+{
+    if(!coast_pending){step=oldstep;return;}
+    uint32_t info[6];
+    const int chosen=am13e_app_coast_select(reverse,info);
+    am13e_coast_acquire_diag[0]=tick;am13e_coast_acquire_diag[1]=(uint32_t)oldstep;
+    am13e_coast_acquire_diag[2]=(uint32_t)chosen;
+    for(unsigned i=0;i<6U;++i)am13e_coast_acquire_diag[i+3U]=info[i];
+    am13e_coast_acquire_diag[10]=am13e_coast_acquire_diag[11]=0U;
+#ifdef AM13E_SIM_ONLY_COAST_PHASE_SHADOW
+    am13e_coast_acquire_diag[9]=5U; /* Shadow is not authorization. */
+    step=oldstep;coast_acquiring=0U;
+#else
+    am13e_coast_acquire_diag[9]=chosen>=1 && chosen<=6?1U:2U;
+    if(chosen<1 || chosen>6){hard_fault_handler();return;}
+    step=chosen==1?6:chosen-1;
+    coast_acquiring=1U;coast_capture_stage=0U;
+#endif
+    coast_pending=0U;
+}
+#endif
+
 /* Keep the original LED status state only when a target can use it.
  * The generic AM13E target specifies neither LED_MAP nor LED_STAT.
  */
@@ -443,6 +472,9 @@ static void laststep(void) {
 	TIM1_EGR = TIM_EGR_UG | TIM_EGR_COMG;
 #endif
 	compctl(0);
+#ifdef AM13E_SIM_ONLY_COAST_PHASE_ACQUIRE
+    if(step>0 && step<=6){coast_pending=1U;coast_acquiring=coast_capture_stage=0U;am13e_app_coast_observer_reset();}
+#endif
 	oldstep = step;
 	step = 0;
 #if defined(AM13E)
@@ -673,6 +705,9 @@ void am13e_app_motor_on_commutation_event(void) {
  */
 int am13e_app_motor_on_bemf_event(int capture_us, int timeout) {
     if (timeout) {
+#ifdef AM13E_SIM_ONLY_COAST_PHASE_ACQUIRE
+        if(coast_acquiring){am13e_coast_acquire_diag[9]=6U;hard_fault_handler();return 0;}
+#endif
         am13e_bemf_diag_record(0, ival, 0, (unsigned char)sync, 3U);
         bemf_timeout_reset();
         return 1;
@@ -683,7 +718,24 @@ int am13e_app_motor_on_bemf_event(int capture_us, int timeout) {
 #endif
     const int prior_ival = ival;
     const unsigned prior_sync = (unsigned char)sync;
-    int delay_us = bemf_zero_cross_delay(capture_us);
+    int delay_us;
+#ifdef AM13E_SIM_ONLY_COAST_PHASE_ACQUIRE
+    if(coast_acquiring){
+        if(capture_us<=0 || !bemf_inputs_valid(capture_us,capture_us,cfg.timing)){hard_fault_handler();return 0;}
+        if(coast_capture_stage==0U){
+            /* A real first crossing authorizes a real minimum-delay timer.
+             * No elapsed partial sector is claimed as a measured period. */
+            am13e_coast_acquire_diag[10]=(uint32_t)capture_us;
+            am13e_coast_acquire_diag[9]=3U;coast_capture_stage=1U;delay_us=1;
+        }else{
+            am13e_coast_acquire_diag[11]=(uint32_t)capture_us;
+            ival=capture_us;fast=0;
+            delay_us=max((ival-(ival*cfg.timing>>5))>>1,1);
+            coast_acquiring=0U;coast_capture_stage=2U;am13e_coast_acquire_diag[9]=4U;
+        }
+    }else
+#endif
+    delay_us = bemf_zero_cross_delay(capture_us);
     am13e_bemf_diag_record(capture_us, prior_ival, delay_us, prior_sync,
                            delay_us ? 1U : 2U);
     if (!delay_us) return 0; /* Ignore early capture; keep ECAP1 armed. */
@@ -1248,7 +1300,11 @@ void main(void) {
 				goto tick;
 			}
 			__disable_irq();
+#ifdef AM13E_SIM_ONLY_COAST_PHASE_ACQUIRE
+            coast_prepare_start();
+#else
 			step = oldstep;
+#endif
 			ival = 10000 << MOTOR_TIME_SHIFT;
 			ertm = 100000000;
 			nextstep();

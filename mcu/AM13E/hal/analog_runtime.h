@@ -40,3 +40,9 @@ int am13e_app_adc_get_reference(AM13E_BemfReference *out);
  * Old acquisitions (including pending ADC IRQs) must not cross this boundary. */
 void am13e_app_adc_blackout_invalidate(void);
 int am13e_app_adc_reference_fresh(const AM13E_BemfReference *ref);
+
+#ifdef AM13E_SIM_ONLY_COAST_PHASE_ACQUIRE
+int am13e_app_coast_observing(void);
+void am13e_app_coast_observer_reset(void);
+int am13e_app_coast_select(int reverse,uint32_t info[6]);
+#endif

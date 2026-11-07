@@ -1,3 +1,4 @@
+#include "coast_phase_plan.h"
 /* Option 1 raw ADC0/1/2 housekeeping acquisition. The proposed SOC map
  * is not frozen or PWM synchronized. Only an explicit board calibration
  * enables Rel17 voltage/temperature policy; current codes remain raw.
@@ -153,6 +154,10 @@ static void publish_reference_from_raw(void)
         ref.blackout_epoch=blackout_epoch;
         const int valid=am13e_bemf_reference_fresh(&ref,tick) &&
               am13e_bemf_reference_convert(&reference_cal,raw.vbus,ref.code);
+        #ifdef AM13E_SIM_ONLY_COAST_PHASE_ACQUIRE
+        if(valid && am13e_app_coast_observing())am13e_coast_phase_update(&raw,blackout_epoch);
+        else am13e_coast_phase_reset();
+#endif
         const uint32_t mask=__get_PRIMASK();__disable_irq();
         reference_valid=0U;
         if(valid){reference_latest=ref;reference_valid=1U;}
@@ -303,3 +308,20 @@ int am13e_app_adc_get_reference(AM13E_BemfReference *out)
     __set_PRIMASK(mask);
     return valid && am13e_app_adc_reference_fresh(out);
 }
+
+#ifdef AM13E_SIM_ONLY_COAST_PHASE_ACQUIRE
+void am13e_app_coast_observer_reset(void){am13e_coast_phase_reset();}
+int am13e_app_coast_select(int reverse,uint32_t info[6])
+{
+    AM13E_CoastPhase observed;
+    const int chosen=am13e_coast_phase_select(tick,blackout_epoch,reverse,
+                                              reference_latest.code,&observed);
+    info[0]=observed.pattern;info[1]=(uint32_t)observed.direction;
+    info[2]=observed.transitions;info[3]=observed.stable;
+    info[4]=observed.sample;info[5]=observed.tick;
+    if(!reference_valid || !am13e_app_adc_reference_fresh(&reference_latest) ||
+       reference_latest.sample!=observed.sample ||
+       reference_latest.blackout_epoch!=observed.epoch)return 0;
+    return chosen;
+}
+#endif
