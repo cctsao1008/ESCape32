@@ -4,6 +4,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 static AM13E_AdcRaw raw(unsigned sample,uint32_t t,float angle)
 {
     AM13E_AdcRaw r={0};r.sample_count=sample;r.acquisition_tick=r.completion_tick=t;
@@ -35,6 +36,21 @@ int main(void)
      * has identical samples. Do not claim this estimates physical direction
      * without an independently established bandwidth bound. */
     for(unsigned n=0;n<3;++n){AM13E_AdcRaw a=raw(n+1,n*16U,n*.2617993878f),b=raw(n+1,n*16U,n*(.2617993878f+6.2831853072f));assert(a.phase_a==b.phase_a && a.phase_b==b.phase_b && a.phase_c==b.phase_c);}
+    /* Independent floating reference checks the quantized waveform's
+     * rotation, including all atan2 quadrants/wrap, against integer CORDIC. */
+    for(unsigned pose=0;pose<72U;++pose){
+        am13e_restart_rate_invalidate();AM13E_AdcRaw prev={0};float prior_angle=0.0f;
+        for(unsigned n=0;n<3U;++n){
+            r=raw(n+1,n*16U,(float)pose*.0872664626f+(float)n*.4f);
+            const float angle=atan2f(1.7320508075688772f*((float)r.phase_b-r.phase_c),2.0f*r.phase_a-r.phase_b-r.phase_c);
+            am13e_restart_rate_update(&r,9);
+            if(n==2U){float delta=angle-prior_angle;if(delta<0)delta+=6.2831853072f;
+                const int expected=(int)(1047.1975512f/delta+.5f);const int measured=am13e_restart_rate_period(32,9,0);
+                assert(abs(measured-expected)<=2);}
+            prev=r;prior_angle=angle;
+        }
+        (void)prev;
+    }
     puts("PASS_NEW phase-rate coherent/fresh/epoch/direction/weak/rail/gap/wrap negatives; INCOMPLETE standalone physical direction due explicit alias counterexample");
     return 0;
 }
