@@ -10,5 +10,5 @@ cc "${flags[@]}" mcu/AM13E/hal/coast_phase_plan.c mcu/_support/AM13E/tests/hal/c
 "$out/planner"
 fi
 flags+=(-DAM13E_BOARD_SENSORS_CONFIGURED=1 -DCLK=200000000 '-DTARGET_NAME="Host"' -funsigned-char -ffunction-sections -fdata-sections -Wl,--gc-sections -Imcu/AM13E/serial -Imcu/AM13E -Imcu/_support/AM13E/tests/app -Imcu/_support/AM13E/tests/hal/motor_mock -DAM13E_SIM_ONLY_FIRST_EDGE_QUARTER=1 -DAM13E_SIM_ONLY_FIRST_EDGE_SEED=1 -DAM13E_SIM_ONLY_ACQUISITION_QUARTER=1 -DAM13E_SIM_ONLY_ACQUISITION_DIRECT_INTERVAL=1)
-cc "${flags[@]}" src/util.c mcu/AM13E/hal/motor_bemf_event_plan.c mcu/AM13E/hal/motor_phase_plan.c mcu/_support/AM13E/tests/app/motor_source_host_test.c -o if [ "${1:-all}" = new-core ]; then E62_COAST_NEW_NEGATIVES_ONLY=1 "$out/core"; else "$out/core"; fi
+cc "${flags[@]}" src/util.c mcu/AM13E/hal/motor_bemf_event_plan.c mcu/AM13E/hal/motor_phase_plan.c mcu/_support/AM13E/tests/app/motor_source_host_test.c -o "$out/core"
 if [ "${1:-all}" = new-core ]; then E62_COAST_NEW_NEGATIVES_ONLY=1 "$out/core"; else "$out/core"; fi
