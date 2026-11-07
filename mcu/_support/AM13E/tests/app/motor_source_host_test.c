@@ -55,10 +55,17 @@ static void stop(unsigned mask,int hold,int sine_step)
 static void bemf(void)
 {
     clear_trace();scheduled=0U;sync=2;fast=1;ival=3000;ertm=1000;cfg.timing=16;
+#ifdef AM13E_SIM_ONLY_ACQUISITION_QUARTER
+    /* Production-mode execution still tests the original sync2 vectors.
+     * For this opt-in variant, test unchanged half-window after lock;
+     * its intentionally different pre-lock window is tested separately. */
+    sync=6;
+#endif
+    const unsigned prior_sync=(unsigned char)sync;
     assert(!am13e_app_motor_on_bemf_event(1499,0));
-    assert(sync==2 && fast==1 && ival==3000 && !scheduled && !trace_length);
+    assert((unsigned char)sync==prior_sync && fast==1 && ival==3000 && !scheduled && !trace_length);
     assert(am13e_app_motor_on_bemf_event(1500,0));
-    assert(sync==3 && fast==1 && ival==2625 && scheduled==1U && scheduled_delay==656);
+    assert((unsigned char)sync==(prior_sync<6U?prior_sync+1U:6U) && fast==1 && ival==2625 && scheduled==1U && scheduled_delay==656);
     clear_trace();sync=6;ival=3000;ertm=3000;
     assert(am13e_app_motor_on_bemf_event(3000,0));
     assert(sync==6 && !fast && ival==3000 && scheduled_delay==750);
