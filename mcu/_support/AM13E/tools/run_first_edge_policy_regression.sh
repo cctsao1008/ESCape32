@@ -20,3 +20,9 @@ if cc "${flags[@]}" -DAM13E_SIM_ONLY_FIRST_EDGE_QUARTER=1 "${sources[@]}" -o "$o
 fi
 rg -q 'First-edge policy experiment requires explicit SIM_ONLY profile' "$out/guard.log"
 echo 'PASS default + experimental actual-Core safety/overflow/timeout/boundary regression, production guard'
+
+if cc "${flags[@]}" -DAM13E_SIM_ONLY_BOARD_PROFILE=1 -DAM13E_SIM_ONLY_ACQUISITION_DIRECT_INTERVAL=1 "${sources[@]}" -o "$out/missing-acquisition" >"$out/acq-guard.log" 2>&1; then
+    echo 'FAIL: direct interval compiled without prerequisite acquisition window'; exit 1
+fi
+rg -q 'Direct acquisition interval requires the isolated acquisition-window experiment' "$out/acq-guard.log"
+echo 'PASS direct-estimator prerequisite guard and actual-Core overflow shutdown ordering'

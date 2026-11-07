@@ -134,6 +134,12 @@ static void first_edge_experiment(void)
     assert(!bemf_inputs_valid(10000,-1,16));
     assert(!bemf_inputs_valid(10000,2782,33));
     assert(!bemf_inputs_valid(INT_MAX/4,INT_MAX/16,32));
+#ifdef AM13E_SIM_ONLY_ACQUISITION_DIRECT_INTERVAL
+    shutdowns=0U;clear_trace();ival=10000;sync=1;cfg.timing=32;
+    const unsigned scheduled_before=scheduled;
+    if(!setjmp(fault_return)){(void)am13e_app_motor_on_bemf_event(INT_MAX/32+1,0);assert(0);}
+    assert(!strcmp(trace,"OX") && scheduled==scheduled_before && sync==1 && ival==10000);
+#endif
 }
 #endif
 int main(void)
