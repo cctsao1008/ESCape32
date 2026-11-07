@@ -81,12 +81,17 @@ static void first_edge_experiment(void)
     assert(!am13e_app_motor_on_bemf_event(2499,0));
     assert(ival==10000 && sync==0 && scheduled==0U);
     assert(am13e_app_motor_on_bemf_event(2782,0));
+#ifdef AM13E_SIM_ONLY_FIRST_EDGE_SEED
+    assert(ival==5564 && sync==1 && scheduled_delay==1391 && scheduled==1U);
+#else
     assert(ival==8195 && sync==1 && scheduled_delay==2049 && scheduled==1U);
+#endif
+    const int prior=ival,limit=ival>>1;
     /* Acceptance of one early edge is not permission to relax steady-state
      * filtering. No state/timer change for the next half-window rejection. */
-    assert(!am13e_app_motor_on_bemf_event(4096,0));
-    assert(ival==8195 && sync==1 && scheduled==1U);
-    assert(am13e_app_motor_on_bemf_event(4097,0));
+    assert(!am13e_app_motor_on_bemf_event(limit-1,0));
+    assert(ival==prior && sync==1 && scheduled==1U);
+    assert(am13e_app_motor_on_bemf_event(limit,0));
     assert(sync==2 && scheduled==2U);
     assert(am13e_app_motor_on_bemf_event(0,1));
     assert(sync==0 && ival==10000 && bemf_ignore_before(ival)==2500);

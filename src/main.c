@@ -471,6 +471,9 @@ static void bemf_timeout_reset(void) {
  * Return zero for an early/spurious capture; do not change state.
  */
 #if defined(AM13E)
+#if defined(AM13E_SIM_ONLY_FIRST_EDGE_SEED) && !defined(AM13E_SIM_ONLY_FIRST_EDGE_QUARTER)
+#error "First-edge seed experiment requires the isolated first-edge acceptance experiment"
+#endif
 #if defined(AM13E_SIM_ONLY_FIRST_EDGE_QUARTER) && !defined(AM13E_SIM_ONLY_BOARD_PROFILE)
 #error "First-edge policy experiment requires explicit SIM_ONLY profile"
 #endif
@@ -484,6 +487,9 @@ static int bemf_ignore_before(int interval) {
 }
 static int bemf_inputs_valid(int interval,int capture,int timing) {
     if(interval<=0 || capture<0 || interval>INT_MAX/3 || timing<0 || timing>32)return 0;
+#ifdef AM13E_SIM_ONLY_FIRST_EDGE_SEED
+    if(sync==0 && capture<(interval>>1) && capture>INT_MAX/64)return 0;
+#endif
     if(capture<bemf_ignore_before(interval))return 1;
     const int u=interval*3;
     return capture<=INT_MAX-u && ((capture+u)>>2)<=INT_MAX/32;
@@ -503,6 +509,13 @@ static int bemf_zero_cross_delay(int capture_ticks) {
 #endif
     int u = ival * 3;
     fast = (capture_ticks < u >> 2 || capture_ticks > u >> 1) && ertm < 2000;
+#ifdef AM13E_SIM_ONLY_FIRST_EDGE_SEED
+    /* H5 only: a genuinely spatial first crossing after an aligned half
+     * sector would seed the full interval at twice its elapsed time.
+     * No rotor angle is supplied to Guest; this assumption is unqualified. */
+    if(sync==0 && capture_ticks<(ival>>1))ival=capture_ticks*2;
+    else
+#endif
     ival = (capture_ticks + u) >> 2;
     return max((ival - (ival * cfg.timing >> 5)) >> 1, 1);
 }
