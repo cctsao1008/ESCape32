@@ -67,4 +67,6 @@ int am13e_restart_rate_period(uint32_t now,uint32_t epoch,int reverse)
        published_direction!=(reverse?-1:1))return 0;
     return published_period;
 }
+#else
+typedef int restart_phase_rate_not_selected;
 #endif
