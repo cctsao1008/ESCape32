@@ -721,6 +721,15 @@ void delay(uint32_t x, void (*f)(void)) {
 
 void pend_sv_handler(void) {
 	sendtelem();
+#ifdef AM13E_SIM_ONLY_ADC_INTERLEAVE
+#if !defined(AM13E) || !defined(AM13E_SIM_ONLY_BOARD_PROFILE)
+#error "ADC interleave fault-isolation fixture requires explicit AM13E SIM_ONLY profile"
+#endif
+    /* Native acquisitions in the otherwise idle half-period. Isolate an
+     * invalid publication while the previous reference is still fresh.
+     * Other housekeeping and production 1kHz trigger remain unchanged. */
+    if((tick&15U)==8U)adctrig();
+#endif
 	if (tick & 0xf) return; // 16kHz -> 1kHz
 	adctrig();
 #if !defined(AM13E) || LED_CNT > 0
