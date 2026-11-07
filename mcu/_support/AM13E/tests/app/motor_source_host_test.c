@@ -111,10 +111,23 @@ static void first_edge_experiment(void)
     assert(!am13e_app_motor_on_bemf_event(749,0));
     assert(sync==5 && ival==3000 && scheduled==count);
     assert(am13e_app_motor_on_bemf_event(750,0));
+#ifdef AM13E_SIM_ONLY_ACQUISITION_DIRECT_INTERVAL
+    assert(sync==6 && ival==750 && scheduled==count+1U);
+    const int locked=750;
+#else
     assert(sync==6 && ival==2437 && scheduled==count+1U);
-    assert(bemf_ignore_before(ival)==1218);
-    assert(!am13e_app_motor_on_bemf_event(1217,0));
-    assert(sync==6 && ival==2437 && scheduled==count+1U);
+    const int locked=2437;
+#endif
+    assert(bemf_ignore_before(ival)==locked/2);
+    assert(!am13e_app_motor_on_bemf_event(locked/2-1,0));
+    assert(sync==6 && ival==locked && scheduled==count+1U);
+#ifdef AM13E_SIM_ONLY_ACQUISITION_DIRECT_INTERVAL
+    /* Lock is not permission to continue the acquisition shortcut. */
+    assert(am13e_app_motor_on_bemf_event(1000,0));
+    assert(ival==(1000+750*3)/4 && sync==6);
+    sync=1;
+    assert(!bemf_inputs_valid(10000,INT_MAX/32+1,32));
+#endif
 #endif
     assert(am13e_app_motor_on_bemf_event(0,1));
     assert(sync==0 && ival==10000 && bemf_ignore_before(ival)==2500);

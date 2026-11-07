@@ -480,6 +480,9 @@ static void bemf_timeout_reset(void) {
 #if defined(AM13E_SIM_ONLY_ACQUISITION_QUARTER) && !defined(AM13E_SIM_ONLY_FIRST_EDGE_SEED)
 #error "Acquisition-window experiment requires the isolated first-edge seed experiment"
 #endif
+#if defined(AM13E_SIM_ONLY_ACQUISITION_DIRECT_INTERVAL) && !defined(AM13E_SIM_ONLY_ACQUISITION_QUARTER)
+#error "Direct acquisition interval requires the isolated acquisition-window experiment"
+#endif
 static int bemf_ignore_before(int interval) {
 #ifdef AM13E_SIM_ONLY_ACQUISITION_QUARTER
     /* H6: observed spatial crossings during acceleration can precede
@@ -497,6 +500,9 @@ static int bemf_inputs_valid(int interval,int capture,int timing) {
     if(interval<=0 || capture<0 || interval>INT_MAX/3 || timing<0 || timing>32)return 0;
 #ifdef AM13E_SIM_ONLY_FIRST_EDGE_SEED
     if(sync==0 && capture<(interval>>1) && capture>INT_MAX/64)return 0;
+#endif
+#ifdef AM13E_SIM_ONLY_ACQUISITION_DIRECT_INTERVAL
+    if(sync>0 && sync<6 && capture>INT_MAX/32)return 0;
 #endif
     if(capture<bemf_ignore_before(interval))return 1;
     const int u=interval*3;
@@ -517,6 +523,13 @@ static int bemf_zero_cross_delay(int capture_ticks) {
 #endif
     int u = ival * 3;
     fast = (capture_ticks < u >> 2 || capture_ticks > u >> 1) && ertm < 2000;
+#ifdef AM13E_SIM_ONLY_ACQUISITION_DIRECT_INTERVAL
+    /* H8: accepted subsequent crossings measure a complete sector. Do
+     * not mix their acquisition estimate with the uninitialized prior.
+     * After sync6 the original quarter-IIR/half-window behavior resumes. */
+    if(sync>0 && sync<6)ival=capture_ticks;
+    else
+#endif
 #ifdef AM13E_SIM_ONLY_FIRST_EDGE_SEED
     /* H5 only: a genuinely spatial first crossing after an aligned half
      * sector would seed the full interval at twice its elapsed time.
