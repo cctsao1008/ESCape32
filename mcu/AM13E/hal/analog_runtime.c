@@ -137,11 +137,11 @@ void am13e_app_adc_init(void)
     NVIC_SetPriority(ADC1_INT1_INT_IRQn,1U);NVIC_EnableIRQ(ADC1_INT1_INT_IRQn);
     NVIC_SetPriority(ADC2_INT1_INT_IRQn,1U);NVIC_EnableIRQ(ADC2_INT1_INT_IRQn);
 }
-void adctrig(void)
+/* Calibration stays in preemptible housekeeping, never the ADC ISR. */
+static void publish_reference_from_raw(void)
 {
-    if(!adc_initialized)adc_fail_closed();
 #ifdef AM13E_BOARD_SC5_CALIBRATION
-    /* Existing PendSV housekeeping is the sole producer. Arithmetic stays
+    /* PendSV housekeeping is the sole producer. Arithmetic stays
      * outside priority-0 commutation/capture IRQs and global masking. */
     AM13E_AdcRaw raw;
     AM13E_BemfReference ref;
@@ -162,6 +162,20 @@ void adctrig(void)
 #endif
     }
 #endif
+}
+#ifdef AM13E_EXPERIMENTAL_SC5_PROMPT_PRODUCER
+#if !defined(AM13E_SIM_ONLY_BOARD_PROFILE) || !defined(AM13E_BOARD_SC5_CALIBRATION)
+#error "Prompt reference producer requires explicit SIM_ONLY SC5 profile"
+#endif
+void am13e_app_adc_reference_service(void)
+{
+    if(adc_initialized)publish_reference_from_raw();
+}
+#endif
+void adctrig(void)
+{
+    if(!adc_initialized)adc_fail_closed();
+    publish_reference_from_raw();
     if(adc_inflight || DL_ADC_isBusy(ADC0) || DL_ADC_isBusy(ADC1) || DL_ADC_isBusy(ADC2)){
         ++adc_latest.trigger_overruns;return;
     }

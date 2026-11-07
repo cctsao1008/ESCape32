@@ -13,6 +13,7 @@
 #include "telem_backend.h"
 #endif
 #include "motor_bemf.h"
+#include "analog_runtime.h"
 #include <dl_gpio.h>
 
 void SysTick_Handler(void)
@@ -32,6 +33,11 @@ void SysTick_Handler(void)
 
 void PendSV_Handler(void)
 {
+#ifdef AM13E_EXPERIMENTAL_SC5_PROMPT_PRODUCER
+    /* SysTick already pends this worker at16kHz. Process complete raw
+     * epochs promptly; keep Rel17's ADC request cadence at1kHz. */
+    am13e_app_adc_reference_service();
+#endif
     pend_sv_handler();
 #ifdef AM13E_BOARD_SERIAL_RX_CONFIGURED
     /* EXBUS bitrate switch only when UART RX is genuinely idle.
