@@ -1,0 +1,3 @@
+# Isolated guard for invalid/stale ADC reference at real TIMG12 delivery.
+include("${CMAKE_CURRENT_LIST_DIR}/e62_sc5_coast_phase.cmake")
+list(APPEND AM13E_BOARD_BOARD_DEFINITIONS AM13E_SIM_ONLY_SC5_COMMUTATION_ADMISSION=1)

@@ -7,6 +7,12 @@
 #include "motor_timer_math.h"
 #include "motor_backend.h"
 #include "motor_audio_hw.h"
+#ifdef AM13E_SIM_ONLY_SC5_COMMUTATION_ADMISSION
+#include "analog_runtime.h"
+#if !defined(AM13E_SIM_ONLY_BOARD_PROFILE) || !defined(AM13E_BOARD_SC5_CALIBRATION)
+#error "SC5 commutation admission requires explicit SIM_ONLY calibrated profile"
+#endif
+#endif
 #include "clock_backend.h"
 #include "../config.h"
 #include <limits.h>
@@ -148,6 +154,13 @@ void TIMG12_0_IRQHandler(void)
      * replacement clears its peripheral/NVIC source. An empty delivery
      * must neither consume the new one-shot nor fault the running motor. */
     if ((status & DL_TIMER_INTERRUPT_ZERO_EVENT) == 0U) return;
+#ifdef AM13E_SIM_ONLY_SC5_COMMUTATION_ADMISSION
+    /* PendSV can publish invalidity just before a priority0 timer delivery.
+     * Reject before Core advances its step or stages a new PWM image; do
+     * not wait for the lower-priority reference producer or next SysTick. */
+    AM13E_BemfReference reference;
+    if(!am13e_app_adc_get_reference(&reference))timing_fault();
+#endif
     timer_armed=0U;
     DL_Timer_stopCounter(MOTOR_TIMER);
     ++serviced;

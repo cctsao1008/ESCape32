@@ -622,6 +622,49 @@ static void sc5_continuous_equivalent_cases(void)
     puts("PASS UNIT continuous equivalent association: latched/accepted CAP1 and timer, cancellation, stale/invalid/epoch/phase/polarity/input/active mismatch and invalid-before-CAP negatives");
 }
 #endif
+#ifdef AM13E_EXPERIMENTAL_SC5_PROMPT_PRODUCER
+/* UNIT ordering counterexamples; real Core/SDK HAL, manually dispatched
+ * peripheral flags, never supplied to native QEMU as feedback. */
+static void sc5_pending_fault_cases(void)
+{
+    for(unsigned n=0;n<17U;++n){ECAP1->TSCTR+=12500U;am13e_app_motor_bemf_tick();}
+    cfg.damp=1;sine=prep=0;step=0;reverse=0;sync=0;ival=3000;ertm=18000;
+    am13e_app_motor_pwm_apply(800,24,48,ertm,1,0,0,1);
+    nextstep();am13e_app_motor_commutation_commit();
+    am13e_app_motor_commutation_enable(1);zero();zero();assert(gate_on());
+    for(volatile unsigned mode=0;mode<4U;++mode){
+        const pid_t child=fork();assert(child>=0);
+        if(child==0){
+            am13e_app_motor_bemf_commutation_delay_us(2290);
+            assert(DL_Timer_isRunning(TIMG12));
+            const int prior_step=step;const unsigned before=watchdog_arms;
+            if(mode<2U){
+                *(volatile uint16_t *)((uintptr_t)ADC1RESULT+ADC_ADCRESULT0+DL_ADCRESULT_STEP)=0U;
+                ++tick;ADC0_INT1_IRQHandler();ADC1_INT1_IRQHandler();ADC2_INT1_IRQHandler();
+                am13e_app_adc_reference_service();
+                AM13E_BemfReference ref;assert(!am13e_app_adc_get_reference(&ref));
+            }else if(mode==2U)tick+=33U;
+            else am13e_app_adc_blackout_invalidate();
+            /* Model a priority0 delivery immediately after PendSV publishes
+             * invalidity, before the next SysTick safety supervisor. */
+            if(setjmp(fault_return)==0){
+                if(mode==1U){ECAP1->CAP1=600000U;ECAP1->ECFLG=DL_ECAP_ISR_SOURCE_CEVT1;ECAP1_IRQHandler();}
+                else {*(volatile uint32_t *)(uintptr_t)&TIMG12->CPU_INT.MIS=DL_TIMER_INTERRUPT_ZERO_EVENT;TIMG12_0_IRQHandler();}
+                assert(!"known invalid/stale/epoch-broken reference advanced a pending commutation");
+            }
+            assert(step==prior_step && watchdog_arms==before+1U && !gate_on());
+            assert(!DL_Timer_isRunning(TIMG12));
+            assert(am13e_mcu_motor_pads_disconnected(am13e_board_motor_pad_route()));
+            /* Late latched IRQs after cancellation cannot resurrect power. */
+            *(volatile uint32_t *)(uintptr_t)&TIMG12->CPU_INT.MIS=DL_TIMER_INTERRUPT_ZERO_EVENT;
+            TIMG12_0_IRQHandler();ECAP1->ECFLG=DL_ECAP_ISR_SOURCE_CEVT1;ECAP1_IRQHandler();
+            assert(step==prior_step && !gate_on());_exit(0);
+        }
+        int result;assert(waitpid(child,&result,0)==child && WIFEXITED(result) && WEXITSTATUS(result)==0);
+    }
+    puts("PASS_NEW UNIT pending timer/CAP before supervisor: actual invalid ADC, stale and epoch invalidation, no Core step, shutdown and late-vector suppression");
+}
+ #endif
 static void sc5_publication(void)
 {
     AM13E_BemfReferenceStatus status;
@@ -1214,6 +1257,9 @@ int main(void)
     sensing_reference_required();
     protection_required();
 #ifdef AM13E_SC5_FIXTURE
+#ifdef AM13E_EXPERIMENTAL_SC5_PROMPT_PRODUCER
+    if(getenv("E62_SC5_PENDING_ONLY")){sc5_adc();sc5_pending_fault_cases();assert(munmap(r,0x07000000)==0);return 0;}
+#endif
     sc5_no_sample();sc5_adc();
 #ifdef AM13E_EXPERIMENTAL_SC5_PROMPT_PRODUCER
     sc5_prompt_producer_cases();
