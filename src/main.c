@@ -485,6 +485,28 @@ static int bemf_zero_cross_delay(int capture_ticks) {
         return 0;
     }
 #endif
+#if defined(AM13E)
+    /* E62 Issue #5, second NON-ORIGINAL isolated startup candidate.
+     * Exact G13B3L Original build source+board fixture; never hardware.
+     *
+     * Real QEMU source shows the FIRST, SECOND and THIRD geometric CAP1
+     * (2.5, 1.26, 1.13ms) accepted after candidate entry; the FOURTH
+     * geometrically valid 0.88ms CAP1 was rejected by the legacy
+     * smoothed ival/2 threshold, causing another uncommutated sector
+     * and mechanical torque reversal. While sync<6 (startup), use the
+     * actual comparator interval for the 30-degree delay and adapt ival
+     * directly instead of delaying on a 3/4 stale historical estimate.
+     *
+     * The 400..4500us candidate range is source-observed simulation
+     * hypothesis, not safety-qualified analog glitch blanking. When
+     * synched (sync>=6), the unchanged original policy applies.
+     */
+    if(sync<6 && capture_ticks>=400 && capture_ticks<=4500) {
+        ival=capture_ticks;
+        fast=0;
+        return max((capture_ticks*(32-cfg.timing))>>6,1);
+    }
+#endif
     if (capture_ticks < ival >> 1) return 0;
     int u = ival * 3;
     fast = (capture_ticks < u >> 2 || capture_ticks > u >> 1) && ertm < 2000;
