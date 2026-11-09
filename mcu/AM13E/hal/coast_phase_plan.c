@@ -7,12 +7,20 @@
 #include <string.h>
 static AM13E_CoastPhase state;
 static unsigned have,last_index,current_valid;
+static uint32_t last_completion;
 void am13e_coast_phase_reset(void){memset(&state,0,sizeof state);have=current_valid=0U;}
 void am13e_coast_phase_update(const AM13E_AdcRaw *r,uint32_t epoch)
 {
     static const unsigned forward_patterns[]={5,1,3,2,6,4};
     if(!r){am13e_coast_phase_reset();return;}
-    if(have && state.sample==r->sample_count && state.epoch==epoch)return;
+    if(have && state.sample==r->sample_count && state.epoch==epoch){
+        /* A sample identity is immutable. Do not silently retain an older
+         * authorization when its producer replays contradictory evidence. */
+        if(state.tick!=r->acquisition_tick || last_completion!=r->completion_tick ||
+           state.phase[0]!=r->phase_a || state.phase[1]!=r->phase_b ||
+           state.phase[2]!=r->phase_c)am13e_coast_phase_reset();
+        return;
+    }
     if(have && (state.epoch!=epoch || (uint32_t)(r->sample_count-state.sample)!=1U ||
        (uint32_t)(r->acquisition_tick-state.tick)==0U ||
        (uint32_t)(r->acquisition_tick-state.tick)>32U))am13e_coast_phase_reset();
@@ -21,10 +29,11 @@ void am13e_coast_phase_update(const AM13E_AdcRaw *r,uint32_t epoch)
        (a==b && b==c) || (uint32_t)(r->completion_tick-r->acquisition_tick)>32U){am13e_coast_phase_reset();return;}
     current_valid=0U;
     state.sample=r->sample_count;state.tick=r->acquisition_tick;state.epoch=epoch;
+    last_completion=r->completion_tick;
     state.phase[0]=(uint16_t)a;state.phase[1]=(uint16_t)b;state.phase[2]=(uint16_t)c;
-    /* An exactly centered phase is a bounded unknown crossing, not a
-     * fabricated bit. Preserve the prior sequence but do not power now. */
-    if(3U*a==sum || 3U*b==sum || 3U*c==sum){state.stable=0U;return;}
+    /* An unknown crossing can hide direction changes or skipped sectors.
+     * A fresh sequence must be established after it, not bridged through. */
+    if(3U*a==sum || 3U*b==sum || 3U*c==sum){am13e_coast_phase_reset();return;}
     const unsigned pattern=(3U*a>sum?1U:0U)|(3U*b>sum?2U:0U)|(3U*c>sum?4U:0U);
     unsigned index=0U;while(index<6U && forward_patterns[index]!=pattern)++index;
     if(index==6U){am13e_coast_phase_reset();return;}
