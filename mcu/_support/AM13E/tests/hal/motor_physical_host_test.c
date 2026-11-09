@@ -632,12 +632,23 @@ static void sc5_pending_fault_cases(void)
     am13e_app_motor_pwm_apply(800,24,48,ertm,1,0,0,1);
     nextstep();am13e_app_motor_commutation_commit();
     am13e_app_motor_commutation_enable(1);zero();zero();assert(gate_on());
-    for(volatile unsigned mode=0;mode<4U;++mode){
+    for(volatile unsigned mode=0;mode<5U;++mode){
+        if(getenv("E62_SC5_PENDING_VALID_ONLY") && mode!=4U)continue;
         const pid_t child=fork();assert(child>=0);
         if(child==0){
             am13e_app_motor_bemf_commutation_delay_us(2290);
             assert(DL_Timer_isRunning(TIMG12));
             const int prior_step=step;const unsigned before=watchdog_arms;
+            if(mode==4U){
+                ++tick;ADC0_INT1_IRQHandler();ADC1_INT1_IRQHandler();
+                am13e_app_adc_reference_service();
+                AM13E_BemfReference ref;assert(am13e_app_adc_get_reference(&ref));
+                *(volatile uint32_t *)(uintptr_t)&TIMG12->CPU_INT.MIS=0U;
+                TIMG12_0_IRQHandler();assert(step==prior_step && DL_Timer_isRunning(TIMG12));
+                *(volatile uint32_t *)(uintptr_t)&TIMG12->CPU_INT.MIS=DL_TIMER_INTERRUPT_ZERO_EVENT;
+                TIMG12_0_IRQHandler();assert(step!=prior_step && gate_on() && watchdog_arms==before);
+                puts("PASS_NEW UNIT incomplete ADC epoch retains a still-fresh reference; empty IRQ preserves timer and valid expiry advances Core");_exit(0);
+            }
             if(mode<2U){
                 *(volatile uint16_t *)((uintptr_t)ADC1RESULT+ADC_ADCRESULT0+DL_ADCRESULT_STEP)=0U;
                 ++tick;ADC0_INT1_IRQHandler();ADC1_INT1_IRQHandler();ADC2_INT1_IRQHandler();
@@ -662,7 +673,7 @@ static void sc5_pending_fault_cases(void)
         }
         int result;assert(waitpid(child,&result,0)==child && WIFEXITED(result) && WEXITSTATUS(result)==0);
     }
-    puts("PASS_NEW UNIT pending timer/CAP before supervisor: actual invalid ADC, stale and epoch invalidation, no Core step, shutdown and late-vector suppression");
+    puts(getenv("E62_SC5_PENDING_VALID_ONLY")?"PASS_NEW UNIT valid partial ADC + empty/timer IRQ control":"PASS_NEW UNIT pending timer/CAP before supervisor: actual invalid ADC, stale and epoch invalidation, no Core step, shutdown and late-vector suppression");
 }
  #endif
 static void sc5_publication(void)
