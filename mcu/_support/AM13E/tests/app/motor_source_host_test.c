@@ -171,6 +171,17 @@ static void coast_acquisition_test(void)
 }
 #endif
 #ifdef AM13E_SIM_ONLY_COAST_PHASE_ACQUIRE
+static void coast_interrupted_capture_test(void)
+{
+    clear_trace();scheduled=shutdowns=0;coast_acquiring=1U;coast_capture_stage=0U;
+    ival=10000;sync=0;cfg.timing=16;
+    assert(am13e_app_motor_on_bemf_event(300,0));
+    assert(scheduled==1U && scheduled_delay==1 && coast_capture_stage==1U);
+    clear_trace();
+    if(!setjmp(fault_return)){(void)am13e_app_motor_on_bemf_event(0,1);assert(0);}
+    assert(scheduled==1U && !strcmp(trace,"OX") && am13e_coast_acquire_diag[9]==6U);
+    puts("PASS_NEW actual-Core timeout after first real capture requests shutdown without another timer; physical cancellation needs native evidence");
+}
 static void coast_invalid_capture_test(void)
 {
     const int values[]={0,-1,INT_MAX};
@@ -189,6 +200,7 @@ int main(void)
 {
     memcpy(&cfg,&cfgdata,sizeof cfg);cfg.damp=1;cfg.throt_ztc=0;
 #ifdef AM13E_SIM_ONLY_COAST_PHASE_ACQUIRE
+    if(getenv("E62_COAST_INTERRUPTION_ONLY")){coast_interrupted_capture_test();return 0;}
     if(getenv("E62_COAST_NEW_NEGATIVES_ONLY")){coast_invalid_capture_test();return 0;}
 #endif
     stop(0U,0,0);stop(1U,0,359);
