@@ -17,6 +17,7 @@ for arg in "$@"; do
   fi
 done
 if [ "${#extra[@]}" -gt 0 ]; then
+    if [ "${E62_SC5_TIMER_ADMISSION:-0}" = 1 ]; then extra+=(-DAM13E_SIM_ONLY_SC5_COMMUTATION_ADMISSION=1); fi
     exec "$E62_SC5_HOST_CC" "${extra[@]}" "$@" mcu/AM13E/hal/coast_phase_plan.c
 fi
 exec "$E62_SC5_HOST_CC" "$@"
